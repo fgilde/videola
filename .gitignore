@@ -1,0 +1,30 @@
+# Rust
+/target
+**/target
+Cargo.lock.orig
+
+# Node
+node_modules
+dist
+.vite
+*.tsbuildinfo
+.pnpm-store
+
+# Tauri
+src-tauri/target
+**/gen/android
+**/gen/apple
+
+# WASM build output
+**/pkg
+
+# Local
+.env
+.env.local
+.DS_Store
+Thumbs.db
+*.log
+
+# Test output
+/test-output
+**/__diff__
