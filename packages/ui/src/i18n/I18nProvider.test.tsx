@@ -20,7 +20,7 @@ function Probe(): ReactElement {
 describe("I18nProvider", () => {
   beforeEach(() => localStorage.clear());
 
-  it("starts in German by default", () => {
+  it("starts in German when the browser asks for German", () => {
     render(
       <I18nProvider>
         <Probe />
@@ -28,6 +28,17 @@ describe("I18nProvider", () => {
     );
     expect(screen.getByTestId("locale").textContent).toBe("de");
     expect(screen.getByTestId("label").textContent).toBe("Speichern");
+  });
+
+  it("starts in English for every other browser language", () => {
+    vi.spyOn(navigator, "language", "get").mockReturnValue("fr-FR");
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("locale").textContent).toBe("en");
+    expect(screen.getByTestId("label").textContent).toBe("Save");
   });
 
   it("switches language without remounting and persists the choice", () => {

@@ -44,5 +44,7 @@ function readLocale(): Locale {
   if (stored === "de" || stored === "en") {
     return stored;
   }
-  return navigator.language.startsWith("en") ? "en" : "de";
+  // English is the fallback because the project's public face - README, release notes, docs
+  // site - is English; German is what a German browser asks for, not what everyone else gets.
+  return navigator.language.startsWith("de") ? "de" : "en";
 }

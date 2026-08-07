@@ -5,6 +5,7 @@ import { cleanup } from "@testing-library/react";
 // auto-cleanup never registers, so unmounted trees pile up across tests.
 afterEach(cleanup);
 
-// jsdom hard-codes navigator.language to "en-US"; the app defaults to German,
-// so tests need a host locale that actually exercises that default.
+// The shell tests assert German labels, which the app now only picks for a German browser.
+// Pinning the host locale keeps them from depending on whatever jsdom hard-codes; the tests
+// that cover the English fallback override this property themselves.
 Object.defineProperty(navigator, "language", { value: "de-DE", configurable: true });
