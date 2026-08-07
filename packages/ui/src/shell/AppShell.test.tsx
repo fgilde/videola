@@ -69,7 +69,10 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Wiederholen" }).hasAttribute("disabled")).toBe(false);
   });
 
-  it("keeps every action button present in phone layout", () => {
+  // jsdom does no layout, so this only guards against a button vanishing from the DOM (e.g.
+  // a future collapse-to-menu). It cannot see the CSS overflow-x fix that keeps buttons
+  // reachable on real phone widths - only a real-browser check catches that regressing.
+  it("keeps every action button in the DOM at phone width", () => {
     stubEnvironment(390);
     render(
       <AppShell layoutPreference="phone" onNew={() => {}} onOpen={() => {}} onImport={() => {}}>
