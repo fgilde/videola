@@ -356,6 +356,12 @@ Tests mit einem gefälschten `AudioContext`, dessen `currentTime` der Test steue
 
 Orchestriert und arbeitet nicht: pro Tick fragt es für jeden sichtbaren Clip den Quellzeitpunkt beim Kern ab, holt Frames aus Cache oder Quelle, und ruft `Compositor.render`. Fehlt ein Frame noch, wird der letzte gezeigte behalten, statt schwarz zu blitzen.
 
+**Zwei Dinge, die Gruppe B aufgedeckt hat und die dieser Task erledigen muss:**
+
+`Clip::source_time_at` ist zwar im Rust-Kern richtig, aber **von JavaScript aus nicht erreichbar** — `crates/videola-core-wasm/src/lib.rs` exportiert es nicht. Dieser Task erweitert die WASM-Grenze. Die richtige Form ist eine Stapelabfrage: alle sichtbaren Clips für einen Zeitpunkt in einem Aufruf, nicht einer pro Clip, weil pro Frame sonst ein Dutzend Grenzübertritte anfallen. `VideoSource` arbeitet bewusst in Quellzeit und kennt keine `ClipId` — die Abbildung Timeline nach Quelle gehört hierher.
+
+**Rückwärts laufende Clips brauchen eine Klemmung.** Bei `t == clip.start` gibt `source_time_at` das *exklusive* Ende des verbrauchten Quellbereichs zurück, also einen Flick hinter dem letzten gültigen Sample. Wer das ungeprüft an den Dekoder gibt, bekommt für das erste Bild eines rückwärts laufenden Clips nichts oder Schwarz. Klemme in `[in_point, in_point + consumed_source)`. Das steht als Kommentar in `model/clip.rs` und war in keinem Plan — es stammt aus einer Review-Runde in M0.
+
 `stepFrame` rechnet über die Projekt-Framerate als Rational, nicht über eine Sekundenzahl.
 
 Tests mit gefälschtem Compositor und gefälschten Quellen: ein Tick fragt genau die Clips ab, die den Zeitpunkt überdecken; ein fehlender Frame führt nicht zu einem Render-Aufruf mit `undefined`; `dispose` schließt alle Quellen und leert den Cache.
