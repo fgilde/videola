@@ -16,6 +16,25 @@ permissions:
   packages: write
 
 jobs:
+  # Der secrets-Kontext ist in einem job-level `if:` nicht verfuegbar -- dort gibt
+  # es nur github, needs, vars und inputs. Die Existenz der Signatur-Secrets muss
+  # darum ueber Job-Outputs transportiert werden, damit die abhaengigen Ziele
+  # sichtbar uebersprungen statt rot werden.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      android: ${{ steps.probe.outputs.android }}
+    steps:
+      - id: probe
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE" ]; then
+            echo "android=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "android=no" >> "$GITHUB_OUTPUT"
+          fi
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -112,3 +131,88 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --bundles ${{ matrix.bundles }}
+
+  android:
+    # Ohne Keystore entstuende nur eine unsignierte APK, die niemand installieren
+    # kann -- dann besser sichtbar ueberspringen als ein unbrauchbares Artefakt
+    # anhaengen.
+    if: needs.gate.outputs.android == 'yes'
+    # Nach desktop, damit der teure Mobile-Job erst laeuft wenn die Installer
+    # stehen, und damit nur ein Job zugleich das Draft-Release anlegt.
+    needs: [gate, wasm, desktop]
+    runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 27.0.12077973
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+      - name: NDK installieren
+        run: |
+          sdkmanager "ndk;$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            apps/desktop/src-tauri
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+      - run: pnpm install --frozen-lockfile
+      - name: Keystore entpacken
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+        run: printf '%s' "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
+      - name: Android-Projekt erzeugen und Signatur einhaengen
+        run: |
+          pnpm --filter videola-desktop exec tauri android init --ci
+          cat >> apps/desktop/src-tauri/gen/android/app/build.gradle.kts <<'GRADLE'
+
+          // Die Vorlage von `tauri android init` bringt keine signingConfig mit, also
+          // waere jede Release-APK unsigniert. Gradle liest die Werte hier direkt aus
+          // der Umgebung, statt aus einer keystore.properties, die dieselben Secrets
+          // nur ueber eine zusaetzliche Datei transportieren wuerde.
+          android {
+              signingConfigs {
+                  create("release") {
+                      storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH"))
+                      storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                      keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+          GRADLE
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Videola ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          mobile: android
+          args: --apk --aab
