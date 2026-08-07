@@ -75,6 +75,13 @@ jobs:
       - name: WASM-Artefakt vorhanden
         run: test -f packages/core/src/wasm/videola_core.js || (echo "wasm-Artefakt fehlt in packages/core/src/wasm" && exit 1)
       - run: pnpm install --frozen-lockfile
+      # node-web-audio-api rendert die Audio-Tests wirklich; sein Linux-Build linkt
+      # libasound.so.2, das auf dem Runner-Image nicht zugesichert ist.
+      # Das Paket heisst seit Ubuntu 24.04 libasound2t64, davor libasound2.
+      - name: ALSA fuer die Audio-Tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
