@@ -1,0 +1,49 @@
+import type { ReactElement } from "react";
+
+import { useI18n } from "../i18n/useI18n";
+import { SettingsMenu } from "./SettingsMenu";
+
+export interface TopBarActions {
+  onNew?: () => void;
+  onOpen?: () => void;
+  onSave?: () => void;
+  onImport?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+}
+
+export function TopBar(actions: TopBarActions): ReactElement {
+  const { t } = useI18n();
+
+  return (
+    <header className="v-topbar">
+      <span className="v-topbar__brand">{t("app.title")}</span>
+      <button className="v-button" onClick={actions.onNew} disabled={!actions.onNew}>
+        {t("action.new")}
+      </button>
+      <button className="v-button" onClick={actions.onOpen} disabled={!actions.onOpen}>
+        {t("action.open")}
+      </button>
+      <button className="v-button" onClick={actions.onImport} disabled={!actions.onImport}>
+        {t("action.import")}
+      </button>
+      <button className="v-button" onClick={actions.onUndo} disabled={actions.canUndo !== true}>
+        {t("action.undo")}
+      </button>
+      <button className="v-button" onClick={actions.onRedo} disabled={actions.canRedo !== true}>
+        {t("action.redo")}
+      </button>
+      <span className="v-topbar__spacer" />
+      <SettingsMenu />
+      <button
+        className="v-button v-button--primary"
+        onClick={actions.onSave}
+        disabled={!actions.onSave}
+      >
+        {t("action.save")}
+      </button>
+    </header>
+  );
+}

@@ -1,0 +1,66 @@
+.v-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.v-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-3);
+  padding: var(--v-space-2) var(--v-space-4);
+  background: var(--v-bg-elevated);
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-topbar__brand {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.v-topbar__spacer {
+  flex: 1;
+}
+
+.v-button {
+  min-height: 32px;
+  padding: 0 var(--v-space-3);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--v-transition);
+}
+
+.v-button:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+}
+
+.v-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.v-button--primary {
+  background: var(--v-accent);
+  color: var(--v-accent-contrast);
+  border-color: transparent;
+}
+
+.v-shell__content {
+  overflow: auto;
+  background: var(--v-bg);
+}
+
+.v-shell[data-layout="tablet"] .v-button,
+.v-shell[data-layout="phone"] .v-button {
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-4);
+}
+
+.v-shell[data-layout="phone"] .v-topbar__brand {
+  display: none;
+}
