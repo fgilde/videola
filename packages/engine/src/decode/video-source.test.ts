@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { secondsToTime } from "@videola/core";
 import { putMedia } from "@videola/media";
@@ -6,11 +6,15 @@ import { installFakeOpfs } from "@videola/media/src/fake-opfs";
 
 import { tinyMp4 } from "./fixture-mp4";
 import {
+  heldIndexAt,
+  insertHeld,
   lastStartingAtOrBefore,
   MAX_FORWARD_DECODE_SECONDS,
   shouldRestartWindow,
   VideoSource,
 } from "./video-source";
+
+import type { Held } from "./video-source";
 
 const HASH = "a".repeat(64);
 const MISSING = "b".repeat(64);
@@ -60,6 +64,47 @@ describe("VideoSource", () => {
     expect(source.bytesHeld).toBe(0);
     expect(source.duration).toBe(0);
   });
+
+  // jsdom has no VideoDecoder, so mediabunny refuses to build one and the decode path throws.
+  // That is the failure this asks about and not a shortcoming of the environment: a source whose
+  // decoder dies must keep answering, because frameAt promises a missing frame as undefined.
+  it("answers undefined and stays usable when the decoder cannot be built", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const source = new VideoSource();
+    await source.open(HASH);
+
+    await expect(source.frameAt(0)).resolves.toBeUndefined();
+    await expect(source.frameAt(secondsToTime(0.5))).resolves.toBeUndefined();
+
+    expect(logged).toHaveBeenCalled();
+    expect(source.duration).toBe(secondsToTime(1.001));
+  });
+
+  it("serialises overlapping requests rather than racing two windows", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const source = new VideoSource();
+    await source.open(HASH);
+
+    const frames = await Promise.all([
+      source.frameAt(0),
+      source.frameAt(secondsToTime(0.5)),
+      source.frameAt(secondsToTime(0.25)),
+    ]);
+
+    expect(frames).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("survives a close in flight", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const source = new VideoSource();
+    await source.open(HASH);
+
+    const inFlight = source.frameAt(0);
+    source.close();
+
+    await expect(inFlight).resolves.toBeUndefined();
+    expect(source.bytesHeld).toBe(0);
+  });
 });
 
 describe("shouldRestartWindow", () => {
@@ -80,6 +125,63 @@ describe("shouldRestartWindow", () => {
     expect(shouldRestartWindow(4, 4 + MAX_FORWARD_DECODE_SECONDS + 0.001)).toBe(true);
   });
 });
+
+describe("heldIndexAt", () => {
+  const held = frames([0, 1, 2]);
+
+  it("finds the frame whose interval covers the instant", () => {
+    expect(heldIndexAt(held, 0)).toBe(0);
+    expect(heldIndexAt(held, 1.5)).toBe(1);
+    expect(heldIndexAt(held, 2.999)).toBe(2);
+  });
+
+  it("reports nothing in a gap between decoded frames", () => {
+    const gapped = [...frames([0]), ...frames([5])];
+
+    expect(heldIndexAt(gapped, 2)).toBe(-1);
+  });
+
+  it("reports nothing past the last frame or before the first", () => {
+    expect(heldIndexAt(held, 3)).toBe(-1);
+    expect(heldIndexAt(held, -0.001)).toBe(-1);
+    expect(heldIndexAt([], 0)).toBe(-1);
+  });
+});
+
+describe("insertHeld", () => {
+  it("keeps the list sorted whatever order frames arrive in", () => {
+    const held: Held[] = [];
+
+    for (const start of [2, 0, 4, 1, 3]) insertHeld(held, one(start));
+
+    expect(held.map((entry) => entry.start)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("replaces rather than duplicates when a window overlaps one already decoded", () => {
+    const held = frames([0, 1, 2]);
+
+    insertHeld(held, { start: 1, end: 2, key: "again" });
+
+    expect(held).toHaveLength(3);
+    expect(held[1]?.key).toBe("again");
+  });
+
+  it("puts a frame earlier than everything held at the front", () => {
+    const held = frames([5, 6]);
+
+    insertHeld(held, one(1));
+
+    expect(held[0]?.start).toBe(1);
+  });
+});
+
+function frames(starts: number[]): Held[] {
+  return starts.map(one);
+}
+
+function one(start: number): Held {
+  return { start, end: start + 1, key: `f${start}` };
+}
 
 describe("lastStartingAtOrBefore", () => {
   const held = [{ start: 0 }, { start: 1 }, { start: 2 }, { start: 3 }];
