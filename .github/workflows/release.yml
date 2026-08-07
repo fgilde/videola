@@ -24,15 +24,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       android: ${{ steps.probe.outputs.android }}
+      ios: ${{ steps.probe.outputs.ios }}
     steps:
       - id: probe
         env:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
         run: |
           if [ -n "$ANDROID_KEYSTORE" ]; then
             echo "android=yes" >> "$GITHUB_OUTPUT"
           else
             echo "android=no" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$IOS_CERTIFICATE" ] && [ -n "$IOS_MOBILE_PROVISION" ]; then
+            echo "ios=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "ios=no" >> "$GITHUB_OUTPUT"
           fi
 
   docker:
@@ -216,3 +224,66 @@ jobs:
           prerelease: false
           mobile: android
           args: --apk --aab
+
+  ios:
+    # An beide Secrets gebunden, weil ohne Zertifikat und Provisioning-Profil gar
+    # kein verteilbares IPA entstehen kann.
+    if: needs.gate.outputs.ios == 'yes'
+    needs: [gate, wasm, desktop]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            apps/desktop/src-tauri
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+      - run: pnpm install --frozen-lockfile
+      - name: Signatur einrichten
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          printf '%s' "$IOS_CERTIFICATE" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          PROFILES="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES"
+          printf '%s' "$IOS_MOBILE_PROVISION" | base64 -d > "$PROFILES/videola.mobileprovision"
+      - name: Xcode-Projekt erzeugen
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter videola-desktop exec tauri ios init --ci
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Videola ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          mobile: ios
+          # app-store-connect passt zum Distribution-Zertifikat aus IOS_CERTIFICATE;
+          # release-testing oder debugging wuerden ein anderes verlangen und der
+          # Export scheiterte mit einer wenig hilfreichen Xcode-Meldung.
+          args: --export-method app-store-connect
