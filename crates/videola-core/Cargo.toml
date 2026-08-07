@@ -20,6 +20,3 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true
-
-[package.metadata.ts-rs]
-export_to = "../../packages/core/src/generated/"

@@ -9,5 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc -p tsconfig.json --emitDeclarationOnly false --outDir dist"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }

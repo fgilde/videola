@@ -225,7 +225,7 @@ fn media_id_from_entry(name: &str) -> Option<MediaId> {
     Some(MediaId::from(format!("med_{stem}")))
 }
 
-fn is_content_hash(stem: &str) -> bool {
+pub(crate) fn is_content_hash(stem: &str) -> bool {
     stem.len() == 64 && stem.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 

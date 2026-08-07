@@ -1,4 +1,4 @@
-use super::{find_clip_mut, finite, TrimEdge, MAX_VOLUME};
+use super::{bounded, find_clip_mut, finite, TrimEdge, MAX_VOLUME};
 use crate::model::{Clip, ClipId, ClipSource, Effect, MediaId, ParamValue, Project, Time, TrackId};
 use crate::{CoreError, Result};
 
@@ -224,12 +224,4 @@ fn checked_add(a: Time, b: Time) -> Result<Time> {
 fn checked_sub(a: Time, b: Time) -> Result<Time> {
     a.checked_sub(b)
         .ok_or_else(|| CoreError::InvalidArgument("time overflow".into()))
-}
-
-fn bounded(t: Time) -> Result<Time> {
-    if t.as_flicks() < 0 || t > Time::MAX_REASONABLE {
-        Err(CoreError::InvalidArgument("time value out of range".into()))
-    } else {
-        Ok(t)
-    }
 }

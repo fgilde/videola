@@ -125,7 +125,11 @@ pub enum ClipSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Generator {
     Text {
         content: String,
@@ -327,6 +331,13 @@ mod tests {
         );
         assert!(matches!(clip.source, ClipSource::Generator { .. }));
         assert_eq!(clip.end().as_seconds(), 3.0);
+    }
+
+    #[test]
+    fn generator_fields_serialise_in_camel_case() {
+        let json = serde_json::to_value(Generator::Countdown { from_seconds: 5 }).unwrap();
+        assert_eq!(json["fromSeconds"], 5);
+        assert!(json.get("from_seconds").is_none());
     }
 
     #[test]

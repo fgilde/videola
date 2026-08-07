@@ -1,4 +1,6 @@
-use super::{finite, MAX_VOLUME};
+use super::{bounded, finite, MAX_VOLUME};
+use crate::format::reader::is_content_hash;
+use crate::model::project::MAX_COMPOUND_DEPTH;
 use crate::model::{
     Clip, ClipSource, MediaAsset, MediaId, Project, ProjectSettings, Timeline, Track, TrackId,
     TrackKind,
@@ -103,6 +105,12 @@ fn track_mut<'p>(target: &'p mut Project, track: &TrackId) -> Result<&'p mut Tra
 }
 
 pub(super) fn import_media(target: &mut Project, asset: &MediaAsset) -> Result<()> {
+    validate_new_asset(asset)?;
+    // First import wins. Every field but `original_name` is derived purely from the asset's
+    // bytes, and an identical id means identical bytes, so an honest second import of the same
+    // content contributes nothing new. The metadata is attacker-supplied, though: letting a
+    // later import overwrite it would let a second media.import silently rewrite an existing
+    // asset's mime/kind and change how every clip already referencing it gets interpreted.
     if !target
         .library
         .iter()
@@ -113,28 +121,56 @@ pub(super) fn import_media(target: &mut Project, asset: &MediaAsset) -> Result<(
     Ok(())
 }
 
+// `media.import` is a trust boundary like every other command: `id` arrives as an arbitrary
+// string that `writer::media_entry_name` later interpolates unsanitised into a ZIP entry path,
+// and `duration` feeds the same bound `Project::normalize` enforces on load. Rejecting both here
+// means a project that dispatches cleanly can also be saved and reopened.
+fn validate_new_asset(asset: &MediaAsset) -> Result<()> {
+    if !is_content_hash(asset.id.content_hash()) {
+        return Err(CoreError::InvalidArgument(
+            "media id must be a content hash".into(),
+        ));
+    }
+    if let Some(duration) = asset.duration {
+        bounded(duration)?;
+    }
+    Ok(())
+}
+
 pub(super) fn remove_media(target: &mut Project, media: &MediaId) -> Result<()> {
     let before = target.library.len();
     target.library.retain(|asset| &asset.id != media);
     if target.library.len() == before {
         return Err(CoreError::MediaNotAvailable(media.clone()));
     }
-    remove_clips_using(&mut target.timeline, media);
-    Ok(())
+    remove_clips_using(&mut target.timeline, media, 0)
 }
 
 // A clip using the removed medium can sit inside a Compound clip's own nested timeline, not just
 // on a top-level track; leaving it there would be the same dangling reference this command exists
-// to prevent, so the walk recurses the same way Project::normalize already does.
-fn remove_clips_using(timeline: &mut Timeline, media: &MediaId) {
+// to prevent, so the walk recurses the same way Project::normalize already does. Unlike
+// normalize's walk, this one runs on a fully public Project that `Command::apply` (also public)
+// can be handed directly, bypassing `clip.add`'s own normalize step — so it needs its own depth
+// cap rather than trusting the caller to have gone through a command that already checked one.
+fn remove_clips_using(timeline: &mut Timeline, media: &MediaId, depth: usize) -> Result<()> {
+    if depth > MAX_COMPOUND_DEPTH {
+        return Err(CoreError::InvalidArgument(
+            "compound clip nesting too deep".into(),
+        ));
+    }
     for track in &mut timeline.tracks {
         track.clips.retain(|clip| !uses_media(clip, media));
         for clip in &mut track.clips {
+            // A compound clip that loses every one of its own clips is kept, not deleted: it may
+            // still carry other, unrelated clips, or the resulting gap on the parent track may be
+            // exactly what the author wants. media.remove only deletes clips that themselves
+            // reference the removed medium, never their container.
             if let ClipSource::Compound { timeline: nested } = &mut clip.source {
-                remove_clips_using(nested, media);
+                remove_clips_using(nested, media, depth + 1)?;
             }
         }
     }
+    Ok(())
 }
 
 fn uses_media(clip: &Clip, media: &MediaId) -> bool {

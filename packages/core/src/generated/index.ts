@@ -31,6 +31,7 @@ export type { MediaKind } from "./MediaKind";
 export type { Command } from "./Command";
 export type { TrimEdge } from "./TrimEdge";
 export type { Dispatch } from "./Dispatch";
+export type { DispatchResult } from "./DispatchResult";
 export type { Manifest } from "./Manifest";
 export type { LoadWarning } from "./LoadWarning";
 export type { Rate } from "./Rate";

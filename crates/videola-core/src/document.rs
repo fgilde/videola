@@ -1,6 +1,7 @@
 use json_patch::Patch;
 use serde::Serialize;
 use serde_json::Value;
+use ts_rs::TS;
 
 use crate::command::Dispatch;
 use crate::history::{diff, Entry, History, HISTORY_LIMIT};
@@ -13,7 +14,7 @@ pub struct Document {
     history: History,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DispatchResult {
     pub patch: Value,
