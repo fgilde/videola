@@ -1,6 +1,7 @@
 import type {
   ClipSource,
   Command,
+  MediaAsset,
   ParamValue,
   ProjectSettings,
   Time,
@@ -88,5 +89,9 @@ export const cmd = {
     value,
   }),
 
+  // Since M1 the bytes live in OPFS rather than in WASM memory, so the caller is the only side
+  // that ever sees them and has to supply the id it hashed them to. The core still checks the
+  // id's canonical form, the duration and the frame rate before the asset enters the library.
+  mediaImport: (asset: MediaAsset) => ({ type: "media.import", asset }),
   mediaRemove: (media: string) => ({ type: "media.remove", media }),
 } satisfies Record<string, (...args: never[]) => Command>;

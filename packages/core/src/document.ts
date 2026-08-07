@@ -90,7 +90,7 @@ export class VideolaDocument {
   }
 }
 
-function mediaKind(mime: string): MediaKind {
+export function mediaKind(mime: string): MediaKind {
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("image/")) return "image";

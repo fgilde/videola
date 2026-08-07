@@ -24,15 +24,8 @@ describe("command factories", () => {
     expect(Number.isInteger(command.at)).toBe(true);
   });
 
-  it("has a factory for every Command variant the WASM layer can reach from JS", () => {
-    // media.import is not reachable from JS by design: the WASM layer derives the
-    // media id from a content hash of the bytes, so a caller can never supply one.
-    const unreachableFromJs = new Set(["media.import"]);
-    const expectedTypes = new Set(
-      COMMAND_LABELS.map((label) => label.replace(/^cmd\./, "")).filter(
-        (type) => !unreachableFromJs.has(type),
-      ),
-    );
+  it("has a factory for every Command variant", () => {
+    const expectedTypes = new Set(COMMAND_LABELS.map((label) => label.replace(/^cmd\./, "")));
 
     const factories = Object.values(cmd) as ((...args: unknown[]) => Command)[];
     const coveredTypes = new Set(factories.map((factory) => factory("x", "x", "x", "x", "x").type));
