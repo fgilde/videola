@@ -104,6 +104,29 @@ fn import_media_rejects_a_duration_out_of_range() {
     assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
 }
 
+// C2: a zero-denominator fps used to pass this command unnoticed, only to make the project
+// unloadable the next time it was opened (`normalize_library` calls the same `rate_bounded` on
+// read). Rejecting it here means a dispatch that succeeds can also be saved and reopened.
+#[test]
+fn import_media_rejects_a_zero_denominator_fps() {
+    let mut doc = Document::new();
+    let mut bad = asset(b"a", "a.mp4");
+    bad.fps = Some(videola_core::model::Rate::new(30, 0));
+
+    let result = doc.dispatch(Dispatch::new(Command::MediaImport { asset: bad }));
+    assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
+}
+
+#[test]
+fn import_media_accepts_a_legitimate_fps() {
+    let mut doc = Document::new();
+    let mut good = asset(b"a", "a.mp4");
+    good.fps = Some(videola_core::model::Rate::new(30_000, 1001));
+
+    let result = doc.dispatch(Dispatch::new(Command::MediaImport { asset: good }));
+    assert!(result.is_ok());
+}
+
 #[test]
 fn removing_a_medium_also_removes_the_clips_that_use_it() {
     let mut doc = Document::new();

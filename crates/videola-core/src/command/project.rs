@@ -1,6 +1,6 @@
 use super::{bounded, finite, MAX_VOLUME};
 use crate::format::reader::is_content_hash;
-use crate::model::project::{settings_bounded, MAX_COMPOUND_DEPTH};
+use crate::model::project::{rate_bounded, settings_bounded, MAX_COMPOUND_DEPTH};
 use crate::model::{
     Clip, ClipSource, MediaAsset, MediaId, Project, ProjectSettings, Timeline, Track, TrackId,
     TrackKind,
@@ -126,12 +126,13 @@ pub(super) fn import_media(target: &mut Project, asset: &MediaAsset) -> Result<(
 }
 
 // `media.import` is a trust boundary like every other command: `id` arrives as an arbitrary
-// string that `writer::media_entry_name` later interpolates into a ZIP entry path, and
-// `duration` feeds the same bound `Project::normalize` enforces on load. Rejecting both here
-// means a project that dispatches cleanly can also be saved and reopened. The id check requires
-// the canonical `med_<64 hex>` form, not just a 64-hex tail: `reader::media_id_from_entry`
-// reconstructs ids as `med_<hash>` on load, so an id missing the prefix would dangle for every
-// clip that references it after a save/load round trip.
+// string that `writer::media_entry_name` later interpolates into a ZIP entry path, `duration`
+// feeds the same bound `Project::normalize` enforces on load, and `fps` feeds the bound
+// `normalize_library` enforces there too. Rejecting all three here means a project that
+// dispatches cleanly can also be saved and reopened. The id check requires the canonical
+// `med_<64 hex>` form, not just a 64-hex tail: `reader::media_id_from_entry` reconstructs ids as
+// `med_<hash>` on load, so an id missing the prefix would dangle for every clip that references
+// it after a save/load round trip.
 fn validate_new_asset(asset: &MediaAsset) -> Result<()> {
     if !asset
         .id
@@ -145,6 +146,9 @@ fn validate_new_asset(asset: &MediaAsset) -> Result<()> {
     }
     if let Some(duration) = asset.duration {
         bounded(duration)?;
+    }
+    if let Some(fps) = asset.fps {
+        rate_bounded(fps)?;
     }
     Ok(())
 }

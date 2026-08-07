@@ -264,15 +264,9 @@ pub(crate) fn find_clip_mut<'p>(
 
 pub(crate) const MAX_VOLUME: f32 = 4.0;
 
-pub(crate) fn finite(value: f32) -> Result<f32> {
-    if value.is_finite() {
-        Ok(value)
-    } else {
-        Err(crate::CoreError::InvalidArgument(
-            "value must be finite".into(),
-        ))
-    }
-}
+// The one definition of "finite" the load path and every command handler share; see
+// `model::project::finite`.
+pub(crate) use crate::model::project::finite;
 
 // Shared by every command that accepts a `Time` from the wire: clip placement, trims, and media
 // metadata all need the same bound, defined once in `model::project::bounded`. This wrapper only

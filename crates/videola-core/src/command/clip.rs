@@ -150,10 +150,6 @@ pub(super) fn split(target: &mut Project, clip: &ClipId, at: Time) -> Result<()>
     Ok(())
 }
 
-// Above this, consumed_source()'s `as i64` cast starts saturating instead of overflowing
-// cleanly, which would silently corrupt the source range rather than raising an error.
-const MAX_SPEED_RATE: f32 = 100.0;
-
 pub(super) fn set_speed(
     target: &mut Project,
     clip: &ClipId,
@@ -161,12 +157,7 @@ pub(super) fn set_speed(
     reverse: bool,
     preserve_pitch: bool,
 ) -> Result<()> {
-    let rate = finite(rate)?;
-    if !(0.0 < rate && rate <= MAX_SPEED_RATE) {
-        return Err(CoreError::InvalidArgument(
-            "rate must be positive and at most 100".into(),
-        ));
-    }
+    crate::model::project::speed_rate_bounded(rate)?;
     let (track, index) = find_clip_mut(target, clip)?;
     let clip = &mut track.clips[index];
     clip.speed.rate = rate;

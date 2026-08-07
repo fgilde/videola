@@ -100,6 +100,8 @@ fn normalize_timeline(timeline: &mut Timeline, depth: usize) -> Result<()> {
 }
 
 fn normalize_track(track: &mut Track, depth: usize) -> Result<()> {
+    finite(track.volume)?;
+    finite(track.pan)?;
     for clip in &mut track.clips {
         normalize_clip(clip, depth)?;
     }
@@ -112,6 +114,8 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     bounded(clip.in_point)?;
     bounded(clip.fades.in_duration)?;
     bounded(clip.fades.out_duration)?;
+    speed_rate_bounded(clip.speed.rate)?;
+    clip_scalars_finite(clip)?;
     normalize_transition(&clip.transition_in)?;
     normalize_transition(&clip.transition_out)?;
     for keyframes in clip.keyframes.values_mut() {
@@ -124,6 +128,35 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
         normalize_timeline(timeline, depth + 1)?;
     }
     normalize_effects(&mut clip.effects)
+}
+
+// `speed.rate` is the one scalar C1 of the M0 review found unbounded here: `Clip::consumed_source`
+// and `out_point` multiply it straight into a `Time`, and a value past this bound overflows the
+// raw `+`/`-` on `Time` in command/clip.rs's trim and split instead of raising an error. The rest
+// of a clip's floats (volume, pan, transform, crop) have no such overflow path, only the ordinary
+// hazard of a non-finite value surviving into a computation and then into JS as `null` — `finite`
+// alone closes that for them.
+fn clip_scalars_finite(clip: &Clip) -> Result<()> {
+    finite(clip.volume)?;
+    finite(clip.pan)?;
+    let transform = &clip.transform;
+    for value in [
+        transform.x,
+        transform.y,
+        transform.scale_x,
+        transform.scale_y,
+        transform.rotation,
+        transform.anchor_x,
+        transform.anchor_y,
+        transform.opacity,
+        transform.crop.left,
+        transform.crop.top,
+        transform.crop.right,
+        transform.crop.bottom,
+    ] {
+        finite(value)?;
+    }
+    Ok(())
 }
 
 fn normalize_transition(transition: &Option<Transition>) -> Result<()> {
@@ -183,6 +216,33 @@ pub(crate) fn bounded(time: Time) -> Result<()> {
 // overflowing `i64` flicks.
 const MIN_REASONABLE_FPS: f64 = 1.0;
 const MAX_REASONABLE_FPS: f64 = 1000.0;
+
+// Shared by the load path and every command that accepts an f32 from the wire: `is_finite`
+// rejects NaN/infinity before they can cross into JS, where `JSON.stringify` silently turns
+// either into `null` and the loss becomes invisible at the point it happens.
+pub(crate) fn finite(value: f32) -> Result<f32> {
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(CoreError::InvalidArgument("value must be finite".into()))
+    }
+}
+
+// Above this, `Clip::consumed_source`'s `as i64` cast starts saturating instead of overflowing
+// cleanly, which would silently corrupt the source range rather than raising an error. Shared by
+// `command::clip::set_speed` and `normalize_clip` so a rate one route accepts is never a rate the
+// other route lets overflow `Time`'s raw arithmetic on the next trim or split.
+pub(crate) const MAX_SPEED_RATE: f32 = 100.0;
+
+pub(crate) fn speed_rate_bounded(rate: f32) -> Result<()> {
+    finite(rate)?;
+    if !(0.0 < rate && rate <= MAX_SPEED_RATE) {
+        return Err(CoreError::InvalidArgument(
+            "rate must be positive and at most 100".into(),
+        ));
+    }
+    Ok(())
+}
 
 pub(crate) fn rate_bounded(rate: Rate) -> Result<()> {
     if rate.numerator == 0 || rate.denominator == 0 {
@@ -425,6 +485,79 @@ mod tests {
             loaded.normalize(),
             Err(CoreError::InvalidArgument(_))
         ));
+    }
+
+    // C1: a speed rate this absurd used to sail through `normalize` untouched, and only overflow
+    // `Time`'s raw `+` on the next `clip.trim` or `clip.split` — far from where the bad value
+    // actually entered.
+    #[test]
+    fn a_clip_with_an_absurd_speed_rate_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.speed.rate = 1e30;
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let json = serde_json::to_string(&p).unwrap();
+        let mut loaded: Project = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    // I3: `1e300` is a valid JSON number and casts to `f32::INFINITY` on deserialisation (no
+    // f32 literal can express this directly, hence going via `Value` rather than field
+    // assignment), which `normalize` used to wave through — the value only became a problem
+    // once it crossed to JS, where `JSON.stringify` turns `Infinity` into `null` with no error
+    // anywhere in between.
+    #[test]
+    fn a_clip_with_a_non_finite_volume_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let mut json = serde_json::to_value(&p).unwrap();
+        json["timeline"]["tracks"][0]["clips"][0]["volume"] = serde_json::json!(1e300);
+        let mut loaded: Project = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn a_clip_with_ordinary_scalars_still_loads() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.volume = 0.8;
+        track.pan = -0.3;
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.volume = 1.5;
+        clip.pan = 0.2;
+        clip.speed.rate = 2.0;
+        clip.transform.opacity = 0.5;
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let json = serde_json::to_string(&p).unwrap();
+        let mut loaded: Project = serde_json::from_str(&json).unwrap();
+        assert!(loaded.normalize().is_ok());
     }
 
     fn leaf_clip() -> Clip {
