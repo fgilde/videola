@@ -17,6 +17,9 @@ apps/desktop/src-tauri/gen
 **/gen/android
 **/gen/apple
 
+# VitePress
+apps/docs/.vitepress/cache
+
 # WASM build output
 **/pkg
 packages/core/src/wasm
