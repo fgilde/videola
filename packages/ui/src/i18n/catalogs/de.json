@@ -47,6 +47,7 @@
   "error.mediaMetadata": "Die technischen Daten dieser Datei sind unbrauchbar.",
   "error.mediaHashInvalid": "Die Kennung dieses Mediums ist fehlerhaft.",
   "error.mediaStoreUnavailable": "Der Medienspeicher ist nicht verfügbar.",
+  "error.mediaMissing": "Die Daten dieses Mediums liegen nicht mehr im Speicher.",
   "error.mediaTooLarge": "Die Medien dieses Projekts sind zu groß für eine Projektdatei.",
   "warning.missingMedia": "{count} Medium fehlt im Projekt | {count} Medien fehlen im Projekt",
   "empty.noTracks": "Noch keine Spuren. Lege die erste über „Spur hinzufügen“ in der Kopfzeile an."

@@ -47,6 +47,7 @@
   "error.mediaMetadata": "This file's technical data is unusable.",
   "error.mediaHashInvalid": "This medium's identifier is malformed.",
   "error.mediaStoreUnavailable": "Media storage is unavailable.",
+  "error.mediaMissing": "This medium's data is no longer in storage.",
   "error.mediaTooLarge": "This project's media exceed the size a project file can hold.",
   "warning.missingMedia": "{count} medium is missing from the project | {count} media are missing from the project",
   "empty.noTracks": "No tracks yet. Create the first one with “Add track” in the top bar."
