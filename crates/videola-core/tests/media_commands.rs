@@ -280,9 +280,10 @@ fn media_remove_rejects_compound_nesting_deeper_than_the_limit() {
 
     let result = Command::MediaRemove { media: id }.apply(&mut project);
     assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
-    // The library check happens before the walk mutates anything: a caller that applies the
-    // command directly (no clone to fall back on, unlike `Document::dispatch`) must not see the
-    // library entry gone while the clip that used it is still sitting there dangling.
+    // The walk itself mutates as it descends — clips at shallower levels than the failing depth
+    // are already gone by the time this assertion runs. The library entry survives specifically
+    // because `remove_media` only retains it after the walk returns `Ok`, not because anything
+    // was verified up front.
     assert_eq!(project.library.len(), 1);
 }
 

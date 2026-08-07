@@ -157,10 +157,13 @@ pub(super) fn remove_media(target: &mut Project, media: &MediaId) -> Result<()> 
     if !target.library.iter().any(|asset| &asset.id == media) {
         return Err(CoreError::MediaNotAvailable(media.clone()));
     }
-    // The library is only mutated once the walk below has verified the timeline is shallow
-    // enough to finish; a caller invoking `Command::apply` directly (no clone to discard a
-    // partial mutation on error, unlike `Document::dispatch`) must never observe the library
-    // entry gone while a clip still references it.
+    // `retain` below runs *while* the walk descends, so a depth-cap failure at level 9 still
+    // leaves clips at shallower levels removed — this does not verify before mutating. What it
+    // does guarantee: the library entry is only dropped once the walk has returned `Ok`, because
+    // this line runs after the `?`. A caller invoking `Command::apply` directly (no clone to
+    // discard a partial mutation on error, unlike `Document::dispatch`) can still end up with
+    // orphaned clips removed out from under a medium that failed to fully clear, but never with
+    // the library entry gone while some clip still references it.
     remove_clips_using(&mut target.timeline, media, 0)?;
     target.library.retain(|asset| &asset.id != media);
     Ok(())

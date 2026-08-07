@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn seconds_conversion_is_lossless_for_whole_seconds() {
+    fn seconds_conversion_is_lossless_for_a_whole_and_a_fractional_value() {
         assert_eq!(Time::from_seconds(2.5).as_seconds(), 2.5);
         assert_eq!(Time::from_seconds(0.0), Time::ZERO);
     }

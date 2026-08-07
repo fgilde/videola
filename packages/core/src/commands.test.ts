@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cmd, FLICKS_PER_SECOND, framesToTime, secondsToTime, timeToSeconds } from "./commands";
+import { cmd, secondsToTime, timeToSeconds } from "./commands";
 import type { Command } from "./generated";
 import { COMMAND_LABELS } from "./generated";
 
@@ -48,16 +48,10 @@ describe("time conversion", () => {
     }
   });
 
-  it("stays inside the safe integer range for a four hour timeline", () => {
-    expect(secondsToTime(4 * 3600)).toBeLessThan(Number.MAX_SAFE_INTEGER);
-  });
-
-  it("converts a frame number to flicks using a fps rate", () => {
-    expect(framesToTime(1, { numerator: 25, denominator: 1 })).toBe(FLICKS_PER_SECOND / 25);
-  });
-
-  it("rounds a non-integral frame rate to an integer flick time", () => {
-    const ntsc30 = { numerator: 30000, denominator: 1001 };
-    expect(Number.isInteger(framesToTime(1, ntsc30))).toBe(true);
+  // The bound that actually matters: Time::MAX_REASONABLE on the Rust side caps a project at
+  // 24 hours (crates/videola-core/src/model/time.rs), so that is the longest timeline this
+  // conversion ever has to survive without losing precision to a float round-trip.
+  it("stays inside the safe integer range up to the longest timeline the core accepts", () => {
+    expect(secondsToTime(24 * 3600)).toBeLessThan(Number.MAX_SAFE_INTEGER);
   });
 });

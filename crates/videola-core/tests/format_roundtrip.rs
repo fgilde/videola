@@ -13,7 +13,6 @@ fn save_options() -> SaveOptions {
         created: "2026-08-07T10:00:00Z".into(),
         modified: "2026-08-07T11:00:00Z".into(),
         locale: "de".into(),
-        slim: true,
     }
 }
 

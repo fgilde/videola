@@ -17,6 +17,15 @@ use crate::{CoreError, Result};
 // tops out at 4 GiB — typically far less in a real browser tab.
 const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
 
+// `project.json`/`videola.json` get their own, much smaller cap: the 512 MiB figure above reasons
+// about a *media* entry's compressed-to-decompressed ratio, but a JSON entry does not decompress
+// into bytes, it decompresses into a `serde_json::Value` tree — object/array nodes, `String`
+// allocations, UTF-8 validation buffers — which for a 512 MiB string routinely costs several
+// times that in a wasm32 tab whose entire linear memory tops out well under 512 MiB to begin
+// with. No legitimate project (even a large one, hand-authored or AI-generated) gets remotely
+// close to this.
+const MAX_JSON_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+
 // Bounds how much a single `read` call can commit to `LoadedProject.media` in total, independent
 // of how many individual entries (each already under MAX_ENTRY_BYTES) add up to it. Public so
 // callers accumulating media outside a `read` (e.g. importing from JS) can enforce the same
@@ -47,7 +56,7 @@ pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {
     let mut archive =
         ZipArchive::new(source).map_err(|error| CoreError::NotAProject(error.to_string()))?;
 
-    let raw_project = read_required_entry(&mut archive, PROJECT_ENTRY)?;
+    let raw_project = read_required_entry(&mut archive, PROJECT_ENTRY, MAX_JSON_ENTRY_BYTES)?;
     let manifest = read_manifest(&mut archive)?;
     let (project, mut warnings) = super::migrate::load(&raw_project)?;
     let (media, media_warnings) = read_media(&mut archive)?;
@@ -69,15 +78,19 @@ pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {
 }
 
 fn read_manifest<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest> {
-    let raw = read_required_entry(archive, MANIFEST_ENTRY)?;
+    let raw = read_required_entry(archive, MANIFEST_ENTRY, MAX_JSON_ENTRY_BYTES)?;
     serde_json::from_str(&raw).map_err(|error| CoreError::NotAProject(error.to_string()))
 }
 
 // A missing, oversized or unreadable *required* entry all mean the same thing to the caller:
 // this archive is not a well-formed videola project. Fine-grained distinction between those
 // cases only matters for media entries (see read_media_entry), which degrade instead of aborting.
-fn read_required_entry<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Result<String> {
-    let bytes = read_entry_bytes(archive, name, MAX_ENTRY_BYTES)
+fn read_required_entry<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    name: &str,
+    cap: u64,
+) -> Result<String> {
+    let bytes = read_entry_bytes(archive, name, cap)
         .map_err(|_| CoreError::NotAProject(format!("missing or invalid entry: {name}")))?;
     String::from_utf8(bytes).map_err(|error| CoreError::NotAProject(error.to_string()))
 }
@@ -329,6 +342,24 @@ mod tests {
         let result = read_entry_bytes(&mut archive, "project.json", 10).unwrap();
 
         assert_eq!(result, b"0123456789");
+    }
+
+    // I15: `project.json`/`videola.json` must not share the media entries' 512 MiB cap — a JSON
+    // entry that size would build a `Value` tree several times larger in memory, in a wasm32 tab
+    // whose linear memory tops out well below that.
+    #[test]
+    fn the_json_entry_cap_is_smaller_than_the_media_entry_cap() {
+        const { assert!(MAX_JSON_ENTRY_BYTES < MAX_ENTRY_BYTES) };
+    }
+
+    #[test]
+    fn read_required_entry_honours_the_caller_supplied_cap() {
+        let bytes = tiny_archive("project.json", b"0123456789");
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+
+        let result = read_required_entry(&mut archive, "project.json", 5);
+
+        assert!(matches!(result, Err(CoreError::NotAProject(_))));
     }
 
     #[test]

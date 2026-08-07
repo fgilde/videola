@@ -3,7 +3,6 @@ import type {
   Command,
   ParamValue,
   ProjectSettings,
-  Rate,
   Time,
   TrackKind,
   TrimEdge,
@@ -17,10 +16,6 @@ export function secondsToTime(seconds: number): Time {
 
 export function timeToSeconds(time: Time): number {
   return time / FLICKS_PER_SECOND;
-}
-
-export function framesToTime(frame: number, fps: Rate): Time {
-  return Math.round((frame * FLICKS_PER_SECOND * fps.denominator) / fps.numerator);
 }
 
 export const cmd = {

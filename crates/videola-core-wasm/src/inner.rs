@@ -212,7 +212,6 @@ mod tests {
                 created: "c".into(),
                 modified: "m".into(),
                 locale: "de".into(),
-                slim: true,
             })
             .unwrap();
 

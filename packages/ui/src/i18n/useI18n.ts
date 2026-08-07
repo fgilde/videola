@@ -9,7 +9,7 @@ export interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: (key: string, vars?: Vars) => string;
-  formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
+  formatNumber: (value: number) => string;
   formatTimecode: (seconds: number, fps: Rate) => string;
 }
 

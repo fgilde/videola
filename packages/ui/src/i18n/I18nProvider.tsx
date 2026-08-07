@@ -25,8 +25,7 @@ export function I18nProvider({ children }: { children: ReactNode }): ReactElemen
   const value = useMemo(() => {
     const catalog = CATALOGS[locale];
     const defaultNumberFormat = new Intl.NumberFormat(locale);
-    const formatNumber = (input: number, options?: Intl.NumberFormatOptions) =>
-      options === undefined ? defaultNumberFormat.format(input) : new Intl.NumberFormat(locale, options).format(input);
+    const formatNumber = (input: number) => defaultNumberFormat.format(input);
     return {
       locale,
       setLocale,

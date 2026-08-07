@@ -73,8 +73,8 @@ fn ease(left: &Keyframe, right: &Keyframe, t: f32) -> f32 {
     }
 }
 
-// ponytail: 24 Bisektionsschritte statt Newton-Iteration — reicht für Sub-Pixel-Genauigkeit;
-// auf Newton wechseln, falls Keyframe-Auswertung je im Profil auffällt.
+// ponytail: 24 bisection steps instead of Newton iteration — enough for sub-pixel accuracy;
+// switch to Newton if keyframe evaluation ever shows up in a profile.
 fn cubic_bezier_y_at(p1: [f32; 2], p2: [f32; 2], x: f32) -> f32 {
     let mut low = 0.0f32;
     let mut high = 1.0f32;

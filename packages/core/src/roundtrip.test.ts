@@ -30,7 +30,6 @@ describe("save and reopen through the real WASM backend", () => {
       created: "2026-01-01T00:00:00.000Z",
       modified: "2026-01-01T00:00:00.000Z",
       locale: "de",
-      slim: true,
     });
 
     const reopened = new VideolaDocument(await createWasmBackend(bytes));

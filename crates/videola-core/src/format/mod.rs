@@ -36,8 +36,6 @@ pub struct SaveOptions {
     pub created: String,
     pub modified: String,
     pub locale: String,
-    #[serde(default)]
-    pub slim: bool,
 }
 
 #[cfg(test)]
@@ -48,22 +46,7 @@ impl SaveOptions {
             created: "2026-08-07T10:00:00Z".into(),
             modified: "2026-08-07T10:00:00Z".into(),
             locale: "de".into(),
-            slim: true,
         }
-    }
-}
-
-#[cfg(test)]
-mod save_options_tests {
-    use super::SaveOptions;
-
-    #[test]
-    fn slim_defaults_to_false_when_the_caller_omits_it() {
-        let options: SaveOptions = serde_json::from_str(
-            r#"{"appVersion":"1.0.0","created":"c","modified":"m","locale":"de"}"#,
-        )
-        .unwrap();
-        assert!(!options.slim);
     }
 }
 
@@ -92,10 +75,6 @@ impl MemoryMediaStore {
     // use this instead of the fallible `MediaStore::read` — no error path, nothing to swallow.
     pub fn get(&self, id: &MediaId) -> Option<&Vec<u8>> {
         self.entries.get(id)
-    }
-
-    pub fn take(self) -> BTreeMap<MediaId, Vec<u8>> {
-        self.entries
     }
 }
 

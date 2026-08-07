@@ -5,7 +5,6 @@ export interface SaveOptions {
   created: string;
   modified: string;
   locale: string;
-  slim: boolean;
 }
 
 export interface ImportMediaResult {
