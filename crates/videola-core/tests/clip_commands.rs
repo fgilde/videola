@@ -396,6 +396,20 @@ fn reverse_is_a_flag_and_speed_must_be_positive() {
 }
 
 #[test]
+fn an_absurd_speed_rate_is_rejected() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipSetSpeed {
+            clip,
+            rate: 1e30,
+            reverse: false,
+            preserve_pitch: false,
+        }))
+        .is_err());
+}
+
+#[test]
 fn non_finite_speed_is_rejected() {
     let (mut doc, _) = doc_with_clip(0.0, 2.0);
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();

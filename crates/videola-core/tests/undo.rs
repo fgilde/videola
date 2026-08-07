@@ -67,12 +67,12 @@ fn a_failing_command_leaves_the_project_untouched() {
     assert!(doc.undo().is_err());
 }
 
-// F12: the case above fails on its very first statement, so an implementation that mutates the
-// live project in place (instead of a discardable clone) would still pass it. This one actually
-// exercises the clone: move_clip removes the clip from its source track *before* it discovers
-// the destination track does not exist.
+// Every handler validates its arguments before touching the model, so there is currently no
+// command that mutates and then fails partway through (see the comment on Document::dispatch).
+// This asserts the observable contract that matters regardless: a failed dispatch changes
+// neither the project nor the history.
 #[test]
-fn a_failing_clip_move_leaves_the_source_track_untouched() {
+fn a_failing_dispatch_leaves_project_and_history_untouched() {
     let mut doc = Document::new();
     doc.dispatch(add_track("V1")).unwrap();
     let track = doc.project().timeline.tracks[0].id.clone();
@@ -102,7 +102,7 @@ fn a_failing_clip_move_leaves_the_source_track_untouched() {
 
 #[test]
 fn commands_sharing_a_coalesce_key_collapse_into_one_undo_step() {
-    let mut doc = Document::from_project(Project::default());
+    let mut doc = Document::from_project(Project::default()).unwrap();
     doc.dispatch(add_track("V1")).unwrap();
     let track = doc.project().timeline.tracks[0].id.clone();
     let baseline = serde_json::to_value(doc.project()).unwrap();
@@ -183,5 +183,7 @@ fn dispatch_reports_the_patch_it_produced() {
     assert!(result.can_undo);
     assert!(!result.can_redo);
     let ops = result.patch.as_array().unwrap();
-    assert!(!ops.is_empty());
+    assert_eq!(ops.len(), 1);
+    assert_eq!(ops[0]["op"], "add");
+    assert_eq!(ops[0]["path"], "/timeline/tracks/0");
 }

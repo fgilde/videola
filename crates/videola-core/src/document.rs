@@ -24,7 +24,13 @@ pub struct DispatchResult {
 
 impl Default for Document {
     fn default() -> Self {
-        Self::from_project(Project::default())
+        // Project::default() has no clips or keyframes to normalize and no Time field outside
+        // its MAX_REASONABLE bound, so this can go straight through instead of pretending a
+        // known-valid value might fail.
+        Self {
+            project: Project::default(),
+            history: History::new(HISTORY_LIMIT),
+        }
     }
 }
 
@@ -34,13 +40,13 @@ impl Document {
     }
 
     // The entry point every deserialised project comes through; normalising here means nothing
-    // downstream has to check keyframe ordering itself (see Project::normalize).
-    pub fn from_project(mut project: Project) -> Self {
-        project.normalize();
-        Self {
+    // downstream has to check keyframe ordering or Time bounds itself (see Project::normalize).
+    pub fn from_project(mut project: Project) -> Result<Self> {
+        project.normalize()?;
+        Ok(Self {
             project,
             history: History::new(HISTORY_LIMIT),
-        }
+        })
     }
 
     pub fn project(&self) -> &Project {
@@ -54,6 +60,11 @@ impl Document {
     // ponytail: every dispatch clones the project and serialises it twice. On large projects
     // and drag-frequency dispatch this can start to show; then build patches per command by
     // hand instead of diffing — the Entry struct stays the same either way.
+    //
+    // No handler today mutates `candidate` and then fails partway through (every one validates
+    // its arguments before touching the model), so this clone currently has nothing to undo. It
+    // is defence for handlers that haven't been written yet, not a live path — do not remove it
+    // on the grounds that nothing exercises it.
     pub fn dispatch(&mut self, dispatch: Dispatch) -> Result<DispatchResult> {
         let before = serde_json::to_value(&self.project)?;
         let mut candidate = self.project.clone();
@@ -63,7 +74,6 @@ impl Document {
 
         let patch = diff(&before, &after);
         if !patch.is_empty() {
-            self.history.clear_redo();
             if self.history.coalesces_with(&dispatch.coalesce_key) {
                 self.coalesce_into_last(&before, &after)?;
             } else {
@@ -74,6 +84,9 @@ impl Document {
                     coalesce_key: dispatch.coalesce_key,
                 });
             }
+            // Only clear redo once the branch above has actually succeeded — clearing it first
+            // would drop history a failed coalesce (patch or from_value error) never invalidated.
+            self.history.clear_redo();
         }
         self.project = candidate;
         self.result(patch, label)

@@ -45,6 +45,7 @@ pub(super) fn move_clip(
     }
     let start = bounded(start.clamp_min_zero())?;
     let (source_track, index) = find_clip_mut(target, clip)?;
+    bounded(checked_add(start, source_track.clips[index].duration)?)?;
     let mut moved = source_track.clips.remove(index);
     moved.start = start;
     let destination = target
@@ -67,6 +68,7 @@ pub(super) fn trim(target: &mut Project, clip: &ClipId, edge: TrimEdge, delta: T
     let start = bounded(start)?;
     let duration = bounded(duration)?;
     let in_point = bounded(in_point)?;
+    bounded(checked_add(start, duration)?)?;
 
     let clip = &mut track.clips[index];
     clip.start = start;
@@ -147,6 +149,10 @@ pub(super) fn split(target: &mut Project, clip: &ClipId, at: Time) -> Result<()>
     Ok(())
 }
 
+// Above this, consumed_source()'s `as i64` cast starts saturating instead of overflowing
+// cleanly, which would silently corrupt the source range rather than raising an error.
+const MAX_SPEED_RATE: f32 = 100.0;
+
 pub(super) fn set_speed(
     target: &mut Project,
     clip: &ClipId,
@@ -155,8 +161,10 @@ pub(super) fn set_speed(
     preserve_pitch: bool,
 ) -> Result<()> {
     let rate = finite(rate)?;
-    if rate <= 0.0 {
-        return Err(CoreError::InvalidArgument("rate must be positive".into()));
+    if !(0.0 < rate && rate <= MAX_SPEED_RATE) {
+        return Err(CoreError::InvalidArgument(
+            "rate must be positive and at most 100".into(),
+        ));
     }
     let (track, index) = find_clip_mut(target, clip)?;
     let clip = &mut track.clips[index];

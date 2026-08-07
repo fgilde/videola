@@ -244,4 +244,29 @@ mod tests {
         assert!(json.get("toTrack").is_some());
         assert!(json.get("to_track").is_none());
     }
+
+    // The direction a TypeScript client actually exercises: it sends camelCase, so a regression
+    // in rename_all_fields would show up here, not in the serialise-only test above.
+    #[test]
+    fn a_camelcase_payload_from_a_client_deserialises_correctly() {
+        let json = serde_json::json!({
+            "type": "clip.move",
+            "clip": "clp_1",
+            "toTrack": "trk_1",
+            "start": 42,
+        });
+        let command: Command = serde_json::from_value(json).unwrap();
+        match command {
+            Command::ClipMove {
+                clip,
+                to_track,
+                start,
+            } => {
+                assert_eq!(clip, ClipId::from("clp_1".to_string()));
+                assert_eq!(to_track, TrackId::from("trk_1".to_string()));
+                assert_eq!(start, Time::from_flicks(42));
+            }
+            other => panic!("expected ClipMove, got {other:?}"),
+        }
+    }
 }

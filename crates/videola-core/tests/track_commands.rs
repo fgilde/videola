@@ -81,6 +81,14 @@ fn removing_a_track_takes_its_clips_with_it() {
 
     assert_eq!(doc.project().timeline.tracks.len(), 1);
     assert_eq!(doc.project().timeline.tracks[0].name, "V2");
+    let total_clips: usize = doc
+        .project()
+        .timeline
+        .tracks
+        .iter()
+        .map(|t| t.clips.len())
+        .sum();
+    assert_eq!(total_clips, 0);
 }
 
 #[test]

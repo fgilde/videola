@@ -7,7 +7,8 @@ use super::effect::Effect;
 use super::keyframe::sort_track;
 use super::media::MediaAsset;
 use super::timeline::{Marker, Timeline, Track};
-use super::{ProjectId, Rate, TrackId};
+use super::{ProjectId, Rate, Time, TrackId};
+use crate::{CoreError, Result};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -62,35 +63,60 @@ impl Project {
     }
 
     // Keyframe tracks come straight from deserialised, untrusted JSON and `evaluate` assumes
-    // sorted-by-time (see keyframe.rs). The loader calls this once after parsing so nothing
-    // downstream has to re-check it.
-    pub fn normalize(&mut self) {
+    // sorted-by-time (see keyframe.rs); the same JSON can also carry a corrupt or hostile Time
+    // value (e.g. i64::MAX), which Clip::end()/out_point() would then add unchecked. The loader
+    // calls this once after parsing so nothing downstream has to re-check either.
+    pub fn normalize(&mut self) -> Result<()> {
         for track in &mut self.timeline.tracks {
-            normalize_track(track);
+            normalize_track(track)?;
         }
-        normalize_effects(&mut self.master.effects);
+        normalize_effects(&mut self.master.effects)?;
+        for marker in &self.markers {
+            bounded(marker.time)?;
+        }
+        Ok(())
     }
 }
 
-fn normalize_track(track: &mut Track) {
+fn normalize_track(track: &mut Track) -> Result<()> {
     for clip in &mut track.clips {
-        normalize_clip(clip);
+        normalize_clip(clip)?;
     }
-    normalize_effects(&mut track.effects);
+    normalize_effects(&mut track.effects)
 }
 
-fn normalize_clip(clip: &mut Clip) {
+fn normalize_clip(clip: &mut Clip) -> Result<()> {
+    bounded(clip.start)?;
+    bounded(clip.duration)?;
+    bounded(clip.in_point)?;
+    bounded(clip.fades.in_duration)?;
+    bounded(clip.fades.out_duration)?;
     for keyframes in clip.keyframes.values_mut() {
         sort_track(keyframes);
+        for keyframe in keyframes.iter() {
+            bounded(keyframe.time)?;
+        }
     }
-    normalize_effects(&mut clip.effects);
+    normalize_effects(&mut clip.effects)
 }
 
-fn normalize_effects(effects: &mut [Effect]) {
+fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
     for effect in effects {
         for keyframes in effect.keyframes.values_mut() {
             sort_track(keyframes);
+            for keyframe in keyframes.iter() {
+                bounded(keyframe.time)?;
+            }
         }
+    }
+    Ok(())
+}
+
+fn bounded(time: Time) -> Result<()> {
+    if time.as_flicks() < 0 || time > Time::MAX_REASONABLE {
+        Err(CoreError::InvalidArgument("time value out of range".into()))
+    } else {
+        Ok(())
     }
 }
 
@@ -252,12 +278,33 @@ mod tests {
         let mut p = Project::default();
         p.timeline.tracks.push(track);
 
-        p.normalize();
+        p.normalize().unwrap();
 
         let keyframes = &p.timeline.tracks[0].clips[0].keyframes["opacity"];
         assert_eq!(
             crate::model::keyframe::evaluate(keyframes, Time::from_seconds(1.0)),
             Some(ParamValue::Float(50.0))
         );
+    }
+
+    #[test]
+    fn a_clip_with_an_absurd_start_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.start = Time::from_flicks(i64::MAX);
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let json = serde_json::to_string(&p).unwrap();
+        let mut loaded: Project = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
     }
 }
