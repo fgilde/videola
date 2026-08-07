@@ -122,13 +122,21 @@ pub(super) fn import_media(target: &mut Project, asset: &MediaAsset) -> Result<(
 }
 
 // `media.import` is a trust boundary like every other command: `id` arrives as an arbitrary
-// string that `writer::media_entry_name` later interpolates unsanitised into a ZIP entry path,
-// and `duration` feeds the same bound `Project::normalize` enforces on load. Rejecting both here
-// means a project that dispatches cleanly can also be saved and reopened.
+// string that `writer::media_entry_name` later interpolates into a ZIP entry path, and
+// `duration` feeds the same bound `Project::normalize` enforces on load. Rejecting both here
+// means a project that dispatches cleanly can also be saved and reopened. The id check requires
+// the canonical `med_<64 hex>` form, not just a 64-hex tail: `reader::media_id_from_entry`
+// reconstructs ids as `med_<hash>` on load, so an id missing the prefix would dangle for every
+// clip that references it after a save/load round trip.
 fn validate_new_asset(asset: &MediaAsset) -> Result<()> {
-    if !is_content_hash(asset.id.content_hash()) {
+    if !asset
+        .id
+        .as_str()
+        .strip_prefix("med_")
+        .is_some_and(is_content_hash)
+    {
         return Err(CoreError::InvalidArgument(
-            "media id must be a content hash".into(),
+            "media id must be \"med_\" followed by a 64-character content hash".into(),
         ));
     }
     if let Some(duration) = asset.duration {
@@ -138,12 +146,16 @@ fn validate_new_asset(asset: &MediaAsset) -> Result<()> {
 }
 
 pub(super) fn remove_media(target: &mut Project, media: &MediaId) -> Result<()> {
-    let before = target.library.len();
-    target.library.retain(|asset| &asset.id != media);
-    if target.library.len() == before {
+    if !target.library.iter().any(|asset| &asset.id == media) {
         return Err(CoreError::MediaNotAvailable(media.clone()));
     }
-    remove_clips_using(&mut target.timeline, media, 0)
+    // The library is only mutated once the walk below has verified the timeline is shallow
+    // enough to finish; a caller invoking `Command::apply` directly (no clone to discard a
+    // partial mutation on error, unlike `Document::dispatch`) must never observe the library
+    // entry gone while a clip still references it.
+    remove_clips_using(&mut target.timeline, media, 0)?;
+    target.library.retain(|asset| &asset.id != media);
+    Ok(())
 }
 
 // A clip using the removed medium can sit inside a Compound clip's own nested timeline, not just
@@ -159,12 +171,12 @@ fn remove_clips_using(timeline: &mut Timeline, media: &MediaId, depth: usize) ->
         ));
     }
     for track in &mut timeline.tracks {
+        // A compound clip that loses every one of its own clips is kept, not deleted, by this
+        // retain: it may still carry other, unrelated clips, or the resulting gap on the parent
+        // track may be exactly what the author wants. media.remove only deletes clips that
+        // themselves reference the removed medium, never their container.
         track.clips.retain(|clip| !uses_media(clip, media));
         for clip in &mut track.clips {
-            // A compound clip that loses every one of its own clips is kept, not deleted: it may
-            // still carry other, unrelated clips, or the resulting gap on the parent track may be
-            // exactly what the author wants. media.remove only deletes clips that themselves
-            // reference the removed medium, never their container.
             if let ClipSource::Compound { timeline: nested } = &mut clip.source {
                 remove_clips_using(nested, media, depth + 1)?;
             }

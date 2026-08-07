@@ -72,14 +72,25 @@ fn write_media<W: Write + Seek>(
 
 // Sanitised here too, not just at `MediaAsset::extension()`'s call site: this function is a
 // public entry-name builder future callers (Tasks 14-16) can reach directly, and the guarantee
-// against path-traversal / oversized extensions must hold no matter who calls it.
+// against path-traversal / oversized extensions must hold no matter who calls it. That includes
+// `id`: `command::project::import_media` rejects a non-canonical id, but a `.videola` loaded from
+// disk skips that command entirely, and `normalize_library` never checks id shape — so a hostile
+// `library[].id` reaches here regardless of path. Hashing anything that isn't already a content
+// hash keeps the entry inside `MEDIA_PREFIX` either way, instead of trusting two call sites to
+// agree on validation.
 pub fn media_entry_name(id: &MediaId, extension: &str) -> String {
     let extension = if crate::model::media::is_safe_extension(extension) {
         extension
     } else {
         "bin"
     };
-    format!("{MEDIA_PREFIX}{}.{extension}", id.content_hash())
+    let hash = id.content_hash();
+    let hash = if super::reader::is_content_hash(hash) {
+        hash.to_string()
+    } else {
+        super::hash::sha256_hex(hash.as_bytes())
+    };
+    format!("{MEDIA_PREFIX}{hash}.{extension}")
 }
 
 fn deflated() -> SimpleFileOptions {
@@ -240,6 +251,44 @@ mod tests {
 
         let expected = format!("{MEDIA_PREFIX}{}.bin", id.content_hash());
         assert!(entry_names(sink.get_ref()).contains(&expected));
+    }
+
+    // `import_media` rejects a non-canonical id at the command boundary, but a `.videola` loaded
+    // straight from disk never goes through that command, and `normalize_library` does not check
+    // id shape either — so a hostile `library[].id` reaches `write` regardless of how the project
+    // got here. `media_entry_name` is the one guard that must hold no matter which path led to it.
+    #[test]
+    fn a_hostile_media_id_cannot_escape_the_media_prefix_on_save() {
+        let bytes = b"data".to_vec();
+        let id = MediaId::from("med_../../evil".to_string());
+        let mut store = MemoryMediaStore::default();
+        store.insert(id.clone(), bytes.clone());
+
+        let mut project = Project::default();
+        project.library.push(MediaAsset::new(
+            id,
+            "clip.mp4".into(),
+            "video/mp4".into(),
+            MediaKind::Video,
+            bytes.len() as u64,
+        ));
+        let loaded = crate::Document::from_project(project).unwrap();
+
+        let mut sink = Cursor::new(Vec::new());
+        write(
+            &mut sink,
+            loaded.project(),
+            &store,
+            &SaveOptions::for_test(),
+        )
+        .unwrap();
+
+        for name in entry_names(sink.get_ref()) {
+            if let Some(rest) = name.strip_prefix(MEDIA_PREFIX) {
+                assert!(!rest.contains(".."), "entry escaped media/: {name}");
+                assert!(!rest.contains('/'), "entry escaped media/: {name}");
+            }
+        }
     }
 
     #[test]

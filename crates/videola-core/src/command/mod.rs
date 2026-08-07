@@ -230,17 +230,12 @@ pub(crate) fn finite(value: f32) -> Result<f32> {
     }
 }
 
-// Shared by every command that accepts a `Time` from the wire: clip placement, trims, and now
-// media metadata all need the same bound `Project::normalize` enforces on load, so a value that
-// would fail to reload is rejected up front instead of round-tripping through save/load once.
+// Shared by every command that accepts a `Time` from the wire: clip placement, trims, and media
+// metadata all need the same bound, defined once in `model::project::bounded`. This wrapper only
+// exists because command handlers want the value back to keep using after the check.
 pub(crate) fn bounded(t: Time) -> Result<Time> {
-    if t.as_flicks() < 0 || t > Time::MAX_REASONABLE {
-        Err(crate::CoreError::InvalidArgument(
-            "time value out of range".into(),
-        ))
-    } else {
-        Ok(t)
-    }
+    crate::model::project::bounded(t)?;
+    Ok(t)
 }
 
 #[cfg(test)]

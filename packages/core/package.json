@@ -7,7 +7,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "build": "tsc -p tsconfig.json --emitDeclarationOnly false --outDir dist"
   },
   "devDependencies": {

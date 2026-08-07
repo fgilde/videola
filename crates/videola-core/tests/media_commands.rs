@@ -80,6 +80,20 @@ fn import_media_rejects_an_id_that_is_not_a_content_hash() {
     assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
 }
 
+// A 64-hex id missing the `med_` prefix would pass a check against `content_hash()` alone
+// (`content_hash()` falls back to the full string when there is no prefix to strip), but
+// `reader::media_id_from_entry` always reconstructs `med_<hash>` on load, so every clip
+// referencing the un-prefixed id would dangle after one save/load round trip.
+#[test]
+fn import_media_rejects_an_id_missing_the_med_prefix() {
+    let mut doc = Document::new();
+    let mut bad = asset(b"a", "a.mp4");
+    bad.id = MediaId::from(bad.id.content_hash().to_string());
+
+    let result = doc.dispatch(Dispatch::new(Command::MediaImport { asset: bad }));
+    assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
+}
+
 #[test]
 fn import_media_rejects_a_duration_out_of_range() {
     let mut doc = Document::new();
@@ -243,6 +257,10 @@ fn media_remove_rejects_compound_nesting_deeper_than_the_limit() {
 
     let result = Command::MediaRemove { media: id }.apply(&mut project);
     assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
+    // The library check happens before the walk mutates anything: a caller that applies the
+    // command directly (no clone to fall back on, unlike `Document::dispatch`) must not see the
+    // library entry gone while the clip that used it is still sitting there dangling.
+    assert_eq!(project.library.len(), 1);
 }
 
 // The counterpart to the rejection test above: two levels of nesting is well within the limit
@@ -271,4 +289,27 @@ fn media_remove_reaches_two_legitimate_levels_of_compound_nesting() {
         },
         other => panic!("expected a compound clip, got {other:?}"),
     }
+}
+
+// Depths 2 and 10 alone would also pass a stricter-than-intended `>=` check that rejects one
+// level earlier than `normalize` does; nesting exactly to the limit pins that boundary.
+#[test]
+fn media_remove_accepts_nesting_exactly_at_the_depth_limit() {
+    let media = asset(b"a", "a.mp4");
+    let id = media.id.clone();
+
+    let mut clip = leaf_clip_on(id.clone());
+    for _ in 0..8 {
+        clip = wrap_in_compound(clip);
+    }
+    let mut track = Track::new(TrackKind::Video, "V1".into());
+    track.clips.push(clip);
+
+    let mut project = Project::default();
+    project.timeline.tracks.push(track);
+    project.library.push(media);
+
+    Command::MediaRemove { media: id }
+        .apply(&mut project)
+        .unwrap();
 }

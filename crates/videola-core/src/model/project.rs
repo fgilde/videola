@@ -160,7 +160,10 @@ fn normalize_library(library: &[MediaAsset]) -> Result<()> {
     Ok(())
 }
 
-fn bounded(time: Time) -> Result<()> {
+// The one definition of the `Time` bound `Project::normalize` enforces on load; the command
+// layer re-exposes this (see `command::bounded`) so a value that would fail to reload is
+// rejected up front instead of round-tripping through save/load once.
+pub(crate) fn bounded(time: Time) -> Result<()> {
     if time.as_flicks() < 0 || time > Time::MAX_REASONABLE {
         Err(CoreError::InvalidArgument("time value out of range".into()))
     } else {

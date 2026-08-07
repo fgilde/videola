@@ -8,8 +8,14 @@ use videola_core::DispatchResult;
 
 // ts-rs 12's `export_all` takes a `&Config` (older versions took none), and this version reads no
 // Cargo.toml metadata for the export directory at all, so it is set here instead.
+//
+// The completeness check below used to be a separate `#[test]` that read this same directory.
+// `cargo test` runs tests in a binary in parallel by default, so that second test had no
+// guarantee it ran after this one wrote the files — harmless only because the files are already
+// committed from a prior run. Folding both into one test removes that race and makes the name
+// "exactly the files ts-rs emits" actually true of what this run produced, not of leftovers.
 #[test]
-fn generated_bindings_land_in_the_core_package() {
+fn generated_bindings_are_complete_and_the_barrel_matches() {
     let generated = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/core/src/generated");
     let cfg = Config::default().with_out_dir(generated.clone());
 
@@ -27,18 +33,12 @@ fn generated_bindings_land_in_the_core_package() {
     for name in ["Project.ts", "Clip.ts", "Command.ts", "ParamValue.ts"] {
         assert!(generated.join(name).exists(), "missing binding: {name}");
     }
-}
 
-// `cargo test --test export_types` regenerates rather than merely checking, so it can never by
-// itself catch staleness, and `git diff` alone misses a type that was added (new untracked file,
-// diff is silent) or removed/renamed (ts-rs never deletes, so the old file just sits there,
-// unreferenced but still tracked). This closes the half of that gap that lives in Rust: the
-// barrel must name exactly the files ts-rs actually emits, no more, no less. `serde_json/` holds
-// only the shared `JsonValue` helper type and is exempt by design (see the brief).
-#[test]
-fn the_barrel_reexports_exactly_the_files_ts_rs_emits() {
-    let generated = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/core/src/generated");
-
+    // `git diff` alone misses a type that was added (new untracked file, diff is silent) or
+    // removed/renamed (ts-rs never deletes, so the old file just sits there, unreferenced but
+    // still tracked). This closes the half of that gap that lives in Rust: the barrel must name
+    // exactly the files ts-rs just emitted, no more, no less. `serde_json/` holds only the shared
+    // `JsonValue` helper type and is exempt by design (see the brief).
     let mut emitted: Vec<String> = std::fs::read_dir(&generated)
         .expect("read generated dir")
         .filter_map(|entry| entry.ok())

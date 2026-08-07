@@ -62,10 +62,11 @@ impl Document {
     // and drag-frequency dispatch this can start to show; then build patches per command by
     // hand instead of diffing — the Entry struct stays the same either way.
     //
-    // No handler today mutates `candidate` and then fails partway through (every one validates
-    // its arguments before touching the model), so this clone currently has nothing to undo. It
-    // is defence for handlers that haven't been written yet, not a live path — do not remove it
-    // on the grounds that nothing exercises it.
+    // `media.remove` genuinely exercises this: it validates the medium exists before touching
+    // anything, but the compound-nesting depth cap inside `remove_clips_using` can still fail
+    // after clips at shallower levels have already been removed. That partial mutation lands on
+    // `candidate`, not `self.project`, and is discarded here — do not remove this clone on the
+    // grounds that no handler needs the rollback, one already does.
     pub fn dispatch(&mut self, dispatch: Dispatch) -> Result<DispatchResult> {
         let before = serde_json::to_value(&self.project)?;
         let mut candidate = self.project.clone();
