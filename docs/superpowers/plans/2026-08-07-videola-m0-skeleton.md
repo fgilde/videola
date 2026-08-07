@@ -21,10 +21,31 @@
 - **Alle Maps im Modell sind `BTreeMap`, niemals `HashMap`.** Der Undo-Mechanismus vergleicht serialisiertes JSON; nichtdeterministische Schlüsselreihenfolge würde Phantom-Patches erzeugen.
 - **Zeit ist `Time` in Flicks (`705_600_000` pro Sekunde), niemals `f64`-Sekunden.** 705600000 ist durch 24, 25, 30, 48, 50, 60, 90, 100, 120 fps und durch 8/16/22.05/24/32/44.1/48/88.2/96/192 kHz teilbar, also frame- und sample-genau ohne Rundungsdrift. Innerhalb der JS-Sicherheitsgrenze (2^53) reicht das für ~147 Tage Material.
 - Dependency-Versionen werden mit `cargo add` bzw. `pnpm add` aufgelöst, nicht von Hand in Manifeste geschrieben.
-- Zielversionen: Rust stable, Node 22, pnpm 10.
+- Zielversionen: Rust stable, Node 22, pnpm 10. **Installiert in dieser Umgebung:** rustc/cargo 1.97.1, Node 24.13.1, pnpm 11.20.0, MSVC-Linker vorhanden.
+- **`cargo` liegt nicht im PATH der Tool-Shells.** Jede Rust-Kommandozeile in PowerShell mit dem Prefix ausführen:
+  ```powershell
+  $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo test -p videola-core
+  ```
+  In Bash entsprechend `export PATH="$HOME/.cargo/bin:$PATH"` als erstes Kommando derselben Zeile. `pnpm` und `node` sind normal erreichbar.
+- Arbeitsbranch ist `m0-skeleton`, nicht `main`.
 - React 19 hat den globalen `JSX`-Namespace entfernt. Komponenten geben `ReactElement` zurück (`import type { ReactElement } from "react"`), nicht `JSX.Element`. Wo in diesem Plan `JSX.Element` steht, ist `ReactElement` gemeint — ersetze es beim Schreiben.
 - Reihenfolge bei neuen Paketen: **zuerst** `package.json` anlegen, **dann** `pnpm add --filter <name> …`. Ein `--filter` auf ein Paket, das pnpm noch nicht kennt, schlägt fehl.
 - `ts-rs` ab Version 10 bietet `TS::export_all()`. Bei einer älteren Version heißt die Methode `export()` und exportiert nur den eigenen Typ — dann alle Typen einzeln aufrufen.
+
+## Ausführungsgruppen
+
+Mehrere Tasks bilden eine Kompiliereinheit: `model/mod.rs` re-exportiert alle Modelldateien, und `command/mod.rs` verweist auf beide Handler-Module. Diese Tasks werden gemeinsam umgesetzt und gemeinsam getestet, jede Gruppe mit eigenem Review:
+
+| Gruppe | Tasks | Grund |
+|---|---|---|
+| A | 1 | eigenständig |
+| B | 2, 3, 4, 5, 9 | `model/mod.rs` kompiliert erst, wenn alle Modelldateien existieren |
+| C | 6, 7, 8 | `command/mod.rs` routet an `project::apply` und `clip::apply` |
+| D | 10 | eigenständig |
+| E | 11, 12 | Reader ruft `migrate::load` |
+| F–N | 13, 14, 15, 16, 17, 18, 19, 20, 21 | jeweils eigenständig |
+
+Innerhalb einer Gruppe bleibt der TDD-Zyklus pro Task erhalten: Tests zuerst, dann Implementierung. Nur der Commit rutscht ans Gruppenende, wenn ein Task für sich nicht kompilieren kann.
 
 ## Dateistruktur nach M0
 
