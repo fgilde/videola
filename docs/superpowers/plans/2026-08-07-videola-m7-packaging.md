@@ -16,7 +16,7 @@
 - Commit-Messages auf Deutsch mit transliterierten Umlauten (`ue`, `ae`, `oe`, `ss`) und englischem Conventional-Commits-Präfix. **Niemals** Co-Authored-By-, "Generated with"- oder sonstige Attribution-Zeilen.
 - Kein `unwrap()` / `expect()` in Produktiv-Rust. Jede Map ist `BTreeMap`. Zeit ist ganzzahlig in Flicks.
 - Werkzeuge: Rust stable, Node 22 oder neuer, pnpm 11 oder neuer.
-- Actions werden auf einen Major gepinnt. Stand heute aktuell: `actions/checkout@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `pnpm/setup@v2`, `Swatinem/rust-cache@v2`, `docker/setup-buildx-action@v3`, `docker/login-action@v3`, `docker/build-push-action@v6`, `softprops/action-gh-release@v2`. `upload-artifact@v7` neben `download-artifact@v8` ist **kein** Versionsfehler.
+- Actions werden auf einen Major gepinnt. Stand heute aktuell: `actions/checkout@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `pnpm/setup@v2`, `Swatinem/rust-cache@v2`, `docker/setup-buildx-action@v4`, `docker/login-action@v4`, `docker/build-push-action@v7`, `actions/setup-java@v5`, `android-actions/setup-android@v4`, `tauri-apps/tauri-action@v1`. `upload-artifact@v7` neben `download-artifact@v8` ist **kein** Versionsfehler. Prüfe jeden Major vor dem Übernehmen gegen `gh api repos/<owner>/<repo>/releases/latest`: `actionlint` validiert Ausdrücke und den `needs`-Graphen, aber seine Action-Datenbank ist älter als diese Majors und akzeptiert deshalb auch erfundene Eingabenamen.
 - `packages/core/src/wasm` ist unversioniertes Build-Ergebnis. Jeder Job, der `packages/core` typechecked oder baut, braucht es vorher.
 
 ## Was heute noch nicht dazugehört
@@ -29,12 +29,12 @@
 
 ## Signaturschlüssel — was der Projektinhaber anlegen muss
 
-Ohne diese Secrets läuft das Release trotzdem durch, überspringt aber Ziele und schreibt in die Zusammenfassung, welche. Jeder Job ist über `if: ${{ secrets.X != '' }}` bedingt.
+Ohne diese Secrets läuft das Release trotzdem durch, überspringt aber Ziele und schreibt in die Zusammenfassung, welche. Die Bedingung kann **nicht** `if: ${{ secrets.X != '' }}` auf Job-Ebene sein: der `secrets`-Kontext ist dort nicht verfügbar und das Workflow lädt gar nicht erst. Ein vorgeschalteter `gate`-Job bildet die Existenz der Secrets auf Job-Outputs ab, die dann in `if:` erlaubt sind — siehe Task 3, Step 1.
 
 | Ziel | Secrets | Ohne sie |
 |---|---|---|
 | Windows, Linux, Docker | keine | vollständig signaturfrei nutzbar |
-| macOS | `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (App-spezifisch), `APPLE_TEAM_ID` | DMG entsteht unsigniert, Gatekeeper blockt es beim Nutzer |
+| macOS | `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (App-spezifisch), `APPLE_TEAM_ID` | DMG entsteht unsigniert, Gatekeeper blockt es beim Nutzer — aber nur, wenn die Apple-Variablen dann gar nicht gesetzt sind, siehe Task 3, Step 2 |
 | iOS | dieselbe Zertifikatskette plus `IOS_CERTIFICATE` (Distribution) und `IOS_MOBILE_PROVISION` (base64) | **kein verteilbares IPA möglich**, Job wird übersprungen |
 | Android | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | nur unsignierte APK, nicht Play-Store-fähig |
 
@@ -417,17 +417,37 @@ permissions:
   packages: write
 
 jobs:
+  # Der secrets-Kontext ist in `jobs.<id>.if` nicht verfuegbar -- dort gibt es nur
+  # github, needs, vars und inputs. Die Existenz jedes Signatur-Secrets muss darum
+  # ueber Job-Outputs transportiert werden, sonst laedt das Workflow nicht.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      macos: ${{ steps.probe.outputs.macos }}
+      android: ${{ steps.probe.outputs.android }}
+      ios: ${{ steps.probe.outputs.ios }}
+    steps:
+      - id: probe
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          # je Ziel `echo "<ziel>=yes|no" >> "$GITHUB_OUTPUT"`
+
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
@@ -445,16 +465,20 @@ jobs:
 
 ```yaml
   desktop:
+    needs: gate
     strategy:
       fail-fast: false
       matrix:
+        # --bundles gehoert in die Matrix, weil der Bundler nsis absichtlich nicht
+        # auf Windows beschraenkt (cargo-xwin): die Zielliste aus tauri.conf.json
+        # liesse Linux und macOS je einen Windows-Installer bauen.
         include:
           - os: ubuntu-latest
-            target: linux
+            bundles: deb,appimage
           - os: windows-latest
-            target: windows
+            bundles: nsis
           - os: macos-latest
-            target: macos
+            bundles: dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -471,33 +495,46 @@ jobs:
           runtime: node@22
           cache: true
       - name: Linux-Systemabhaengigkeiten
-        if: matrix.target == 'linux'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - uses: jetli/wasm-pack-action@v0.4.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm wasm
-      - uses: tauri-apps/tauri-action@v0
+      # Tauri prueft die Apple-Variablen mit var_os, also auf Existenz und nicht
+      # auf Inhalt. Ein `env:`-Eintrag auf ein fehlendes Secret erzeugt eine
+      # gesetzte, leere Variable -- der macOS-Lauf importiert dann ein leeres
+      # Zertifikat und scheitert nach zwanzig Minuten Kompilierung. Die Variablen
+      # duerfen darum nur entstehen, wenn es wirklich ein Zertifikat gibt.
+      - name: Apple-Signatur bereitstellen
+        if: runner.os == 'macOS' && needs.gate.outputs.macos == 'yes'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # ... die uebrigen fuenf ebenso
+        run: |
+          # je nicht-leere Variable ein Heredoc-Block nach "$GITHUB_ENV"
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: Videola ${{ github.ref_name }}
           releaseDraft: true
           prerelease: false
+          releaseBody: |
+            This build packages the app shell — no timeline, no playback, no effects, no export.
+          args: --bundles ${{ matrix.bundles }}
 ```
 
-`fail-fast: false` sorgt dafür, dass ein gescheiterter macOS-Build die fertigen Windows- und Linux-Installer nicht mitnimmt. Die Apple-Variablen sind leer, wenn die Secrets fehlen — `tauri-action` signiert dann nicht und baut trotzdem. `releaseDraft: true` heißt: du siehst das Release, bevor die Welt es sieht.
+`fail-fast: false` sorgt dafür, dass ein gescheiterter macOS-Build die fertigen Windows- und Linux-Installer nicht mitnimmt. `releaseDraft: true` heißt: du siehst das Release, bevor die Welt es sieht.
+
+`releaseBody` ist Pflicht und nicht Kosmetik: ohne ihn bleibt der Text des Drafts leer, und kein späterer Job kann ihn nachtragen, weil `tauri-action` Drafts absichtlich nicht aktualisiert (das würde ihre Tags verschieben und Dubletten erzeugen). Wer das Release herunterlädt, liest diesen Satz zuerst — er muss sagen, was drin ist und dass fehlende Mobile-Assets das erwartete Ergebnis sind.
 
 `rust-cache` bekommt beide Workspaces genannt, weil `src-tauri` ein eigener ist und sonst uncached bleibt.
+
+`tauri.conf.json` muss vor dem ersten Tag eine echte `version` tragen: `tauri-action` leitet die Asset-Dateinamen daraus ab, ein `0.0.0` liefert also `Videola_0.0.0_x64-setup.exe` unter dem Tag `v0.1.0` aus.
 
 - [ ] **Step 3: Lokal prüfen, was prüfbar ist**
 
@@ -553,16 +590,16 @@ und paste, was entsteht.
 
 ```yaml
   android:
-    if: ${{ secrets.ANDROID_KEYSTORE != '' }}
+    if: needs.gate.outputs.android == 'yes'
     runs-on: ubuntu-latest
-    needs: desktop
+    needs: [gate, desktop]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: NDK installieren
         run: sdkmanager "ndk;27.0.12077973"
       - uses: dtolnay/rust-toolchain@stable
@@ -584,29 +621,43 @@ und paste, was entsteht.
         env:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
         run: echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
-      - name: Signiert bauen
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-          TAURI_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
-          TAURI_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          TAURI_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          TAURI_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Android-Projekt erzeugen und Signatur einhaengen
         run: |
-          pnpm --filter videola-desktop tauri android init --ci
-          pnpm --filter videola-desktop tauri android build --apk --aab
-      - uses: softprops/action-gh-release@v2
+          pnpm --filter videola-desktop exec tauri android init --ci
+          # Die Vorlage von `tauri android init` bringt keinen signingConfigs-Block
+          # mit, also waere jede Release-APK unsigniert. Ein zweiter android { }
+          # Block am Ende von gen/android/app/build.gradle.kts ist im Kotlin-DSL
+          # nur ein weiteres extensions.configure und merged, statt in eine
+          # generierte Datei hineinzu-sed-en.
+          cat >> apps/desktop/src-tauri/gen/android/app/build.gradle.kts <<'GRADLE'
+          # signingConfigs { create("release") { ... System.getenv(...) } }
+          # buildTypes { getByName("release") { signingConfig = ... } }
+          GRADLE
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
-            apps/desktop/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/*.aab
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Videola ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          mobile: android
+          args: --apk --aab
 ```
 
-Die genauen Ausgabepfade und die Namen der Signatur-Umgebungsvariablen können sich zwischen Tauri-Versionen unterscheiden. **Prüfe sie gegen die Tauri-2-Dokumentation der installierten CLI-Version** und korrigiere sie, statt diesen Block blind zu übernehmen — schreib in den Report, was du nachgeschlagen und was du geändert hast.
+**Android-Signatur ist reines Gradle.** Es gibt keine `TAURI_ANDROID_*`-Signaturvariable irgendeines Namens — die CLI kennt nur `TAURI_ANDROID_PACKAGE_UNESCAPED` und `TAURI_ANDROID_PROJECT_PATH`. Die Namen oben sind darum frei gewählt und werden von dem angehängten Gradle-Block über `System.getenv` gelesen; wer sie umbenennt, muss beide Stellen ändern. Prüfe das gegen die installierte CLI-Version, statt es zu glauben.
 
-`needs: desktop` ist bewusst: erst wenn die Desktop-Builds stehen, lohnt der teure Mobile-Job.
+`mobile: android` in `tauri-action@v1` ersetzt die handgeschriebenen Upload-Schritte: die Action kennt die Ausgabepfade selbst, einschließlich des Unterschieds zwischen `app-universal-release.apk` und `app-universal-release-unsigned.apk`. Ein Pfad, der nicht im Workflow steht, kann auch nicht verrotten.
+
+`needs: desktop` ist bewusst: erst wenn die Desktop-Builds stehen, lohnt der teure Mobile-Job — und so legt nur ein Job zugleich das Draft-Release an.
+
+`NDK_HOME` besser im Schritt selbst aus dem echten `$ANDROID_HOME` bilden und über `$GITHUB_ENV` exportieren; `ANDROID_HOME: ${{ env.ANDROID_HOME }}` ist eine Selbstreferenz, die nichts tut.
 
 - [ ] **Step 3: Committen**
 
@@ -638,9 +689,9 @@ iOS lässt sich nur auf macOS mit Xcode bauen. Dieser Rechner läuft Windows. De
 
 ```yaml
   ios:
-    if: ${{ secrets.IOS_CERTIFICATE != '' && secrets.IOS_MOBILE_PROVISION != '' }}
+    if: needs.gate.outputs.ios == 'yes'
     runs-on: macos-latest
-    needs: desktop
+    needs: [gate, desktop]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -674,20 +725,29 @@ iOS lässt sich nur auf macOS mit Xcode bauen. Dieser Rechner läuft Windows. De
           security list-keychains -d user -s "$KEYCHAIN" login.keychain
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$IOS_MOBILE_PROVISION" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/videola.mobileprovision
-      - name: Bauen
+      - name: Xcode-Projekt erzeugen
         env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          pnpm --filter videola-desktop tauri ios init --ci
-          pnpm --filter videola-desktop tauri ios build --export-method app-store-connect
-      - uses: softprops/action-gh-release@v2
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter videola-desktop exec tauri ios init --ci
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: apps/desktop/src-tauri/gen/apple/build/**/*.ipa
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Videola ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          mobile: ios
+          args: --export-method app-store-connect
 ```
 
-`--export-method` muss zum Zertifikatstyp passen: `app-store-connect` für ein Distribution-Zertifikat, `debugging` für Development, `ad-hoc` für eine begrenzte Geräteliste. Bei einem Mismatch scheitert der Export mit einer wenig hilfreichen Xcode-Meldung. Prüfe die verfügbaren Werte gegen die Tauri-2-Dokumentation der installierten CLI und nenne im Report, welchen du gewählt hast und warum.
+Die Team-ID heißt für die CLI `APPLE_DEVELOPMENT_TEAM`, nicht `APPLE_TEAM_ID` — letzteres liest nur `tauri-action` für die macOS-Notarisierung. Das Secret darf `APPLE_TEAM_ID` heißen, aber es muss unter dem anderen Namen exportiert werden, sonst fragt `tauri ios init` interaktiv nach dem Team und hängt im `--ci`-Lauf.
+
+`--export-method` muss zum Zertifikatstyp passen: `app-store-connect` für ein Distribution-Zertifikat, `release-testing` oder `debugging` für Development. Bei einem Mismatch scheitert der Export mit einer wenig hilfreichen Xcode-Meldung. Prüfe die verfügbaren Werte gegen die Tauri-2-Dokumentation der installierten CLI und nenne im Report, welchen du gewählt hast und warum.
+
+Wie bei Android liefert `mobile: ios` die Artefakterkennung mit, also entfällt der handgeschriebene Upload-Schritt und der IPA-Pfad steht nirgends im Workflow.
 
 - [ ] **Step 3: Committen**
 
@@ -719,25 +779,30 @@ Ein Release, das stillschweigend vier von sechs Zielen überspringt, ist eine Fa
   summary:
     if: always()
     runs-on: ubuntu-latest
-    needs: [docker, desktop, android, ios]
+    needs: [gate, docker, desktop, android, ios]
     steps:
       - name: Ergebnis zusammenfassen
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           {
-            echo "## Release ${{ github.ref_name }}"
+            echo "## Release $TAG"
             echo
             echo "| Ziel | Ergebnis |"
             echo "|---|---|"
+            echo "| Signatur-Secrets pruefen | ${{ needs.gate.result }} |"
             echo "| Docker | ${{ needs.docker.result }} |"
             echo "| Desktop (Win/Linux/macOS) | ${{ needs.desktop.result }} |"
             echo "| Android | ${{ needs.android.result }} |"
             echo "| iOS | ${{ needs.ios.result }} |"
             echo
-            echo "\`skipped\` bedeutet: das Signatur-Secret fehlt. Siehe README, Abschnitt Release."
+            echo "\`skipped\` bedeutet: das Signatur-Secret fehlt, oder ein vorausgesetzter Job ist gescheitert. Siehe README, Abschnitt Release."
           } >> "$GITHUB_STEP_SUMMARY"
 ```
 
 `if: always()` ist nötig, damit der Job auch läuft, wenn ein Ziel gescheitert ist — sonst fehlt die Zusammenfassung genau dann, wenn man sie braucht.
+
+`gate` gehört mit in `needs` und in die Tabelle: scheitert es selbst, stehen Android und iOS auf `skipped` und die Zusammenfassung könnte nicht auf die Ursache zeigen. Der Tag geht über `env:` und nicht als `${{ }}` in den Skriptkörper — ein Tagname wird textuell eingesetzt und ist damit eine Injektionsfläche für jeden, der Tags pushen darf. Die `needs.*.result`-Werte sind ein geschlossenes Enum und bleiben inline.
 
 - [ ] **Step 2: README-Abschnitt „Release" schreiben**
 
