@@ -15,6 +15,11 @@ pub struct Time(i64);
 impl Time {
     pub const ZERO: Time = Time(0);
 
+    // Commands arrive from a REST API and from AI agents; without an upper bound a single
+    // absurd value (e.g. i64::MAX) would pass every other check and only misbehave far
+    // downstream. 24h is generous for any real edit and cheap to raise later if needed.
+    pub const MAX_REASONABLE: Time = Time(FLICKS_PER_SECOND * 60 * 60 * 24);
+
     pub const fn from_flicks(flicks: i64) -> Self {
         Self(flicks)
     }
@@ -49,6 +54,14 @@ impl Time {
 
     pub fn clamp_min_zero(self) -> Time {
         Time(self.0.max(0))
+    }
+
+    pub fn checked_add(self, rhs: Time) -> Option<Time> {
+        self.0.checked_add(rhs.0).map(Time)
+    }
+
+    pub fn checked_sub(self, rhs: Time) -> Option<Time> {
+        self.0.checked_sub(rhs.0).map(Time)
     }
 }
 

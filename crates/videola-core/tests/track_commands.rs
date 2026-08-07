@@ -1,5 +1,5 @@
 use videola_core::command::{Command, Dispatch};
-use videola_core::model::TrackKind;
+use videola_core::model::{ClipSource, MediaId, ProjectSettings, Rate, Time, TrackKind};
 use videola_core::Document;
 
 #[allow(clippy::unwrap_used)]
@@ -39,6 +39,18 @@ fn an_explicit_index_inserts_instead_of_appending() {
 }
 
 #[test]
+fn an_index_equal_to_the_length_appends() {
+    let mut doc = doc_with_tracks(&["V1", "V2"]);
+    doc.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Audio,
+        name: "A1".into(),
+        index: Some(2),
+    }))
+    .unwrap();
+    assert_eq!(doc.project().timeline.tracks[2].name, "A1");
+}
+
+#[test]
 fn an_out_of_range_index_is_rejected() {
     let mut doc = doc_with_tracks(&["V1"]);
     assert!(doc
@@ -54,8 +66,19 @@ fn an_out_of_range_index_is_rejected() {
 fn removing_a_track_takes_its_clips_with_it() {
     let mut doc = doc_with_tracks(&["V1", "V2"]);
     let first = doc.project().timeline.tracks[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::ClipAdd {
+        track: first.clone(),
+        source: ClipSource::Media {
+            media: MediaId::from("med_a".to_string()),
+        },
+        start: Time::ZERO,
+        duration: Time::from_seconds(1.0),
+    }))
+    .unwrap();
+
     doc.dispatch(Dispatch::new(Command::TrackRemove { track: first }))
         .unwrap();
+
     assert_eq!(doc.project().timeline.tracks.len(), 1);
     assert_eq!(doc.project().timeline.tracks[0].name, "V2");
 }
@@ -80,6 +103,25 @@ fn reorder_moves_a_track_to_the_target_index() {
 }
 
 #[test]
+fn reorder_forward_accounts_for_the_shift_after_removal() {
+    let mut doc = doc_with_tracks(&["V1", "V2", "V3"]);
+    let first = doc.project().timeline.tracks[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::TrackReorder {
+        track: first,
+        to_index: 2,
+    }))
+    .unwrap();
+    let names: Vec<_> = doc
+        .project()
+        .timeline
+        .tracks
+        .iter()
+        .map(|t| t.name.clone())
+        .collect();
+    assert_eq!(names, vec!["V2", "V3", "V1"]);
+}
+
+#[test]
 fn volume_and_pan_are_clamped_to_valid_ranges() {
     let mut doc = doc_with_tracks(&["V1"]);
     let track = doc.project().timeline.tracks[0].id.clone();
@@ -97,20 +139,49 @@ fn volume_and_pan_are_clamped_to_valid_ranges() {
 }
 
 #[test]
+fn non_finite_volume_and_pan_are_rejected() {
+    let mut doc = doc_with_tracks(&["V1"]);
+    let track = doc.project().timeline.tracks[0].id.clone();
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::TrackSetVolume {
+            track: track.clone(),
+            volume: f32::NAN
+        }))
+        .is_err());
+    assert!(doc
+        .dispatch(Dispatch::new(Command::TrackSetPan {
+            track,
+            pan: f32::INFINITY
+        }))
+        .is_err());
+}
+
+#[test]
 fn set_flags_only_touches_the_flags_it_is_given() {
     let mut doc = doc_with_tracks(&["V1"]);
     let track = doc.project().timeline.tracks[0].id.clone();
     doc.dispatch(Dispatch::new(Command::TrackSetFlags {
         track: track.clone(),
+        muted: None,
+        solo: Some(true),
+        locked: None,
+        hidden: None,
+    }))
+    .unwrap();
+
+    doc.dispatch(Dispatch::new(Command::TrackSetFlags {
+        track,
         muted: Some(true),
         solo: None,
         locked: None,
         hidden: None,
     }))
     .unwrap();
+
     let t = &doc.project().timeline.tracks[0];
     assert!(t.muted);
-    assert!(!t.solo);
+    assert!(t.solo);
     assert!(!t.locked);
 }
 
@@ -124,4 +195,36 @@ fn setting_the_title_leaves_the_project_id_alone() {
     .unwrap();
     assert_eq!(doc.project().meta.title, "Urlaub");
     assert_eq!(doc.project().meta.id, id);
+}
+
+#[test]
+fn renaming_a_track_changes_only_its_name() {
+    let mut doc = doc_with_tracks(&["V1"]);
+    let track = doc.project().timeline.tracks[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::TrackRename {
+        track: track.clone(),
+        name: "Intro".into(),
+    }))
+    .unwrap();
+    assert_eq!(doc.project().timeline.tracks[0].name, "Intro");
+    assert_eq!(doc.project().timeline.tracks[0].id, track);
+}
+
+#[test]
+fn setting_project_settings_replaces_them_wholesale() {
+    let mut doc = Document::new();
+    let settings = ProjectSettings {
+        width: 3840,
+        height: 2160,
+        fps: Rate::from_fps(60),
+        sample_rate: 48_000,
+        color_space: "srgb".into(),
+        background: "#000000".into(),
+    };
+    doc.dispatch(Dispatch::new(Command::ProjectSetSettings {
+        settings: settings.clone(),
+    }))
+    .unwrap();
+    assert_eq!(doc.project().settings.width, 3840);
+    assert_eq!(doc.project().settings.fps, Rate::from_fps(60));
 }

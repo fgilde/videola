@@ -10,7 +10,11 @@ use crate::model::{
 use crate::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Command {
     #[serde(rename = "project.setSettings")]
     ProjectSetSettings { settings: ProjectSettings },
@@ -96,16 +100,53 @@ pub enum TrimEdge {
 impl Command {
     pub fn apply(&self, target: &mut Project) -> Result<()> {
         match self {
-            Self::ProjectSetSettings { .. }
-            | Self::ProjectSetTitle { .. }
-            | Self::TrackAdd { .. }
-            | Self::TrackRemove { .. }
-            | Self::TrackReorder { .. }
-            | Self::TrackRename { .. }
-            | Self::TrackSetVolume { .. }
-            | Self::TrackSetPan { .. }
-            | Self::TrackSetFlags { .. } => project::apply(self, target),
-            _ => clip::apply(self, target),
+            Self::ProjectSetSettings { settings } => project::set_settings(target, settings),
+            Self::ProjectSetTitle { title } => project::set_title(target, title),
+            Self::TrackAdd { kind, name, index } => project::add_track(target, *kind, name, *index),
+            Self::TrackRemove { track } => project::remove_track(target, track),
+            Self::TrackReorder { track, to_index } => {
+                project::reorder_track(target, track, *to_index)
+            }
+            Self::TrackRename { track, name } => project::rename_track(target, track, name),
+            Self::TrackSetVolume { track, volume } => {
+                project::set_track_volume(target, track, *volume)
+            }
+            Self::TrackSetPan { track, pan } => project::set_track_pan(target, track, *pan),
+            Self::TrackSetFlags {
+                track,
+                muted,
+                solo,
+                locked,
+                hidden,
+            } => project::set_track_flags(target, track, *muted, *solo, *locked, *hidden),
+            Self::ClipAdd {
+                track,
+                source,
+                start,
+                duration,
+            } => clip::add(target, track, source.clone(), *start, *duration),
+            Self::ClipRemove { clip } => clip::remove(target, clip),
+            Self::ClipMove {
+                clip,
+                to_track,
+                start,
+            } => clip::move_clip(target, clip, to_track, *start),
+            Self::ClipTrim { clip, edge, delta } => clip::trim(target, clip, *edge, *delta),
+            Self::ClipSplit { clip, at } => clip::split(target, clip, *at),
+            Self::ClipSetSpeed {
+                clip,
+                rate,
+                reverse,
+                preserve_pitch,
+            } => clip::set_speed(target, clip, *rate, *reverse, *preserve_pitch),
+            Self::ClipSetVolume { clip, volume } => clip::set_volume(target, clip, *volume),
+            Self::EffectAdd { clip, effect_type } => clip::add_effect(target, clip, effect_type),
+            Self::EffectSetParam {
+                clip,
+                effect_type,
+                key,
+                value,
+            } => clip::set_effect_param(target, clip, effect_type, key, value.clone()),
         }
     }
 
@@ -165,4 +206,42 @@ pub(crate) fn find_clip_mut<'p>(
         }
     }
     Err(crate::CoreError::ClipNotFound(clip.clone()))
+}
+
+pub(crate) const MAX_VOLUME: f32 = 4.0;
+
+pub(crate) fn finite(value: f32) -> Result<f32> {
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(crate::CoreError::InvalidArgument(
+            "value must be finite".into(),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{ClipId, TrackId, TrackKind};
+
+    #[test]
+    fn commands_use_dotted_tags_and_camelcase_fields() {
+        let add = Command::TrackAdd {
+            kind: TrackKind::Video,
+            name: "V1".into(),
+            index: None,
+        };
+        let json = serde_json::to_value(&add).unwrap();
+        assert_eq!(json["type"], "track.add");
+
+        let mv = Command::ClipMove {
+            clip: ClipId::from("clp_1".to_string()),
+            to_track: TrackId::from("trk_1".to_string()),
+            start: Time::ZERO,
+        };
+        let json = serde_json::to_value(&mv).unwrap();
+        assert!(json.get("toTrack").is_some());
+        assert!(json.get("to_track").is_none());
+    }
 }

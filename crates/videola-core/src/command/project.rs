@@ -1,63 +1,20 @@
-use super::Command;
-use crate::model::{Project, Track, TrackId};
+use super::{finite, MAX_VOLUME};
+use crate::model::{Project, ProjectSettings, Track, TrackId, TrackKind};
 use crate::{CoreError, Result};
 
-const MAX_TRACK_VOLUME: f32 = 4.0;
-
-pub(super) fn apply(command: &Command, target: &mut Project) -> Result<()> {
-    match command {
-        Command::ProjectSetSettings { settings } => {
-            target.settings = settings.clone();
-            Ok(())
-        }
-        Command::ProjectSetTitle { title } => {
-            target.meta.title = title.clone();
-            Ok(())
-        }
-        Command::TrackAdd { kind, name, index } => add_track(target, *kind, name, *index),
-        Command::TrackRemove { track } => remove_track(target, track),
-        Command::TrackReorder { track, to_index } => reorder_track(target, track, *to_index),
-        Command::TrackRename { track, name } => {
-            track_mut(target, track)?.name = name.clone();
-            Ok(())
-        }
-        Command::TrackSetVolume { track, volume } => {
-            track_mut(target, track)?.volume = volume.clamp(0.0, MAX_TRACK_VOLUME);
-            Ok(())
-        }
-        Command::TrackSetPan { track, pan } => {
-            track_mut(target, track)?.pan = pan.clamp(-1.0, 1.0);
-            Ok(())
-        }
-        Command::TrackSetFlags {
-            track,
-            muted,
-            solo,
-            locked,
-            hidden,
-        } => {
-            let target_track = track_mut(target, track)?;
-            if let Some(value) = muted {
-                target_track.muted = *value;
-            }
-            if let Some(value) = solo {
-                target_track.solo = *value;
-            }
-            if let Some(value) = locked {
-                target_track.locked = *value;
-            }
-            if let Some(value) = hidden {
-                target_track.hidden = *value;
-            }
-            Ok(())
-        }
-        other => Err(CoreError::InvalidArgument(other.label().to_string())),
-    }
+pub(super) fn set_settings(target: &mut Project, settings: &ProjectSettings) -> Result<()> {
+    target.settings = settings.clone();
+    Ok(())
 }
 
-fn add_track(
+pub(super) fn set_title(target: &mut Project, title: &str) -> Result<()> {
+    target.meta.title = title.to_string();
+    Ok(())
+}
+
+pub(super) fn add_track(
     target: &mut Project,
-    kind: crate::model::TrackKind,
+    kind: TrackKind,
     name: &str,
     index: Option<usize>,
 ) -> Result<()> {
@@ -71,7 +28,7 @@ fn add_track(
     Ok(())
 }
 
-fn remove_track(target: &mut Project, track: &TrackId) -> Result<()> {
+pub(super) fn remove_track(target: &mut Project, track: &TrackId) -> Result<()> {
     let index = target
         .track_index(track)
         .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?;
@@ -79,7 +36,7 @@ fn remove_track(target: &mut Project, track: &TrackId) -> Result<()> {
     Ok(())
 }
 
-fn reorder_track(target: &mut Project, track: &TrackId, to_index: usize) -> Result<()> {
+pub(super) fn reorder_track(target: &mut Project, track: &TrackId, to_index: usize) -> Result<()> {
     let from = target
         .track_index(track)
         .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?;
@@ -92,6 +49,47 @@ fn reorder_track(target: &mut Project, track: &TrackId, to_index: usize) -> Resu
     }
     let moved = target.timeline.tracks.remove(from);
     target.timeline.tracks.insert(to_index, moved);
+    Ok(())
+}
+
+pub(super) fn rename_track(target: &mut Project, track: &TrackId, name: &str) -> Result<()> {
+    track_mut(target, track)?.name = name.to_string();
+    Ok(())
+}
+
+pub(super) fn set_track_volume(target: &mut Project, track: &TrackId, volume: f32) -> Result<()> {
+    let volume = finite(volume)?;
+    track_mut(target, track)?.volume = volume.clamp(0.0, MAX_VOLUME);
+    Ok(())
+}
+
+pub(super) fn set_track_pan(target: &mut Project, track: &TrackId, pan: f32) -> Result<()> {
+    let pan = finite(pan)?;
+    track_mut(target, track)?.pan = pan.clamp(-1.0, 1.0);
+    Ok(())
+}
+
+pub(super) fn set_track_flags(
+    target: &mut Project,
+    track: &TrackId,
+    muted: Option<bool>,
+    solo: Option<bool>,
+    locked: Option<bool>,
+    hidden: Option<bool>,
+) -> Result<()> {
+    let target_track = track_mut(target, track)?;
+    if let Some(value) = muted {
+        target_track.muted = value;
+    }
+    if let Some(value) = solo {
+        target_track.solo = value;
+    }
+    if let Some(value) = locked {
+        target_track.locked = value;
+    }
+    if let Some(value) = hidden {
+        target_track.hidden = value;
+    }
     Ok(())
 }
 
