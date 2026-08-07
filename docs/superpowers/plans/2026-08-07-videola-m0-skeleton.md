@@ -1,7 +1,5 @@
 # Videola M0 — Skelett: Implementierungsplan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Ein Monorepo, in dem `videola-core` (Rust) das Projektmodell, den Command-Bus, Undo/Redo und das `.videola`-Format vollständig beherrscht, per WASM aus TypeScript nutzbar ist, und eine React-App-Shell mit Theme, Zweisprachigkeit und Layout-Erkennung ein Projekt laden und speichern kann.
 
 **Architecture:** Alle Zustandslogik liegt in Rust (`videola-core`) und wird nach WASM kompiliert; TypeScript ist reiner Konsument mit generierten Typen. Commands mutieren eine Kopie des Projekts; aus dem Vorher/Nachher-Vergleich entstehen JSON-Patch und Inverse-Patch, die den Undo-Stack bilden. Zeit ist ganzzahlig in Flicks, nicht in Sekunden-Floats.
@@ -21,14 +19,8 @@
 - **Alle Maps im Modell sind `BTreeMap`, niemals `HashMap`.** Der Undo-Mechanismus vergleicht serialisiertes JSON; nichtdeterministische Schlüsselreihenfolge würde Phantom-Patches erzeugen.
 - **Zeit ist `Time` in Flicks (`705_600_000` pro Sekunde), niemals `f64`-Sekunden.** 705600000 ist durch 24, 25, 30, 48, 50, 60, 90, 100, 120 fps und durch 8/16/22.05/24/32/44.1/48/88.2/96/192 kHz teilbar, also frame- und sample-genau ohne Rundungsdrift. Innerhalb der JS-Sicherheitsgrenze (2^53) reicht das für ~147 Tage Material.
 - Dependency-Versionen werden mit `cargo add` bzw. `pnpm add` aufgelöst, nicht von Hand in Manifeste geschrieben.
-- Zielversionen: Rust stable, Node 22, pnpm 10. **Installiert in dieser Umgebung:** rustc/cargo 1.97.1, Node 24.13.1, pnpm 11.20.0, MSVC-Linker vorhanden.
-- **`cargo` liegt nicht im PATH der Tool-Shells.** Jede Rust-Kommandozeile in PowerShell mit dem Prefix ausführen:
-  ```powershell
-  $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"; cargo test -p videola-core
-  ```
-  In Bash entsprechend `export PATH="$HOME/.cargo/bin:$PATH"` als erstes Kommando derselben Zeile. `pnpm` und `node` sind normal erreichbar.
+- Werkzeuge: Rust stable, Node 22 oder neuer, pnpm 11 oder neuer.
 - Arbeitsbranch ist `m0-skeleton`, nicht `main`.
-- React 19 hat den globalen `JSX`-Namespace entfernt. Komponenten geben `ReactElement` zurück (`import type { ReactElement } from "react"`), nicht `JSX.Element`. Wo in diesem Plan `JSX.Element` steht, ist `ReactElement` gemeint — ersetze es beim Schreiben.
 - Reihenfolge bei neuen Paketen: **zuerst** `package.json` anlegen, **dann** `pnpm add --filter <name> …`. Ein `--filter` auf ein Paket, das pnpm noch nicht kennt, schlägt fehl.
 - `ts-rs` ab Version 10 bietet `TS::export_all()`. Bei einer älteren Version heißt die Methode `export()` und exportiert nur den eigenen Typ — dann alle Typen einzeln aufrufen.
 
@@ -108,7 +100,7 @@ videola/
 **Interfaces:**
 - Produces: `CoreError` (thiserror-Enum), `Result<T>` Alias, `Time` (Flicks, `from_seconds`, `as_seconds`, `from_frames`, `to_frame`, `ZERO`, `+`/`-`/`Ord`), `Rate` (fps als Rational), `ProjectId`/`TrackId`/`ClipId`/`EffectId`/`MarkerId`/`MediaId` mit `new()` und `as_str()`.
 
-- [ ] **Step 1: Workspace anlegen**
+- [x] **Step 1: Workspace anlegen**
 
 `Cargo.toml`:
 ```toml
@@ -152,7 +144,7 @@ indent_size = 2
 indent_size = 4
 ```
 
-- [ ] **Step 2: Crate anlegen und Dependencies auflösen**
+- [x] **Step 2: Crate anlegen und Dependencies auflösen**
 
 ```bash
 mkdir -p crates/videola-core/src/model
@@ -171,7 +163,7 @@ In `crates/videola-core/Cargo.toml` ergänzen:
 workspace = true
 ```
 
-- [ ] **Step 3: Failing tests für Time und IDs schreiben**
+- [x] **Step 3: Failing tests für Time und IDs schreiben**
 
 `crates/videola-core/src/model/time.rs`:
 ```rust
@@ -242,12 +234,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 4: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 4: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core`
 Expected: FAIL — `cannot find type Time`, `cannot find type TrackId`
 
-- [ ] **Step 5: `time.rs` implementieren**
+- [x] **Step 5: `time.rs` implementieren**
 
 Oberhalb des `mod tests`-Blocks:
 ```rust
@@ -341,7 +333,7 @@ impl Default for Rate {
 }
 ```
 
-- [ ] **Step 6: `ids.rs` implementieren**
+- [x] **Step 6: `ids.rs` implementieren**
 
 Oberhalb des `mod tests`-Blocks:
 ```rust
@@ -397,7 +389,7 @@ id_type!(MarkerId, "mrk");
 
 `MediaId` fehlt hier absichtlich — sie ist ein Inhalts-Hash, keine Zufallszahl, und entsteht in Task 9.
 
-- [ ] **Step 7: `error.rs` implementieren**
+- [x] **Step 7: `error.rs` implementieren**
 
 ```rust
 use thiserror::Error;
@@ -431,7 +423,7 @@ pub enum CoreError {
 }
 ```
 
-- [ ] **Step 8: Module verdrahten**
+- [x] **Step 8: Module verdrahten**
 
 `crates/videola-core/src/model/mod.rs`:
 ```rust
@@ -450,12 +442,12 @@ pub mod model;
 pub use error::{CoreError, Result};
 ```
 
-- [ ] **Step 9: Tests laufen lassen**
+- [x] **Step 9: Tests laufen lassen**
 
 Run: `cargo test -p videola-core && cargo clippy -p videola-core -- -D warnings && cargo fmt --check`
 Expected: alle Tests PASS, keine Clippy-Warnungen
 
-- [ ] **Step 10: Committen**
+- [x] **Step 10: Committen**
 
 ```bash
 git add Cargo.toml rust-toolchain.toml .editorconfig crates/videola-core
@@ -477,7 +469,7 @@ Frame- und Sample-Rechnung ohne Rundungsdrift bleibt."
 - Consumes: `Time`, `Rate`, `ProjectId`, `TrackId`, `MarkerId` (Task 1)
 - Produces: `Project { schema_version, meta, settings, timeline, markers, master, extra }`, `ProjectMeta`, `ProjectSettings`, `Timeline { tracks }`, `Track { id, kind, name, color_hex, height, locked, hidden, muted, solo, volume, pan, clips, effects, extra }`, `TrackKind`, `Marker`, `MasterSettings`. `Project::default()`, `Project::track(&TrackId)`, `Project::track_mut(&TrackId)`, `Project::track_index(&TrackId)`, `Project::normalize()`, `Timeline::duration()`.
 
-- [ ] **Step 1: Failing tests schreiben**
+- [x] **Step 1: Failing tests schreiben**
 
 `crates/videola-core/src/model/project.rs`, am Dateiende:
 ```rust
@@ -560,12 +552,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core`
 Expected: FAIL — `cannot find type Project`, `cannot find type Timeline`
 
-- [ ] **Step 3: `timeline.rs` implementieren**
+- [x] **Step 3: `timeline.rs` implementieren**
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -667,7 +659,7 @@ pub struct Marker {
 }
 ```
 
-- [ ] **Step 4: `project.rs` implementieren**
+- [x] **Step 4: `project.rs` implementieren**
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -792,7 +784,7 @@ impl Default for MasterSettings {
 
 `ProjectMeta` trägt bewusst keine Zeitstempel: `created`/`modified` gehören ins `videola.json`-Manifest (Task 10), weil sie beim Speichern gesetzt werden und sonst jeden Undo-Diff verschmutzen würden.
 
-- [ ] **Step 5: Module verdrahten**
+- [x] **Step 5: Module verdrahten**
 
 `crates/videola-core/src/model/mod.rs` ersetzen:
 ```rust
@@ -819,12 +811,12 @@ pub use timeline::{Marker, Timeline, Track, TrackKind};
 
 Die Module `clip`, `effect`, `keyframe`, `media`, `param` entstehen in Tasks 3–5 und 9. Damit dieser Task kompiliert, legst du sie jetzt als leere Dateien an und füllst sie in den folgenden Tasks — die Re-Exports oben bleiben dann unverändert.
 
-- [ ] **Step 6: Tests laufen lassen**
+- [x] **Step 6: Tests laufen lassen**
 
 Run: `cargo test -p videola-core`
 Expected: PASS, sobald Tasks 3–5 und 9 die leeren Module gefüllt haben. Arbeite Tasks 3, 4, 5 und 9 direkt im Anschluss ab, bevor du hier committest.
 
-- [ ] **Step 7: Committen (nach Tasks 3, 4, 5 und 9)**
+- [x] **Step 7: Committen (nach Tasks 3, 4, 5 und 9)**
 
 ```bash
 git add crates/videola-core/src/model
@@ -844,7 +836,7 @@ git commit -m "feat(core): Projekt-, Timeline- und Track-Modell"
 
 **Korrektur nach Review:** `out_point` ist **kein Feld**, sondern die abgeleitete Methode `out_point() = in_point + consumed_source()`. Als Feld war es redundanter Zustand, den `source_time_at` gar nicht liest — bei einer Geschwindigkeit ungleich 1.0 laufen Feld und tatsächlich verbrauchter Quellbereich nach dem ersten Trim auseinander, und der Renderer folgt dem einen, das Feld behauptet das andere. Abgeleitet kann es nicht driften.
 
-- [ ] **Step 1: Failing tests schreiben**
+- [x] **Step 1: Failing tests schreiben**
 
 Am Dateiende von `clip.rs`:
 ```rust
@@ -919,12 +911,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core clip::`
 Expected: FAIL — `cannot find type Clip`
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 ```rust
 use std::collections::BTreeMap;
@@ -1123,12 +1115,12 @@ pub struct Fades {
 }
 ```
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `cargo test -p videola-core clip::`
 Expected: PASS
 
-- [ ] **Step 5: Committen**
+- [x] **Step 5: Committen**
 
 ```bash
 git add crates/videola-core/src/model/clip.rs
@@ -1151,7 +1143,7 @@ liest den Quellzeitpunkt vom Ende des verbrauchten Bereichs zurueck."
 
 **Ergänzung nach Review:** `evaluate` sucht binär und setzt eine nach `time` sortierte Spur voraus. Keyframe-Spuren kommen aus deserialisiertem Projekt-JSON, also von einer Vertrauensgrenze — eine unsortierte Spur liefert sonst lautlos falsche Werte für jeden Frame. Deshalb `sort_track` plus `Project::normalize()` (Task 2), das beim Laden aufgerufen wird (Task 11).
 
-- [ ] **Step 1: Failing tests schreiben**
+- [x] **Step 1: Failing tests schreiben**
 
 `param.rs`, am Dateiende:
 ```rust
@@ -1276,12 +1268,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core -- param:: keyframe::`
 Expected: FAIL — `cannot find type ParamValue`
 
-- [ ] **Step 3: `param.rs` implementieren**
+- [x] **Step 3: `param.rs` implementieren**
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -1324,7 +1316,7 @@ fn mix(a: f32, b: f32, t: f32) -> f32 {
 
 `Int` interpoliert absichtlich nicht: eine halbe Wiederholungszahl oder ein halber Blur-Radius in Pixeln ist kein sinnvoller Zwischenwert. Wer weiche Übergänge braucht, nimmt `Float`.
 
-- [ ] **Step 4: `keyframe.rs` implementieren**
+- [x] **Step 4: `keyframe.rs` implementieren**
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -1419,12 +1411,12 @@ fn bezier_component(c1: f32, c2: f32, t: f32) -> f32 {
 
 `cubic_bezier_y_at` löst die x-Komponente per Bisektion. `ponytail: 24 Bisektionsschritte statt Newton-Iteration — reicht für Sub-Pixel-Genauigkeit; auf Newton wechseln, falls Keyframe-Auswertung je im Profil auffällt.`
 
-- [ ] **Step 5: Tests laufen lassen**
+- [x] **Step 5: Tests laufen lassen**
 
 Run: `cargo test -p videola-core -- param:: keyframe::`
 Expected: PASS
 
-- [ ] **Step 6: Committen**
+- [x] **Step 6: Committen**
 
 ```bash
 git add crates/videola-core/src/model/param.rs crates/videola-core/src/model/keyframe.rs
@@ -1445,7 +1437,7 @@ loest die x-Komponente per Bisektion."
 - Consumes: `Time`, `EffectId`, `ParamValue`, `Keyframe`
 - Produces: `Effect { id, effect_type, enabled, params: BTreeMap<String, ParamValue>, keyframes: BTreeMap<String, Vec<Keyframe>>, extra }`, `Effect::new(&str)`, `Effect::param(&str)`, `Effect::param_at(&str, Time)`, `Transition { transition_type, duration, alignment, params }`, `TransitionAlignment`.
 
-- [ ] **Step 1: Failing tests schreiben**
+- [x] **Step 1: Failing tests schreiben**
 
 ```rust
 #[cfg(test)]
@@ -1510,12 +1502,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core effect::`
 Expected: FAIL — `cannot find type Effect`
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 ```rust
 use std::collections::BTreeMap;
@@ -1595,12 +1587,12 @@ pub enum TransitionAlignment {
 }
 ```
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `cargo test -p videola-core effect::`
 Expected: PASS
 
-- [ ] **Step 5: Committen**
+- [x] **Step 5: Committen**
 
 ```bash
 git add crates/videola-core/src/model/effect.rs
@@ -1637,13 +1629,13 @@ keyframete Parameter schlagen statische."
 - Consumes: `Project`, `CoreError`, `Result`
 - Produces: `Command` (Enum, serde-tag `type` mit Punktnamen wie `"track.add"`), `Command::apply(&self, &mut Project) -> Result<()>`, `Command::label(&self) -> &'static str`, `Dispatch { command, coalesce_key: Option<String> }`, `DispatchResult { patch: Value, label: &'static str, can_undo: bool, can_redo: bool }`, `Document::new()`, `Document::from_project(Project)`, `Document::project()`, `Document::dispatch(Dispatch)`, `Document::undo()`, `Document::redo()`, `History::labels()`.
 
-- [ ] **Step 1: Dependency ergänzen**
+- [x] **Step 1: Dependency ergänzen**
 
 ```bash
 cd crates/videola-core && cargo add json-patch && cd ../..
 ```
 
-- [ ] **Step 2: Failing test schreiben**
+- [x] **Step 2: Failing test schreiben**
 
 `crates/videola-core/tests/undo.rs`:
 ```rust
@@ -1746,12 +1738,12 @@ fn dispatch_reports_the_patch_it_produced() {
 }
 ```
 
-- [ ] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test undo`
 Expected: FAIL — `unresolved import videola_core::Document`
 
-- [ ] **Step 4: `command/mod.rs` implementieren (Rumpf mit Track-Volume)**
+- [x] **Step 4: `command/mod.rs` implementieren (Rumpf mit Track-Volume)**
 
 ```rust
 mod clip;
@@ -1900,7 +1892,7 @@ pub(crate) fn unused_effect(effect_type: &str) -> Effect {
 
 `unused_effect` fliegt am Ende von Task 8 wieder raus — es hält nur `Effect` im Import, bis `effect.add` implementiert ist. Wenn du Task 8 direkt anschließt, lass es weg.
 
-- [ ] **Step 5: `history.rs` implementieren**
+- [x] **Step 5: `history.rs` implementieren**
 
 ```rust
 use json_patch::Patch;
@@ -1993,7 +1985,7 @@ pub fn diff(from: &Value, to: &Value) -> Patch {
 }
 ```
 
-- [ ] **Step 6: `document.rs` implementieren**
+- [x] **Step 6: `document.rs` implementieren**
 
 ```rust
 use json_patch::Patch;
@@ -2114,7 +2106,7 @@ Der Umweg über eine Kopie (`candidate`) ist die Sicherheitsgarantie: ein Comman
 
 `ponytail: pro Dispatch wird das Projekt geklont und zweimal serialisiert. Bei grossen Projekten und Drag-Frequenz kann das auffallen; dann Patches pro Command von Hand erzeugen statt zu diffen — die Entry-Struktur bleibt dabei gleich.`
 
-- [ ] **Step 7: `lib.rs` erweitern**
+- [x] **Step 7: `lib.rs` erweitern**
 
 ```rust
 pub mod command;
@@ -2128,12 +2120,12 @@ pub use document::{DispatchResult, Document};
 pub use error::{CoreError, Result};
 ```
 
-- [ ] **Step 8: Test laufen lassen**
+- [x] **Step 8: Test laufen lassen**
 
 Run: `cargo test -p videola-core --test undo`
 Expected: PASS, nachdem Task 7 die Projekt- und Track-Handler geliefert hat. Arbeite Task 7 direkt im Anschluss ab.
 
-- [ ] **Step 9: Committen (nach Task 7)**
+- [x] **Step 9: Committen (nach Task 7)**
 
 ```bash
 git add crates/videola-core/src/command crates/videola-core/src/history.rs \
@@ -2159,7 +2151,7 @@ deterministisch bleibt."
 - Consumes: `Command`, `Project`, `Track`, `TrackKind`, `CoreError`
 - Produces: `command::project::apply(&Command, &mut Project) -> Result<()>`
 
-- [ ] **Step 1: Failing test schreiben**
+- [x] **Step 1: Failing test schreiben**
 
 `crates/videola-core/tests/track_commands.rs`:
 ```rust
@@ -2273,12 +2265,12 @@ fn setting_the_title_leaves_the_project_id_alone() {
 }
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test track_commands`
 Expected: FAIL — `module project is private` bzw. `apply` nicht gefunden
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 `crates/videola-core/src/command/project.rs`:
 ```rust
@@ -2377,12 +2369,12 @@ fn track_mut<'p>(target: &'p mut Project, track: &TrackId) -> Result<&'p mut Tra
 }
 ```
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `cargo test -p videola-core && cargo clippy -p videola-core -- -D warnings`
 Expected: PASS — auch `tests/undo.rs` aus Task 6 ist jetzt grün
 
-- [ ] **Step 5: Committen**
+- [x] **Step 5: Committen**
 
 ```bash
 git add crates/videola-core/src/command/project.rs crates/videola-core/tests/track_commands.rs
@@ -2410,7 +2402,7 @@ Die Invariante, gegen die zu testen ist: **für jedes `t` im überlebenden Timel
 - Consumes: `Command`, `TrimEdge`, `Clip`, `ClipSource`, `Project`, `find_clip_mut`
 - Produces: `command::clip::apply(&Command, &mut Project) -> Result<()>`
 
-- [ ] **Step 1: Failing test schreiben**
+- [x] **Step 1: Failing test schreiben**
 
 `crates/videola-core/tests/clip_commands.rs`:
 ```rust
@@ -2639,12 +2631,12 @@ fn setting_an_effect_param_on_a_missing_effect_fails() {
 }
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test clip_commands`
 Expected: FAIL — `apply` in `command::clip` nicht gefunden
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 `crates/videola-core/src/command/clip.rs`:
 ```rust
@@ -2824,16 +2816,16 @@ fn sort_clips(track: &mut crate::model::Track) {
 
 `add` legt zuerst einen Media-Clip mit leerer `MediaId` an und ersetzt `source` sofort — das vermeidet einen zweiten Konstruktor, der dasselbe tut. Wenn `Clip::new` in Task 3 als `pub(crate)` sichtbar gemacht wird, ist die direkte Variante sauberer; ändere das dann hier mit.
 
-- [ ] **Step 4: `unused_effect` aus `command/mod.rs` entfernen**
+- [x] **Step 4: `unused_effect` aus `command/mod.rs` entfernen**
 
 Lösche die Funktion und passe den `use`-Block an, sodass `Effect` nicht mehr importiert wird.
 
-- [ ] **Step 5: Tests laufen lassen**
+- [x] **Step 5: Tests laufen lassen**
 
 Run: `cargo test -p videola-core && cargo clippy -p videola-core -- -D warnings && cargo fmt --check`
 Expected: PASS
 
-- [ ] **Step 6: Committen**
+- [x] **Step 6: Committen**
 
 ```bash
 git add crates/videola-core/src/command crates/videola-core/tests/clip_commands.rs
@@ -2857,13 +2849,13 @@ nicht springt."
 - Consumes: `Time`, `Rate`
 - Produces: `MediaId` (aus Inhalts-Hash, `MediaId::from_bytes(&[u8])`, `MediaId::from(String)`, `as_str`), `MediaKind` (Video/Audio/Image/Font), `MediaAsset { id, original_name, mime, kind, size_bytes, duration, width, height, fps, sample_rate, channels }`, `MediaAsset::extension()`, `format::hash::sha256_hex(&[u8]) -> String`.
 
-- [ ] **Step 1: Dependency ergänzen**
+- [x] **Step 1: Dependency ergänzen**
 
 ```bash
 cd crates/videola-core && cargo add sha2 && cd ../..
 ```
 
-- [ ] **Step 2: Failing tests schreiben**
+- [x] **Step 2: Failing tests schreiben**
 
 `crates/videola-core/src/format/hash.rs`:
 ```rust
@@ -2946,12 +2938,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 3: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core -- media:: hash::`
 Expected: FAIL — `cannot find function sha256_hex`
 
-- [ ] **Step 4: `format/hash.rs` implementieren**
+- [x] **Step 4: `format/hash.rs` implementieren**
 
 ```rust
 use sha2::{Digest, Sha256};
@@ -2966,7 +2958,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 }
 ```
 
-- [ ] **Step 5: `model/media.rs` implementieren**
+- [x] **Step 5: `model/media.rs` implementieren**
 
 ```rust
 use std::fmt;
@@ -3071,7 +3063,7 @@ impl MediaAsset {
 }
 ```
 
-- [ ] **Step 6: Module verdrahten**
+- [x] **Step 6: Module verdrahten**
 
 `crates/videola-core/src/format/mod.rs`:
 ```rust
@@ -3080,12 +3072,12 @@ pub mod hash;
 
 In `crates/videola-core/src/lib.rs` `pub mod format;` ergänzen.
 
-- [ ] **Step 7: Tests laufen lassen**
+- [x] **Step 7: Tests laufen lassen**
 
 Run: `cargo test -p videola-core`
 Expected: PASS
 
-- [ ] **Step 8: Committen**
+- [x] **Step 8: Committen**
 
 ```bash
 git add crates/videola-core/src/model/media.rs crates/videola-core/src/format \
@@ -3108,7 +3100,7 @@ zweimal importiert landet einmal im Projekt."
 - Consumes: `Project`, `MediaId`, `MediaAsset`, `CoreError`
 - Produces: `Manifest { schema_version, app_version, project_id, title, created, modified, locale }`, `MediaStore` (Trait mit `read(&MediaId) -> Result<Vec<u8>>`), `MemoryMediaStore`, `SaveOptions { app_version, created, modified, locale, slim }`, `format::writer::write<W: Write + Seek>(W, &Project, &dyn MediaStore, &SaveOptions) -> Result<()>`, Konstanten `MANIFEST_ENTRY`, `PROJECT_ENTRY`, `MEDIA_PREFIX`.
 
-- [ ] **Step 1: Dependency und Fehlervarianten ergänzen**
+- [x] **Step 1: Dependency und Fehlervarianten ergänzen**
 
 ```bash
 cd crates/videola-core && cargo add zip --no-default-features --features deflate && cd ../..
@@ -3132,7 +3124,7 @@ In `crates/videola-core/src/error.rs` ergänzen:
     UnsupportedSchema(u32),
 ```
 
-- [ ] **Step 2: Failing test schreiben**
+- [x] **Step 2: Failing test schreiben**
 
 `crates/videola-core/src/format/writer.rs`, am Dateiende:
 ```rust
@@ -3249,12 +3241,12 @@ impl SaveOptions {
 }
 ```
 
-- [ ] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core writer::`
 Expected: FAIL — `cannot find function write`
 
-- [ ] **Step 4: `format/mod.rs` erweitern**
+- [x] **Step 4: `format/mod.rs` erweitern**
 
 ```rust
 pub mod hash;
@@ -3325,7 +3317,7 @@ impl MediaStore for MemoryMediaStore {
 
 Der Zeitstempel kommt von außen: `videola-core` läuft auch in WASM und soll deterministisch testbar bleiben, also hat es keine Uhr.
 
-- [ ] **Step 5: `format/writer.rs` implementieren**
+- [x] **Step 5: `format/writer.rs` implementieren**
 
 ```rust
 use std::io::{Seek, Write};
@@ -3410,12 +3402,12 @@ Medien werden ohne Kompression abgelegt: H.264, AAC und JPEG sind bereits kompri
 
 Sollte die installierte `zip`-Version `SimpleFileOptions` anders benennen (`FileOptions` in 1.x), passe die zwei Hilfsfunktionen an — der Rest bleibt gleich.
 
-- [ ] **Step 6: Test laufen lassen**
+- [x] **Step 6: Test laufen lassen**
 
 Run: `cargo test -p videola-core writer::`
 Expected: PASS, sobald `format/reader.rs` als leeres Modul existiert. Lege die Datei jetzt mit `pub` -Rumpf an und fülle sie in Task 11.
 
-- [ ] **Step 7: Committen**
+- [x] **Step 7: Committen**
 
 ```bash
 git add crates/videola-core/src/format crates/videola-core/src/error.rs
@@ -3438,7 +3430,7 @@ bleibt."
 - Consumes: `Manifest`, `MEDIA_PREFIX`, `PROJECT_ENTRY`, `MANIFEST_ENTRY`, `Project`, `MediaId`
 - Produces: `LoadedProject { manifest, project, media: BTreeMap<MediaId, Vec<u8>>, warnings: Vec<LoadWarning> }`, `LoadWarning` (MissingMedia/UnreadableEntry/Migrated), `format::reader::read<R: Read + Seek>(R) -> Result<LoadedProject>`
 
-- [ ] **Step 1: Failing test schreiben**
+- [x] **Step 1: Failing test schreiben**
 
 `crates/videola-core/tests/format_roundtrip.rs`:
 ```rust
@@ -3578,12 +3570,12 @@ Der Test braucht `zip` als Dev-Dependency des Integrationstests:
 cd crates/videola-core && cargo add zip --dev --no-default-features --features deflate && cd ../..
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test format_roundtrip`
 Expected: FAIL — `cannot find function read`
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 `crates/videola-core/src/format/reader.rs`:
 ```rust
@@ -3685,7 +3677,7 @@ Ein fehlendes Medium ist bewusst kein Fehler: der Nutzer soll sein Projekt öffn
 
 `ponytail: der Reader hält alle Mediendaten im Speicher. Fuer M0 und Projekte in Testgroesse in Ordnung; ab M1 auf streamende Extraktion in den Host-Storage (OPFS bzw. Dateisystem) umstellen, LoadedProject.media wird dann zu einem Iterator.`
 
-- [ ] **Step 4: `format/mod.rs` um Re-Exports ergänzen**
+- [x] **Step 4: `format/mod.rs` um Re-Exports ergänzen**
 
 ```rust
 pub mod hash;
@@ -3696,12 +3688,12 @@ pub mod writer;
 pub use reader::{LoadWarning, LoadedProject};
 ```
 
-- [ ] **Step 5: Test laufen lassen**
+- [x] **Step 5: Test laufen lassen**
 
 Run: `cargo test -p videola-core --test format_roundtrip`
 Expected: PASS, sobald Task 12 `format/migrate.rs` geliefert hat. Arbeite Task 12 direkt im Anschluss ab.
 
-- [ ] **Step 6: Committen (nach Task 12)**
+- [x] **Step 6: Committen (nach Task 12)**
 
 ```bash
 git add crates/videola-core/src/format crates/videola-core/tests/format_roundtrip.rs
@@ -3723,7 +3715,7 @@ betroffenen Clips behalten ihre Parameter und werden als Warnung gemeldet."
 - Consumes: `Project`, `SCHEMA_VERSION`, `LoadWarning`
 - Produces: `format::migrate::load(&str) -> Result<(Project, Vec<LoadWarning>)>`
 
-- [ ] **Step 1: Failing test schreiben**
+- [x] **Step 1: Failing test schreiben**
 
 `crates/videola-core/tests/migration.rs`:
 ```rust
@@ -3782,12 +3774,12 @@ fn malformed_json_fails_loudly() {
 }
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test migration`
 Expected: FAIL — `cannot find function load`
 
-- [ ] **Step 3: Implementieren**
+- [x] **Step 3: Implementieren**
 
 ```rust
 use serde_json::Value;
@@ -3833,12 +3825,12 @@ Zwei Tests dafür: ein Projekt-JSON mit absichtlich verdrehter Keyframe-Spur wir
 
 `upgrade` hat mit `SCHEMA_VERSION == 1` noch keine Schritte zu tun. Ab Version 2 kommt pro Sprung eine Funktion `fn v1_to_v2(document: &mut Value)` hinzu, die `upgrade` in Reihenfolge aufruft — die Signatur steht deshalb jetzt schon.
 
-- [ ] **Step 4: Tests laufen lassen**
+- [x] **Step 4: Tests laufen lassen**
 
 Run: `cargo test -p videola-core && cargo clippy -p videola-core -- -D warnings`
 Expected: PASS — auch `tests/format_roundtrip.rs` aus Task 11 ist jetzt grün
 
-- [ ] **Step 5: Committen**
+- [x] **Step 5: Committen**
 
 ```bash
 git add crates/videola-core/src/format/migrate.rs crates/videola-core/tests/migration.rs
@@ -3861,7 +3853,7 @@ Feldumbauten moeglich sind, ohne alte Struct-Versionen im Code zu halten."
 **Interfaces:**
 - Produces: `packages/core/src/generated/*.ts` mit TS-Typen für `Project`, `Track`, `Clip`, `Effect`, `Keyframe`, `ParamValue`, `Command`, `Dispatch`, `Manifest`, `LoadWarning`; pnpm-Workspace mit `@videola/core`.
 
-- [ ] **Step 1: pnpm-Workspace anlegen**
+- [x] **Step 1: pnpm-Workspace anlegen**
 
 `package.json`:
 ```json
@@ -3932,7 +3924,7 @@ packages:
 }
 ```
 
-- [ ] **Step 2: Export-Ziel in `Cargo.toml` setzen**
+- [x] **Step 2: Export-Ziel in `Cargo.toml` setzen**
 
 ```toml
 [package.metadata.ts-rs]
@@ -3941,7 +3933,7 @@ export_to = "../../packages/core/src/generated/"
 
 Zusätzlich an jedem `#[derive(TS)]`-Typ, dessen Datei nicht direkt exportiert wird, `#[ts(export)]` ergänzen — konkret an `Project`, `ProjectMeta`, `ProjectSettings`, `MasterSettings`, `Timeline`, `Track`, `TrackKind`, `Marker`, `Clip`, `ClipSource`, `Generator`, `Speed`, `Transform`, `Crop`, `BlendMode`, `Fades`, `Effect`, `Transition`, `TransitionAlignment`, `Keyframe`, `Interp`, `ParamValue`, `MediaAsset`, `MediaKind`, `Command`, `TrimEdge`, `Dispatch`, `Manifest`, `LoadWarning`, `Rate`, `Time`.
 
-- [ ] **Step 3: Failing test schreiben**
+- [x] **Step 3: Failing test schreiben**
 
 `crates/videola-core/tests/export_types.rs`:
 ```rust
@@ -3974,12 +3966,12 @@ fn generated_bindings_land_in_the_core_package() {
 
 `expect` ist hier zulässig: die Datei liegt unter `tests/`, wo die Clippy-Lints aus dem Workspace nicht als Produktivcode zählen. Falls Clippy trotzdem meckert, setze `#![allow(clippy::expect_used)]` an den Dateianfang.
 
-- [ ] **Step 4: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 4: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test export_types`
 Expected: FAIL — die Dateien unter `packages/core/src/generated/` existieren noch nicht
 
-- [ ] **Step 5: Generieren und Barrel-Datei anlegen**
+- [x] **Step 5: Generieren und Barrel-Datei anlegen**
 
 ```bash
 cargo test -p videola-core --test export_types
@@ -4024,12 +4016,12 @@ export type { Rate } from "./Rate";
 
 Ergänze `packages/core/src/generated/` in `.gitignore` **nicht** — generierte Typen werden eingecheckt, damit `pnpm typecheck` ohne Rust-Toolchain läuft. Ein CI-Schritt prüft, dass sie aktuell sind (Task 20).
 
-- [ ] **Step 6: Test laufen lassen**
+- [x] **Step 6: Test laufen lassen**
 
 Run: `cargo test -p videola-core --test export_types`
 Expected: PASS
 
-- [ ] **Step 7: Committen**
+- [x] **Step 7: Committen**
 
 ```bash
 git add package.json pnpm-workspace.yaml tsconfig.base.json packages/core \
@@ -4051,7 +4043,7 @@ Rust-Toolchain laeuft; CI prueft ihre Aktualitaet."
 **Interfaces:**
 - Produces: `Command::MediaImport { asset: MediaAsset }` (serde `"media.import"`), `Command::MediaRemove { media: MediaId }` (serde `"media.remove"`). `MediaRemove` entfernt das Asset **und** alle Clips, die es referenzieren.
 
-- [ ] **Step 1: Failing test schreiben**
+- [x] **Step 1: Failing test schreiben**
 
 `crates/videola-core/tests/media_commands.rs`:
 ```rust
@@ -4138,12 +4130,12 @@ fn undo_restores_both_library_and_clips() {
 }
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core --test media_commands`
 Expected: FAIL — `no variant MediaImport`
 
-- [ ] **Step 3: Command-Varianten ergänzen**
+- [x] **Step 3: Command-Varianten ergänzen**
 
 In `crates/videola-core/src/command/mod.rs` in das `Command`-Enum:
 ```rust
@@ -4161,7 +4153,7 @@ In `label()`:
 
 In `apply()` die Weiche erweitern, sodass beide Varianten an `project::apply` gehen. Ergänze `MediaAsset` und `MediaId` im `use`-Block.
 
-- [ ] **Step 4: Handler implementieren**
+- [x] **Step 4: Handler implementieren**
 
 In `crates/videola-core/src/command/project.rs` in `apply` ergänzen:
 ```rust
@@ -4193,12 +4185,12 @@ fn uses_media(clip: &crate::model::Clip, media: &crate::model::MediaId) -> bool 
 }
 ```
 
-- [ ] **Step 5: Tests laufen lassen**
+- [x] **Step 5: Tests laufen lassen**
 
 Run: `cargo test -p videola-core && cargo clippy -p videola-core -- -D warnings`
 Expected: PASS
 
-- [ ] **Step 6: Typen neu generieren und committen**
+- [x] **Step 6: Typen neu generieren und committen**
 
 ```bash
 cargo test -p videola-core --test export_types
@@ -4222,7 +4214,7 @@ Medium zeigt."
 - Consumes: `Document`, `Dispatch`, `Project`, `MediaAsset`, `MediaId`, `format::{reader, writer, SaveOptions, MemoryMediaStore}`
 - Produces: JS-Klasse `WasmDocument` mit `new()`, `static open(bytes: Uint8Array)`, `state(): Project`, `dispatch(dispatch: Dispatch): DispatchResult`, `undo()`, `redo()`, `save(options): Uint8Array`, `importMedia(name, mime, kind, bytes): string`, `mediaBytes(id): Uint8Array | undefined`, `warnings(): LoadWarning[]`, `historyLabels(): string[]`
 
-- [ ] **Step 1: Crate anlegen**
+- [x] **Step 1: Crate anlegen**
 
 ```bash
 cargo new --lib crates/videola-core-wasm --name videola-core-wasm --vcs none
@@ -4242,7 +4234,7 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 ```
 
-- [ ] **Step 2: Failing test schreiben**
+- [x] **Step 2: Failing test schreiben**
 
 `crates/videola-core-wasm/tests/api.rs` — getestet wird die plattformunabhängige Innenschicht, nicht die JS-Grenze:
 ```rust
@@ -4302,12 +4294,12 @@ fn opening_rubbish_fails_instead_of_panicking() {
 }
 ```
 
-- [ ] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `cargo test -p videola-core-wasm`
 Expected: FAIL — `unresolved import videola_core_wasm::inner`
 
-- [ ] **Step 4: Innenschicht implementieren**
+- [x] **Step 4: Innenschicht implementieren**
 
 `crates/videola-core-wasm/src/inner.rs`:
 ```rust
@@ -4442,7 +4434,7 @@ fn parse_kind(kind: &str) -> Result<MediaKind> {
 }
 ```
 
-- [ ] **Step 5: JS-Grenze implementieren**
+- [x] **Step 5: JS-Grenze implementieren**
 
 `crates/videola-core-wasm/src/lib.rs`:
 ```rust
@@ -4558,7 +4550,7 @@ fn to_js(error: videola_core::CoreError) -> JsError {
 
 Die JS-Grenze übersetzt nur — alle Regeln liegen in `inner`, damit sie ohne Browser testbar bleiben.
 
-- [ ] **Step 6: Tests laufen lassen und WASM bauen**
+- [x] **Step 6: Tests laufen lassen und WASM bauen**
 
 ```bash
 cargo test -p videola-core-wasm
@@ -4567,7 +4559,7 @@ wasm-pack build crates/videola-core-wasm --target web --out-dir ../../packages/c
 ```
 Expected: Tests PASS, `packages/core/src/wasm/videola_core.js` und `.wasm` entstehen
 
-- [ ] **Step 7: WASM-Ausgabe ignorieren und committen**
+- [x] **Step 7: WASM-Ausgabe ignorieren und committen**
 
 In `.gitignore` ergänzen:
 ```
@@ -4595,7 +4587,7 @@ wasm-bindgen-Schicht uebersetzt nur zwischen JS und Rust."
 - Consumes: generierte Typen aus `./generated`
 - Produces: `cmd` (typisierte Command-Fabriken), `DocumentBackend` (Interface), `VideolaDocument` (`state`, `dispatch`, `undo`, `redo`, `save`, `importMedia`, `subscribe`, `canUndo`, `canRedo`), `createWasmBackend()`
 
-- [ ] **Step 1: Test-Werkzeuge installieren**
+- [x] **Step 1: Test-Werkzeuge installieren**
 
 ```bash
 pnpm add -D -w typescript vitest
@@ -4611,7 +4603,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: Failing tests schreiben**
+- [x] **Step 2: Failing tests schreiben**
 
 `packages/core/src/commands.test.ts`:
 ```ts
@@ -4753,12 +4745,12 @@ describe("VideolaDocument", () => {
 });
 ```
 
-- [ ] **Step 3: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 3: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `pnpm --filter @videola/core test`
 Expected: FAIL — `Cannot find module './index'`
 
-- [ ] **Step 4: `backend.ts` implementieren**
+- [x] **Step 4: `backend.ts` implementieren**
 
 ```ts
 import type { Command, Dispatch, LoadWarning, Project } from "./generated";
@@ -4793,7 +4785,7 @@ export interface DocumentBackend {
 
 `backend.ts` re-exportiert **keine** generierten Typen: `index.ts` gibt `./generated` schon mit `export *` weiter, und ein zweiter Pfad für denselben Namen bricht den Typecheck.
 
-- [ ] **Step 5: `commands.ts` implementieren**
+- [x] **Step 5: `commands.ts` implementieren**
 
 ```ts
 import type { BlendMode, ClipSource, Command, ParamValue, TrackKind } from "./generated";
@@ -4877,7 +4869,7 @@ export const cmd = {
 
 Die Fabriken sind der einzige Ort, an dem Command-Namen als Zeichenkette auftauchen. `satisfies` erzwingt, dass jede Fabrik ein `Command` liefert — ein Tippfehler im `type` bricht den Typecheck, nicht erst die Laufzeit.
 
-- [ ] **Step 6: `document.ts` implementieren**
+- [x] **Step 6: `document.ts` implementieren**
 
 ```ts
 import type { DispatchResult, DocumentBackend, MediaKindName, SaveOptions } from "./backend";
@@ -4966,7 +4958,7 @@ function mediaKind(mime: string): MediaKindName {
 }
 ```
 
-- [ ] **Step 7: `wasm-backend.ts` und `index.ts` implementieren**
+- [x] **Step 7: `wasm-backend.ts` und `index.ts` implementieren**
 
 `packages/core/src/wasm-backend.ts`:
 ```ts
@@ -5007,12 +4999,12 @@ export * from "./generated";
 export { createWasmBackend } from "./wasm-backend";
 ```
 
-- [ ] **Step 8: Tests laufen lassen**
+- [x] **Step 8: Tests laufen lassen**
 
 Run: `pnpm --filter @videola/core test && pnpm --filter @videola/core typecheck`
 Expected: PASS. Falls `typecheck` das WASM-Modul nicht findet, baue es vorher (`wasm-pack build …` aus Task 15) — die Datei ist absichtlich nicht eingecheckt.
 
-- [ ] **Step 9: Committen**
+- [x] **Step 9: Committen**
 
 ```bash
 git add packages/core package.json pnpm-lock.yaml
@@ -5034,7 +5026,7 @@ Interface, damit die Fassade ohne WASM testbar bleibt."
 **Interfaces:**
 - Produces: `ThemeProvider` (React-Komponente), `useTheme() -> { theme: "dark" | "light", preference: ThemePreference, setPreference }`, `ThemePreference = "system" | "dark" | "light"`, CSS-Variablen-Tokens für beide Themes.
 
-- [ ] **Step 1: Paket und Test-Werkzeuge anlegen**
+- [x] **Step 1: Paket und Test-Werkzeuge anlegen**
 
 Zuerst die Manifeste schreiben, dann installieren.
 
@@ -5080,10 +5072,11 @@ pnpm add -D --filter @videola/ui typescript vitest jsdom @testing-library/react 
   @testing-library/dom @types/react @types/react-dom
 ```
 
-- [ ] **Step 2: Failing test schreiben**
+- [x] **Step 2: Failing test schreiben**
 
 `packages/ui/src/theme/ThemeProvider.test.tsx`:
 ```tsx
+import type { ReactElement } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -5102,7 +5095,7 @@ function mockSystemPrefersDark(dark: boolean): void {
   );
 }
 
-function Probe(): JSX.Element {
+function Probe(): ReactElement {
   const { theme, preference, setPreference } = useTheme();
   return (
     <div>
@@ -5175,12 +5168,12 @@ describe("ThemeProvider", () => {
 });
 ```
 
-- [ ] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: FAIL — `Cannot find module './ThemeProvider'`
 
-- [ ] **Step 4: `tokens.css` implementieren**
+- [x] **Step 4: `tokens.css` implementieren**
 
 ```css
 :root {
@@ -5262,7 +5255,7 @@ body {
 }
 ```
 
-- [ ] **Step 5: `useTheme.ts` und `ThemeProvider.tsx` implementieren**
+- [x] **Step 5: `useTheme.ts` und `ThemeProvider.tsx` implementieren**
 
 `packages/ui/src/theme/useTheme.ts`:
 ```ts
@@ -5290,14 +5283,14 @@ export function useTheme(): ThemeContextValue {
 
 `packages/ui/src/theme/ThemeProvider.tsx`:
 ```tsx
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 
 import { ThemeContext, type Theme, type ThemePreference } from "./useTheme";
 import "./tokens.css";
 
 const STORAGE_KEY = "videola.theme";
 
-export function ThemeProvider({ children }: { children: ReactNode }): JSX.Element {
+export function ThemeProvider({ children }: { children: ReactNode }): ReactElement {
   const [preference, setStoredPreference] = useState<ThemePreference>(readPreference);
   const theme = preference === "system" ? systemTheme() : preference;
 
@@ -5333,12 +5326,12 @@ function systemTheme(): Theme {
 }
 ```
 
-- [ ] **Step 6: Tests laufen lassen**
+- [x] **Step 6: Tests laufen lassen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: PASS
 
-- [ ] **Step 7: Committen**
+- [x] **Step 7: Committen**
 
 ```bash
 git add packages/ui
@@ -5360,7 +5353,7 @@ Tokens ohne JavaScript im Render-Pfad greifen."
 **Interfaces:**
 - Produces: `I18nProvider`, `useI18n() -> { t, locale, setLocale, formatNumber, formatTimecode }`, `Locale = "de" | "en"`, `translate(catalog, key, vars?) -> string`
 
-- [ ] **Step 1: Failing tests schreiben**
+- [x] **Step 1: Failing tests schreiben**
 
 `packages/ui/src/i18n/translate.test.ts`:
 ```ts
@@ -5404,13 +5397,14 @@ describe("translate", () => {
 
 `packages/ui/src/i18n/I18nProvider.test.tsx`:
 ```tsx
+import type { ReactElement } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "./I18nProvider";
 import { useI18n } from "./useI18n";
 
-function Probe(): JSX.Element {
+function Probe(): ReactElement {
   const { t, locale, setLocale } = useI18n();
   return (
     <div>
@@ -5488,12 +5482,12 @@ describe("catalogs", () => {
 });
 ```
 
-- [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: FAIL — `Cannot find module './translate'`
 
-- [ ] **Step 3: Kataloge anlegen**
+- [x] **Step 3: Kataloge anlegen**
 
 `packages/ui/src/i18n/catalogs/de.json`:
 ```json
@@ -5597,7 +5591,7 @@ Expected: FAIL — `Cannot find module './translate'`
 
 Die `cmd.*`-Schlüssel entsprechen exakt den `label()`-Rückgaben aus Task 6 — die Undo-Historie ist damit zweisprachig, ohne dass Rust Text kennt.
 
-- [ ] **Step 4: `translate.ts` implementieren**
+- [x] **Step 4: `translate.ts` implementieren**
 
 ```ts
 export type Catalog = Record<string, string>;
@@ -5637,7 +5631,7 @@ Ein fehlender Schlüssel gibt den Schlüssel zurück statt leerem Text: eine Lü
 
 `ponytail: Pluralformen sind auf Singular/Plural beschränkt (reicht für de und en). Sobald eine Sprache mit mehr Kategorien dazukommt, auf Intl.PluralRules mit benannten Formen umstellen — die Katalogsyntax bleibt dabei erweiterbar.`
 
-- [ ] **Step 5: `useI18n.ts` und `I18nProvider.tsx` implementieren**
+- [x] **Step 5: `useI18n.ts` und `I18nProvider.tsx` implementieren**
 
 `packages/ui/src/i18n/useI18n.ts`:
 ```ts
@@ -5668,7 +5662,7 @@ export function useI18n(): I18nContextValue {
 
 `packages/ui/src/i18n/I18nProvider.tsx`:
 ```tsx
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 
 import de from "./catalogs/de.json";
 import en from "./catalogs/en.json";
@@ -5678,7 +5672,7 @@ import { I18nContext, type Locale } from "./useI18n";
 const STORAGE_KEY = "videola.locale";
 const CATALOGS: Record<Locale, Catalog> = { de, en };
 
-export function I18nProvider({ children }: { children: ReactNode }): JSX.Element {
+export function I18nProvider({ children }: { children: ReactNode }): ReactElement {
   const [locale, setStoredLocale] = useState<Locale>(readLocale);
 
   useEffect(() => {
@@ -5726,12 +5720,12 @@ function formatTimecode(seconds: number): string {
 
 `readLocale` bevorzugt Deutsch, weil das die Primärsprache des Projekts ist; Englisch greift, wenn der Browser es meldet.
 
-- [ ] **Step 6: Tests laufen lassen**
+- [x] **Step 6: Tests laufen lassen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: PASS
 
-- [ ] **Step 7: Committen**
+- [x] **Step 7: Committen**
 
 ```bash
 git add packages/ui/src/i18n
@@ -5753,7 +5747,7 @@ statt als Leerstelle."
 **Interfaces:**
 - Produces: `LayoutMode = "desktop" | "tablet" | "phone"`, `LayoutPreference = "auto" | LayoutMode`, `detectLayoutMode({ width, hasFinePointer }) -> LayoutMode`, `useLayoutMode(preference) -> LayoutMode`, Konstanten `TABLET_MIN_WIDTH = 768`, `DESKTOP_MIN_WIDTH = 1280`
 
-- [ ] **Step 1: Failing tests schreiben**
+- [x] **Step 1: Failing tests schreiben**
 
 `packages/ui/src/layout/detectLayoutMode.test.ts`:
 ```ts
@@ -5827,12 +5821,12 @@ describe("useLayoutMode", () => {
 });
 ```
 
-- [ ] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Tests laufen lassen, Fehlschlag bestätigen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: FAIL — `Cannot find module './detectLayoutMode'`
 
-- [ ] **Step 3: `detectLayoutMode.ts` implementieren**
+- [x] **Step 3: `detectLayoutMode.ts` implementieren**
 
 ```ts
 export type LayoutMode = "desktop" | "tablet" | "phone";
@@ -5866,7 +5860,7 @@ export function readViewport(): Viewport {
 
 Ausschlaggebend ist `any-pointer: fine`, nicht `pointer: coarse`: ein Notebook mit Touchscreen hat beides, soll aber Desktop bleiben. Der User-Agent wird nirgends gelesen.
 
-- [ ] **Step 4: `useLayoutMode.ts` implementieren**
+- [x] **Step 4: `useLayoutMode.ts` implementieren**
 
 ```ts
 import { useEffect, useState } from "react";
@@ -5891,12 +5885,12 @@ export function useLayoutMode(preference: LayoutPreference): LayoutMode {
 }
 ```
 
-- [ ] **Step 5: Tests laufen lassen**
+- [x] **Step 5: Tests laufen lassen**
 
 Run: `pnpm --filter @videola/ui test && pnpm --filter @videola/ui typecheck`
 Expected: PASS
 
-- [ ] **Step 6: Committen**
+- [x] **Step 6: Committen**
 
 ```bash
 git add packages/ui/src/layout
@@ -5920,7 +5914,7 @@ User-Agent; ein Notebook mit Touchscreen bleibt damit im Desktop-Modus."
 - Consumes: `ThemeProvider`, `useTheme`, `I18nProvider`, `useI18n`, `useLayoutMode`, `VideolaDocument`, `createWasmBackend`, `cmd`
 - Produces: `AppShell` (Provider-Verbund + Topbar + Inhaltsbereich), `TopBar`, `SettingsMenu`, `@videola/ui` Barrel-Export, lauffähige Web-App mit Öffnen/Speichern/Undo/Redo
 
-- [ ] **Step 1: Failing test schreiben**
+- [x] **Step 1: Failing test schreiben**
 
 `packages/ui/src/shell/AppShell.test.tsx`:
 ```tsx
@@ -5981,12 +5975,12 @@ describe("AppShell", () => {
 });
 ```
 
-- [ ] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
+- [x] **Step 2: Test laufen lassen, Fehlschlag bestätigen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: FAIL — `Cannot find module './AppShell'`
 
-- [ ] **Step 3: `AppShell.css` implementieren**
+- [x] **Step 3: `AppShell.css` implementieren**
 
 ```css
 .v-shell {
@@ -6057,14 +6051,16 @@ Expected: FAIL — `Cannot find module './AppShell'`
 }
 ```
 
-- [ ] **Step 4: `SettingsMenu.tsx` und `TopBar.tsx` implementieren**
+- [x] **Step 4: `SettingsMenu.tsx` und `TopBar.tsx` implementieren**
 
 `packages/ui/src/shell/SettingsMenu.tsx`:
 ```tsx
+import type { ReactElement } from "react";
+
 import { useI18n } from "../i18n/useI18n";
 import { useTheme } from "../theme/useTheme";
 
-export function SettingsMenu(): JSX.Element {
+export function SettingsMenu(): ReactElement {
   const { locale, setLocale } = useI18n();
   const { theme, setPreference } = useTheme();
 
@@ -6093,6 +6089,8 @@ Die beiden `aria-label` sind bewusst sprachneutral: sie benennen die Umschaltung
 
 `packages/ui/src/shell/TopBar.tsx`:
 ```tsx
+import type { ReactElement } from "react";
+
 import { useI18n } from "../i18n/useI18n";
 import { SettingsMenu } from "./SettingsMenu";
 
@@ -6107,7 +6105,7 @@ export interface TopBarActions {
   canRedo?: boolean;
 }
 
-export function TopBar(actions: TopBarActions): JSX.Element {
+export function TopBar(actions: TopBarActions): ReactElement {
   const { t } = useI18n();
 
   return (
@@ -6142,11 +6140,11 @@ export function TopBar(actions: TopBarActions): JSX.Element {
 }
 ```
 
-- [ ] **Step 5: `AppShell.tsx` und Barrel implementieren**
+- [x] **Step 5: `AppShell.tsx` und Barrel implementieren**
 
 `packages/ui/src/shell/AppShell.tsx`:
 ```tsx
-import { useState, type ReactNode } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 
 import { I18nProvider } from "../i18n/I18nProvider";
 import { useLayoutMode } from "../layout/useLayoutMode";
@@ -6160,7 +6158,7 @@ export interface AppShellProps extends TopBarActions {
   layoutPreference?: LayoutPreference;
 }
 
-export function AppShell({ children, layoutPreference, ...actions }: AppShellProps): JSX.Element {
+export function AppShell({ children, layoutPreference, ...actions }: AppShellProps): ReactElement {
   return (
     <ThemeProvider>
       <I18nProvider>
@@ -6180,7 +6178,7 @@ function Frame({
   children: ReactNode;
   layoutPreference?: LayoutPreference;
   actions: TopBarActions;
-}): JSX.Element {
+}): ReactElement {
   const [preference] = useState<LayoutPreference>(layoutPreference ?? "auto");
   const layout = useLayoutMode(preference);
 
@@ -6211,12 +6209,12 @@ export { ThemeProvider } from "./theme/ThemeProvider";
 export { useTheme, type Theme, type ThemePreference } from "./theme/useTheme";
 ```
 
-- [ ] **Step 6: Test laufen lassen**
+- [x] **Step 6: Test laufen lassen**
 
 Run: `pnpm --filter @videola/ui test`
 Expected: PASS
 
-- [ ] **Step 7: Web-App anlegen**
+- [x] **Step 7: Web-App anlegen**
 
 Erst die vier Manifeste schreiben, dann installieren.
 
@@ -6281,7 +6279,7 @@ pnpm add --filter videola-web react react-dom @videola/core @videola/ui
 pnpm add -D --filter videola-web vite @vitejs/plugin-react typescript @types/react @types/react-dom
 ```
 
-- [ ] **Step 8: App implementieren**
+- [x] **Step 8: App implementieren**
 
 `apps/web/src/main.tsx`:
 ```tsx
@@ -6298,12 +6296,12 @@ createRoot(root).render(<App />);
 
 `apps/web/src/App.tsx`:
 ```tsx
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 
 import { cmd, createWasmBackend, VideolaDocument, type Project } from "@videola/core";
 import { AppShell, useI18n } from "@videola/ui";
 
-export function App(): JSX.Element {
+export function App(): ReactElement {
   const [document, setDocument] = useState<VideolaDocument>();
   const [project, setProject] = useState<Project>();
   const [flags, setFlags] = useState({ canUndo: false, canRedo: false });
@@ -6371,7 +6369,7 @@ export function App(): JSX.Element {
   );
 }
 
-function Status({ project }: { project?: Project }): JSX.Element {
+function Status({ project }: { project?: Project }): ReactElement {
   const { t, formatTimecode } = useI18n();
   if (project === undefined) {
     return <p style={{ padding: 24 }}>…</p>;
@@ -6412,7 +6410,7 @@ function pickFile(accept: string): Promise<File | undefined> {
 
 `onImport` legt in M0 nur eine Spur an — echter Medienimport braucht die Media-Library aus M1. Der Button steht schon, weil die Command-Kette dahinter fertig ist.
 
-- [ ] **Step 9: App bauen und starten**
+- [x] **Step 9: App bauen und starten**
 
 ```bash
 wasm-pack build crates/videola-core-wasm --target web --out-dir ../../packages/core/src/wasm --out-name videola_core
@@ -6422,7 +6420,7 @@ pnpm --filter videola-web dev
 ```
 Expected: Build grün; unter `http://localhost:5173` erscheint die Shell, Sprache und Theme lassen sich umschalten, „Medien importieren" erhöht die Spurzahl, Undo wird aktiv, Speichern lädt eine `.videola` herunter, Öffnen liest sie zurück.
 
-- [ ] **Step 10: Committen**
+- [x] **Step 10: Committen**
 
 ```bash
 git add packages/ui apps/web package.json pnpm-lock.yaml
@@ -6442,7 +6440,7 @@ mit dem WASM-Kern und kann .videola speichern und oeffnen."
 **Interfaces:**
 - Produces: CI mit vier Jobs — `rust` (fmt, clippy, test), `types` (generierte Typen sind aktuell), `wasm` (wasm-pack-Build), `web` (typecheck, test, build)
 
-- [ ] **Step 1: Workflow schreiben**
+- [x] **Step 1: Workflow schreiben**
 
 ```yaml
 name: ci
@@ -6522,7 +6520,7 @@ Der `types`-Job ist der eigentliche Wächter: er verhindert, dass eine Änderung
 
 Der `web`-Job zieht das WASM-Artefakt vom `wasm`-Job, damit Node keine Rust-Toolchain braucht.
 
-- [ ] **Step 2: Lokal nachfahren**
+- [x] **Step 2: Lokal nachfahren**
 
 ```bash
 cargo fmt --all --check
@@ -6534,7 +6532,7 @@ pnpm typecheck && pnpm test && pnpm build
 ```
 Expected: alles grün
 
-- [ ] **Step 3: Committen und pushen**
+- [x] **Step 3: Committen und pushen**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -6545,7 +6543,7 @@ Rust-Modell passen."
 git push
 ```
 
-- [ ] **Step 4: CI-Ergebnis prüfen**
+- [x] **Step 4: CI-Ergebnis prüfen**
 
 ```bash
 gh run watch

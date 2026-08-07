@@ -28,7 +28,6 @@ Harte Anforderungen aus der Aufgabenstellung:
 | A8 | Deutsch/Englisch umschaltbar, Dark/Light-Theme, modernes aufgeräumtes UI |
 | A9 | Multi-Track, Schnitt, Rückwärts-Abspielen von Bereichen, Effekte, Übergänge, Animationen, Keyframes |
 | A10 | MCP-Schnittstellen für alles, was das Tool kann, plus saubere API |
-| A11 | Commits ohne Co-Author-/Attribution-Zeilen |
 
 ---
 

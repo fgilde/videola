@@ -1,7 +1,5 @@
 # Videola M7 — Packaging: Implementierungsplan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Ein Release, das auf einen Tag `v*` hin sechs Artefakte erzeugt — Windows-Installer, Linux-AppImage und deb, macOS-DMG, Android-APK/AAB, iOS-IPA und ein Docker-Image auf ghcr.io — und dabei ehrlich meldet, welche Ziele wegen fehlender Signaturschlüssel übersprungen wurden.
 
 **Architecture:** Eine einzige Tauri-2-Anwendung bedient alle fünf nativen Plattformen; ihr Frontend ist das bereits gebaute `apps/web/dist`, sodass es keine zweite UI-Codebasis gibt. Das Docker-Image ist ein Multi-Stage-Build, der WASM und Web-Bundle erzeugt und statisch ausliefert. Der Release-Workflow ist von `ci.yml` getrennt: CI beweist, dass der Baum baut, Release erzeugt verteilbare Artefakte.
@@ -17,8 +15,7 @@
 - Bezeichner, Typnamen und Code-Kommentare auf Englisch. Alle nutzersichtbaren Texte ausschließlich über die i18n-Kataloge in `packages/ui/src/i18n/catalogs/`.
 - Commit-Messages auf Deutsch mit transliterierten Umlauten (`ue`, `ae`, `oe`, `ss`) und englischem Conventional-Commits-Präfix. **Niemals** Co-Authored-By-, "Generated with"- oder sonstige Attribution-Zeilen. Git mit `-c user.email=florian.gilde@cargonerds.com` aufrufen.
 - Kein `unwrap()` / `expect()` in Produktiv-Rust. Jede Map ist `BTreeMap`. Zeit ist ganzzahlig in Flicks.
-- **`cargo` liegt nicht im PATH der Tool-Shells.** Jede Rust-Kommandozeile in PowerShell mit `$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"; ` als Prefix auf derselben Zeile. Bei `STATUS_ACCESS_VIOLATION` oder `STATUS_ILLEGAL_INSTRUCTION` zusätzlich `$env:CARGO_BUILD_JOBS = "1"; `.
-- **`wasm-opt.exe` ist auf dem Entwicklungsrechner defekt.** Lokal `pnpm wasm` gegebenenfalls mit `--no-opt`. CI und Release tragen dieses Flag **nicht**.
+- Werkzeuge: Rust stable, Node 22 oder neuer, pnpm 11 oder neuer.
 - Actions werden auf einen Major gepinnt. Stand heute aktuell: `actions/checkout@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `pnpm/setup@v2`, `Swatinem/rust-cache@v2`, `docker/setup-buildx-action@v3`, `docker/login-action@v3`, `docker/build-push-action@v6`, `softprops/action-gh-release@v2`. `upload-artifact@v7` neben `download-artifact@v8` ist **kein** Versionsfehler.
 - `packages/core/src/wasm` ist unversioniertes Build-Ergebnis. Jeder Job, der `packages/core` typechecked oder baut, braucht es vorher.
 
@@ -288,7 +285,7 @@ docs
 apps/desktop/src-tauri/gen
 ```
 
-`packages/core/src/wasm` wird bewusst ausgeschlossen: das Image baut es selbst, und ein lokal mit `--no-opt` erzeugtes Artefakt darf nicht hineinlecken.
+`packages/core/src/wasm` wird bewusst ausgeschlossen: das Image baut es selbst, und ein lokal erzeugtes Artefakt darf nicht hineinlecken.
 
 - [ ] **Step 2: Dockerfile schreiben**
 
