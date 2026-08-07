@@ -13,7 +13,7 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -25,7 +25,7 @@ jobs:
   types:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p videola-core --test export_types
@@ -39,7 +39,7 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -49,7 +49,7 @@ jobs:
       # wasm-opt.exe abstuerzt. Auf den sauberen Ubuntu-Runnern laeuft es normal
       # und die Optimierung soll auch stattfinden.
       - run: wasm-pack build crates/videola-core-wasm --target web --out-dir ../../packages/core/src/wasm --out-name videola_core
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wasm
           path: packages/core/src/wasm
@@ -58,15 +58,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: wasm
     steps:
-      - uses: actions/checkout@v4
-      # pnpm muss vor setup-node stehen: dessen "cache: pnpm" braucht die pnpm-Binary
-      # schon auf dem PATH, um den Store-Pfad zu ermitteln.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # Root-package.json pinnt "packageManager": "pnpm@11.20.0". pnpm/action-setup
+      # deckt nur pnpm bis v10 ab; ab v11 ist pnpm/setup der von pnpm selbst
+      # unterstuetzte Weg. Es ersetzt zugleich actions/setup-node, also entfaellt
+      # die vorherige Reihenfolge-Frage zwischen beiden Actions.
+      - uses: pnpm/setup@v2
         with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/download-artifact@v4
+          runtime: node@22
+          cache: true
+          install: false
+      - uses: actions/download-artifact@v8
         with:
           name: wasm
           path: packages/core/src/wasm
