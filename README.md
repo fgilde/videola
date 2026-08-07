@@ -1,3 +1,5 @@
+<img src="brand/videola-logo.png" alt="Videola" width="420">
+
 # Videola
 
 Videola is a browser-based video editor. It is early: the project core and the application shell
