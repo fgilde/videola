@@ -4,7 +4,7 @@ use ts_rs::TS;
 
 use super::clip::Clip;
 use super::effect::Effect;
-use super::{MarkerId, Time, TrackId};
+use super::{ClipId, MarkerId, Time, TrackId};
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +72,7 @@ impl Track {
         }
     }
 
-    pub fn clip_index(&self, id: &crate::model::ClipId) -> Option<usize> {
+    pub fn clip_index(&self, id: &ClipId) -> Option<usize> {
         self.clips.iter().position(|clip| &clip.id == id)
     }
 }
@@ -99,10 +99,34 @@ pub struct Marker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::MediaId;
 
     #[test]
     fn empty_timeline_has_zero_duration() {
         assert_eq!(Timeline::default().duration(), Time::ZERO);
+    }
+
+    #[test]
+    fn duration_is_the_latest_clip_end_across_all_tracks() {
+        let mut timeline = Timeline::default();
+
+        let mut a = Track::new(TrackKind::Video, "V1".into());
+        a.clips.push(Clip::new_media(
+            MediaId::from("med_a".to_string()),
+            Time::ZERO,
+            Time::from_seconds(3.0),
+        ));
+        timeline.tracks.push(a);
+
+        let mut b = Track::new(TrackKind::Audio, "A1".into());
+        b.clips.push(Clip::new_media(
+            MediaId::from("med_b".to_string()),
+            Time::from_seconds(1.0),
+            Time::from_seconds(5.0),
+        ));
+        timeline.tracks.push(b);
+
+        assert_eq!(timeline.duration().as_seconds(), 6.0);
     }
 
     #[test]
@@ -115,8 +139,33 @@ mod tests {
     }
 
     #[test]
+    fn clip_index_finds_an_existing_clip() {
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        let id = clip.id.clone();
+        track.clips.push(clip);
+        assert_eq!(track.clip_index(&id), Some(0));
+    }
+
+    #[test]
     fn track_kind_serialises_in_kebab_case() {
         let json = serde_json::to_string(&TrackKind::Adjustment).unwrap();
         assert_eq!(json, "\"adjustment\"");
+    }
+
+    #[test]
+    fn unknown_fields_survive_a_roundtrip() {
+        let track = Track::new(TrackKind::Video, "V1".into());
+        let mut json = serde_json::to_value(&track).unwrap();
+        json.as_object_mut()
+            .unwrap()
+            .insert("futureField".into(), serde_json::json!({"keep": "me"}));
+        let back: Track = serde_json::from_value(json).unwrap();
+        let out = serde_json::to_value(&back).unwrap();
+        assert_eq!(out["futureField"]["keep"], "me");
     }
 }

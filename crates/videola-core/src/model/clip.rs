@@ -20,7 +20,6 @@ pub struct Clip {
     pub start: Time,
     pub duration: Time,
     pub in_point: Time,
-    pub out_point: Time,
     pub speed: Speed,
     pub transform: Transform,
     pub blend: BlendMode,
@@ -57,7 +56,6 @@ impl Clip {
             start,
             duration,
             in_point: Time::ZERO,
-            out_point: duration,
             speed: Speed::default(),
             transform: Transform::default(),
             blend: BlendMode::Normal,
@@ -80,20 +78,35 @@ impl Clip {
         t >= self.start && t < self.end()
     }
 
+    // Derived, not stored: out_point = in_point + consumed_source. A stored field would be a
+    // second source of truth that source_time_at never consulted, and it drifts from the real
+    // consumed range the moment a clip is trimmed at a rate other than 1.0.
+    pub fn out_point(&self) -> Time {
+        self.in_point + self.consumed_source()
+    }
+
     pub fn source_time_at(&self, t: Time) -> Option<Time> {
         if !self.contains(t) {
             return None;
         }
-        let offset = Time::from_seconds((t - self.start).as_seconds() * self.speed.rate as f64);
+        let offset = Time::from_flicks(
+            ((t - self.start).as_flicks() as f64 * self.speed.rate as f64).round() as i64,
+        );
         Some(if self.speed.reverse {
+            // At t == start this returns in_point + consumed_source, the *exclusive* end of the
+            // consumed source range — one flick past the last valid source sample. The decode
+            // path must clamp reads into [in_point, in_point + consumed_source) or the first
+            // frame of a reversed clip comes back black (read past end-of-media).
             self.in_point + self.consumed_source() - offset
         } else {
             self.in_point + offset
         })
     }
 
-    fn consumed_source(&self) -> Time {
-        Time::from_seconds(self.duration.as_seconds() * self.speed.rate as f64)
+    pub fn consumed_source(&self) -> Time {
+        Time::from_flicks(
+            (self.duration.as_flicks() as f64 * self.speed.rate as f64).round() as i64,
+        )
     }
 }
 
@@ -242,6 +255,14 @@ mod tests {
     }
 
     #[test]
+    fn out_point_accounts_for_speed_when_trimmed() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.in_point = Time::from_seconds(10.0);
+        clip.speed.rate = 2.0;
+        assert_eq!(clip.out_point().as_seconds(), 14.0);
+    }
+
+    #[test]
     fn source_time_follows_in_point_at_normal_speed() {
         let mut clip = media_clip(10.0, 4.0);
         clip.in_point = Time::from_seconds(7.0);
@@ -281,6 +302,15 @@ mod tests {
     }
 
     #[test]
+    fn source_time_scales_with_rate_when_reversed() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.in_point = Time::from_seconds(10.0);
+        clip.speed.rate = 2.0;
+        clip.speed.reverse = true;
+        assert_eq!(clip.source_time_at(Time::ZERO).unwrap().as_seconds(), 14.0);
+    }
+
+    #[test]
     fn source_time_outside_the_clip_is_none() {
         let clip = media_clip(2.0, 1.0);
         assert!(clip.source_time_at(Time::from_seconds(5.0)).is_none());
@@ -297,5 +327,17 @@ mod tests {
         );
         assert!(matches!(clip.source, ClipSource::Generator { .. }));
         assert_eq!(clip.end().as_seconds(), 3.0);
+    }
+
+    #[test]
+    fn unknown_fields_survive_a_roundtrip() {
+        let clip = media_clip(0.0, 1.0);
+        let mut json = serde_json::to_value(&clip).unwrap();
+        json.as_object_mut()
+            .unwrap()
+            .insert("futureField".into(), serde_json::json!({"keep": "me"}));
+        let back: Clip = serde_json::from_value(json).unwrap();
+        let out = serde_json::to_value(&back).unwrap();
+        assert_eq!(out["futureField"]["keep"], "me");
     }
 }

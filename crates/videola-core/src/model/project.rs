@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
+use super::clip::Clip;
 use super::effect::Effect;
+use super::keyframe::sort_track;
 use super::media::MediaAsset;
 use super::timeline::{Marker, Timeline, Track};
 use super::{ProjectId, Rate, TrackId};
@@ -57,6 +59,38 @@ impl Project {
             .tracks
             .iter_mut()
             .find(|track| &track.id == id)
+    }
+
+    // Keyframe tracks come straight from deserialised, untrusted JSON and `evaluate` assumes
+    // sorted-by-time (see keyframe.rs). The loader calls this once after parsing so nothing
+    // downstream has to re-check it.
+    pub fn normalize(&mut self) {
+        for track in &mut self.timeline.tracks {
+            normalize_track(track);
+        }
+        normalize_effects(&mut self.master.effects);
+    }
+}
+
+fn normalize_track(track: &mut Track) {
+    for clip in &mut track.clips {
+        normalize_clip(clip);
+    }
+    normalize_effects(&mut track.effects);
+}
+
+fn normalize_clip(clip: &mut Clip) {
+    for keyframes in clip.keyframes.values_mut() {
+        sort_track(keyframes);
+    }
+    normalize_effects(&mut clip.effects);
+}
+
+fn normalize_effects(effects: &mut [Effect]) {
+    for effect in effects {
+        for keyframes in effect.keyframes.values_mut() {
+            sort_track(keyframes);
+        }
     }
 }
 
@@ -116,8 +150,8 @@ impl Default for MasterSettings {
 
 #[cfg(test)]
 mod tests {
-    use super::super::timeline::TrackKind;
     use super::*;
+    use crate::model::{Interp, Keyframe, MediaId, ParamValue, Time, TrackKind};
 
     #[test]
     fn default_project_has_no_tracks_and_sane_settings() {
@@ -159,10 +193,71 @@ mod tests {
     }
 
     #[test]
+    fn extra_fields_keep_deterministic_key_order() {
+        let mut p = Project::default();
+        p.extra.insert("z".into(), serde_json::json!(1));
+        p.extra.insert("a".into(), serde_json::json!(2));
+        let json = serde_json::to_string(&p).unwrap();
+        assert!(json.find("\"a\"").unwrap() < json.find("\"z\"").unwrap());
+    }
+
+    #[test]
     fn track_lookup_reports_missing_ids() {
         let p = Project::default();
         let missing = TrackId::from("trk_nope".to_string());
         assert!(p.track(&missing).is_none());
         assert!(p.track_index(&missing).is_none());
+    }
+
+    #[test]
+    fn track_lookup_finds_an_existing_track() {
+        let mut p = Project::default();
+        let track = Track::new(TrackKind::Video, "V1".into());
+        let id = track.id.clone();
+        p.timeline.tracks.push(track);
+
+        assert_eq!(p.track_index(&id), Some(0));
+        assert_eq!(p.track(&id).map(|t| t.id.clone()), Some(id.clone()));
+        assert_eq!(p.track_mut(&id).map(|t| t.id.clone()), Some(id));
+    }
+
+    #[test]
+    fn normalize_sorts_out_of_order_keyframe_tracks() {
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(2.0),
+        );
+        clip.keyframes.insert(
+            "opacity".into(),
+            vec![
+                Keyframe {
+                    time: Time::from_seconds(2.0),
+                    value: ParamValue::Float(100.0),
+                    interp: Interp::Linear,
+                    handle_in: None,
+                    handle_out: None,
+                },
+                Keyframe {
+                    time: Time::ZERO,
+                    value: ParamValue::Float(0.0),
+                    interp: Interp::Linear,
+                    handle_in: None,
+                    handle_out: None,
+                },
+            ],
+        );
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.clips.push(clip);
+        let mut p = Project::default();
+        p.timeline.tracks.push(track);
+
+        p.normalize();
+
+        let keyframes = &p.timeline.tracks[0].clips[0].keyframes["opacity"];
+        assert_eq!(
+            crate::model::keyframe::evaluate(keyframes, Time::from_seconds(1.0)),
+            Some(ParamValue::Float(50.0))
+        );
     }
 }

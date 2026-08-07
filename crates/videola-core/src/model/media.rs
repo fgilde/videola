@@ -20,7 +20,9 @@ impl MediaId {
         &self.0
     }
 
-    pub fn hash(&self) -> &str {
+    // Not named `hash`: that would shadow `Hash::hash` in method-call syntax since MediaId
+    // derives Hash.
+    pub fn content_hash(&self) -> &str {
         self.0.strip_prefix("med_").unwrap_or(&self.0)
     }
 }
@@ -114,6 +116,12 @@ mod tests {
     #[test]
     fn different_content_yields_different_ids() {
         assert_ne!(MediaId::from_bytes(b"a"), MediaId::from_bytes(b"b"));
+    }
+
+    #[test]
+    fn content_hash_strips_the_med_prefix() {
+        let id = MediaId::from_bytes(b"x");
+        assert_eq!(id.content_hash(), sha256_hex(b"x"));
     }
 
     #[test]

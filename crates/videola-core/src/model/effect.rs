@@ -33,7 +33,7 @@ impl Effect {
         }
     }
 
-    pub fn param(&self, key: &str) -> Option<&ParamValue> {
+    pub fn static_param(&self, key: &str) -> Option<&ParamValue> {
         self.params.get(key)
     }
 
@@ -139,5 +139,17 @@ mod tests {
     fn transitions_default_to_centre_alignment() {
         let t = Transition::new("crossfade", Time::from_seconds(1.0));
         assert_eq!(t.alignment, TransitionAlignment::Center);
+    }
+
+    #[test]
+    fn unknown_fields_survive_a_roundtrip() {
+        let effect = Effect::new("brightness");
+        let mut json = serde_json::to_value(&effect).unwrap();
+        json.as_object_mut()
+            .unwrap()
+            .insert("futureField".into(), serde_json::json!({"keep": "me"}));
+        let back: Effect = serde_json::from_value(json).unwrap();
+        let out = serde_json::to_value(&back).unwrap();
+        assert_eq!(out["futureField"]["keep"], "me");
     }
 }

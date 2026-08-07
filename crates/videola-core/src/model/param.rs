@@ -70,4 +70,16 @@ mod tests {
     fn mismatched_kinds_do_not_interpolate() {
         assert_eq!(ParamValue::Float(1.0).lerp(&ParamValue::Int(2), 0.5), None);
     }
+
+    #[test]
+    fn ints_do_not_interpolate() {
+        assert_eq!(ParamValue::Int(1).lerp(&ParamValue::Int(2), 0.5), None);
+    }
+
+    #[test]
+    fn vec2_interpolates_per_component() {
+        let a = ParamValue::Vec2([0.0, 10.0]);
+        let b = ParamValue::Vec2([10.0, 0.0]);
+        assert_eq!(a.lerp(&b, 0.5), Some(ParamValue::Vec2([5.0, 5.0])));
+    }
 }

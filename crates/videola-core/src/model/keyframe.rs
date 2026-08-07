@@ -24,6 +24,9 @@ pub enum Interp {
     Bezier,
 }
 
+// Keyframe tracks are deserialised straight from untrusted project JSON, so they can arrive
+// out of order. Sort with `sort_track` (or `Project::normalize`) at the trust boundary before
+// evaluating — this function's binary search assumes `track` is already sorted by `time`.
 pub fn evaluate(track: &[Keyframe], at: Time) -> Option<ParamValue> {
     let first = track.first()?;
     let last = track.last()?;
@@ -39,13 +42,17 @@ pub fn evaluate(track: &[Keyframe], at: Time) -> Option<ParamValue> {
     Some(interpolate(left, right, at))
 }
 
+pub fn sort_track(track: &mut [Keyframe]) {
+    track.sort_by_key(|kf| kf.time);
+}
+
 fn interpolate(left: &Keyframe, right: &Keyframe, at: Time) -> ParamValue {
     if left.interp == Interp::Hold {
         return left.value.clone();
     }
     let span = (right.time - left.time).as_flicks();
     if span <= 0 {
-        return right.value.clone();
+        return left.value.clone();
     }
     let linear = (at - left.time).as_flicks() as f32 / span as f32;
     let eased = ease(left, right, linear);
@@ -66,6 +73,8 @@ fn ease(left: &Keyframe, right: &Keyframe, t: f32) -> f32 {
     }
 }
 
+// ponytail: 24 Bisektionsschritte statt Newton-Iteration — reicht für Sub-Pixel-Genauigkeit;
+// auf Newton wechseln, falls Keyframe-Auswertung je im Profil auffällt.
 fn cubic_bezier_y_at(p1: [f32; 2], p2: [f32; 2], x: f32) -> f32 {
     let mut low = 0.0f32;
     let mut high = 1.0f32;
@@ -159,6 +168,18 @@ mod tests {
         assert_eq!(
             evaluate(&track, Time::from_seconds(2.0)),
             Some(ParamValue::Float(100.0))
+        );
+
+        let Some(ParamValue::Float(mid)) = evaluate(&track, Time::from_seconds(0.5)) else {
+            panic!("expected a float");
+        };
+        assert!(
+            mid > 0.0 && mid < 100.0,
+            "expected mid-span value, got {mid}"
+        );
+        assert!(
+            mid < 25.0,
+            "ease-in-out should lag linear at t=0.25, got {mid}"
         );
     }
 
