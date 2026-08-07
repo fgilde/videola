@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@videola/core": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

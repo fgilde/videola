@@ -1,20 +1,34 @@
+import type { ReactElement } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThemeProvider } from "./ThemeProvider";
 import { useTheme } from "./useTheme";
-import type { ReactElement } from "react";
 
-function mockSystemPrefersDark(dark: boolean): void {
+interface SystemThemeMock {
+  setDark(dark: boolean): void;
+}
+
+function mockSystemPrefersDark(initialDark: boolean): SystemThemeMock {
+  let dark = initialDark;
+  const listeners = new Set<() => void>();
   vi.stubGlobal(
     "matchMedia",
     vi.fn((query: string) => ({
-      matches: query.includes("dark") ? dark : false,
+      get matches() {
+        return query.includes("dark") ? dark : false;
+      },
       media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
+      addEventListener: (_event: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_event: string, listener: () => void) => listeners.delete(listener),
     })),
   );
+  return {
+    setDark(next) {
+      dark = next;
+      listeners.forEach((listener) => listener());
+    },
+  };
 }
 
 function Probe(): ReactElement {
@@ -24,6 +38,7 @@ function Probe(): ReactElement {
       <span data-testid="theme">{theme}</span>
       <span data-testid="preference">{preference}</span>
       <button onClick={() => setPreference("light")}>light</button>
+      <button onClick={() => setPreference("system")}>system</button>
     </div>
   );
 }
@@ -45,7 +60,7 @@ describe("ThemeProvider", () => {
     expect(screen.getByTestId("preference").textContent).toBe("system");
   });
 
-  it("falls back to dark when the system prefers light but nothing is stored", () => {
+  it("mirrors a light system preference when nothing is stored", () => {
     mockSystemPrefersDark(false);
     render(
       <ThemeProvider>
@@ -86,5 +101,33 @@ describe("ThemeProvider", () => {
       </ThemeProvider>,
     );
     expect(screen.getByTestId("theme").textContent).toBe("light");
+  });
+
+  it("re-evaluates when the system theme changes while mounted", () => {
+    const system = mockSystemPrefersDark(false);
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId("theme").textContent).toBe("light");
+    act(() => system.setDark(true));
+    expect(screen.getByTestId("theme").textContent).toBe("dark");
+  });
+
+  it("returns to following the system and clears the stored choice", () => {
+    mockSystemPrefersDark(true);
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    act(() => screen.getByRole("button", { name: "light" }).click());
+    expect(localStorage.getItem("videola.theme")).toBe("light");
+
+    act(() => screen.getByRole("button", { name: "system" }).click());
+    expect(screen.getByTestId("preference").textContent).toBe("system");
+    expect(screen.getByTestId("theme").textContent).toBe("dark");
+    expect(localStorage.getItem("videola.theme")).toBeNull();
   });
 });

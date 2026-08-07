@@ -1,16 +1,17 @@
+import type { ReactElement } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { I18nProvider } from "./I18nProvider";
 import { useI18n } from "./useI18n";
-import type { ReactElement } from "react";
 
 function Probe(): ReactElement {
-  const { t, locale, setLocale } = useI18n();
+  const { t, locale, setLocale, formatNumber } = useI18n();
   return (
     <div>
       <span data-testid="locale">{locale}</span>
       <span data-testid="label">{t("action.save")}</span>
+      <span data-testid="number">{formatNumber(1234.5)}</span>
       <button onClick={() => setLocale(locale === "de" ? "en" : "de")}>toggle</button>
     </div>
   );
@@ -57,5 +58,16 @@ describe("I18nProvider", () => {
       </I18nProvider>,
     );
     expect(document.documentElement.lang).toBe("de");
+  });
+
+  it("formats numbers per locale", () => {
+    render(
+      <I18nProvider>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("number").textContent).toBe("1.234,5");
+    act(() => screen.getByRole("button").click());
+    expect(screen.getByTestId("number").textContent).toBe("1,234.5");
   });
 });

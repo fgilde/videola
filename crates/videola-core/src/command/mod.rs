@@ -160,29 +160,73 @@ impl Command {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Self::ProjectSetSettings { .. } => "cmd.project.setSettings",
-            Self::ProjectSetTitle { .. } => "cmd.project.setTitle",
-            Self::TrackAdd { .. } => "cmd.track.add",
-            Self::TrackRemove { .. } => "cmd.track.remove",
-            Self::TrackReorder { .. } => "cmd.track.reorder",
-            Self::TrackRename { .. } => "cmd.track.rename",
-            Self::TrackSetVolume { .. } => "cmd.track.setVolume",
-            Self::TrackSetPan { .. } => "cmd.track.setPan",
-            Self::TrackSetFlags { .. } => "cmd.track.setFlags",
-            Self::ClipAdd { .. } => "cmd.clip.add",
-            Self::ClipRemove { .. } => "cmd.clip.remove",
-            Self::ClipMove { .. } => "cmd.clip.move",
-            Self::ClipTrim { .. } => "cmd.clip.trim",
-            Self::ClipSplit { .. } => "cmd.clip.split",
-            Self::ClipSetSpeed { .. } => "cmd.clip.setSpeed",
-            Self::ClipSetVolume { .. } => "cmd.clip.setVolume",
-            Self::EffectAdd { .. } => "cmd.effect.add",
-            Self::EffectSetParam { .. } => "cmd.effect.setParam",
-            Self::MediaImport { .. } => "cmd.media.import",
-            Self::MediaRemove { .. } => "cmd.media.remove",
+            Self::ProjectSetSettings { .. } => LABEL_PROJECT_SET_SETTINGS,
+            Self::ProjectSetTitle { .. } => LABEL_PROJECT_SET_TITLE,
+            Self::TrackAdd { .. } => LABEL_TRACK_ADD,
+            Self::TrackRemove { .. } => LABEL_TRACK_REMOVE,
+            Self::TrackReorder { .. } => LABEL_TRACK_REORDER,
+            Self::TrackRename { .. } => LABEL_TRACK_RENAME,
+            Self::TrackSetVolume { .. } => LABEL_TRACK_SET_VOLUME,
+            Self::TrackSetPan { .. } => LABEL_TRACK_SET_PAN,
+            Self::TrackSetFlags { .. } => LABEL_TRACK_SET_FLAGS,
+            Self::ClipAdd { .. } => LABEL_CLIP_ADD,
+            Self::ClipRemove { .. } => LABEL_CLIP_REMOVE,
+            Self::ClipMove { .. } => LABEL_CLIP_MOVE,
+            Self::ClipTrim { .. } => LABEL_CLIP_TRIM,
+            Self::ClipSplit { .. } => LABEL_CLIP_SPLIT,
+            Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
+            Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
+            Self::EffectAdd { .. } => LABEL_EFFECT_ADD,
+            Self::EffectSetParam { .. } => LABEL_EFFECT_SET_PARAM,
+            Self::MediaImport { .. } => LABEL_MEDIA_IMPORT,
+            Self::MediaRemove { .. } => LABEL_MEDIA_REMOVE,
         }
     }
 }
+
+pub const LABEL_PROJECT_SET_SETTINGS: &str = "cmd.project.setSettings";
+pub const LABEL_PROJECT_SET_TITLE: &str = "cmd.project.setTitle";
+pub const LABEL_TRACK_ADD: &str = "cmd.track.add";
+pub const LABEL_TRACK_REMOVE: &str = "cmd.track.remove";
+pub const LABEL_TRACK_REORDER: &str = "cmd.track.reorder";
+pub const LABEL_TRACK_RENAME: &str = "cmd.track.rename";
+pub const LABEL_TRACK_SET_VOLUME: &str = "cmd.track.setVolume";
+pub const LABEL_TRACK_SET_PAN: &str = "cmd.track.setPan";
+pub const LABEL_TRACK_SET_FLAGS: &str = "cmd.track.setFlags";
+pub const LABEL_CLIP_ADD: &str = "cmd.clip.add";
+pub const LABEL_CLIP_REMOVE: &str = "cmd.clip.remove";
+pub const LABEL_CLIP_MOVE: &str = "cmd.clip.move";
+pub const LABEL_CLIP_TRIM: &str = "cmd.clip.trim";
+pub const LABEL_CLIP_SPLIT: &str = "cmd.clip.split";
+pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
+pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
+pub const LABEL_EFFECT_ADD: &str = "cmd.effect.add";
+pub const LABEL_EFFECT_SET_PARAM: &str = "cmd.effect.setParam";
+pub const LABEL_MEDIA_IMPORT: &str = "cmd.media.import";
+pub const LABEL_MEDIA_REMOVE: &str = "cmd.media.remove";
+
+pub const ALL_COMMAND_LABELS: [&str; 20] = [
+    LABEL_PROJECT_SET_SETTINGS,
+    LABEL_PROJECT_SET_TITLE,
+    LABEL_TRACK_ADD,
+    LABEL_TRACK_REMOVE,
+    LABEL_TRACK_REORDER,
+    LABEL_TRACK_RENAME,
+    LABEL_TRACK_SET_VOLUME,
+    LABEL_TRACK_SET_PAN,
+    LABEL_TRACK_SET_FLAGS,
+    LABEL_CLIP_ADD,
+    LABEL_CLIP_REMOVE,
+    LABEL_CLIP_MOVE,
+    LABEL_CLIP_TRIM,
+    LABEL_CLIP_SPLIT,
+    LABEL_CLIP_SET_SPEED,
+    LABEL_CLIP_SET_VOLUME,
+    LABEL_EFFECT_ADD,
+    LABEL_EFFECT_SET_PARAM,
+    LABEL_MEDIA_IMPORT,
+    LABEL_MEDIA_REMOVE,
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -33,4 +33,11 @@ describe("translate", () => {
     expect(translate(catalog, "track.count", { count: 0 })).toBe("0 Spuren");
     expect(translate(catalog, "track.count", { count: 5 })).toBe("5 Spuren");
   });
+
+  it("runs numeric values through the optional formatter instead of String()", () => {
+    const formatNumber = (value: number) => value.toLocaleString("de-DE");
+    expect(translate(catalog, "track.count", { count: 1234 }, formatNumber)).toBe(
+      "1.234 Spuren",
+    );
+  });
 });

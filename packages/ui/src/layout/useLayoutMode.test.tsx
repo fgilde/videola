@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useLayoutMode } from "./useLayoutMode";
@@ -31,10 +31,23 @@ describe("useLayoutMode", () => {
     expect(result.current).toBe("desktop");
   });
 
-  it("subscribes to resize so a rotated tablet re-evaluates", () => {
+  it("re-evaluates on an actual resize event so a rotated tablet follows", () => {
     setViewport(1024, true);
-    const addEventListener = vi.spyOn(window, "addEventListener");
-    renderHook(() => useLayoutMode("auto"));
-    expect(addEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
+    const { result } = renderHook(() => useLayoutMode("auto"));
+    expect(result.current).toBe("tablet");
+
+    act(() => {
+      setViewport(1440, true);
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(result.current).toBe("desktop");
+  });
+
+  it("stops listening for resize after unmount", () => {
+    setViewport(1024, true);
+    const removeEventListener = vi.spyOn(window, "removeEventListener");
+    const { unmount } = renderHook(() => useLayoutMode("auto"));
+    unmount();
+    expect(removeEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
   });
 });

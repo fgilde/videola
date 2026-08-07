@@ -37,3 +37,4 @@ export type { LoadWarning } from "./LoadWarning";
 export type { Rate } from "./Rate";
 export type { Time } from "./Time";
 export type { JsonValue } from "./serde_json/JsonValue";
+export { COMMAND_LABELS } from "./commandLabels";

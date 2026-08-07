@@ -20,6 +20,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@videola/core':
+        specifier: workspace:*
+        version: link:../core
       react:
         specifier: ^19.2.8
         version: 19.2.8

@@ -9,7 +9,7 @@ export interface I18nContextValue {
   setLocale: (locale: Locale) => void;
   t: (key: string, vars?: Vars) => string;
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
-  formatTimecode: (seconds: number) => string;
+  formatTimecode: (seconds: number, fps: number) => string;
 }
 
 export const I18nContext = createContext<I18nContextValue | undefined>(undefined);

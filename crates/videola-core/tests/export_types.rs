@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use ts_rs::{Config, TS};
-use videola_core::command::{Command, Dispatch};
+use videola_core::command::{Command, Dispatch, ALL_COMMAND_LABELS};
 use videola_core::format::{LoadWarning, Manifest};
 use videola_core::model::{Clip, Effect, Keyframe, ParamValue, Project};
 use videola_core::DispatchResult;
@@ -29,6 +29,20 @@ fn generated_bindings_are_complete_and_the_barrel_matches() {
     Manifest::export_all(&cfg).expect("manifest types");
     LoadWarning::export_all(&cfg).expect("warning types");
     DispatchResult::export_all(&cfg).expect("dispatch result types");
+
+    // Not a ts-rs binding: the label strings live in Rust source, not in a serializable type, so
+    // they need their own hand-rolled export. This is what lets the UI's catalogue completeness
+    // test assert every `cmd.*` key the core can emit is actually translated.
+    let labels = ALL_COMMAND_LABELS
+        .iter()
+        .map(|label| format!("  \"{label}\","))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(
+        generated.join("commandLabels.ts"),
+        format!("export const COMMAND_LABELS = [\n{labels}\n] as const;\n"),
+    )
+    .expect("write command labels");
 
     for name in ["Project.ts", "Clip.ts", "Command.ts", "ParamValue.ts"] {
         assert!(generated.join(name).exists(), "missing binding: {name}");

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 
+import { readStored, writeStored } from "../storage";
 import de from "./catalogs/de.json";
 import en from "./catalogs/en.json";
+import { formatTimecode } from "./formatTimecode";
 import { translate, type Catalog, type Vars } from "./translate";
 import { I18nContext, type Locale } from "./useI18n";
 
@@ -17,18 +19,21 @@ export function I18nProvider({ children }: { children: ReactNode }): ReactElemen
 
   const setLocale = useCallback((next: Locale) => {
     setStoredLocale(next);
-    localStorage.setItem(STORAGE_KEY, next);
+    writeStored(STORAGE_KEY, next);
   }, []);
 
   const value = useMemo(() => {
     const catalog = CATALOGS[locale];
+    const defaultNumberFormat = new Intl.NumberFormat(locale);
+    const formatNumber = (input: number, options?: Intl.NumberFormatOptions) =>
+      options === undefined ? defaultNumberFormat.format(input) : new Intl.NumberFormat(locale, options).format(input);
     return {
       locale,
       setLocale,
-      t: (key: string, vars?: Vars) => translate(catalog, key, vars),
-      formatNumber: (input: number, options?: Intl.NumberFormatOptions) =>
-        new Intl.NumberFormat(locale, options).format(input),
-      formatTimecode: (seconds: number) => formatTimecode(seconds),
+      t: (key: string, vars?: Vars) =>
+        translate(catalog, key, vars, (n: number) => defaultNumberFormat.format(n)),
+      formatNumber,
+      formatTimecode,
     };
   }, [locale, setLocale]);
 
@@ -36,19 +41,9 @@ export function I18nProvider({ children }: { children: ReactNode }): ReactElemen
 }
 
 function readLocale(): Locale {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = readStored(STORAGE_KEY);
   if (stored === "de" || stored === "en") {
     return stored;
   }
   return navigator.language.startsWith("en") ? "en" : "de";
-}
-
-function formatTimecode(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const rest = total % 60;
-  const frames = Math.floor((seconds - total) * 100);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(hours)}:${pad(minutes)}:${pad(rest)}.${pad(frames)}`;
 }
