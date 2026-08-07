@@ -11,7 +11,7 @@ export const DEFAULT_FRAME_BUDGET_BYTES = 256 * 1024 * 1024;
 // counted in entries is sized for one of them and wrong for the other.
 export class FrameCache {
   #budget: number;
-  #frames = new Map<string, VideoFrame>();
+  #frames = new Map<string, Entry>();
   #bytes = 0;
 
   constructor(budgetBytes: number = DEFAULT_FRAME_BUDGET_BYTES) {
@@ -19,18 +19,22 @@ export class FrameCache {
   }
 
   get(key: string): VideoFrame | undefined {
-    const frame = this.#frames.get(key);
-    if (frame === undefined) return undefined;
+    const entry = this.#frames.get(key);
+    if (entry === undefined) return undefined;
     // A Map iterates in insertion order, so re-inserting is what makes the eviction order LRU.
     this.#frames.delete(key);
-    this.#frames.set(key, frame);
-    return frame;
+    this.#frames.set(key, entry);
+    return entry.frame;
   }
 
+  // The size is taken once, here, and carried with the entry. A closed VideoFrame reports
+  // codedWidth and codedHeight as zero, so anything that measures a frame on the way out
+  // subtracts nothing and leaves the accounting climbing until the tab dies.
   put(key: string, frame: VideoFrame): void {
     this.#discard(key);
-    this.#frames.set(key, frame);
-    this.#bytes += frameBytes(frame);
+    const bytes = frame.codedWidth * frame.codedHeight * BYTES_PER_PIXEL;
+    this.#frames.set(key, { frame, bytes });
+    this.#bytes += bytes;
     this.#evict();
   }
 
@@ -53,14 +57,15 @@ export class FrameCache {
   }
 
   #discard(key: string): void {
-    const frame = this.#frames.get(key);
-    if (frame === undefined) return;
+    const entry = this.#frames.get(key);
+    if (entry === undefined) return;
     this.#frames.delete(key);
-    this.#bytes -= frameBytes(frame);
-    frame.close();
+    this.#bytes -= entry.bytes;
+    entry.frame.close();
   }
 }
 
-function frameBytes(frame: VideoFrame): number {
-  return frame.codedWidth * frame.codedHeight * BYTES_PER_PIXEL;
+interface Entry {
+  frame: VideoFrame;
+  bytes: number;
 }

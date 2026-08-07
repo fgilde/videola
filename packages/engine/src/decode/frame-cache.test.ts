@@ -9,6 +9,11 @@ interface Fake {
 
 // jsdom has no VideoFrame, and a fake with a real decoder behind it would prove less, not more:
 // what is under test here is who closes what, which is bookkeeping and nothing else.
+//
+// It has to be unfriendly in exactly one respect, though, and that respect is the whole point of
+// this file: closing a real VideoFrame zeroes codedWidth and codedHeight. A fake that keeps them
+// lets a cache which measures frames on the way out subtract the right number by accident, and
+// the budget test then passes over an unbounded cache.
 function fakeFrame(width: number, height: number): Fake {
   let closed = false;
   const frame = {
@@ -16,6 +21,8 @@ function fakeFrame(width: number, height: number): Fake {
     codedHeight: height,
     close: () => {
       closed = true;
+      frame.codedWidth = 0;
+      frame.codedHeight = 0;
     },
   };
   return { frame: frame as unknown as VideoFrame, closed: () => closed };
@@ -76,6 +83,16 @@ describe("FrameCache", () => {
     expect(replacement.closed()).toBe(false);
     expect(cache.get("a")).toBe(replacement.frame);
     expect(cache.bytesHeld()).toBe(bytesOf(64, 64));
+  });
+
+  it("accounts with the size a frame had going in, not what it reports once closed", () => {
+    const cache = new FrameCache(bytesOf(64, 64) * 2);
+    cache.put("a", fakeFrame(64, 64).frame);
+    cache.put("b", fakeFrame(64, 64).frame);
+
+    cache.put("c", fakeFrame(64, 64).frame);
+
+    expect(cache.bytesHeld()).toBe(bytesOf(64, 64) * 2);
   });
 
   it("closes everything on clear", () => {
