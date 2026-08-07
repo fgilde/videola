@@ -1,13 +1,17 @@
 use super::{bounded, finite, MAX_VOLUME};
 use crate::format::reader::is_content_hash;
-use crate::model::project::MAX_COMPOUND_DEPTH;
+use crate::model::project::{settings_bounded, MAX_COMPOUND_DEPTH};
 use crate::model::{
     Clip, ClipSource, MediaAsset, MediaId, Project, ProjectSettings, Timeline, Track, TrackId,
     TrackKind,
 };
 use crate::{CoreError, Result};
 
+// `project.setSettings` replaces the whole struct in one shot, so it is as much a trust boundary
+// as loading a project file: without this check a dispatch from the API or an AI agent could set
+// a zero-denominator fps or a zero width that `Project::normalize` would never let through a load.
 pub(super) fn set_settings(target: &mut Project, settings: &ProjectSettings) -> Result<()> {
+    settings_bounded(settings)?;
     target.settings = settings.clone();
     Ok(())
 }

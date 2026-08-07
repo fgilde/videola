@@ -72,7 +72,7 @@ impl Project {
     // value (e.g. i64::MAX), which Clip::end()/out_point() would then add unchecked. The loader
     // calls this once after parsing so nothing downstream has to re-check either.
     pub fn normalize(&mut self) -> Result<()> {
-        rate_bounded(self.settings.fps)?;
+        settings_bounded(&self.settings)?;
         normalize_timeline(&mut self.timeline, 0)?;
         normalize_effects(&mut self.master.effects)?;
         normalize_markers(&self.markers)?;
@@ -196,6 +196,45 @@ pub(crate) fn rate_bounded(rate: Rate) -> Result<()> {
             "rate out of reasonable range".into(),
         )),
     }
+}
+
+// 16384 covers 8K (7680x4320) with headroom for odd custom sizes, and keeps `width * height * 4`
+// (a full RGBA frame buffer) at ~1 GiB, nowhere near overflowing a u32 byte count downstream.
+const MAX_REASONABLE_DIMENSION: u32 = 16_384;
+
+// 192 kHz is the practical ceiling for real audio hardware; doubling it leaves room for an
+// oversampled pro-audio pipeline without accepting values that only a corrupt file would carry.
+const MAX_REASONABLE_SAMPLE_RATE: u32 = 384_000;
+
+fn dimension_bounded(value: u32) -> Result<()> {
+    if value == 0 || value > MAX_REASONABLE_DIMENSION {
+        Err(CoreError::InvalidArgument(
+            "width and height must be between 1 and 16384".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn sample_rate_bounded(value: u32) -> Result<()> {
+    if value == 0 || value > MAX_REASONABLE_SAMPLE_RATE {
+        Err(CoreError::InvalidArgument(
+            "sample rate must be between 1 and 384000".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+// The one rule `Project::normalize` (load) and `command::project::set_settings` (dispatch) both
+// enforce for `ProjectSettings` — without this, a `project.setSettings` command could set a
+// zero-denominator fps or a zero width that a loaded project could never carry, corrupting the
+// project from that dispatch onward.
+pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
+    rate_bounded(settings.fps)?;
+    dimension_bounded(settings.width)?;
+    dimension_bounded(settings.height)?;
+    sample_rate_bounded(settings.sample_rate)
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
@@ -482,6 +521,42 @@ mod tests {
                 "{numerator}/{denominator} should be accepted"
             );
         }
+    }
+
+    fn project_json_with_settings(width: u32, height: u32, sample_rate: u32) -> String {
+        format!(
+            r##"{{
+                "schemaVersion": 1,
+                "meta": {{"id":"prj_1","title":"T","tags":[]}},
+                "settings": {{"width":{width},"height":{height},
+                             "fps":{{"numerator":30000,"denominator":1001}},
+                             "sampleRate":{sample_rate},"colorSpace":"srgb","background":"#000000"}},
+                "timeline": {{"tracks":[]}},
+                "markers": [],
+                "master": {{"volume":1.0,"effects":[]}}
+            }}"##
+        )
+    }
+
+    #[test]
+    fn a_zero_width_fails_to_load() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(0, 1080, 48_000)).unwrap();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_zero_sample_rate_fails_to_load() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(1920, 1080, 0)).unwrap();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_legitimate_4k_ntsc_project_still_loads() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(3840, 2160, 48_000)).unwrap();
+        assert!(p.normalize().is_ok());
     }
 
     #[test]

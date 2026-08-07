@@ -1,6 +1,6 @@
 use videola_core::command::{Command, Dispatch};
 use videola_core::model::{ClipSource, MediaId, ProjectSettings, Rate, Time, TrackKind};
-use videola_core::Document;
+use videola_core::{CoreError, Document};
 
 #[allow(clippy::unwrap_used)]
 fn doc_with_tracks(names: &[&str]) -> Document {
@@ -235,4 +235,53 @@ fn setting_project_settings_replaces_them_wholesale() {
     .unwrap();
     assert_eq!(doc.project().settings.width, 3840);
     assert_eq!(doc.project().settings.fps, Rate::from_fps(60));
+}
+
+fn ntsc_settings() -> ProjectSettings {
+    ProjectSettings {
+        width: 3840,
+        height: 2160,
+        fps: Rate::new(30_000, 1001),
+        sample_rate: 48_000,
+        color_space: "srgb".into(),
+        background: "#000000".into(),
+    }
+}
+
+#[test]
+fn setting_a_legitimate_ntsc_rate_and_4k_resolution_is_accepted() {
+    let mut doc = Document::new();
+    doc.dispatch(Dispatch::new(Command::ProjectSetSettings {
+        settings: ntsc_settings(),
+    }))
+    .unwrap();
+    assert_eq!(doc.project().settings.fps, Rate::new(30_000, 1001));
+    assert_eq!(doc.project().settings.width, 3840);
+}
+
+#[test]
+fn setting_a_zero_denominator_fps_is_rejected() {
+    let mut doc = Document::new();
+    let mut settings = ntsc_settings();
+    settings.fps = Rate::new(30, 0);
+    let result = doc.dispatch(Dispatch::new(Command::ProjectSetSettings { settings }));
+    assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
+}
+
+#[test]
+fn setting_a_zero_width_is_rejected() {
+    let mut doc = Document::new();
+    let mut settings = ntsc_settings();
+    settings.width = 0;
+    let result = doc.dispatch(Dispatch::new(Command::ProjectSetSettings { settings }));
+    assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
+}
+
+#[test]
+fn setting_a_zero_sample_rate_is_rejected() {
+    let mut doc = Document::new();
+    let mut settings = ntsc_settings();
+    settings.sample_rate = 0;
+    let result = doc.dispatch(Dispatch::new(Command::ProjectSetSettings { settings }));
+    assert!(matches!(result, Err(CoreError::InvalidArgument(_))));
 }
