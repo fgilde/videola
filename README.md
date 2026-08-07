@@ -14,6 +14,13 @@ referenzierten Medien und Metadaten, plattformübergreifend austauschbar.
 
 Deutsch und Englisch, im UI umschaltbar. Dark- und Light-Theme.
 
+## Entwicklung
+
+`packages/core/src/wasm` ist nicht eingecheckt. Vor dem ersten `pnpm --filter videola-web dev`
+einmal `pnpm wasm` laufen lassen. Stuerzt `wasm-opt.exe` auf dem eigenen Rechner ab, den Befehl
+aus `package.json`s `wasm`-Skript direkt mit `--no-opt` aufrufen — das betrifft nur die
+Artefaktgroesse, nicht die Funktion. CI baut ohne das Flag.
+
 ## Lizenz
 
 Noch nicht festgelegt. Die Desktop- und Docker-Builds binden einen GPL-FFmpeg-Build ein

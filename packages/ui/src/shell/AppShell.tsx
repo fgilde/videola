@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { I18nProvider } from "../i18n/I18nProvider";
 import { useLayoutMode } from "../layout/useLayoutMode";
@@ -33,8 +33,7 @@ function Frame({
   layoutPreference?: LayoutPreference;
   actions: TopBarActions;
 }): ReactElement {
-  const [preference] = useState<LayoutPreference>(layoutPreference ?? "auto");
-  const layout = useLayoutMode(preference);
+  const layout = useLayoutMode(layoutPreference ?? "auto");
 
   return (
     <div className="v-shell" data-layout={layout} data-testid="app-shell">

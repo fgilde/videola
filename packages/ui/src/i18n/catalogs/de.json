@@ -40,6 +40,7 @@
   "cmd.media.remove": "Medium entfernt",
   "error.openFailed": "Projekt konnte nicht geöffnet werden: {reason}",
   "error.saveFailed": "Projekt konnte nicht gespeichert werden: {reason}",
+  "error.actionFailed": "Aktion fehlgeschlagen: {reason}",
   "error.unsupportedMedia": "Dieser Dateityp wird nicht unterstützt: {mime}",
   "warning.missingMedia": "{count} Medium fehlt im Projekt | {count} Medien fehlen im Projekt",
   "empty.noTracks": "Noch keine Spuren. Ziehe Medien hierher, um anzufangen."

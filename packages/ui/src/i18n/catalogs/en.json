@@ -40,6 +40,7 @@
   "cmd.media.remove": "Media removed",
   "error.openFailed": "Could not open the project: {reason}",
   "error.saveFailed": "Could not save the project: {reason}",
+  "error.actionFailed": "Action failed: {reason}",
   "error.unsupportedMedia": "This file type is not supported: {mime}",
   "warning.missingMedia": "{count} medium is missing from the project | {count} media are missing from the project",
   "empty.noTracks": "No tracks yet. Drop media here to get started."

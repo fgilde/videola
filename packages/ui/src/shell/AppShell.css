@@ -12,11 +12,15 @@
   padding: var(--v-space-2) var(--v-space-4);
   background: var(--v-bg-elevated);
   border-bottom: 1px solid var(--v-border);
+  /* Eight controls do not fit a phone width even squashed. Scrolling keeps every one
+     of them reachable instead of clipping or wrapping into an unreadable topbar. */
+  overflow-x: auto;
 }
 
 .v-topbar__brand {
   font-weight: 600;
   letter-spacing: 0.01em;
+  flex-shrink: 0;
 }
 
 .v-topbar__spacer {
@@ -33,6 +37,7 @@
   font: inherit;
   cursor: pointer;
   transition: background var(--v-transition);
+  flex-shrink: 0;
 }
 
 .v-button:hover:not(:disabled) {

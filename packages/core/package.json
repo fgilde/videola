@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json --emitDeclarationOnly false --outDir dist"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "vitest": "^4.1.10"
   }
 }

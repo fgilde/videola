@@ -18,7 +18,7 @@ export interface DocumentBackend {
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
-  save(options: SaveOptions): Uint8Array;
+  save(options: SaveOptions): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
   warnings(): LoadWarning[];
 }

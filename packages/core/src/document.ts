@@ -64,7 +64,7 @@ export class VideolaDocument {
     return id;
   }
 
-  save(options: SaveOptions): Uint8Array {
+  save(options: SaveOptions): Uint8Array<ArrayBuffer> {
     return this.#backend.save(options);
   }
 

@@ -4,14 +4,13 @@ import { useI18n } from "../i18n/useI18n";
 import { useTheme } from "../theme/useTheme";
 
 export function SettingsMenu(): ReactElement {
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const { theme, setPreference } = useTheme();
 
   return (
     <>
-      {/* Both aria-labels name the toggle action itself, not its current state or a
-          user-visible word, so they read correctly in either language without a
-          catalogue entry. */}
+      {/* Names the toggle action itself, not a translatable word, so it reads correctly
+          in either language without a catalogue entry. */}
       <button
         className="v-button"
         aria-label="Deutsch / English"
@@ -19,9 +18,11 @@ export function SettingsMenu(): ReactElement {
       >
         {locale.toUpperCase()}
       </button>
+      {/* This one names the target state, which is a translatable word - unlike the
+          label above, it belongs in the catalogue. */}
       <button
         className="v-button"
-        aria-label={theme === "dark" ? "Light" : "Dark"}
+        aria-label={theme === "dark" ? t("theme.light") : t("theme.dark")}
         onClick={() => setPreference(theme === "dark" ? "light" : "dark")}
       >
         {theme === "dark" ? "☾" : "☀"}
