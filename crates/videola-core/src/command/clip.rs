@@ -20,6 +20,7 @@ pub(super) fn add(
 
     let mut clip = Clip::new_media(MediaId::from(String::new()), start, duration);
     clip.source = source;
+    crate::model::project::normalize_new_clip(&mut clip)?;
     let target_track = target
         .track_mut(track)
         .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?;

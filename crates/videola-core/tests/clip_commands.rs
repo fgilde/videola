@@ -1,5 +1,7 @@
 use videola_core::command::{Command, Dispatch, TrimEdge};
-use videola_core::model::{Clip, ClipSource, MediaId, ParamValue, Time, TrackKind};
+use videola_core::model::{
+    Clip, ClipSource, MediaId, ParamValue, Time, Timeline, Track, TrackKind,
+};
 use videola_core::Document;
 
 #[allow(clippy::unwrap_used)]
@@ -115,6 +117,43 @@ fn an_absurdly_large_clip_is_rejected() {
             },
             start: Time::from_flicks(i64::MAX),
             duration: Time::from_flicks(i64::MAX),
+        }))
+        .is_err());
+}
+
+// N3 (2nd round): a compound clip's nested timeline is not exempt from the same bound — an
+// out-of-range Time buried inside it must fail here, on the command that stores it, not only on
+// the next load.
+#[test]
+fn a_compound_clip_with_an_absurd_nested_start_is_rejected() {
+    let mut doc = Document::new();
+    doc.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Video,
+        name: "V1".into(),
+        index: None,
+    }))
+    .unwrap();
+    let track = doc.project().timeline.tracks[0].id.clone();
+
+    let mut nested_clip = Clip::new_media(
+        MediaId::from("med_a".to_string()),
+        Time::ZERO,
+        Time::from_seconds(1.0),
+    );
+    nested_clip.start = Time::from_flicks(i64::MAX);
+    let mut nested_track = Track::new(TrackKind::Video, "nested".into());
+    nested_track.clips.push(nested_clip);
+    let mut nested_timeline = Timeline::default();
+    nested_timeline.tracks.push(nested_track);
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipAdd {
+            track,
+            source: ClipSource::Compound {
+                timeline: Box::new(nested_timeline)
+            },
+            start: Time::ZERO,
+            duration: Time::from_seconds(1.0),
         }))
         .is_err());
 }

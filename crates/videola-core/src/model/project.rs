@@ -2,13 +2,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
-use super::clip::Clip;
-use super::effect::Effect;
+use super::clip::{Clip, ClipSource};
+use super::effect::{Effect, Transition};
 use super::keyframe::sort_track;
 use super::media::MediaAsset;
 use super::timeline::{Marker, Timeline, Track};
 use super::{ProjectId, Rate, Time, TrackId};
 use crate::{CoreError, Result};
+
+// `ClipSource::Compound` nests a whole `Timeline`, which can itself contain compound clips.
+// `Box<Timeline>` cannot form a cycle in safe Rust (there is no way to reach back to an
+// ancestor), so a depth cap is the only guard nesting needs — do not add a visited-set later.
+const MAX_COMPOUND_DEPTH: usize = 8;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -67,37 +72,64 @@ impl Project {
     // value (e.g. i64::MAX), which Clip::end()/out_point() would then add unchecked. The loader
     // calls this once after parsing so nothing downstream has to re-check either.
     pub fn normalize(&mut self) -> Result<()> {
-        for track in &mut self.timeline.tracks {
-            normalize_track(track)?;
-        }
+        normalize_timeline(&mut self.timeline, 0)?;
         normalize_effects(&mut self.master.effects)?;
-        for marker in &self.markers {
-            bounded(marker.time)?;
-        }
-        Ok(())
+        normalize_markers(&self.markers)?;
+        normalize_library(&self.library)
     }
 }
 
-fn normalize_track(track: &mut Track) -> Result<()> {
+// Entry point for a `ClipSource` that hasn't been stored yet (the command layer's `clip.add`):
+// the same field-by-field walk `Project::normalize` runs for every clip already in the tree,
+// so a hostile nested timeline is rejected before it reaches the model, not on the next load.
+pub(crate) fn normalize_new_clip(clip: &mut Clip) -> Result<()> {
+    normalize_clip(clip, 0)
+}
+
+fn normalize_timeline(timeline: &mut Timeline, depth: usize) -> Result<()> {
+    if depth > MAX_COMPOUND_DEPTH {
+        return Err(CoreError::InvalidArgument(
+            "compound clip nesting too deep".into(),
+        ));
+    }
+    for track in &mut timeline.tracks {
+        normalize_track(track, depth)?;
+    }
+    Ok(())
+}
+
+fn normalize_track(track: &mut Track, depth: usize) -> Result<()> {
     for clip in &mut track.clips {
-        normalize_clip(clip)?;
+        normalize_clip(clip, depth)?;
     }
     normalize_effects(&mut track.effects)
 }
 
-fn normalize_clip(clip: &mut Clip) -> Result<()> {
+fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     bounded(clip.start)?;
     bounded(clip.duration)?;
     bounded(clip.in_point)?;
     bounded(clip.fades.in_duration)?;
     bounded(clip.fades.out_duration)?;
+    normalize_transition(&clip.transition_in)?;
+    normalize_transition(&clip.transition_out)?;
     for keyframes in clip.keyframes.values_mut() {
         sort_track(keyframes);
         for keyframe in keyframes.iter() {
             bounded(keyframe.time)?;
         }
     }
+    if let ClipSource::Compound { timeline } = &mut clip.source {
+        normalize_timeline(timeline, depth + 1)?;
+    }
     normalize_effects(&mut clip.effects)
+}
+
+fn normalize_transition(transition: &Option<Transition>) -> Result<()> {
+    match transition {
+        Some(transition) => bounded(transition.duration),
+        None => Ok(()),
+    }
 }
 
 fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
@@ -107,6 +139,22 @@ fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
             for keyframe in keyframes.iter() {
                 bounded(keyframe.time)?;
             }
+        }
+    }
+    Ok(())
+}
+
+fn normalize_markers(markers: &[Marker]) -> Result<()> {
+    for marker in markers {
+        bounded(marker.time)?;
+    }
+    Ok(())
+}
+
+fn normalize_library(library: &[MediaAsset]) -> Result<()> {
+    for asset in library {
+        if let Some(duration) = asset.duration {
+            bounded(duration)?;
         }
     }
     Ok(())
@@ -306,5 +354,70 @@ mod tests {
             loaded.normalize(),
             Err(CoreError::InvalidArgument(_))
         ));
+    }
+
+    fn leaf_clip() -> Clip {
+        Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        )
+    }
+
+    fn compound_clip(inner: Clip) -> Clip {
+        let mut track = Track::new(TrackKind::Video, "nested".into());
+        track.clips.push(inner);
+        let mut timeline = Timeline::default();
+        timeline.tracks.push(track);
+        let mut clip = Clip::new_media(
+            MediaId::from(String::new()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.source = ClipSource::Compound {
+            timeline: Box::new(timeline),
+        };
+        clip
+    }
+
+    #[test]
+    fn a_compound_clips_nested_start_is_checked_too() {
+        let mut nested = leaf_clip();
+        nested.start = Time::from_flicks(i64::MAX);
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.clips.push(compound_clip(nested));
+        let mut p = Project::default();
+        p.timeline.tracks.push(track);
+
+        let json = serde_json::to_string(&p).unwrap();
+        let mut loaded: Project = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn two_levels_of_compound_nesting_are_accepted() {
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.clips.push(compound_clip(compound_clip(leaf_clip())));
+        let mut p = Project::default();
+        p.timeline.tracks.push(track);
+
+        assert!(p.normalize().is_ok());
+    }
+
+    #[test]
+    fn compound_nesting_deeper_than_the_limit_is_rejected() {
+        let mut clip = leaf_clip();
+        for _ in 0..(MAX_COMPOUND_DEPTH + 2) {
+            clip = compound_clip(clip);
+        }
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.clips.push(clip);
+        let mut p = Project::default();
+        p.timeline.tracks.push(track);
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
     }
 }
