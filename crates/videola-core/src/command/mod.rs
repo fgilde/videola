@@ -1,0 +1,168 @@
+mod clip;
+mod project;
+
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+use crate::model::{
+    ClipId, ClipSource, ParamValue, Project, ProjectSettings, Time, TrackId, TrackKind,
+};
+use crate::Result;
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Command {
+    #[serde(rename = "project.setSettings")]
+    ProjectSetSettings { settings: ProjectSettings },
+    #[serde(rename = "project.setTitle")]
+    ProjectSetTitle { title: String },
+
+    #[serde(rename = "track.add")]
+    TrackAdd {
+        kind: TrackKind,
+        name: String,
+        index: Option<usize>,
+    },
+    #[serde(rename = "track.remove")]
+    TrackRemove { track: TrackId },
+    #[serde(rename = "track.reorder")]
+    TrackReorder { track: TrackId, to_index: usize },
+    #[serde(rename = "track.rename")]
+    TrackRename { track: TrackId, name: String },
+    #[serde(rename = "track.setVolume")]
+    TrackSetVolume { track: TrackId, volume: f32 },
+    #[serde(rename = "track.setPan")]
+    TrackSetPan { track: TrackId, pan: f32 },
+    #[serde(rename = "track.setFlags")]
+    TrackSetFlags {
+        track: TrackId,
+        muted: Option<bool>,
+        solo: Option<bool>,
+        locked: Option<bool>,
+        hidden: Option<bool>,
+    },
+
+    #[serde(rename = "clip.add")]
+    ClipAdd {
+        track: TrackId,
+        source: ClipSource,
+        start: Time,
+        duration: Time,
+    },
+    #[serde(rename = "clip.remove")]
+    ClipRemove { clip: ClipId },
+    #[serde(rename = "clip.move")]
+    ClipMove {
+        clip: ClipId,
+        to_track: TrackId,
+        start: Time,
+    },
+    #[serde(rename = "clip.trim")]
+    ClipTrim {
+        clip: ClipId,
+        edge: TrimEdge,
+        delta: Time,
+    },
+    #[serde(rename = "clip.split")]
+    ClipSplit { clip: ClipId, at: Time },
+    #[serde(rename = "clip.setSpeed")]
+    ClipSetSpeed {
+        clip: ClipId,
+        rate: f32,
+        reverse: bool,
+        preserve_pitch: bool,
+    },
+    #[serde(rename = "clip.setVolume")]
+    ClipSetVolume { clip: ClipId, volume: f32 },
+
+    #[serde(rename = "effect.add")]
+    EffectAdd { clip: ClipId, effect_type: String },
+    #[serde(rename = "effect.setParam")]
+    EffectSetParam {
+        clip: ClipId,
+        effect_type: String,
+        key: String,
+        value: ParamValue,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrimEdge {
+    Start,
+    End,
+}
+
+impl Command {
+    pub fn apply(&self, target: &mut Project) -> Result<()> {
+        match self {
+            Self::ProjectSetSettings { .. }
+            | Self::ProjectSetTitle { .. }
+            | Self::TrackAdd { .. }
+            | Self::TrackRemove { .. }
+            | Self::TrackReorder { .. }
+            | Self::TrackRename { .. }
+            | Self::TrackSetVolume { .. }
+            | Self::TrackSetPan { .. }
+            | Self::TrackSetFlags { .. } => project::apply(self, target),
+            _ => clip::apply(self, target),
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::ProjectSetSettings { .. } => "cmd.project.setSettings",
+            Self::ProjectSetTitle { .. } => "cmd.project.setTitle",
+            Self::TrackAdd { .. } => "cmd.track.add",
+            Self::TrackRemove { .. } => "cmd.track.remove",
+            Self::TrackReorder { .. } => "cmd.track.reorder",
+            Self::TrackRename { .. } => "cmd.track.rename",
+            Self::TrackSetVolume { .. } => "cmd.track.setVolume",
+            Self::TrackSetPan { .. } => "cmd.track.setPan",
+            Self::TrackSetFlags { .. } => "cmd.track.setFlags",
+            Self::ClipAdd { .. } => "cmd.clip.add",
+            Self::ClipRemove { .. } => "cmd.clip.remove",
+            Self::ClipMove { .. } => "cmd.clip.move",
+            Self::ClipTrim { .. } => "cmd.clip.trim",
+            Self::ClipSplit { .. } => "cmd.clip.split",
+            Self::ClipSetSpeed { .. } => "cmd.clip.setSpeed",
+            Self::ClipSetVolume { .. } => "cmd.clip.setVolume",
+            Self::EffectAdd { .. } => "cmd.effect.add",
+            Self::EffectSetParam { .. } => "cmd.effect.setParam",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Dispatch {
+    pub command: Command,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coalesce_key: Option<String>,
+}
+
+impl Dispatch {
+    pub fn new(command: Command) -> Self {
+        Self {
+            command,
+            coalesce_key: None,
+        }
+    }
+
+    pub fn coalesce(mut self, key: &str) -> Self {
+        self.coalesce_key = Some(key.to_string());
+        self
+    }
+}
+
+pub(crate) fn find_clip_mut<'p>(
+    target: &'p mut Project,
+    clip: &ClipId,
+) -> Result<(&'p mut crate::model::Track, usize)> {
+    for track in target.timeline.tracks.iter_mut() {
+        if let Some(index) = track.clip_index(clip) {
+            return Ok((track, index));
+        }
+    }
+    Err(crate::CoreError::ClipNotFound(clip.clone()))
+}
