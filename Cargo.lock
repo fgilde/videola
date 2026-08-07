@@ -456,6 +456,7 @@ dependencies = [
 name = "videola-core-wasm"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "videola-core",

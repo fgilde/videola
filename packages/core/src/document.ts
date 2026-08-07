@@ -1,4 +1,4 @@
-import type { DocumentBackend, SaveOptions } from "./backend";
+import type { DocumentBackend, MediaBytes, SaveOptions } from "./backend";
 import type { Command, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
 
 type Listener = (project: Project) => void;
@@ -64,8 +64,8 @@ export class VideolaDocument {
     return id;
   }
 
-  save(options: SaveOptions): Uint8Array<ArrayBuffer> {
-    return this.#backend.save(options);
+  save(options: SaveOptions, media: MediaBytes): Uint8Array<ArrayBuffer> {
+    return this.#backend.save(options, media);
   }
 
   #absorb(result: DispatchResult): DispatchResult {

@@ -25,12 +25,15 @@ describe("save and reopen through the real WASM backend", () => {
     const doc = new VideolaDocument(await createWasmBackend());
     doc.dispatch(cmd.trackAdd("video", "V1"));
 
-    const bytes = doc.save({
-      appVersion: "0.0.0-test",
-      created: "2026-01-01T00:00:00.000Z",
-      modified: "2026-01-01T00:00:00.000Z",
-      locale: "de",
-    });
+    const bytes = doc.save(
+      {
+        appVersion: "0.0.0-test",
+        created: "2026-01-01T00:00:00.000Z",
+        modified: "2026-01-01T00:00:00.000Z",
+        locale: "de",
+      },
+      new Map(),
+    );
 
     const reopened = new VideolaDocument(await createWasmBackend(bytes));
     expect(reopened.state.timeline.tracks).toHaveLength(1);

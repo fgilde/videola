@@ -1,11 +1,15 @@
 pub mod inner;
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 use inner::DocumentHost;
 use videola_core::command::Dispatch;
 use videola_core::format::SaveOptions;
+use videola_core::model::MediaId;
 use videola_core::DispatchResult;
 
 // A bare id string would drop the undo/redo flags the import itself just changed, leaving the
@@ -91,10 +95,36 @@ impl WasmDocument {
         self.host.media_bytes(&id)
     }
 
-    pub fn save(&self, options: JsValue) -> std::result::Result<Vec<u8>, JsError> {
+    pub fn save(
+        &self,
+        options: JsValue,
+        media: js_sys::Map,
+    ) -> std::result::Result<Vec<u8>, JsError> {
         let parsed: SaveOptions = serde_wasm_bindgen::from_value(options)?;
-        self.host.save(parsed).map_err(to_js)
+        self.host
+            .save(parsed, supplied_media(&media)?)
+            .map_err(to_js)
     }
+}
+
+// Not serde_wasm_bindgen: `Vec<u8>` goes through `deserialize_seq` there, which walks a
+// Uint8Array element by element and allocates a JsValue for every byte. `to_vec` is one bulk
+// copy, which is the difference between a save that takes a moment and one that stalls the tab
+// on real video.
+fn supplied_media(media: &js_sys::Map) -> std::result::Result<BTreeMap<MediaId, Vec<u8>>, JsError> {
+    let mut supplied = BTreeMap::new();
+    for key in media.keys() {
+        let key = key.map_err(|_| JsError::new("media map is not iterable"))?;
+        let id = key
+            .as_string()
+            .ok_or_else(|| JsError::new("media id must be a string"))?;
+        let bytes = media
+            .get(&key)
+            .dyn_into::<js_sys::Uint8Array>()
+            .map_err(|_| JsError::new("media bytes must be a Uint8Array"))?;
+        supplied.insert(MediaId::from(id), bytes.to_vec());
+    }
+    Ok(supplied)
 }
 
 impl Default for WasmDocument {

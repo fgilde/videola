@@ -29,6 +29,9 @@ importers:
       '@videola/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@videola/media':
+        specifier: workspace:*
+        version: link:../../packages/media
       '@videola/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -69,13 +72,13 @@ importers:
       '@noble/hashes':
         specifier: ^2.0.1
         version: 2.3.0
+      '@videola/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@videola/core':
-        specifier: workspace:*
-        version: link:../core
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1(@noble/hashes@2.3.0)

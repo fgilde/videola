@@ -10,11 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@noble/hashes": "^2.0.1"
+    "@noble/hashes": "^2.0.1",
+    "@videola/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "@videola/core": "workspace:*",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

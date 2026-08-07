@@ -1,6 +1,6 @@
 import init, { WasmDocument } from "./wasm/videola_core.js";
 
-import type { DocumentBackend, ImportMediaResult, SaveOptions } from "./backend";
+import type { DocumentBackend, ImportMediaResult, MediaBytes, SaveOptions } from "./backend";
 import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
 
 let ready: Promise<unknown> | undefined;
@@ -27,7 +27,8 @@ export async function createWasmBackend(bytes?: Uint8Array): Promise<DocumentBac
     // (getArrayU8FromWasm0(...).slice()) always allocates a fresh ArrayBuffer-backed copy -
     // never a view into wasm memory, never a SharedArrayBuffer - so this cast just corrects
     // the declared type to what the implementation already guarantees.
-    save: (options: SaveOptions) => handle.save(options) as Uint8Array<ArrayBuffer>,
+    save: (options: SaveOptions, media: MediaBytes) =>
+      handle.save(options, media) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
     warnings: () => handle.warnings() as LoadWarning[],

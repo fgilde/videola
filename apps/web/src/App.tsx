@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 
 import { cmd, createWasmBackend, VideolaDocument, type LoadWarning, type Project } from "@videola/core";
+import { mediaForProject } from "@videola/media";
 import { AppShell, useI18n } from "@videola/ui";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed";
@@ -88,16 +89,22 @@ export function App(): ReactElement {
     }
   }, [doc, reportError]);
 
-  const save = useCallback(() => {
+  const save = useCallback(async () => {
     if (doc === undefined || project === undefined) return;
     try {
       const now = new Date().toISOString();
-      const bytes = doc.save({
-        appVersion: "0.1.0",
-        created: now,
-        modified: now,
-        locale: navigator.language,
-      });
+      // The bytes live in OPFS since M1, so they have to be gathered before the write - the core
+      // only holds media a .videola brought with it, and falls back to those on its own.
+      const media = await mediaForProject(project);
+      const bytes = doc.save(
+        {
+          appVersion: "0.1.0",
+          created: now,
+          modified: now,
+          locale: navigator.language,
+        },
+        media,
+      );
       downloadBlob(bytes, `${project.meta.title || project.meta.id}.videola`);
       setError(undefined);
     } catch (err) {

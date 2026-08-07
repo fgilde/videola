@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use serde::de::value::{Error as DeError, StrDeserializer};
 use serde::Deserialize;
 
 use videola_core::command::{Command, Dispatch};
-use videola_core::format::{reader, writer, LoadWarning, MemoryMediaStore, SaveOptions};
+use videola_core::format::{
+    reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
+};
 use videola_core::model::{MediaAsset, MediaId, MediaKind, Project};
 use videola_core::{CoreError, DispatchResult, Document, Result};
 
@@ -122,10 +125,55 @@ impl DocumentHost {
         self.media.get(&MediaId::from(id.to_string())).cloned()
     }
 
-    pub fn save(&self, options: SaveOptions) -> Result<Vec<u8>> {
+    // ponytail: every medium the project references is resident for the length of the write --
+    // `MediaStore::read` hands the writer an owned `Vec<u8>`, so moving media into OPFS buys
+    // nothing on this path. The way out is a streaming writer that takes a `Blob` (or a reader)
+    // per entry and pushes it into the ZIP, at which point JS hands over handles instead of
+    // bytes. Until then the reader's own cap on the same data is the loud failure.
+    pub fn save(
+        &self,
+        options: SaveOptions,
+        supplied: BTreeMap<MediaId, Vec<u8>>,
+    ) -> Result<Vec<u8>> {
+        media_within_cap(supplied.values().map(|bytes| bytes.len() as u64).sum())?;
+        let store = SaveStore {
+            supplied,
+            held: &self.media,
+        };
         let mut sink = Cursor::new(Vec::new());
-        writer::write(&mut sink, self.document.project(), &self.media, &options)?;
+        writer::write(&mut sink, self.document.project(), &store, &options)?;
         Ok(sink.into_inner())
+    }
+}
+
+// The same ceiling the reader enforces when it loads media back out of a `.videola`, applied on
+// the way in: a project that would be refused on reopen fails here instead, and it fails with a
+// message rather than by exhausting the heap somewhere inside the ZIP writer.
+fn media_within_cap(total: u64) -> Result<()> {
+    if total > reader::MAX_TOTAL_MEDIA_BYTES {
+        return Err(CoreError::InvalidArgument(format!(
+            "{total} bytes of media exceed the {} byte limit",
+            reader::MAX_TOTAL_MEDIA_BYTES
+        )));
+    }
+    Ok(())
+}
+
+// Bytes handed in from JS win over bytes still held here. Since M1 an import writes the file to
+// OPFS and the core never sees it, so `held` is empty for anything imported this session - but it
+// is full for a project opened from disk, and making JS re-read those would be work for nothing.
+// Read-through rather than a merge, so the in-memory entries are not copied a second time.
+struct SaveStore<'a> {
+    supplied: BTreeMap<MediaId, Vec<u8>>,
+    held: &'a MemoryMediaStore,
+}
+
+impl MediaStore for SaveStore<'_> {
+    fn read(&self, id: &MediaId) -> Result<Vec<u8>> {
+        match self.supplied.get(id) {
+            Some(bytes) => Ok(bytes.clone()),
+            None => self.held.read(id),
+        }
     }
 }
 
@@ -206,17 +254,56 @@ mod tests {
             b"12345".to_vec(),
         )
         .unwrap();
-        let bytes = host
-            .save(SaveOptions {
-                app_version: "0.0.0".into(),
-                created: "c".into(),
-                modified: "m".into(),
-                locale: "de".into(),
-            })
-            .unwrap();
+        let bytes = host.save(options(), BTreeMap::new()).unwrap();
 
         let reopened = DocumentHost::open(&bytes).unwrap();
 
         assert_eq!(reopened.media_bytes_total, 5);
+    }
+
+    fn options() -> SaveOptions {
+        SaveOptions {
+            app_version: "0.0.0".into(),
+            created: "c".into(),
+            modified: "m".into(),
+            locale: "de".into(),
+        }
+    }
+
+    // The round trip M1 actually walks: the bytes went to OPFS, so the core never saw them and
+    // `media.import` only ever carried metadata. Without the supplied map the writer fails on
+    // `media.read` and a milestone that can import cannot save.
+    #[test]
+    fn save_writes_media_the_core_never_held() {
+        let mut host = DocumentHost::new();
+        let bytes = b"bytes that only OPFS has".to_vec();
+        let id = MediaId::from_bytes(&bytes);
+        let asset = MediaAsset::new(
+            id.clone(),
+            "a.mp4".into(),
+            "video/mp4".into(),
+            MediaKind::Video,
+            bytes.len() as u64,
+        );
+        host.dispatch(Dispatch::new(Command::MediaImport { asset }))
+            .unwrap();
+
+        let supplied = BTreeMap::from([(id.clone(), bytes.clone())]);
+        let archive = host.save(options(), supplied).unwrap();
+
+        let reopened = DocumentHost::open(&archive).unwrap();
+        assert_eq!(reopened.media_bytes(id.as_str()), Some(bytes));
+        assert_eq!(reopened.project().library.len(), 1);
+    }
+
+    // Tested through the bound rather than through `save`, because reaching it for real means
+    // allocating two gibibytes.
+    #[test]
+    fn media_beyond_the_reader_cap_is_refused() {
+        assert!(media_within_cap(reader::MAX_TOTAL_MEDIA_BYTES).is_ok());
+        assert!(matches!(
+            media_within_cap(reader::MAX_TOTAL_MEDIA_BYTES + 1),
+            Err(CoreError::InvalidArgument(_))
+        ));
     }
 }
