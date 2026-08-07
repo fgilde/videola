@@ -55,8 +55,9 @@ videola/
 │        └─ icons/                  aus einem Quellbild generiert
 ├─ docker/
 │  ├─ Dockerfile                    multi-stage: wasm, web, nginx
-│  ├─ nginx.conf                    SPA-Fallback, WASM-MIME, Cache-Header
-│  └─ .dockerignore
+│  └─ nginx.conf                    SPA-Fallback, WASM-MIME, Cache-Header
+├─ .dockerignore                    im Wurzelverzeichnis, nicht in docker/ --
+│                                   `docker build -f docker/Dockerfile .` liest nur diese
 ├─ .github/workflows/
 │  ├─ ci.yml                        unverändert
 │  └─ release.yml                   neu
@@ -336,11 +337,18 @@ server {
   }
 
   # Ohne den korrekten MIME-Typ verweigert der Browser die WASM-Instanziierung.
-  types {
-    application/wasm wasm;
+  # Der types-Block steht bewusst in einer location und nicht auf server-Ebene:
+  # dort wuerde er die geerbte mime.types-Tabelle *ersetzen* statt sie zu
+  # erweitern, und .js ginge als application/octet-stream raus -- was Browser
+  # fuer ES-Module verweigern, also startet die App gar nicht.
+  location ~* \.wasm$ {
+    types { }
+    default_type application/wasm;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
   }
 
-  location ~* \.(js|css|wasm)$ {
+  location ~* \.(js|css)$ {
     expires 1y;
     add_header Cache-Control "public, immutable";
   }
