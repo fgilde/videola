@@ -16,4 +16,5 @@ Deutsch und Englisch, im UI umschaltbar. Dark- und Light-Theme.
 
 ## Lizenz
 
-Noch nicht festgelegt — abhängig von der FFmpeg-Build-Entscheidung (siehe Spec, Abschnitt 11.1).
+Noch nicht festgelegt. Die Desktop- und Docker-Builds binden einen GPL-FFmpeg-Build ein
+(siehe Spec, Abschnitt 11.1).

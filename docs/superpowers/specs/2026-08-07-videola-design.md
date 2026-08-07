@@ -516,14 +516,16 @@ effects/brightness/
 CI: GitHub Actions Matrix über alle Ziele, Release mit Artefakten, Image-Push nach
 `ghcr.io/fgilde/videola`.
 
-### 11.1 FFmpeg-Lizenz — offene Entscheidung
+### 11.1 FFmpeg-Build: GPL
 
-Ein GPL-FFmpeg-Build (mit x264/x265) macht das ausgelieferte Produkt GPL-pflichtig. Alternative:
-LGPL-Build plus Hardware-Encoder bzw. `libopenh264`. Betrifft Desktop-Installer und
-Docker-Image, nicht die Web-App.
+Entschieden: **GPL-FFmpeg-Build mit x264/x265.** Funktionale Vollständigkeit hat Vorrang —
+volle Codec-Abdeckung auch ohne Hardware-Encoder, kein Software-Fallback zweiter Klasse.
 
-**Entscheidung fällt vor dem M1-Packaging-Schritt.** Bis dahin nutzt die Entwicklung ein
-lokal vorhandenes FFmpeg und bindet keines ein.
+Konsequenz: Desktop-Installer und Docker-Image stehen damit unter GPL. Die Web-App ist
+unberührt, weil dort WebCodecs encodiert. Die endgültige Projektlizenz wird gegen Projektende
+festgelegt; die Architektur hält den Ausweg offen, weil FFmpeg nur in `videola-render` hinter
+dem Render-Interface sitzt und gegen einen LGPL-Build getauscht werden kann, ohne dass anderer
+Code sich ändert.
 
 ---
 
@@ -542,7 +544,34 @@ Die Teststrategie folgt dem Hauptrisiko: Divergenz zwischen den Ausführungsorte
 
 ---
 
-## 13. Roadmap
+## 13. Code-Konventionen
+
+Verbindlich für alles, was in diesem Repo entsteht.
+
+**Clean Code Developer als Grundlage.** SRP, SoC, DRY, KISS, YAGNI, Information Hiding, PoLA.
+Dazu IOSP: eine Funktion *orchestriert* (ruft andere Funktionen) oder sie *arbeitet* (enthält
+Logik) — nicht beides. Das hält Logik testbar und Orchestrierung lesbar.
+
+**Kommentare sind die Ausnahme.** Kommentiert wird das *Warum*, wenn es nicht aus dem Code
+hervorgeht: eine nicht offensichtliche Reihenfolge, ein Workaround für ein Fremdverhalten, eine
+bewusste Abweichung von der naheliegenden Lösung. Nie das *Was*. Kein Abschnitts-Banner, keine
+`Schritt 1:` / `Schritt 2:`-Blöcke, keine Doc-Kommentare für triviale Zugriffsmethoden. Namen
+tragen die Erklärung, nicht Prosa daneben.
+
+**Struktur.** Kleine Funktionen mit einer Aufgabe. Eine Datei hat einen Zweck; über ~400 Zeilen
+ist ein Signal zum Teilen. Öffentliche Oberfläche eines Moduls klein halten, alles andere privat.
+
+**Fehlerbehandlung.** Kein defensives Fangen ohne Behandlung. In Rust `Result` mit sprechenden
+Fehlertypen (`thiserror`), keine `unwrap()` außerhalb von Tests. An Vertrauensgrenzen
+(API-Requests, Dateiimport, Projektdateien) wird vollständig validiert.
+
+**Sprache.** Bezeichner, Typnamen und Code-Kommentare auf Englisch; alle nutzersichtbaren Texte
+ausschließlich über die i18n-Kataloge. Commit-Messages auf Deutsch mit englischem
+Conventional-Commits-Präfix (`feat:`, `fix:`, `docs:` …) und ohne Attribution-Zeilen.
+
+---
+
+## 14. Roadmap
 
 ### M0 — Skelett
 Monorepo (pnpm + Cargo), `videola-core` mit Modell, Commands, Undo und `.videola`-I/O,
@@ -558,7 +587,7 @@ WASM-Bindings mit generierten TS-Typen, App-Shell mit Theme und i18n, CI-Grundge
 ✓ Preview-Playback 1080p mit ≥24 fps, Audio synchron
 ✓ Export H.264/AAC über mindestens zwei der drei Backends
 ✓ MCP-Tools: open, import, split, set_param, render, get_frame
-✓ Builds grün: Web, Windows, Docker  (setzt die Lizenzentscheidung aus 11.1 voraus)
+✓ Builds grün: Web, Windows, Docker
 ✓ Golden-Frame-Test läuft und vergleicht Browser gegen Rust
 ```
 
@@ -597,7 +626,7 @@ Die AI-Audio-Features (Stem-Separation, Whisper-Untertitel, TTS-Voiceover) häng
 
 ---
 
-## 14. Erwartungsmanagement
+## 15. Erwartungsmanagement
 
 Die Architektur ist darauf ausgelegt, Breite billig zu machen: ein Effekt sind zwei Dateien,
 ein Command ist eine Enum-Variante plus Handler, und beides ist automatisch per API und MCP
@@ -606,7 +635,7 @@ dass diese Arbeit additiv ist statt umbauintensiv — mehr kann Architektur nich
 
 ---
 
-## 15. Nicht im Umfang
+## 16. Nicht im Umfang
 
 * Cloud-Konten, Abrechnung, geteilte Projekte, Mehrbenutzer-Kollaboration
 * Eingebauter Stock-Media-Marktplatz
