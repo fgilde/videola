@@ -14,5 +14,8 @@ wasm-bindgen = "0.2"
 serde-wasm-bindgen = "0.6"
 serde = { version = "1.0.229", features = ["derive"] }
 
+[dev-dependencies]
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+
 [lints]
 workspace = true

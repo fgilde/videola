@@ -18,8 +18,10 @@ use crate::{CoreError, Result};
 const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
 
 // Bounds how much a single `read` call can commit to `LoadedProject.media` in total, independent
-// of how many individual entries (each already under MAX_ENTRY_BYTES) add up to it.
-const MAX_TOTAL_MEDIA_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+// of how many individual entries (each already under MAX_ENTRY_BYTES) add up to it. Public so
+// callers accumulating media outside a `read` (e.g. importing from JS) can enforce the same
+// ceiling instead of growing linear memory without bound.
+pub const MAX_TOTAL_MEDIA_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]

@@ -460,6 +460,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "videola-core",
  "wasm-bindgen",
+ "zip",
 ]
 
 [[package]]

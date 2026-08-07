@@ -29,12 +29,14 @@ pub struct Manifest {
     pub locale: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveOptions {
     pub app_version: String,
     pub created: String,
     pub modified: String,
     pub locale: String,
+    #[serde(default)]
     pub slim: bool,
 }
 
@@ -48,6 +50,20 @@ impl SaveOptions {
             locale: "de".into(),
             slim: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod save_options_tests {
+    use super::SaveOptions;
+
+    #[test]
+    fn slim_defaults_to_false_when_the_caller_omits_it() {
+        let options: SaveOptions = serde_json::from_str(
+            r#"{"appVersion":"1.0.0","created":"c","modified":"m","locale":"de"}"#,
+        )
+        .unwrap();
+        assert!(!options.slim);
     }
 }
 

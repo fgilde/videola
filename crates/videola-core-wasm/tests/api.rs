@@ -1,4 +1,20 @@
-use videola_core_wasm::inner::{DocumentHost, SaveRequest};
+use std::io::{Cursor, Write};
+
+use videola_core::command::{Command, Dispatch};
+use videola_core::format::{LoadWarning, SaveOptions};
+use videola_core::model::{MediaId, TrackKind};
+use videola_core::CoreError;
+use videola_core_wasm::inner::DocumentHost;
+
+fn save_options() -> SaveOptions {
+    SaveOptions {
+        app_version: "0.0.0".into(),
+        created: "2026-08-07T10:00:00Z".into(),
+        modified: "2026-08-07T10:00:00Z".into(),
+        locale: "de".into(),
+        slim: true,
+    }
+}
 
 #[test]
 fn a_fresh_host_has_an_empty_project_and_no_history() {
@@ -18,8 +34,26 @@ fn imported_media_is_addressable_by_its_returned_id() {
             b"bytes".to_vec(),
         )
         .unwrap();
+
+    // The id is the content hash, not anything the caller could have supplied or influenced.
+    assert_eq!(id, MediaId::from_bytes(b"bytes"));
     assert_eq!(host.project().library.len(), 1);
-    assert_eq!(host.media_bytes(&id).as_deref(), Some(&b"bytes"[..]));
+    assert_eq!(
+        host.media_bytes(id.as_str()).as_deref(),
+        Some(&b"bytes"[..])
+    );
+
+    // Re-importing identical content resolves to the same id and does not duplicate the asset.
+    let second = host
+        .import_media(
+            "a-again.mp4".into(),
+            "video/mp4".into(),
+            "video".into(),
+            b"bytes".to_vec(),
+        )
+        .unwrap();
+    assert_eq!(second, id);
+    assert_eq!(host.project().library.len(), 1);
 }
 
 #[test]
@@ -33,37 +67,117 @@ fn save_then_open_restores_project_and_media() {
             b"bytes".to_vec(),
         )
         .unwrap();
-    let bytes = host
-        .save(SaveRequest {
-            app_version: "0.0.0".into(),
-            created: "2026-08-07T10:00:00Z".into(),
-            modified: "2026-08-07T10:00:00Z".into(),
-            locale: "de".into(),
-            slim: true,
-        })
-        .unwrap();
+    let bytes = host.save(save_options()).unwrap();
 
     let reopened = DocumentHost::open(&bytes).unwrap();
 
     assert_eq!(reopened.project().library.len(), 1);
-    assert_eq!(reopened.media_bytes(&id).as_deref(), Some(&b"bytes"[..]));
+    assert_eq!(
+        reopened.media_bytes(id.as_str()).as_deref(),
+        Some(&b"bytes"[..])
+    );
     assert!(reopened.warnings().is_empty());
 }
 
 #[test]
 fn an_unknown_media_kind_is_rejected() {
     let mut host = DocumentHost::new();
-    assert!(host
+    let error = host
         .import_media(
             "a.xyz".into(),
             "application/x".into(),
             "hologram".into(),
-            vec![1]
+            vec![1],
         )
-        .is_err());
+        .unwrap_err();
+    assert!(matches!(error, CoreError::InvalidArgument(_)));
 }
 
 #[test]
 fn opening_rubbish_fails_instead_of_panicking() {
-    assert!(DocumentHost::open(b"not a zip").is_err());
+    let error = DocumentHost::open(b"not a zip").err().unwrap();
+    assert!(matches!(error, CoreError::NotAProject(_)));
+}
+
+#[test]
+fn a_wellformed_zip_without_a_project_entry_is_rejected_as_not_a_project() {
+    let mut sink = Cursor::new(Vec::new());
+    {
+        let mut archive = zip::ZipWriter::new(&mut sink);
+        archive
+            .start_file("readme.txt", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(b"nope").unwrap();
+        archive.finish().unwrap();
+    }
+    let error = DocumentHost::open(&sink.into_inner()).err().unwrap();
+    assert!(matches!(error, CoreError::NotAProject(_)));
+}
+
+#[test]
+fn opening_an_archive_missing_a_media_entry_still_opens_with_a_warning() {
+    let mut host = DocumentHost::new();
+    host.import_media(
+        "a.mp4".into(),
+        "video/mp4".into(),
+        "video".into(),
+        b"bytes".to_vec(),
+    )
+    .unwrap();
+    let bytes = host.save(save_options()).unwrap();
+    let stripped = strip_media_entries(bytes);
+
+    let reopened = DocumentHost::open(&stripped).unwrap();
+
+    assert_eq!(reopened.warnings().len(), 1);
+    assert!(matches!(
+        reopened.warnings()[0],
+        LoadWarning::MissingMedia { .. }
+    ));
+}
+
+#[test]
+fn media_bytes_for_an_unknown_id_is_none_not_an_error() {
+    let host = DocumentHost::new();
+    assert!(host.media_bytes("garbage").is_none());
+}
+
+#[test]
+fn dispatch_then_undo_then_redo_round_trips_through_history() {
+    let mut host = DocumentHost::new();
+    host.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Video,
+        name: "V1".into(),
+        index: None,
+    }))
+    .unwrap();
+    assert_eq!(host.project().timeline.tracks.len(), 1);
+    assert_eq!(host.history_labels().len(), 1);
+
+    host.undo().unwrap();
+    assert!(host.project().timeline.tracks.is_empty());
+
+    host.redo().unwrap();
+    assert_eq!(host.project().timeline.tracks.len(), 1);
+}
+
+#[allow(clippy::unwrap_used)]
+fn strip_media_entries(bytes: Vec<u8>) -> Vec<u8> {
+    let mut source = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let mut sink = Cursor::new(Vec::new());
+    {
+        let mut out = zip::ZipWriter::new(&mut sink);
+        for index in 0..source.len() {
+            let mut entry = source.by_index(index).unwrap();
+            let name = entry.name().to_string();
+            if name.starts_with("media/") {
+                continue;
+            }
+            out.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            std::io::copy(&mut entry, &mut out).unwrap();
+        }
+        out.finish().unwrap();
+    }
+    sink.into_inner()
 }
