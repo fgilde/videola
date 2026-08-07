@@ -17,6 +17,8 @@ export class Clock {
   #playing = false;
   #listeners = new Set<(t: Time) => void>();
   #raf = 0;
+  #emitting = false;
+  #restated?: Time;
 
   constructor(ctx: ClockSource) {
     this.#ctx = ctx;
@@ -38,17 +40,21 @@ export class Clock {
     this.#tick();
   }
 
+  // The last frame lands between the last tick and here, so pausing without saying where it
+  // stopped leaves every listener up to one frame behind the position the clock reports.
   pause(): void {
     if (!this.#playing) return;
     this.#startProjectTime = this.now();
     this.#playing = false;
     cancelAnimationFrame(this.#raf);
+    this.#emit(this.#startProjectTime);
   }
 
-  // Rounded here rather than trusted, so that `now()` returns whole flicks no matter what a
-  // caller computed its target from.
+  // Rounded and clamped here rather than trusted: `now()` returns whole flicks no matter what a
+  // caller computed its target from, and the timeline has no time before zero for any of them to
+  // land on.
   seek(t: Time): void {
-    this.#startProjectTime = Math.round(t);
+    this.#startProjectTime = Math.max(0, Math.round(t));
     this.#startContextTime = this.#ctx.currentTime;
     this.#emit(this.#startProjectTime);
   }
@@ -60,18 +66,41 @@ export class Clock {
 
   #tick(): void {
     if (!this.#playing) return;
+    const mine = this.#raf;
     this.#emit(this.now());
-    // A listener is free to pause from inside the tick. Scheduling anyway would leave a frame
-    // request that `pause` has already had its chance to cancel, and the next `play` would start
-    // a second loop alongside it -- every listener called twice per frame from then on.
-    if (!this.#playing) return;
+    // A listener is free to pause, or to loop with pause-seek-play, from inside the tick. Either
+    // way this run is no longer the one that owns the loop: a paused clock has none, and a
+    // restarted one has already requested its own frame. Adding a request here would leave two
+    // loops side by side, and every listener called twice per frame from then on.
+    if (!this.#playing || this.#raf !== mine) return;
     this.#raf = requestAnimationFrame(() => this.#tick());
+  }
+
+  // A listener may seek from inside a tick, which asks for another round. Delivering it nested
+  // would leave the listeners behind it holding the older time as their last word, and a
+  // listener that seeks every time would recurse until the stack gives out. So a nested request
+  // is remembered and delivered once, flat, afterwards -- and a request raised during *that* is
+  // dropped, because the position is in `now()` either way and the next frame carries it.
+  #emit(t: Time): void {
+    if (this.#emitting) {
+      this.#restated = t;
+      return;
+    }
+    this.#emitting = true;
+    try {
+      this.#deliver(t);
+      const restated = this.#restated;
+      if (restated !== undefined && restated !== t) this.#deliver(restated);
+    } finally {
+      this.#emitting = false;
+      this.#restated = undefined;
+    }
   }
 
   // A listener that throws must not stop the clock, or one buggy consumer freezes playback for
   // every other one. Iterating the Set itself and not a copy of it is deliberate: a component
   // tearing down inside a tick unsubscribes, and a copy would call it once more afterwards.
-  #emit(t: Time): void {
+  #deliver(t: Time): void {
     for (const cb of this.#listeners) {
       try {
         cb(t);

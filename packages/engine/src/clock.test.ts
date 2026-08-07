@@ -134,12 +134,13 @@ describe("Clock", () => {
     const seen: number[] = [];
 
     clock.play();
+    ctx.advance(1);
     clock.onTick((t) => seen.push(t));
     clock.pause();
     runFrame();
     runFrame();
 
-    expect(seen).toEqual([]);
+    expect(seen).toEqual([FLICKS_PER_SECOND]);
   });
 
   it("leaves no second tick loop behind when a listener pauses it", () => {
@@ -214,5 +215,93 @@ describe("Clock", () => {
     runFrame();
 
     expect(seen).toEqual([]);
+  });
+
+  it("leaves no second tick loop behind when a listener loops the playhead", () => {
+    const ctx = new FakeAudioContext();
+    const clock = new Clock(ctx);
+    let ticks = 0;
+    let looped = false;
+    // Loop playback, written the way anyone would write it.
+    clock.onTick((t) => {
+      ticks += 1;
+      if (looped || t < FLICKS_PER_SECOND) return;
+      looped = true;
+      clock.pause();
+      clock.seek(0);
+      clock.play();
+    });
+
+    clock.play();
+    ctx.advance(1);
+    runFrame();
+    ticks = 0;
+    runFrame();
+
+    expect(ticks).toBe(1);
+
+    ticks = 0;
+    runFrame();
+
+    expect(ticks).toBe(1);
+  });
+
+  it("reports the frozen position to its listeners on pause", () => {
+    const ctx = new FakeAudioContext();
+    const clock = new Clock(ctx);
+    const seen: number[] = [];
+    clock.onTick((t) => seen.push(t));
+
+    clock.play();
+    ctx.advance(1);
+    runFrame();
+    ctx.advance(0.016);
+    clock.pause();
+
+    expect(seen.at(-1)).toBe(clock.now());
+  });
+
+  it("leaves every listener holding the newest time when one of them seeks", () => {
+    const ctx = new FakeAudioContext();
+    const clock = new Clock(ctx);
+    const seen: number[] = [];
+    clock.onTick((t) => {
+      if (t !== 0) clock.seek(0);
+    });
+    clock.onTick((t) => seen.push(t));
+
+    clock.play();
+    ctx.advance(1);
+    runFrame();
+
+    expect(seen.at(-1)).toBe(clock.now());
+    expect(clock.now()).toBe(0);
+  });
+
+  it("does not recurse when a listener seeks on every notification", () => {
+    const ctx = new FakeAudioContext();
+    const clock = new Clock(ctx);
+    let calls = 0;
+    clock.onTick((t) => {
+      calls += 1;
+      clock.seek(t + FLICKS_PER_SECOND);
+    });
+
+    clock.play();
+
+    expect(calls).toBeLessThan(10);
+    expect(clock.isPlaying).toBe(true);
+  });
+
+  it("clamps a seek before the start of the timeline", () => {
+    const ctx = new FakeAudioContext();
+    const clock = new Clock(ctx);
+    const seen: number[] = [];
+    clock.onTick((t) => seen.push(t));
+
+    clock.seek(-5 * FLICKS_PER_SECOND);
+
+    expect(clock.now()).toBe(0);
+    expect(seen).toEqual([0]);
   });
 });
