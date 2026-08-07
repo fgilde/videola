@@ -1,0 +1,17 @@
+{
+  "name": "videola",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "gen:types": "cargo test -p videola-core --test export_types"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
