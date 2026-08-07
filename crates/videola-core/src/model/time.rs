@@ -77,6 +77,14 @@ impl Time {
     }
 }
 
+// ponytail: raw `+`/`-`, not `checked_add`/`checked_sub` above — this was C1 of the M0 review
+// (an unbounded `speed.rate` overflowed exactly this). It is safe only as long as every `Time`
+// reaching here is already bounded: `MAX_REASONABLE` caps a single value at 24h
+// (~6.1e13 flicks), and `MAX_SPEED_RATE` (100.0, model::project) caps `consumed_source()`'s
+// duration*rate product at ~6.1e15 — both far under `i64::MAX` (~9.2e18). If a future caller
+// builds a `Time` that skips `Project::normalize`/the command-layer bounds (a new deserialise
+// path, a raw `Time::from_flicks` from an untrusted source), switch these back to the checked
+// variants instead of re-adding a bound here.
 impl Add for Time {
     type Output = Time;
     fn add(self, rhs: Time) -> Time {

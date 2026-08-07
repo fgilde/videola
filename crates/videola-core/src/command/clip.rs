@@ -193,6 +193,7 @@ pub(super) fn set_effect_param(
     key: &str,
     value: ParamValue,
 ) -> Result<()> {
+    crate::model::project::param_value_finite(&value)?;
     let (track, index) = find_clip_mut(target, clip)?;
     let effect = track.clips[index]
         .effects

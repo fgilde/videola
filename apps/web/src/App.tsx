@@ -49,6 +49,11 @@ export function App(): ReactElement {
     if (doc === undefined) return;
     return doc.subscribe((next) => {
       setProject(next);
+      // doc.warnings only ever narrows (media.remove is the one command that can clear a
+      // "missing" entry) or stays put after load - but it does change, and #notify() in
+      // document.ts already refreshes it before listeners run, so read it fresh here too instead
+      // of leaving the banner stuck on whatever was true at load time.
+      setWarnings(doc.warnings);
       setFlags({ canUndo: doc.canUndo, canRedo: doc.canRedo });
     });
   }, [doc]);
@@ -152,9 +157,13 @@ function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement 
   const { t } = useI18n();
   const missingMedia = warnings.filter((warning) => warning.kind === "missingMedia").length;
   if (missingMedia === 0) return null;
+  // Same severity tier as ErrorBanner (role="alert" + --v-danger): the theme has no separate
+  // "warning" token, and a missing medium is exactly as actionable as the errors above it, not
+  // a passive status update - role="status" is announced politely and easy to miss, which
+  // contradicted the danger colour right next to it.
   return (
     <p
-      role="status"
+      role="alert"
       style={{ padding: "var(--v-space-2) var(--v-space-6)", color: "var(--v-danger)" }}
     >
       {t("warning.missingMedia", { count: missingMedia })}

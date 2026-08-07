@@ -2,10 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
-use super::clip::{Clip, ClipSource};
+use super::clip::{Clip, ClipSource, Generator};
 use super::effect::{Effect, Transition};
 use super::keyframe::sort_track;
 use super::media::MediaAsset;
+use super::param::ParamValue;
 use super::timeline::{Marker, Timeline, Track};
 use super::{ProjectId, Rate, Time, TrackId};
 use crate::{CoreError, Result};
@@ -122,12 +123,32 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
         sort_track(keyframes);
         for keyframe in keyframes.iter() {
             bounded(keyframe.time)?;
+            param_value_finite(&keyframe.value)?;
         }
     }
-    if let ClipSource::Compound { timeline } = &mut clip.source {
-        normalize_timeline(timeline, depth + 1)?;
+    match &mut clip.source {
+        ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
+        ClipSource::Generator {
+            generator: Generator::Gradient { angle, .. },
+        } => {
+            finite(*angle)?;
+        }
+        ClipSource::Generator { .. } | ClipSource::Media { .. } => {}
     }
     normalize_effects(&mut clip.effects)
+}
+
+// A clip's `params`/keyframes are what `command::clip::set_effect_param` writes one field at a
+// time; a hand-authored project.json can set every field of every variant at once, so this
+// checks all of them the setter would ever see, not just `Float`. Discrete variants (`Int`,
+// `Bool`, `Choice`) have no float to go non-finite.
+pub(crate) fn param_value_finite(value: &ParamValue) -> Result<()> {
+    match value {
+        ParamValue::Float(v) => finite(*v).map(|_| ()),
+        ParamValue::Color(channels) => channels.iter().try_for_each(|c| finite(*c).map(|_| ())),
+        ParamValue::Vec2(components) => components.iter().try_for_each(|c| finite(*c).map(|_| ())),
+        ParamValue::Int(_) | ParamValue::Bool(_) | ParamValue::Choice(_) => Ok(()),
+    }
 }
 
 // `speed.rate` is the one scalar C1 of the M0 review found unbounded here: `Clip::consumed_source`
@@ -168,10 +189,14 @@ fn normalize_transition(transition: &Option<Transition>) -> Result<()> {
 
 fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
     for effect in effects {
+        for value in effect.params.values() {
+            param_value_finite(value)?;
+        }
         for keyframes in effect.keyframes.values_mut() {
             sort_track(keyframes);
             for keyframe in keyframes.iter() {
                 bounded(keyframe.time)?;
+                param_value_finite(&keyframe.value)?;
             }
         }
     }
@@ -558,6 +583,98 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         let mut loaded: Project = serde_json::from_str(&json).unwrap();
         assert!(loaded.normalize().is_ok());
+    }
+
+    // C2 follow-up: none of these fields have a command-layer setter that would clamp or reject
+    // them (only `effect.setParam` does, covered by the command-level test), so a hand-authored
+    // project.json is the only way a non-finite value reaches them. Injected as a JSON `1e300`
+    // (a legitimate JSON number, unlike `f32::INFINITY` which `serde_json` would already refuse
+    // to serialise as anything but `null`, itself unparsable back into an `f32`) — the actual
+    // reviewer repro: a plain, valid-looking JSON number that downcasts to `f32::INFINITY` only
+    // once `normalize` reads the field, and must be caught there, not one step earlier.
+    #[test]
+    fn a_keyframes_non_finite_value_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(2.0),
+        );
+        clip.keyframes.insert(
+            "opacity".into(),
+            vec![Keyframe {
+                time: Time::ZERO,
+                value: ParamValue::Float(0.5),
+                interp: Interp::Linear,
+                handle_in: None,
+                handle_out: None,
+            }],
+        );
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let mut json = serde_json::to_value(&p).unwrap();
+        json["timeline"]["tracks"][0]["clips"][0]["keyframes"]["opacity"][0]["value"]["value"] =
+            serde_json::json!(1e300);
+        let mut loaded: Project = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn an_effects_non_finite_param_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        let mut effect = crate::model::Effect::new("brightness");
+        effect
+            .params
+            .insert("amount".into(), ParamValue::Color([0.2, 0.0, 0.0, 1.0]));
+        clip.effects.push(effect);
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let mut json = serde_json::to_value(&p).unwrap();
+        json["timeline"]["tracks"][0]["clips"][0]["effects"][0]["params"]["amount"]["value"][0] =
+            serde_json::json!(1e300);
+        let mut loaded: Project = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn a_generators_non_finite_gradient_angle_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let clip = Clip::new_generator(
+            crate::model::Generator::Gradient {
+                from: "#000000".into(),
+                to: "#ffffff".into(),
+                angle: 45.0,
+            },
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let mut json = serde_json::to_value(&p).unwrap();
+        json["timeline"]["tracks"][0]["clips"][0]["source"]["generator"]["angle"] =
+            serde_json::json!(1e300);
+        let mut loaded: Project = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
     }
 
     fn leaf_clip() -> Clip {

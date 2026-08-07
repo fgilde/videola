@@ -1,6 +1,6 @@
 use videola_core::command::{Command, Dispatch, TrimEdge};
 use videola_core::model::{
-    Clip, ClipSource, MediaId, ParamValue, Time, Timeline, Track, TrackKind,
+    Clip, ClipSource, Generator, MediaId, ParamValue, Time, Timeline, Track, TrackKind,
 };
 use videola_core::Document;
 
@@ -529,4 +529,118 @@ fn setting_an_effect_param_updates_the_matching_effect_only() {
         contrast.static_param("amount"),
         Some(&ParamValue::Float(0.5))
     );
+}
+
+// C2 follow-up: a `1e300` param value dispatches fine, serialises to `null` in Rust's own
+// `serde_json::to_string` (JS never enters into it), and the resulting `.videola` then fails to
+// reopen with "invalid type: null, expected f32" — a dispatch that succeeds must not produce a
+// file that can never be loaded again. Covers every float-carrying `ParamValue` variant, not
+// just `Float`.
+#[test]
+fn setting_a_non_finite_effect_param_is_rejected() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::EffectAdd {
+        clip: clip.clone(),
+        effect_type: "brightness".into(),
+    }))
+    .unwrap();
+
+    for value in [
+        ParamValue::Float(f32::INFINITY),
+        ParamValue::Color([f32::INFINITY, 0.0, 0.0, 1.0]),
+        ParamValue::Vec2([f32::INFINITY, 0.0]),
+    ] {
+        assert!(
+            doc.dispatch(Dispatch::new(Command::EffectSetParam {
+                clip: clip.clone(),
+                effect_type: "brightness".into(),
+                key: "amount".into(),
+                value: value.clone(),
+            }))
+            .is_err(),
+            "{value:?} should have been rejected"
+        );
+    }
+}
+
+#[test]
+fn setting_a_legitimate_effect_param_still_works() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::EffectAdd {
+        clip: clip.clone(),
+        effect_type: "brightness".into(),
+    }))
+    .unwrap();
+
+    for value in [
+        ParamValue::Float(0.5),
+        ParamValue::Color([0.2, 0.4, 0.6, 1.0]),
+        ParamValue::Vec2([1.0, -1.0]),
+    ] {
+        doc.dispatch(Dispatch::new(Command::EffectSetParam {
+            clip: clip.clone(),
+            effect_type: "brightness".into(),
+            key: "amount".into(),
+            value: value.clone(),
+        }))
+        .unwrap_or_else(|error| panic!("{value:?} should have been accepted: {error}"));
+    }
+}
+
+// Same failure mode, different entry point: `clip.add`'s `ClipSource::Generator` carries a
+// `Generator::Gradient` whose `angle` is exactly as reachable from a dispatch as an effect param.
+#[test]
+fn adding_a_gradient_clip_with_a_non_finite_angle_is_rejected() {
+    let mut doc = Document::new();
+    doc.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Video,
+        name: "V1".into(),
+        index: None,
+    }))
+    .unwrap();
+    let track = doc.project().timeline.tracks[0].id.clone();
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipAdd {
+            track,
+            source: ClipSource::Generator {
+                generator: Generator::Gradient {
+                    from: "#000000".into(),
+                    to: "#ffffff".into(),
+                    angle: f32::INFINITY,
+                },
+            },
+            start: Time::ZERO,
+            duration: Time::from_seconds(1.0),
+        }))
+        .is_err());
+}
+
+#[test]
+fn adding_a_gradient_clip_with_a_legitimate_angle_still_works() {
+    let mut doc = Document::new();
+    doc.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Video,
+        name: "V1".into(),
+        index: None,
+    }))
+    .unwrap();
+    let track = doc.project().timeline.tracks[0].id.clone();
+
+    doc.dispatch(Dispatch::new(Command::ClipAdd {
+        track,
+        source: ClipSource::Generator {
+            generator: Generator::Gradient {
+                from: "#000000".into(),
+                to: "#ffffff".into(),
+                angle: 45.0,
+            },
+        },
+        start: Time::ZERO,
+        duration: Time::from_seconds(1.0),
+    }))
+    .unwrap();
+    assert_eq!(doc.project().timeline.tracks[0].clips.len(), 1);
 }

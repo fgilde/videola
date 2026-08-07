@@ -344,9 +344,20 @@ fn every_command_undoes_to_the_exact_prior_state() {
             media: media.clone(),
         },
     ];
-    // Guards the table itself: a command variant added later without a matching entry here would
-    // otherwise silently keep passing.
-    assert_eq!(commands.len(), ALL_COMMAND_LABELS.len());
+    // Guards the table itself: comparing lengths alone would still pass if a duplicate entry
+    // stood in for a missing variant, so this compares the actual label *sets* — a dummy id is
+    // enough since `.label()` never looks at the payload.
+    let dummy_track = TrackId::from("trk_dummy".to_string());
+    let dummy_clip = ClipId::from("clp_dummy".to_string());
+    let dummy_media = MediaId::from("med_dummy".to_string());
+    let mut produced: Vec<&str> = commands
+        .iter()
+        .map(|build| build(&dummy_track, &dummy_track, &dummy_clip, &dummy_media).label())
+        .collect();
+    produced.sort_unstable();
+    let mut expected: Vec<&str> = ALL_COMMAND_LABELS.to_vec();
+    expected.sort_unstable();
+    assert_eq!(produced, expected);
 
     for build in commands {
         let (mut doc, track, other_track, clip, media) = undo_coverage_fixture();

@@ -41,7 +41,7 @@
   "error.openFailed": "Projekt konnte nicht geöffnet werden: {reason}",
   "error.saveFailed": "Projekt konnte nicht gespeichert werden: {reason}",
   "error.actionFailed": "Aktion fehlgeschlagen: {reason}",
-  "error.unsupportedMedia": "Dieser Dateityp wird nicht unterstützt: {mime}",
+  "error.unsupportedMedia": "Dieser Dateityp wird nicht unterstützt.",
   "warning.missingMedia": "{count} Medium fehlt im Projekt | {count} Medien fehlen im Projekt",
   "empty.noTracks": "Noch keine Spuren. Ziehe Medien hierher, um anzufangen."
 }
