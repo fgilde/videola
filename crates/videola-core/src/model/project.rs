@@ -72,6 +72,7 @@ impl Project {
     // value (e.g. i64::MAX), which Clip::end()/out_point() would then add unchecked. The loader
     // calls this once after parsing so nothing downstream has to re-check either.
     pub fn normalize(&mut self) -> Result<()> {
+        rate_bounded(self.settings.fps)?;
         normalize_timeline(&mut self.timeline, 0)?;
         normalize_effects(&mut self.master.effects)?;
         normalize_markers(&self.markers)?;
@@ -156,6 +157,9 @@ fn normalize_library(library: &[MediaAsset]) -> Result<()> {
         if let Some(duration) = asset.duration {
             bounded(duration)?;
         }
+        if let Some(fps) = asset.fps {
+            rate_bounded(fps)?;
+        }
     }
     Ok(())
 }
@@ -168,6 +172,29 @@ pub(crate) fn bounded(time: Time) -> Result<()> {
         Err(CoreError::InvalidArgument("time value out of range".into()))
     } else {
         Ok(())
+    }
+}
+
+// The `Rate` equivalent of `bounded`: `settings.fps` and every `MediaAsset.fps` cross the same
+// untrusted-JSON boundary, and a zero denominator or numerator turns straight into a division by
+// zero in `Time::from_frames`/`to_frame`. 1 fps is the floor because anything slower makes a
+// nominal frame count meaningless (and rounds to zero, which is the same bug wearing a costume);
+// 1000 fps covers every real high-speed camera in use today while keeping `from_frames` far from
+// overflowing `i64` flicks.
+const MIN_REASONABLE_FPS: f64 = 1.0;
+const MAX_REASONABLE_FPS: f64 = 1000.0;
+
+pub(crate) fn rate_bounded(rate: Rate) -> Result<()> {
+    if rate.numerator == 0 || rate.denominator == 0 {
+        return Err(CoreError::InvalidArgument(
+            "rate must have a non-zero numerator and denominator".into(),
+        ));
+    }
+    match rate.as_f64() {
+        Some(fps) if (MIN_REASONABLE_FPS..=MAX_REASONABLE_FPS).contains(&fps) => Ok(()),
+        _ => Err(CoreError::InvalidArgument(
+            "rate out of reasonable range".into(),
+        )),
     }
 }
 
@@ -228,7 +255,9 @@ impl Default for MasterSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Interp, Keyframe, MediaId, ParamValue, Time, TrackKind};
+    use crate::model::{
+        Interp, Keyframe, MediaAsset, MediaId, MediaKind, ParamValue, Time, TrackKind,
+    };
 
     #[test]
     fn default_project_has_no_tracks_and_sane_settings() {
@@ -408,6 +437,67 @@ mod tests {
         p.timeline.tracks.push(track);
 
         assert!(p.normalize().is_ok());
+    }
+
+    fn project_json_with_fps(numerator: u32, denominator: u32) -> String {
+        format!(
+            r##"{{
+                "schemaVersion": 1,
+                "meta": {{"id":"prj_1","title":"T","tags":[]}},
+                "settings": {{"width":1920,"height":1080,
+                             "fps":{{"numerator":{numerator},"denominator":{denominator}}},
+                             "sampleRate":48000,"colorSpace":"srgb","background":"#000000"}},
+                "timeline": {{"tracks":[]}},
+                "markers": [],
+                "master": {{"volume":1.0,"effects":[]}}
+            }}"##
+        )
+    }
+
+    #[test]
+    fn a_zero_denominator_fps_fails_to_load() {
+        let mut p: Project = serde_json::from_str(&project_json_with_fps(30, 0)).unwrap();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_zero_numerator_fps_fails_to_load() {
+        let mut p: Project = serde_json::from_str(&project_json_with_fps(0, 1)).unwrap();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_sub_one_fps_rate_fails_to_load() {
+        let mut p: Project = serde_json::from_str(&project_json_with_fps(1, 3)).unwrap();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn ntsc_rates_still_load() {
+        for (numerator, denominator) in [(30_000, 1001), (24_000, 1001), (60_000, 1001)] {
+            let mut p: Project =
+                serde_json::from_str(&project_json_with_fps(numerator, denominator)).unwrap();
+            assert!(
+                p.normalize().is_ok(),
+                "{numerator}/{denominator} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn a_media_assets_bad_fps_is_caught_too() {
+        let mut p = Project::default();
+        let mut asset = MediaAsset::new(
+            MediaId::from("med_x".to_string()),
+            "clip.mp4".into(),
+            "video/mp4".into(),
+            MediaKind::Video,
+            10,
+        );
+        asset.fps = Some(Rate::new(30, 0));
+        p.library.push(asset);
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
     }
 
     #[test]

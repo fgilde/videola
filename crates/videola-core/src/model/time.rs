@@ -36,12 +36,24 @@ impl Time {
         self.0 as f64 / FLICKS_PER_SECOND as f64
     }
 
-    pub fn from_frames(frame: i64, rate: Rate) -> Self {
-        Self(frame * FLICKS_PER_SECOND * rate.denominator as i64 / rate.numerator as i64)
+    // `rate` can come straight from `Rate::new`, not just from a validated project (see
+    // `Project::normalize`'s `rate_bounded`), so `numerator == 0` here would panic on integer
+    // division rather than merely misbehave. `None` pushes that choice back to the caller instead
+    // of picking a fallback value on their behalf.
+    pub fn from_frames(frame: i64, rate: Rate) -> Option<Self> {
+        if rate.numerator == 0 {
+            return None;
+        }
+        Some(Self(
+            frame * FLICKS_PER_SECOND * rate.denominator as i64 / rate.numerator as i64,
+        ))
     }
 
-    pub fn to_frame(self, rate: Rate) -> i64 {
-        self.0 * rate.numerator as i64 / (FLICKS_PER_SECOND * rate.denominator as i64)
+    pub fn to_frame(self, rate: Rate) -> Option<i64> {
+        if rate.denominator == 0 {
+            return None;
+        }
+        Some(self.0 * rate.numerator as i64 / (FLICKS_PER_SECOND * rate.denominator as i64))
     }
 
     pub fn max(self, other: Time) -> Time {
@@ -98,8 +110,15 @@ impl Rate {
         Self::new(fps, 1)
     }
 
-    pub fn as_f64(self) -> f64 {
-        self.numerator as f64 / self.denominator as f64
+    // Float division by zero would not panic here, only silently yield `inf`/`NaN` that then
+    // propagates into every downstream computation (timecode formatting, playback speed). `None`
+    // makes that failure visible at the point it happens instead of several calls downstream.
+    pub fn as_f64(self) -> Option<f64> {
+        if self.denominator == 0 {
+            None
+        } else {
+            Some(self.numerator as f64 / self.denominator as f64)
+        }
     }
 }
 
@@ -118,8 +137,8 @@ mod tests {
         for fps in [24u32, 25, 30, 48, 50, 60, 90, 100, 120] {
             let rate = Rate::from_fps(fps);
             for frame in [0i64, 1, 7, 1000, 123_456] {
-                let t = Time::from_frames(frame, rate);
-                assert_eq!(t.to_frame(rate), frame, "fps={fps} frame={frame}");
+                let t = Time::from_frames(frame, rate).unwrap();
+                assert_eq!(t.to_frame(rate).unwrap(), frame, "fps={fps} frame={frame}");
             }
         }
     }
@@ -127,8 +146,24 @@ mod tests {
     #[test]
     fn ntsc_rate_stays_exact() {
         let rate = Rate::new(30_000, 1001);
-        let t = Time::from_frames(90_000, rate);
-        assert_eq!(t.to_frame(rate), 90_000);
+        let t = Time::from_frames(90_000, rate).unwrap();
+        assert_eq!(t.to_frame(rate).unwrap(), 90_000);
+    }
+
+    #[test]
+    fn from_frames_rejects_a_zero_numerator() {
+        assert_eq!(Time::from_frames(10, Rate::new(0, 1)), None);
+    }
+
+    #[test]
+    fn to_frame_rejects_a_zero_denominator() {
+        assert_eq!(Time::ZERO.to_frame(Rate::new(30, 0)), None);
+    }
+
+    #[test]
+    fn as_f64_rejects_a_zero_denominator() {
+        assert_eq!(Rate::new(30, 0).as_f64(), None);
+        assert_eq!(Rate::new(30, 1).as_f64(), Some(30.0));
     }
 
     #[test]
