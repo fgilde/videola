@@ -97,6 +97,8 @@ videola/
 
 ### Task 1: Workspace und Kern-Grundtypen
 
+**Status: erledigt** — Commit `2d8da9b`, 7/7 Tests grün, clippy und fmt clean, Review ✅.
+
 **Files:**
 - Create: `Cargo.toml`, `rust-toolchain.toml`, `.editorconfig`
 - Create: `crates/videola-core/Cargo.toml`, `crates/videola-core/src/lib.rs`
@@ -473,7 +475,7 @@ Frame- und Sample-Rechnung ohne Rundungsdrift bleibt."
 
 **Interfaces:**
 - Consumes: `Time`, `Rate`, `ProjectId`, `TrackId`, `MarkerId` (Task 1)
-- Produces: `Project { schema_version, meta, settings, timeline, markers, master, extra }`, `ProjectMeta`, `ProjectSettings`, `Timeline { tracks }`, `Track { id, kind, name, color_hex, height, locked, hidden, muted, solo, volume, pan, clips, effects, extra }`, `TrackKind`, `Marker`, `MasterSettings`. `Project::default()`, `Project::track(&TrackId)`, `Project::track_mut(&TrackId)`, `Project::track_index(&TrackId)`, `Timeline::duration()`.
+- Produces: `Project { schema_version, meta, settings, timeline, markers, master, extra }`, `ProjectMeta`, `ProjectSettings`, `Timeline { tracks }`, `Track { id, kind, name, color_hex, height, locked, hidden, muted, solo, volume, pan, clips, effects, extra }`, `TrackKind`, `Marker`, `MasterSettings`. `Project::default()`, `Project::track(&TrackId)`, `Project::track_mut(&TrackId)`, `Project::track_index(&TrackId)`, `Project::normalize()`, `Timeline::duration()`.
 
 - [ ] **Step 1: Failing tests schreiben**
 
@@ -838,7 +840,9 @@ git commit -m "feat(core): Projekt-, Timeline- und Track-Modell"
 
 **Interfaces:**
 - Consumes: `Time`, `Rate`, `ClipId`, `MediaId`, `Effect`, `Transition`, `Keyframe`
-- Produces: `Clip { id, label, group_id, source, start, duration, in_point, out_point, speed, transform, blend, fades, volume, pan, effects, transition_in, transition_out, keyframes, extra }`, `ClipSource` (Media/Generator/Compound), `Generator`, `Speed`, `Transform`, `Fades`, `BlendMode`. `Clip::end()`, `Clip::contains(Time)`, `Clip::source_time_at(Time)`, `Clip::new_media(MediaId, Time, Time)`.
+- Produces: `Clip { id, label, group_id, source, start, duration, in_point, speed, transform, blend, fades, volume, pan, effects, transition_in, transition_out, keyframes, extra }`, `ClipSource` (Media/Generator/Compound), `Generator`, `Speed`, `Transform`, `Fades`, `BlendMode`. `Clip::end()`, `Clip::contains(Time)`, `Clip::source_time_at(Time)`, `Clip::consumed_source()`, `Clip::out_point()`, `Clip::new_media(MediaId, Time, Time)`, `Clip::new_generator(Generator, Time, Time)`.
+
+**Korrektur nach Review:** `out_point` ist **kein Feld**, sondern die abgeleitete Methode `out_point() = in_point + consumed_source()`. Als Feld war es redundanter Zustand, den `source_time_at` gar nicht liest — bei einer Geschwindigkeit ungleich 1.0 laufen Feld und tatsächlich verbrauchter Quellbereich nach dem ersten Trim auseinander, und der Renderer folgt dem einen, das Feld behauptet das andere. Abgeleitet kann es nicht driften.
 
 - [ ] **Step 1: Failing tests schreiben**
 
@@ -945,7 +949,6 @@ pub struct Clip {
     pub start: Time,
     pub duration: Time,
     pub in_point: Time,
-    pub out_point: Time,
     pub speed: Speed,
     pub transform: Transform,
     pub blend: BlendMode,
@@ -982,7 +985,6 @@ impl Clip {
             start,
             duration,
             in_point: Time::ZERO,
-            out_point: duration,
             speed: Speed::default(),
             transform: Transform::default(),
             blend: BlendMode::Normal,
@@ -1017,8 +1019,14 @@ impl Clip {
         })
     }
 
-    fn consumed_source(&self) -> Time {
-        Time::from_seconds(self.duration.as_seconds() * self.speed.rate as f64)
+    pub fn consumed_source(&self) -> Time {
+        Time::from_flicks(
+            (self.duration.as_flicks() as f64 * self.speed.rate as f64).round() as i64,
+        )
+    }
+
+    pub fn out_point(&self) -> Time {
+        self.in_point + self.consumed_source()
     }
 }
 
@@ -1139,7 +1147,9 @@ liest den Quellzeitpunkt vom Ende des verbrauchten Bereichs zurueck."
 
 **Interfaces:**
 - Consumes: `Time`
-- Produces: `ParamValue` (Float/Int/Bool/Color/Vec2/Choice), `ParamValue::lerp(&self, &Self, f32) -> Option<ParamValue>`, `Keyframe { time, value, interp, handle_in, handle_out }`, `Interp` (Linear/Hold/Ease/Bezier), `evaluate(&[Keyframe], Time) -> Option<ParamValue>`.
+- Produces: `ParamValue` (Float/Int/Bool/Color/Vec2/Choice), `ParamValue::lerp(&self, &Self, f32) -> Option<ParamValue>`, `Keyframe { time, value, interp, handle_in, handle_out }`, `Interp` (Linear/Hold/Ease/Bezier), `evaluate(&[Keyframe], Time) -> Option<ParamValue>`, `sort_track(&mut Vec<Keyframe>)`.
+
+**Ergänzung nach Review:** `evaluate` sucht binär und setzt eine nach `time` sortierte Spur voraus. Keyframe-Spuren kommen aus deserialisiertem Projekt-JSON, also von einer Vertrauensgrenze — eine unsortierte Spur liefert sonst lautlos falsche Werte für jeden Frame. Deshalb `sort_track` plus `Project::normalize()` (Task 2), das beim Laden aufgerufen wird (Task 11).
 
 - [ ] **Step 1: Failing tests schreiben**
 
@@ -2412,7 +2422,7 @@ fn adding_a_clip_places_it_on_the_track() {
     assert_eq!(clips.len(), 1);
     assert_eq!(clips[0].start.as_seconds(), 1.0);
     assert_eq!(clips[0].duration.as_seconds(), 4.0);
-    assert_eq!(clips[0].out_point.as_seconds(), 4.0);
+    assert_eq!(clips[0].out_point().as_seconds(), 4.0);
 }
 
 #[test]
@@ -2500,7 +2510,7 @@ fn trimming_the_end_only_changes_duration_and_out_point() {
     let c = &doc.project().timeline.tracks[0].clips[0];
     assert_eq!(c.start.as_seconds(), 2.0);
     assert_eq!(c.duration.as_seconds(), 3.0);
-    assert_eq!(c.out_point.as_seconds(), 3.0);
+    assert_eq!(c.out_point().as_seconds(), 3.0);
 }
 
 #[test]
@@ -2527,7 +2537,7 @@ fn split_produces_two_adjacent_clips_with_continuous_source_range() {
     assert_eq!(clips.len(), 2);
     assert_eq!(clips[0].id, clip);
     assert_eq!(clips[0].duration.as_seconds(), 1.5);
-    assert_eq!(clips[0].out_point.as_seconds(), 1.5);
+    assert_eq!(clips[0].out_point().as_seconds(), 1.5);
     assert_eq!(clips[1].start.as_seconds(), 1.5);
     assert_eq!(clips[1].duration.as_seconds(), 2.5);
     assert_eq!(clips[1].in_point.as_seconds(), 1.5);
@@ -2695,19 +2705,13 @@ fn move_clip(
 fn trim(target: &mut Project, clip: &ClipId, edge: TrimEdge, delta: Time) -> Result<()> {
     let (track, index) = find_clip_mut(target, clip)?;
     let current = &track.clips[index];
-    let (start, duration, in_point, out_point) = match edge {
+    let (start, duration, in_point) = match edge {
         TrimEdge::Start => (
             current.start + delta,
             current.duration - delta,
             current.in_point + delta,
-            current.out_point,
         ),
-        TrimEdge::End => (
-            current.start,
-            current.duration + delta,
-            current.in_point,
-            current.out_point + delta,
-        ),
+        TrimEdge::End => (current.start, current.duration + delta, current.in_point),
     };
     if duration.as_flicks() <= 0 {
         return Err(CoreError::InvalidArgument("trim would empty the clip".into()));
@@ -2719,7 +2723,6 @@ fn trim(target: &mut Project, clip: &ClipId, edge: TrimEdge, delta: Time) -> Res
     clip.start = start;
     clip.duration = duration;
     clip.in_point = in_point;
-    clip.out_point = out_point;
     Ok(())
 }
 
@@ -2741,7 +2744,6 @@ fn split(target: &mut Project, clip: &ClipId, at: Time) -> Result<()> {
 
     let left = &mut track.clips[index];
     left.duration = consumed;
-    left.out_point = left.in_point + source_offset;
     left.transition_out = None;
 
     track.clips.insert(index + 1, right);
@@ -3779,7 +3781,8 @@ pub fn load(raw: &str) -> Result<(Project, Vec<LoadWarning>)> {
         return Err(CoreError::UnsupportedSchema(found));
     }
     let warnings = upgrade(&mut document, found);
-    let project: Project = serde_json::from_value(document)?;
+    let mut project: Project = serde_json::from_value(document)?;
+    project.normalize();
     Ok((project, warnings))
 }
 
@@ -3801,6 +3804,8 @@ fn upgrade(document: &mut Value, from: u32) -> Vec<LoadWarning> {
     vec![LoadWarning::Migrated { from, to: SCHEMA_VERSION }]
 }
 ```
+
+`load` ist die Deserialisierungsgrenze und ruft deshalb `Project::normalize()` — danach sind alle Keyframe-Spuren nach Zeit sortiert, was `evaluate` voraussetzt. Ergänze dafür einen Test: ein Projekt-JSON mit absichtlich verdrehter Keyframe-Spur wird geladen und die Spur ist danach sortiert.
 
 `upgrade` hat mit `SCHEMA_VERSION == 1` noch keine Schritte zu tun. Ab Version 2 kommt pro Sprung eine Funktion `fn v1_to_v2(document: &mut Value)` hinzu, die `upgrade` in Reihenfolge aufruft — die Signatur steht deshalb jetzt schon.
 
