@@ -1,0 +1,18 @@
+[package]
+name = "videola-core-wasm"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+videola-core = { path = "../videola-core" }
+wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
+serde = { version = "1.0.229", features = ["derive"] }
+
+[lints]
+workspace = true

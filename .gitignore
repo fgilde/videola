@@ -17,6 +17,7 @@ src-tauri/target
 
 # WASM build output
 **/pkg
+packages/core/src/wasm
 
 # Local
 .env
