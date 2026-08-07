@@ -104,9 +104,7 @@ describe("importFile", () => {
     const doc = await openDocument(fake.log);
     const audioOnly: MediaProbe = { duration: secondsToTime(1), audio: fullProbe.audio };
 
-    await expect(importFile(videoFile(), doc, probeOf(audioOnly))).rejects.toThrow(
-      /video track/,
-    );
+    await expect(importFile(videoFile(), doc, probeOf(audioOnly))).rejects.toThrow("error.mediaNoVideoTrack");
 
     expect(fake.log).toEqual([]);
     expect(doc.state.library).toHaveLength(0);
@@ -120,7 +118,9 @@ describe("importFile", () => {
       video: { width: 1920, height: 1080, fps: { numerator: 30, denominator: 0 } },
     };
 
-    await expect(importFile(videoFile(), doc, probeOf(broken))).rejects.toThrow(RangeError);
+    await expect(importFile(videoFile(), doc, probeOf(broken))).rejects.toThrow(
+      "error.mediaMetadata",
+    );
 
     expect(fake.log).toEqual([]);
   });
@@ -130,7 +130,9 @@ describe("importFile", () => {
     const doc = await openDocument(fake.log);
     const tooLong: MediaProbe = { ...fullProbe, duration: secondsToTime(25 * 60 * 60) };
 
-    await expect(importFile(videoFile(), doc, probeOf(tooLong))).rejects.toThrow(RangeError);
+    await expect(importFile(videoFile(), doc, probeOf(tooLong))).rejects.toThrow(
+      "error.mediaMetadata",
+    );
 
     expect(fake.log).toEqual([]);
   });

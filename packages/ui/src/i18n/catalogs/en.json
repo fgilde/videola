@@ -42,6 +42,12 @@
   "error.saveFailed": "Could not save the project: {reason}",
   "error.actionFailed": "Action failed: {reason}",
   "error.unsupportedMedia": "This file type is not supported.",
+  "error.mediaNoVideoTrack": "This file has no video track.",
+  "error.mediaNoAudioTrack": "This file has no audio track.",
+  "error.mediaMetadata": "This file's technical data is unusable.",
+  "error.mediaHashInvalid": "This medium's identifier is malformed.",
+  "error.mediaStoreUnavailable": "Media storage is unavailable.",
+  "error.mediaTooLarge": "This project's media exceed the size a project file can hold.",
   "warning.missingMedia": "{count} medium is missing from the project | {count} media are missing from the project",
   "empty.noTracks": "No tracks yet. Create the first one with “Add track” in the top bar."
 }

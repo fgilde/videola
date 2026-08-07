@@ -54,8 +54,8 @@ describe("OPFS media store", () => {
   });
 
   it("rejects a hash that is not a canonical content hash", async () => {
-    await expect(putMedia("../escape", bytes(1))).rejects.toThrow(TypeError);
-    await expect(hasMedia("ABCD")).rejects.toThrow(TypeError);
+    await expect(putMedia("../escape", bytes(1))).rejects.toThrow("error.mediaHashInvalid");
+    await expect(hasMedia("ABCD")).rejects.toThrow("error.mediaHashInvalid");
   });
 
   it("surfaces a quota failure instead of losing the write silently", async () => {

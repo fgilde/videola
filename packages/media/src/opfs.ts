@@ -100,7 +100,7 @@ async function mediaFile(hash: string): Promise<File | undefined> {
 
 async function fileHandle(hash: string, create: boolean): Promise<FileSystemFileHandle> {
   const dir = await mediaDir(create);
-  if (dir === undefined) throw new Error("media directory is unavailable");
+  if (dir === undefined) throw new Error("error.mediaStoreUnavailable");
   return dir.getFileHandle(entryName(hash), { create });
 }
 
@@ -111,7 +111,7 @@ async function mediaDir(create: boolean): Promise<FileSystemDirectoryHandle | un
 
 function entryName(hash: string): string {
   if (!CONTENT_HASH.test(hash)) {
-    throw new TypeError("media hash must be 64 lowercase hex characters");
+    throw new TypeError("error.mediaHashInvalid");
   }
   return hash;
 }
