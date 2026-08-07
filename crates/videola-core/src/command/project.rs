@@ -1,5 +1,8 @@
 use super::{finite, MAX_VOLUME};
-use crate::model::{Project, ProjectSettings, Track, TrackId, TrackKind};
+use crate::model::{
+    Clip, ClipSource, MediaAsset, MediaId, Project, ProjectSettings, Timeline, Track, TrackId,
+    TrackKind,
+};
 use crate::{CoreError, Result};
 
 pub(super) fn set_settings(target: &mut Project, settings: &ProjectSettings) -> Result<()> {
@@ -97,4 +100,43 @@ fn track_mut<'p>(target: &'p mut Project, track: &TrackId) -> Result<&'p mut Tra
     target
         .track_mut(track)
         .ok_or_else(|| CoreError::TrackNotFound(track.clone()))
+}
+
+pub(super) fn import_media(target: &mut Project, asset: &MediaAsset) -> Result<()> {
+    if !target
+        .library
+        .iter()
+        .any(|existing| existing.id == asset.id)
+    {
+        target.library.push(asset.clone());
+    }
+    Ok(())
+}
+
+pub(super) fn remove_media(target: &mut Project, media: &MediaId) -> Result<()> {
+    let before = target.library.len();
+    target.library.retain(|asset| &asset.id != media);
+    if target.library.len() == before {
+        return Err(CoreError::MediaNotAvailable(media.clone()));
+    }
+    remove_clips_using(&mut target.timeline, media);
+    Ok(())
+}
+
+// A clip using the removed medium can sit inside a Compound clip's own nested timeline, not just
+// on a top-level track; leaving it there would be the same dangling reference this command exists
+// to prevent, so the walk recurses the same way Project::normalize already does.
+fn remove_clips_using(timeline: &mut Timeline, media: &MediaId) {
+    for track in &mut timeline.tracks {
+        track.clips.retain(|clip| !uses_media(clip, media));
+        for clip in &mut track.clips {
+            if let ClipSource::Compound { timeline: nested } = &mut clip.source {
+                remove_clips_using(nested, media);
+            }
+        }
+    }
+}
+
+fn uses_media(clip: &Clip, media: &MediaId) -> bool {
+    matches!(&clip.source, ClipSource::Media { media: used } if used == media)
 }

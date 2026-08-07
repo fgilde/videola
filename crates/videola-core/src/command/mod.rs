@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::model::{
-    ClipId, ClipSource, ParamValue, Project, ProjectSettings, Time, TrackId, TrackKind,
+    ClipId, ClipSource, MediaAsset, MediaId, ParamValue, Project, ProjectSettings, Time, TrackId,
+    TrackKind,
 };
 use crate::Result;
 
@@ -88,6 +89,11 @@ pub enum Command {
         key: String,
         value: ParamValue,
     },
+
+    #[serde(rename = "media.import")]
+    MediaImport { asset: MediaAsset },
+    #[serde(rename = "media.remove")]
+    MediaRemove { media: MediaId },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -147,6 +153,8 @@ impl Command {
                 key,
                 value,
             } => clip::set_effect_param(target, clip, effect_type, key, value.clone()),
+            Self::MediaImport { asset } => project::import_media(target, asset),
+            Self::MediaRemove { media } => project::remove_media(target, media),
         }
     }
 
@@ -170,6 +178,8 @@ impl Command {
             Self::ClipSetVolume { .. } => "cmd.clip.setVolume",
             Self::EffectAdd { .. } => "cmd.effect.add",
             Self::EffectSetParam { .. } => "cmd.effect.setParam",
+            Self::MediaImport { .. } => "cmd.media.import",
+            Self::MediaRemove { .. } => "cmd.media.remove",
         }
     }
 }
