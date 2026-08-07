@@ -21,7 +21,7 @@ aus drei.
 | `media.*` | `import`, `remove` |
 
 `track.setFlags` nimmt jede Marke als nullbaren Wert, damit ein Command eine beliebige Teilmenge
-ändern kann; `null` heißt „unverändert lassen". Rückwärtslauf ist `clip.setSpeed` mit
+ändern kann; `null` heißt „unverändert lassen“. Rückwärtslauf ist `clip.setSpeed` mit
 `reverse: true`, kein eigener Clip-Typ. Die beiden `effect.*`-Commands pflegen nur das Modell;
 gerendert wird nichts. `media.remove` entfernt auch jeden Clip, der das Asset benutzt, und steigt
 dafür in verschachtelte Compound-Timelines ab.

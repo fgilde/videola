@@ -50,8 +50,8 @@ features:
     details: >
       ts-rs leitet die TypeScript-Typen aus den Rust-Typen ab, und die CI schlägt an, sobald das
       eingecheckte Ergebnis nicht mehr zur Quelle passt.
-    link: /de/guide/architecture
-    linkText: Die Fassade
+    link: /de/guide/architecture#das-modell-lebt-in-rust
+    linkText: Das Modell lebt in Rust
   - title: Web, Desktop und Docker
     details: >
       Eine Codebasis liefert die Vite-Web-App, eine Tauri-Hülle mit Installern für Windows, Linux
