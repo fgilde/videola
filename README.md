@@ -42,6 +42,16 @@ pnpm build
 If `wasm-opt` crashes on your machine, run the `wasm` script from `package.json` directly with
 `--no-opt` added. That changes the output size only. CI builds without the flag.
 
+## Self-hosting
+
+```
+docker build -f docker/Dockerfile -t videola:dev .
+docker run --rm -p 8080:80 videola:dev
+```
+
+The image serves the web app as static files and nothing else — there is no API, no MCP endpoint and
+no render worker in it yet.
+
 ## Layout
 
 ```

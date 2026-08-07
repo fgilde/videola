@@ -1,0 +1,11 @@
+.git
+target
+**/target
+node_modules
+**/node_modules
+dist
+**/dist
+packages/core/src/wasm
+.superpowers
+docs
+apps/desktop/src-tauri/gen
