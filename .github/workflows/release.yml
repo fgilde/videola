@@ -23,15 +23,23 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     outputs:
+      macos: ${{ steps.probe.outputs.macos }}
       android: ${{ steps.probe.outputs.android }}
       ios: ${{ steps.probe.outputs.ios }}
     steps:
       - id: probe
         env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
           IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
           IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
         run: |
+          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ]; then
+            echo "macos=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "macos=no" >> "$GITHUB_OUTPUT"
+          fi
           if [ -n "$ANDROID_KEYSTORE" ]; then
             echo "android=yes" >> "$GITHUB_OUTPUT"
           else
@@ -82,7 +90,7 @@ jobs:
           path: packages/core/src/wasm
 
   desktop:
-    needs: wasm
+    needs: [gate, wasm]
     strategy:
       # Ein gescheiterter macOS-Build soll die fertigen Windows- und
       # Linux-Installer nicht mitnehmen.
@@ -122,22 +130,47 @@ jobs:
         with:
           name: wasm
           path: packages/core/src/wasm
+      - name: WASM-Artefakt vorhanden
+        shell: bash
+        run: test -f packages/core/src/wasm/videola_core.js || (echo "wasm-Artefakt fehlt in packages/core/src/wasm" && exit 1)
       - run: pnpm install --frozen-lockfile
-      - uses: tauri-apps/tauri-action@v1
+      # Eine leere Apple-Variable ist nicht dasselbe wie eine fehlende: Tauri
+      # prueft mit var_os nur auf Existenz und laeuft dann in den Import eines
+      # leeren Zertifikats, nach zwanzig Minuten Kompilierung. Die Variablen
+      # entstehen darum erst hier und nur, wenn es wirklich ein Zertifikat gibt
+      # -- ohne eines bleibt das DMG unsigniert, wie im README zugesagt.
+      - name: Apple-Signatur bereitstellen
+        if: runner.os == 'macOS' && needs.gate.outputs.macos == 'yes'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!name}" ] || continue
+            printf '%s<<APPLE_VALUE\n%s\nAPPLE_VALUE\n' "$name" "${!name}" >> "$GITHUB_ENV"
+          done
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: Videola ${{ github.ref_name }}
           releaseDraft: true
           prerelease: false
+          # Das Draft-Release wird von genau einem Job angelegt und danach nicht
+          # mehr aktualisiert (tauri-action laesst Drafts absichtlich in Ruhe),
+          # also muss der Text hier stehen statt in einem spaeteren Job.
+          releaseBody: |
+            This build packages the app shell — no timeline, no playback, no effects, no export.
+
+            The macOS DMG is unsigned unless an Apple certificate is configured, so Gatekeeper will block it.
+            Android and iOS assets are absent whenever their signing keys are: four assets is the expected
+            result, not a failed release.
           args: --bundles ${{ matrix.bundles }}
 
   android:
@@ -179,6 +212,8 @@ jobs:
         with:
           name: wasm
           path: packages/core/src/wasm
+      - name: WASM-Artefakt vorhanden
+        run: test -f packages/core/src/wasm/videola_core.js || (echo "wasm-Artefakt fehlt in packages/core/src/wasm" && exit 1)
       - run: pnpm install --frozen-lockfile
       - name: Keystore entpacken
         env:
@@ -250,6 +285,8 @@ jobs:
         with:
           name: wasm
           path: packages/core/src/wasm
+      - name: WASM-Artefakt vorhanden
+        run: test -f packages/core/src/wasm/videola_core.js || (echo "wasm-Artefakt fehlt in packages/core/src/wasm" && exit 1)
       - run: pnpm install --frozen-lockfile
       - name: Signatur einrichten
         env:
@@ -291,7 +328,9 @@ jobs:
   summary:
     # Ohne always() fehlt die Uebersicht genau dann, wenn ein Ziel gescheitert ist.
     if: always()
-    needs: [docker, wasm, desktop, android, ios]
+    # gate gehoert dazu, sonst zeigen android und ios `skipped` und die Tabelle
+    # kann nicht auf die Ursache zeigen.
+    needs: [gate, docker, wasm, desktop, android, ios]
     runs-on: ubuntu-latest
     steps:
       - name: Ergebnis zusammenfassen
@@ -303,6 +342,7 @@ jobs:
             echo
             echo "| Ziel | Ergebnis |"
             echo "|---|---|"
+            echo "| Signatur-Secrets pruefen | ${{ needs.gate.result }} |"
             echo "| Docker (ghcr.io) | ${{ needs.docker.result }} |"
             echo "| WASM-Kern | ${{ needs.wasm.result }} |"
             echo "| Desktop (Windows, Linux, macOS) | ${{ needs.desktop.result }} |"
