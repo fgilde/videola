@@ -147,6 +147,21 @@ Die Reihenfolge ist bindend: erst OPFS, dann Dispatch. Andernfalls kennt der Ker
 
 Tests: eine kleine Datei ergibt dieselbe Id wie `MediaId::from_bytes` in Rust über dieselben Bytes — dieser Test ist der wichtigste des Tasks und muss die Rust-Seite tatsächlich befragen, nicht einen erwarteten Wert festhalten; Import derselben Datei zweimal ergibt eine Bibliothek mit einem Eintrag; eine Datei ohne Videospur wird abgewiesen, bevor ein Command fliegt.
 
+### Task 2b: Speichern mit Medien aus OPFS
+
+**Nachträglich ergänzt.** Die OPFS-Abweichung hat die Medien aus dem WASM-Speicher geholt, aber der `.videola`-Writer holt sie weiter von dort: `inner.rs::save` reicht `&self.media` an `writer::write`, und `format/writer.rs` ruft für jeden Bibliothekseintrag `media.read(&asset.id)?`. Nach einem Import über OPFS ist dieser Speicher leer, und `save` wirft `media not available`. Ein Meilenstein, der importieren aber nicht speichern kann, ist kaputt — und kein anderer Task deckte das ab.
+
+**Files:** `crates/videola-core-wasm/src/inner.rs`, `crates/videola-core-wasm/src/lib.rs`, `packages/core/src/document.ts`, `packages/core/src/backend.ts`, `packages/media/src/index.ts`, plus Tests
+
+**Interfaces:**
+- Produces: `WasmDocument.save` nimmt zusätzlich eine Abbildung von Medien-Id auf Bytes; `VideolaDocument.save(options, media: Map<string, Uint8Array>)`; eine Hilfsfunktion in `@videola/media`, die für ein Projekt die benötigten Einträge aus OPFS sammelt
+
+Der einfache Weg, der für M1 trägt: JS sammelt vor dem Speichern die Bytes der Bibliothekseinträge aus OPFS und übergibt sie. Der Kern bleibt unverändert, der Writer bekommt einen gefüllten Store.
+
+**Das hebt die OPFS-Ersparnis beim Speichern wieder auf** — für die Dauer des Schreibens liegt das gesamte Projektmaterial im Speicher. Setz dafür einen `ponytail:`-Marker, der das benennt und den Ausweg nennt: ein streamender Writer, der Medieneinträge einzeln aus einem `Blob` in das ZIP schiebt, statt sie als `Vec<u8>` entgegenzunehmen. Und setz eine Obergrenze, die laut scheitert statt den Speicher zu sprengen — `MAX_TOTAL_MEDIA_BYTES` aus dem Reader ist die passende Zahl.
+
+Tests: importieren, speichern, wieder öffnen, und der Clip zeigt weiter auf dasselbe Medium — der Roundtrip über OPFS, der heute bricht. Ein Projekt, dessen Medien die Obergrenze überschreiten, scheitert mit einem erkennbaren Fehler statt mit einem Absturz.
+
 ### Task 3: Demuxer
 
 **Files:** `packages/engine/package.json`, `packages/engine/src/decode/demuxer.ts`, Tests
