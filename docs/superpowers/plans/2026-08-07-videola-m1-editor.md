@@ -119,7 +119,11 @@ Für die Oberflächenkomponenten nennt der Plan die Schnittstelle, das Verhalten
 **Files:** `packages/media/package.json`, `packages/media/src/opfs.ts`, `packages/media/src/opfs.test.ts`
 
 **Interfaces:**
-- Produces: `putMedia(hash: string, bytes: Uint8Array): Promise<void>`, `getMedia(hash: string): Promise<Uint8Array | undefined>`, `hasMedia(hash: string): Promise<boolean>`, `deleteMedia(hash: string)`, `mediaSize(hash: string): Promise<number | undefined>`, `storageEstimate(): Promise<{usage: number, quota: number}>`
+- Produces: `putMedia(hash: string, bytes: Uint8Array): Promise<void>`, `getMedia(hash: string): Promise<Uint8Array | undefined>`, **`mediaBlob(hash: string): Promise<File | undefined>`**, `hasMedia(hash: string): Promise<boolean>`, `deleteMedia(hash: string)`, `mediaSize(hash: string): Promise<number | undefined>`, `storageEstimate(): Promise<{usage: number, quota: number}>`
+
+`mediaBlob` ist der Weg, den alle späteren Tasks nehmen: ein `File` ist ein Griff auf die Datei, kein Abzug im Speicher. `getMedia` existiert für kleine Dateien und Tests — wer es auf Videomaterial anwendet, hat die OPFS-Abweichung wieder aufgehoben.
+
+**Folge, die dieser Plan zunächst übersehen hat:** M0 hielt in `packages/core/src/commands.test.ts` fest, dass `media.import` von JS aus unerreichbar sei, weil die WASM-Schicht die Bytes selbst hasht. Mit OPFS stimmt das nicht mehr — der Import läuft jetzt über `cmd.mediaImport`, und `mediaKind` muss aus `@videola/core` exportiert sein. Die Ausnahme in jenem Test entfällt.
 
 Die Ablage ist inhaltsadressiert und benutzt denselben Hash, den `MediaId` im Kern trägt — `med_` gefolgt von 64 Hex-Zeichen, wobei hier nur der Hex-Teil als Dateiname dient. Damit ist ein Medium in OPFS und im Projekt dieselbe Sache, und ein zweimal importiertes Video liegt einmal auf der Platte.
 
@@ -148,7 +152,9 @@ Tests: eine kleine Datei ergibt dieselbe Id wie `MediaId::from_bytes` in Rust ü
 **Files:** `packages/engine/package.json`, `packages/engine/src/decode/demuxer.ts`, Tests
 
 **Interfaces:**
-- Produces: `probe(bytes: Uint8Array): Promise<MediaInfo>` mit `MediaInfo { duration: Time, video?: VideoTrackInfo, audio?: AudioTrackInfo }`, `VideoTrackInfo { codec: string, width: number, height: number, fps: Rate, description?: Uint8Array }`, `AudioTrackInfo { codec: string, sampleRate: number, channels: number }`, und `readChunks(bytes, trackId, from: Time, to: Time): AsyncIterable<EncodedVideoChunk | EncodedAudioChunk>`
+- Produces: `probe(source: Blob): Promise<MediaInfo>` mit `MediaInfo { duration: Time, video?: VideoTrackInfo, audio?: AudioTrackInfo }`, `VideoTrackInfo { codec: string, width: number, height: number, fps: Rate, description?: Uint8Array }`, `AudioTrackInfo { codec: string, sampleRate: number, channels: number }`, und `readChunks(source: Blob, trackId, from: Time, to: Time): AsyncIterable<EncodedVideoChunk | EncodedAudioChunk>`
+
+**Korrektur nach Gruppe A:** Diese Signaturen hießen ursprünglich `probe(bytes: Uint8Array)`. Das war falsch und hätte die ganze Datei in den Speicher zurückgeholt — also genau das, wogegen die OPFS-Abweichung dieses Plans existiert. `Blob` ist auch das, was mediabunny über `BlobSource` ohnehin erwartet. Task 1 liefert dafür `mediaBlob(hash): Promise<File | undefined>` neben `getMedia`; benutze das und nicht `getMedia`.
 
 `mediabunny` ist die eine Abhängigkeit für Demux und später Mux. Prüfe die aktuelle API gegen ihre Dokumentation, bevor du schreibst — sie ist jung und der Plan darf hier nicht raten.
 
