@@ -9,6 +9,17 @@ const MEDIA_DIR = "media";
 // this string is interpolated straight into a filesystem path.
 const CONTENT_HASH = /^[0-9a-f]{64}$/;
 
+const ID_PREFIX = "med_";
+
+// A MediaId is the prefix plus the content hash (`import::describeAsset`). Anything else is a
+// library entry OPFS was never asked to hold -- a generator, or a project written by something
+// that made ids up -- and the caller has to cope with its absence rather than build a path out
+// of it.
+export function mediaHash(assetId: string): string | undefined {
+  const hash = assetId.startsWith(ID_PREFIX) ? assetId.slice(ID_PREFIX.length) : "";
+  return CONTENT_HASH.test(hash) ? hash : undefined;
+}
+
 export async function putMedia(
   hash: string,
   content: Uint8Array<ArrayBuffer> | Blob,

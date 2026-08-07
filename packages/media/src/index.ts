@@ -6,6 +6,7 @@ export {
   getMedia,
   hasMedia,
   mediaBlob,
+  mediaHash,
   mediaSize,
   putMedia,
   storageEstimate,
