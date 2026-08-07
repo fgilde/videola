@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
 import { SettingsMenu } from "./SettingsMenu";
+import wordmark from "./videola-wordmark.png";
 
 export interface TopBarActions {
   onNew?: () => void;
@@ -19,7 +20,7 @@ export function TopBar(actions: TopBarActions): ReactElement {
 
   return (
     <header className="v-topbar">
-      <span className="v-topbar__brand">{t("app.title")}</span>
+      <img className="v-topbar__brand" src={wordmark} alt={t("app.title")} />
       <button className="v-button" onClick={actions.onNew} disabled={!actions.onNew}>
         {t("action.new")}
       </button>

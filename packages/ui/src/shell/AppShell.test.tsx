@@ -24,7 +24,8 @@ describe("AppShell", () => {
 
   it("renders the title and the German action labels by default", () => {
     render(<AppShell>content</AppShell>);
-    expect(screen.getByText("Videola")).toBeTruthy();
+    // The brand is an image, so the product name has to survive as its accessible name.
+    expect(screen.getByRole("img", { name: "Videola" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Speichern" })).toBeTruthy();
   });
 

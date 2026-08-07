@@ -18,9 +18,17 @@
 }
 
 .v-topbar__brand {
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  /* 28px plus the padding matches the 32px button height, so the brand does not
+     grow the topbar row. */
+  height: 28px;
+  width: auto;
   flex-shrink: 0;
+  /* The wordmark carries its own near-black plate, which lands as a hard dark rectangle
+     in the light theme. Repeating the plate colour as a rounded chip makes that edge
+     deliberate instead of a seam. */
+  padding: 2px 6px;
+  background: #05060a;
+  border-radius: var(--v-radius-md);
 }
 
 .v-topbar__spacer {
