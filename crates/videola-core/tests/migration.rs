@@ -59,6 +59,35 @@ fn malformed_json_fails_loudly() {
 }
 
 #[test]
+fn a_float_schema_version_is_rejected_not_silently_treated_as_v1() {
+    let sneaky = MINIMAL_V1.replace("\"schemaVersion\": 1", "\"schemaVersion\": 99.0");
+    assert!(migrate::load(&sneaky).is_err());
+}
+
+#[test]
+fn a_string_schema_version_is_rejected() {
+    let sneaky = MINIMAL_V1.replace("\"schemaVersion\": 1", "\"schemaVersion\": \"99\"");
+    assert!(migrate::load(&sneaky).is_err());
+}
+
+#[test]
+fn well_formed_json_that_is_not_a_project_is_rejected_as_not_a_project() {
+    assert!(matches!(
+        migrate::load(r#"{"schemaVersion":1,"totally":"unrelated"}"#),
+        Err(CoreError::NotAProject(_))
+    ));
+}
+
+#[test]
+fn a_schema_version_beyond_u32_is_rejected_as_unsupported_not_wrapped_to_a_small_number() {
+    let sneaky = MINIMAL_V1.replace("\"schemaVersion\": 1", "\"schemaVersion\": 4294967296");
+    assert!(matches!(
+        migrate::load(&sneaky),
+        Err(CoreError::UnsupportedSchema(_))
+    ));
+}
+
+#[test]
 fn loading_sorts_an_out_of_order_keyframe_track() {
     let mut clip = Clip::new_media(
         MediaId::from("med_x".to_string()),

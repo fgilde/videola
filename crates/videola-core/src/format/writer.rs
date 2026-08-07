@@ -17,7 +17,11 @@ pub fn write<W: Write + Seek>(
     write_json(&mut archive, MANIFEST_ENTRY, &manifest(project, options))?;
     write_json(&mut archive, PROJECT_ENTRY, project)?;
     write_media(&mut archive, project, media)?;
-    archive.finish().map_err(archive_error)?;
+    // `finish()` hands back the inner writer; for a buffered sink (e.g. &mut BufWriter<File>)
+    // that buffer's tail is only guaranteed on disk once flushed, and a dropped `&mut` reference
+    // flushes nothing on its own.
+    let mut sink = archive.finish().map_err(archive_error)?;
+    sink.flush()?;
     Ok(())
 }
 
@@ -50,9 +54,16 @@ fn write_media<W: Write + Seek>(
     project: &Project,
     media: &dyn MediaStore,
 ) -> Result<()> {
+    // `library` is a plain Vec sourced from untrusted JSON, with no uniqueness invariant: two
+    // entries with the same id (and extension) would otherwise produce two identically-named
+    // ZIP entries, which `zip` does not reject on its own.
+    let mut written = std::collections::BTreeSet::new();
     for asset in &project.library {
-        let bytes = media.read(&asset.id)?;
         let name = media_entry_name(&asset.id, &asset.extension());
+        if !written.insert(name.clone()) {
+            continue;
+        }
+        let bytes = media.read(&asset.id)?;
         archive.start_file(name, stored()).map_err(archive_error)?;
         archive.write_all(&bytes)?;
     }
@@ -67,6 +78,8 @@ fn deflated() -> SimpleFileOptions {
     SimpleFileOptions::default().compression_method(CompressionMethod::Deflated)
 }
 
+// Media is already compressed (H.264, AAC, JPEG, ...); running deflate over it again only costs
+// time for negligible size gain.
 fn stored() -> SimpleFileOptions {
     SimpleFileOptions::default().compression_method(CompressionMethod::Stored)
 }
@@ -180,5 +193,63 @@ mod tests {
             result,
             Err(crate::CoreError::MediaNotAvailable(_))
         ));
+    }
+
+    #[test]
+    fn duplicate_library_entries_do_not_produce_duplicate_zip_entries() {
+        let mut store = MemoryMediaStore::default();
+        let mut project = project_with_media(&mut store);
+        let duplicate = project.library[0].clone();
+        project.library.push(duplicate);
+        let mut sink = Cursor::new(Vec::new());
+
+        write(&mut sink, &project, &store, &SaveOptions::for_test()).unwrap();
+
+        let names = entry_names(sink.get_ref());
+        assert_eq!(
+            names.iter().filter(|n| n.starts_with(MEDIA_PREFIX)).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_path_traversal_extension_falls_back_to_bin_in_the_entry_name() {
+        let bytes = b"data".to_vec();
+        let id = MediaId::from_bytes(&bytes);
+        let mut store = MemoryMediaStore::default();
+        store.insert(id.clone(), bytes.clone());
+        let mut project = Project::default();
+        project.library.push(MediaAsset::new(
+            id.clone(),
+            "x.../../../../evil".into(),
+            "application/octet-stream".into(),
+            MediaKind::Video,
+            bytes.len() as u64,
+        ));
+        let mut sink = Cursor::new(Vec::new());
+
+        write(&mut sink, &project, &store, &SaveOptions::for_test()).unwrap();
+
+        let expected = format!("{MEDIA_PREFIX}{}.bin", id.content_hash());
+        assert!(entry_names(sink.get_ref()).contains(&expected));
+    }
+
+    #[test]
+    fn the_model_is_deflated_and_media_is_stored() {
+        let mut store = MemoryMediaStore::default();
+        let project = project_with_media(&mut store);
+        let mut sink = Cursor::new(Vec::new());
+        write(&mut sink, &project, &store, &SaveOptions::for_test()).unwrap();
+
+        let mut archive = zip::ZipArchive::new(sink).unwrap();
+        assert_eq!(
+            archive.by_name(PROJECT_ENTRY).unwrap().compression(),
+            CompressionMethod::Deflated
+        );
+        let media_name = format!("{MEDIA_PREFIX}{}.mp4", project.library[0].id.content_hash());
+        assert_eq!(
+            archive.by_name(&media_name).unwrap().compression(),
+            CompressionMethod::Stored
+        );
     }
 }

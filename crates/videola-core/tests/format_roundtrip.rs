@@ -5,7 +5,7 @@ use videola_core::format::{
     reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
 };
 use videola_core::model::{ClipSource, MediaAsset, MediaId, MediaKind, Project, Time, TrackKind};
-use videola_core::Document;
+use videola_core::{CoreError, Document};
 
 fn save_options() -> SaveOptions {
     SaveOptions {
@@ -52,6 +52,20 @@ fn built_project() -> (Project, MemoryMediaStore) {
         MediaKind::Video,
         bytes.len() as u64,
     ));
+
+    // Otherwise the round-trip equality checks below would pass even if a writer or migration
+    // step silently dropped `extra`, since an empty map serialises indistinguishably from one
+    // that was never populated.
+    project
+        .extra
+        .insert("futureProjectField".into(), serde_json::json!("keep-me"));
+    project.timeline.tracks[0]
+        .extra
+        .insert("futureTrackField".into(), serde_json::json!("keep-me"));
+    project.timeline.tracks[0].clips[0]
+        .extra
+        .insert("futureClipField".into(), serde_json::json!("keep-me"));
+
     (project, store)
 }
 
@@ -91,11 +105,15 @@ fn a_project_whose_media_entry_is_gone_still_opens_with_a_warning() {
 
     let loaded = reader::read(Cursor::new(stripped)).unwrap();
 
-    assert_eq!(loaded.project.timeline.tracks[0].clips.len(), 1);
-    assert!(loaded
-        .warnings
-        .iter()
-        .any(|warning| matches!(warning, LoadWarning::MissingMedia { .. })));
+    // Bit-identical to the saved project: only the media bytes are gone, not any parameter of
+    // the clips that reference them. A reader that zeroed a duration or dropped a keyframe to
+    // "handle" the missing asset would still pass a looser clips.len() == 1 check.
+    assert_eq!(loaded.project, project);
+    assert_eq!(loaded.warnings.len(), 1);
+    assert!(matches!(
+        loaded.warnings[0],
+        LoadWarning::MissingMedia { .. }
+    ));
 }
 
 #[test]
@@ -109,7 +127,18 @@ fn an_archive_without_a_project_entry_is_rejected() {
         std::io::Write::write_all(&mut archive, b"nope").unwrap();
         archive.finish().unwrap();
     }
-    assert!(reader::read(Cursor::new(sink.into_inner())).is_err());
+    assert!(matches!(
+        reader::read(Cursor::new(sink.into_inner())),
+        Err(CoreError::NotAProject(_))
+    ));
+}
+
+#[test]
+fn a_non_zip_file_is_rejected_as_not_a_project() {
+    assert!(matches!(
+        reader::read(Cursor::new(b"not a zip".to_vec())),
+        Err(CoreError::NotAProject(_))
+    ));
 }
 
 #[allow(clippy::unwrap_used)]

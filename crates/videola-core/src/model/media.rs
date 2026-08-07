@@ -93,12 +93,21 @@ impl MediaAsset {
         }
     }
 
+    // `original_name` arrives from untrusted project JSON and feeds a ZIP entry path
+    // (`media/<hash>.<ext>`); an extension containing '/' or '.' segments would let it escape
+    // that path, and an unbounded one would bloat the entry name, so anything but a short
+    // alphanumeric tail falls back to a safe default.
     pub fn extension(&self) -> String {
         self.original_name
             .rsplit_once('.')
             .map(|(_, ext)| ext.to_ascii_lowercase())
+            .filter(|ext| is_safe_extension(ext))
             .unwrap_or_else(|| "bin".to_string())
     }
+}
+
+fn is_safe_extension(ext: &str) -> bool {
+    !ext.is_empty() && ext.len() <= 8 && ext.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
 #[cfg(test)]
@@ -141,6 +150,31 @@ mod tests {
         let asset = MediaAsset::new(
             MediaId::from_bytes(b"x"),
             "clip".into(),
+            "application/octet-stream".into(),
+            MediaKind::Video,
+            1,
+        );
+        assert_eq!(asset.extension(), "bin");
+    }
+
+    #[test]
+    fn a_traversal_like_extension_falls_back_to_bin() {
+        let asset = MediaAsset::new(
+            MediaId::from_bytes(b"x"),
+            "x.../../../../evil".into(),
+            "application/octet-stream".into(),
+            MediaKind::Video,
+            1,
+        );
+        assert_eq!(asset.extension(), "bin");
+    }
+
+    #[test]
+    fn an_overlong_extension_falls_back_to_bin() {
+        let name = format!("clip.{}", "a".repeat(50));
+        let asset = MediaAsset::new(
+            MediaId::from_bytes(b"x"),
+            name,
             "application/octet-stream".into(),
             MediaKind::Video,
             1,

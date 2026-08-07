@@ -6,22 +6,38 @@ use crate::{CoreError, Result};
 
 pub fn load(raw: &str) -> Result<(Project, Vec<LoadWarning>)> {
     let mut document: Value = serde_json::from_str(raw)?;
-    let found = detect_version(&document);
-    if found > SCHEMA_VERSION {
-        return Err(CoreError::UnsupportedSchema(found));
+    let found = detect_version(&document)?;
+    if found > u64::from(SCHEMA_VERSION) {
+        return Err(CoreError::UnsupportedSchema(
+            found.min(u64::from(u32::MAX)) as u32
+        ));
     }
+    // Safe: bounded by SCHEMA_VERSION (a u32) just above, so this never truncates.
+    let found = found as u32;
     let warnings = upgrade(&mut document, found);
-    let mut project: Project = serde_json::from_value(document)?;
+    // Migration runs on the JSON tree, before deserialisation: it can rename or restructure
+    // fields without keeping an old struct definition around for every past schema version.
+    let mut project: Project = serde_json::from_value(document)
+        .map_err(|error| CoreError::NotAProject(error.to_string()))?;
+    // The deserialisation boundary: sorts every keyframe track (evaluate's binary search
+    // assumes sorted-by-time) and bound-checks every Time field, including nested compound
+    // timelines. Fallible, so a project with impossible times fails loudly here instead of
+    // reaching Clip::end() unchecked.
     project.normalize()?;
     Ok((project, warnings))
 }
 
-fn detect_version(document: &Value) -> u32 {
-    document
-        .get("schemaVersion")
-        .and_then(Value::as_u64)
-        .map(|version| version as u32)
-        .unwrap_or(1)
+// `None` (the key is absent) and `Some` of a non-integer are different failure modes: an old
+// file that never had a schemaVersion field is genuinely version 1, but a present value that
+// isn't a plain non-negative integer (a float, a string, a number too large for i64) is not a
+// version this loader understands and must not be silently coerced into one.
+fn detect_version(document: &Value) -> Result<u64> {
+    match document.get("schemaVersion") {
+        None => Ok(1),
+        Some(value) => value.as_u64().ok_or_else(|| {
+            CoreError::NotAProject("schemaVersion must be a non-negative integer".into())
+        }),
+    }
 }
 
 fn upgrade(document: &mut Value, from: u32) -> Vec<LoadWarning> {
