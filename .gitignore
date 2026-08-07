@@ -12,6 +12,8 @@ dist
 
 # Tauri
 src-tauri/target
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen
 **/gen/android
 **/gen/apple
 

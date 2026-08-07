@@ -1,0 +1,19 @@
+[package]
+name = "videola-desktop"
+version = "0.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+# An empty table makes this crate its own workspace root, which is what keeps it
+# out of the root workspace and cargo test --workspace off the Tauri dep tree.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[lints.rust]
+unsafe_code = "forbid"

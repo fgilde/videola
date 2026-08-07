@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Die App laeuft vollstaendig im Webview; sie braucht heute keine Tauri-Kommandos.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
