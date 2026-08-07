@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { Rate } from "@videola/core/src/generated/Rate";
 
 import type { Vars } from "./translate";
 
@@ -9,7 +10,7 @@ export interface I18nContextValue {
   setLocale: (locale: Locale) => void;
   t: (key: string, vars?: Vars) => string;
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
-  formatTimecode: (seconds: number, fps: number) => string;
+  formatTimecode: (seconds: number, fps: Rate) => string;
 }
 
 export const I18nContext = createContext<I18nContextValue | undefined>(undefined);

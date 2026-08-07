@@ -130,4 +130,34 @@ describe("ThemeProvider", () => {
     expect(screen.getByTestId("theme").textContent).toBe("dark");
     expect(localStorage.getItem("videola.theme")).toBeNull();
   });
+
+  it("falls back to the system theme when reading storage throws", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    mockSystemPrefersDark(true);
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId("preference").textContent).toBe("system");
+    expect(screen.getByTestId("theme").textContent).toBe("dark");
+  });
+
+  it("keeps an explicit choice in memory even when persisting it throws", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("quota exceeded", "QuotaExceededError");
+    });
+    mockSystemPrefersDark(true);
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(() =>
+      act(() => screen.getByRole("button", { name: "light" }).click()),
+    ).not.toThrow();
+    expect(screen.getByTestId("theme").textContent).toBe("light");
+  });
 });

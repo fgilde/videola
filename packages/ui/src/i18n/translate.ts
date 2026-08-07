@@ -2,6 +2,8 @@ export type Catalog = Record<string, string>;
 export type Vars = Record<string, string | number> & { count?: number };
 export type NumberFormatter = (value: number) => string;
 
+export const PLACEHOLDER_PATTERN = /\{(\w+)\}/g;
+
 export function translate(catalog: Catalog, key: string, vars?: Vars, formatNumber?: NumberFormatter): string {
   const template = catalog[key];
   if (template === undefined) {
@@ -30,7 +32,7 @@ function interpolate(template: string, vars?: Vars, formatNumber?: NumberFormatt
   if (vars === undefined) {
     return template;
   }
-  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+  return template.replace(PLACEHOLDER_PATTERN, (match, name: string) => {
     const value = vars[name];
     if (value === undefined) {
       return match;

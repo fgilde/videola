@@ -4,6 +4,7 @@ import { COMMAND_LABELS } from "@videola/core/src/generated/commandLabels";
 
 import de from "./catalogs/de.json";
 import en from "./catalogs/en.json";
+import { PLACEHOLDER_PATTERN } from "./translate";
 
 type CatalogKey = keyof typeof de;
 
@@ -39,7 +40,7 @@ describe("catalogs", () => {
 });
 
 function placeholders(template: string): string[] {
-  return [...template.matchAll(/\{(\w+)\}/g)]
+  return [...template.matchAll(PLACEHOLDER_PATTERN)]
     .map((match) => match[1])
     .filter((name): name is string => name !== undefined)
     .sort();
