@@ -88,6 +88,12 @@ impl MemoryMediaStore {
         self.entries.contains_key(id)
     }
 
+    // Callers that want to hand bytes onward as an `Option` (no "not found" error to represent)
+    // use this instead of the fallible `MediaStore::read` — no error path, nothing to swallow.
+    pub fn get(&self, id: &MediaId) -> Option<&Vec<u8>> {
+        self.entries.get(id)
+    }
+
     pub fn take(self) -> BTreeMap<MediaId, Vec<u8>> {
         self.entries
     }

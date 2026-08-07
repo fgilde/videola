@@ -4,9 +4,7 @@ use serde::de::value::{Error as DeError, StrDeserializer};
 use serde::Deserialize;
 
 use videola_core::command::{Command, Dispatch};
-use videola_core::format::{
-    reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
-};
+use videola_core::format::{reader, writer, LoadWarning, MemoryMediaStore, SaveOptions};
 use videola_core::model::{MediaAsset, MediaId, MediaKind, Project};
 use videola_core::{CoreError, DispatchResult, Document, Result};
 
@@ -109,6 +107,11 @@ impl DocumentHost {
             bytes.len() as u64,
         );
         self.media.insert(id.clone(), bytes);
+        // ponytail: this dispatch only ever succeeds today — `asset` always carries a canonical
+        // hashed id and `duration: None`, and `validate_new_asset` cannot reject either. If a
+        // future change threads a real duration through from JS, this `?` can fail *after* the
+        // budget and the store were already committed, reopening the N-1 leak at the tail instead
+        // of the head. Move the budget charge after this dispatch succeeds if that happens.
         let result = self
             .document
             .dispatch(Dispatch::new(Command::MediaImport { asset }))?;
@@ -116,16 +119,7 @@ impl DocumentHost {
     }
 
     pub fn media_bytes(&self, id: &str) -> Option<Vec<u8>> {
-        match self.media.read(&MediaId::from(id.to_string())) {
-            Ok(bytes) => Some(bytes),
-            Err(error) => {
-                // MemoryMediaStore::read only ever fails with MediaNotAvailable today. If that
-                // stops being true (OPFS/streaming media), a genuine I/O error must not silently
-                // present to JS as "unknown id".
-                debug_assert!(matches!(error, CoreError::MediaNotAvailable(_)));
-                None
-            }
-        }
+        self.media.get(&MediaId::from(id.to_string())).cloned()
     }
 
     pub fn save(&self, options: SaveOptions) -> Result<Vec<u8>> {

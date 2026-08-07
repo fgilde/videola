@@ -132,12 +132,13 @@ fn a_wellformed_zip_without_a_project_entry_is_rejected_as_not_a_project() {
 }
 
 // Distinct from `opening_rubbish_fails_instead_of_panicking`: `b"not a zip"` never gets past
-// `ZipArchive::new`. A valid archive cut in half still has a real (if incomplete) central
-// directory to parse, so this exercises reader.rs's entry-reading failure paths instead — all of
-// which `reader::read` surfaces as the same `NotAProject`, so that's what's observable here even
-// though internally more than one branch can produce it.
+// `ZipArchive::new`. Cutting a saved archive in half removes the central directory and EOCD too
+// (both live at the end of a ZIP), so that only re-exercises the same `ZipArchive::new` failure —
+// it was tried and confirmed by instrumenting the reader. To actually reach `read_entry_bytes`'s
+// `EntryReadError::Unreadable` — the mid-read path with the panic surface — the central directory
+// and EOCD have to stay valid and only project.json's own compressed bytes get corrupted.
 #[test]
-fn a_truncated_archive_is_rejected_not_panicked_on() {
+fn a_corrupted_project_entry_is_rejected_not_panicked_on() {
     let mut host = DocumentHost::new();
     host.import_media(
         "a.mp4".into(),
@@ -147,9 +148,9 @@ fn a_truncated_archive_is_rejected_not_panicked_on() {
     )
     .unwrap();
     let bytes = host.save(save_options()).unwrap();
-    let truncated = &bytes[..bytes.len() / 2];
+    let corrupted = corrupt_entry_payload(bytes, "project.json");
 
-    let error = DocumentHost::open(truncated).err().unwrap();
+    let error = DocumentHost::open(&corrupted).err().unwrap();
     assert!(matches!(error, CoreError::NotAProject(_)));
 }
 
@@ -240,6 +241,36 @@ fn importing_media_after_an_undo_reports_the_redo_stack_cleared() {
         )
         .unwrap();
     assert!(!result.can_redo);
+}
+
+// Flips a byte in the middle of `entry_name`'s compressed payload while leaving the rest of the
+// archive's structure — central directory, EOCD, even this entry's own local header — untouched.
+// Located by hand rather than through the `zip` crate's own reader API: a ZIP local file header
+// is a fixed 30 bytes immediately before the filename, so finding the filename's bytes and
+// reading the compressed-size/filename-length/extra-length fields at their fixed offsets gives
+// the payload's exact position without needing any crate-internal state.
+#[allow(clippy::unwrap_used)]
+fn corrupt_entry_payload(mut bytes: Vec<u8>, entry_name: &str) -> Vec<u8> {
+    let needle = entry_name.as_bytes();
+    let header_start = bytes
+        .windows(needle.len())
+        .position(|window| window == needle)
+        .unwrap()
+        - 30;
+    let filename_len =
+        u16::from_le_bytes([bytes[header_start + 26], bytes[header_start + 27]]) as usize;
+    let extra_len =
+        u16::from_le_bytes([bytes[header_start + 28], bytes[header_start + 29]]) as usize;
+    let compressed_size = u32::from_le_bytes([
+        bytes[header_start + 18],
+        bytes[header_start + 19],
+        bytes[header_start + 20],
+        bytes[header_start + 21],
+    ]) as usize;
+    let data_start = header_start + 30 + filename_len + extra_len;
+    let flip_at = data_start + compressed_size / 2;
+    bytes[flip_at] ^= 0xff;
+    bytes
 }
 
 // clippy.toml's allow-unwrap-in-tests only exempts #[test] items themselves, not helpers they
