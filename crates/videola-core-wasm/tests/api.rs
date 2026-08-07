@@ -26,7 +26,7 @@ fn a_fresh_host_has_an_empty_project_and_no_history() {
 #[test]
 fn imported_media_is_addressable_by_its_returned_id() {
     let mut host = DocumentHost::new();
-    let id = host
+    let (id, _) = host
         .import_media(
             "a.mp4".into(),
             "video/mp4".into(),
@@ -44,7 +44,7 @@ fn imported_media_is_addressable_by_its_returned_id() {
     );
 
     // Re-importing identical content resolves to the same id and does not duplicate the asset.
-    let second = host
+    let (second, _) = host
         .import_media(
             "a-again.mp4".into(),
             "video/mp4".into(),
@@ -59,7 +59,7 @@ fn imported_media_is_addressable_by_its_returned_id() {
 #[test]
 fn save_then_open_restores_project_and_media() {
     let mut host = DocumentHost::new();
-    let id = host
+    let (id, _) = host
         .import_media(
             "a.mp4".into(),
             "video/mp4".into(),
@@ -159,6 +159,42 @@ fn dispatch_then_undo_then_redo_round_trips_through_history() {
 
     host.redo().unwrap();
     assert_eq!(host.project().timeline.tracks.len(), 1);
+}
+
+#[test]
+fn importing_media_reports_that_the_import_can_be_undone() {
+    let mut host = DocumentHost::new();
+    let (_, result) = host
+        .import_media(
+            "a.mp4".into(),
+            "video/mp4".into(),
+            "video".into(),
+            b"bytes".to_vec(),
+        )
+        .unwrap();
+    assert!(result.can_undo);
+}
+
+#[test]
+fn importing_media_after_an_undo_reports_the_redo_stack_cleared() {
+    let mut host = DocumentHost::new();
+    host.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Video,
+        name: "V1".into(),
+        index: None,
+    }))
+    .unwrap();
+    host.undo().unwrap();
+
+    let (_, result) = host
+        .import_media(
+            "a.mp4".into(),
+            "video/mp4".into(),
+            "video".into(),
+            b"bytes".to_vec(),
+        )
+        .unwrap();
+    assert!(!result.can_redo);
 }
 
 #[allow(clippy::unwrap_used)]

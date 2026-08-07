@@ -79,7 +79,7 @@ impl DocumentHost {
         mime: String,
         kind: String,
         bytes: Vec<u8>,
-    ) -> Result<MediaId> {
+    ) -> Result<(MediaId, DispatchResult)> {
         // Hashed here, not accepted as a field from JS: the id is what makes MediaImport's
         // validation (canonical med_ + 64 hex) meaningful. Trusting a caller-supplied id would
         // let JS point the project at bytes it never actually gave us.
@@ -104,9 +104,10 @@ impl DocumentHost {
             bytes.len() as u64,
         );
         self.media.insert(id.clone(), bytes);
-        self.document
+        let result = self
+            .document
             .dispatch(Dispatch::new(Command::MediaImport { asset }))?;
-        Ok(id)
+        Ok((id, result))
     }
 
     pub fn media_bytes(&self, id: &str) -> Option<Vec<u8>> {

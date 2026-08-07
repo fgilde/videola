@@ -6,6 +6,16 @@ use wasm_bindgen::prelude::*;
 use inner::DocumentHost;
 use videola_core::command::Dispatch;
 use videola_core::format::SaveOptions;
+use videola_core::DispatchResult;
+
+// A bare id string would drop the undo/redo flags the import itself just changed, leaving the
+// facade unable to tell the UI a new history entry landed and the redo stack was cleared.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportOutcome {
+    id: String,
+    result: DispatchResult,
+}
 
 #[wasm_bindgen]
 pub struct WasmDocument {
@@ -63,12 +73,15 @@ impl WasmDocument {
         mime: String,
         kind: String,
         bytes: Vec<u8>,
-    ) -> std::result::Result<String, JsError> {
-        Ok(self
+    ) -> std::result::Result<JsValue, JsError> {
+        let (id, result) = self
             .host
             .import_media(original_name, mime, kind, bytes)
-            .map_err(to_js)?
-            .to_string())
+            .map_err(to_js)?;
+        to_js_value(&ImportOutcome {
+            id: id.to_string(),
+            result,
+        })
     }
 
     #[wasm_bindgen(js_name = mediaBytes)]
