@@ -52,6 +52,27 @@ docker run --rm -p 8080:80 videola:dev
 The image serves the web app as static files and nothing else — there is no API, no MCP endpoint and
 no render worker in it yet.
 
+## Release
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`. It creates the GitHub release as a **draft**,
+so the assets can be checked before anyone sees them, and pushes the image to
+`ghcr.io/fgilde/videola`.
+
+Every signature-dependent target is bound to its secret and is skipped when the secret is absent, so
+a missing certificate does not fail the whole release. The workflow summary lists each target as its
+result or as `skipped`.
+
+| Target | Secrets | Without them |
+|---|---|---|
+| Docker image, Windows NSIS, Linux deb and AppImage | none | built and usable, unsigned |
+| macOS DMG | `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `APPLE_TEAM_ID` | the DMG is still built, but unsigned, and Gatekeeper blocks it on the user's machine |
+| Android APK and AAB | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the job is skipped; an unsigned APK cannot be installed or shipped to Play |
+| iOS IPA | `IOS_CERTIFICATE` (base64 distribution `.p12`) and `IOS_MOBILE_PROVISION` (base64), plus `APPLE_CERTIFICATE_PASSWORD` and `APPLE_TEAM_ID` | the job is skipped; no distributable IPA exists without a certificate and a provisioning profile |
+
+An installer built today packages the shell described above — no timeline, no playback, no effects,
+no export — so it installs a working app frame and nothing to edit with. FFmpeg is not bundled yet
+either, and the Docker image only serves static files.
+
 ## Layout
 
 ```

@@ -287,3 +287,27 @@ jobs:
           # release-testing oder debugging wuerden ein anderes verlangen und der
           # Export scheiterte mit einer wenig hilfreichen Xcode-Meldung.
           args: --export-method app-store-connect
+
+  summary:
+    # Ohne always() fehlt die Uebersicht genau dann, wenn ein Ziel gescheitert ist.
+    if: always()
+    needs: [docker, wasm, desktop, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ergebnis zusammenfassen
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo "## Release $TAG"
+            echo
+            echo "| Ziel | Ergebnis |"
+            echo "|---|---|"
+            echo "| Docker (ghcr.io) | ${{ needs.docker.result }} |"
+            echo "| WASM-Kern | ${{ needs.wasm.result }} |"
+            echo "| Desktop (Windows, Linux, macOS) | ${{ needs.desktop.result }} |"
+            echo "| Android (APK, AAB) | ${{ needs.android.result }} |"
+            echo "| iOS (IPA) | ${{ needs.ios.result }} |"
+            echo
+            echo "\`skipped\` heisst: das Signatur-Secret fehlt, oder ein vorausgesetzter Job ist gescheitert. Die Secrets stehen im README unter Release."
+          } >> "$GITHUB_STEP_SUMMARY"
