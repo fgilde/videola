@@ -89,7 +89,7 @@ videola/
 
 ### Task 1: Workspace und Kern-Grundtypen
 
-**Status: erledigt** — Commit `2d8da9b`, 7/7 Tests grün, clippy und fmt clean, Review ✅.
+**Status: erledigt** — Commit `2d8da9b`, 7/7 Tests grün, clippy und fmt clean.
 
 **Files:**
 - Create: `Cargo.toml`, `rust-toolchain.toml`, `.editorconfig`
@@ -1606,7 +1606,7 @@ keyframete Parameter schlagen statische."
 
 ### Task 6: Document, Command-Bus und Patch-basiertes Undo
 
-**Status: erledigt** (mit Tasks 7 und 8), Commits `8b5a42b..911ecb1`. Drei Review-Runden haben folgende Fehler im Plan-Code selbst korrigiert — der umgesetzte Stand weicht hier bewusst ab:
+**Status: erledigt** (mit Tasks 7 und 8), Commits `8b5a42b..911ecb1`. Folgende Fehler im Plan-Code wurden korrigiert — der umgesetzte Stand weicht hier bewusst ab:
 
 | Korrektur | Grund |
 |---|---|

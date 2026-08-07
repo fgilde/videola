@@ -13,7 +13,7 @@
 - Code-Konventionen nach Spec Abschnitt 13: CCD (SRP, SoC, DRY, KISS, YAGNI, Information Hiding, PoLA), IOSP — eine Funktion orchestriert **oder** arbeitet, nie beides.
 - Kommentare nur für das *Warum*, niemals für das *Was*. Keine Abschnitts-Banner, keine `Schritt 1:`-Blöcke. Kein Text, der nach AI-Generierung liest. `ponytail:`-Marker sind verfolgte Entscheidungen und bleiben.
 - Bezeichner, Typnamen und Code-Kommentare auf Englisch. Alle nutzersichtbaren Texte ausschließlich über die i18n-Kataloge in `packages/ui/src/i18n/catalogs/`.
-- Commit-Messages auf Deutsch mit transliterierten Umlauten (`ue`, `ae`, `oe`, `ss`) und englischem Conventional-Commits-Präfix. **Niemals** Co-Authored-By-, "Generated with"- oder sonstige Attribution-Zeilen. Git mit `-c user.email=florian.gilde@cargonerds.com` aufrufen.
+- Commit-Messages auf Deutsch mit transliterierten Umlauten (`ue`, `ae`, `oe`, `ss`) und englischem Conventional-Commits-Präfix. **Niemals** Co-Authored-By-, "Generated with"- oder sonstige Attribution-Zeilen.
 - Kein `unwrap()` / `expect()` in Produktiv-Rust. Jede Map ist `BTreeMap`. Zeit ist ganzzahlig in Flicks.
 - Werkzeuge: Rust stable, Node 22 oder neuer, pnpm 11 oder neuer.
 - Actions werden auf einen Major gepinnt. Stand heute aktuell: `actions/checkout@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `pnpm/setup@v2`, `Swatinem/rust-cache@v2`, `docker/setup-buildx-action@v3`, `docker/login-action@v3`, `docker/build-push-action@v6`, `softprops/action-gh-release@v2`. `upload-artifact@v7` neben `download-artifact@v8` ist **kein** Versionsfehler.
@@ -102,7 +102,7 @@ Vorher `apps/desktop/package.json` schreiben, sonst schlägt der Filter fehl:
 
 Der `build`-Skriptname ist bewusst gewählt: `pnpm -r build` im Root baut damit auch den Installer mit. Falls das unerwünscht ist, benenne ihn zu `bundle` um und halte `pnpm -r build` frei — entscheide es und schreib den Grund in den Report.
 
-Auf Windows braucht Tauri die WebView2-Runtime (auf Windows 11 vorhanden) und die MSVC-Buildtools (vorhanden, der Kern kompiliert ja). Prüfe mit `pnpm --filter videola-desktop tauri info` und paste die Ausgabe in den Report.
+Auf Windows braucht Tauri die WebView2-Runtime (auf Windows 11 vorhanden) und die MSVC-Buildtools. Prüfe mit `pnpm --filter videola-desktop tauri info` und paste die Ausgabe in den Report.
 
 - [ ] **Step 2: Rust-Seite anlegen**
 
@@ -689,7 +689,7 @@ git commit -m "ci: iOS-Build im Release
 
 An beide iOS-Secrets gebunden, weil ohne Zertifikat und Provisioning-Profil
 gar kein verteilbares IPA entstehen kann. Der Job ist ungetestet: iOS baut
-nur auf macOS, der Entwicklungsrechner laeuft Windows."
+nur auf macOS."
 ```
 
 ---
