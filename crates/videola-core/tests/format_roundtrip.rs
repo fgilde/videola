@@ -141,6 +141,29 @@ fn a_non_zip_file_is_rejected_as_not_a_project() {
     ));
 }
 
+#[test]
+fn tampered_media_content_is_reported_and_not_returned() {
+    let (project, store) = built_project();
+    let mut sink = Cursor::new(Vec::new());
+    writer::write(&mut sink, &project, &store, &save_options()).unwrap();
+    let tampered = tamper_media_entries(sink.into_inner());
+
+    let loaded = reader::read(Cursor::new(tampered)).unwrap();
+
+    // The content hash no longer matches, so the entry is dropped rather than trusted, and the
+    // library asset it belonged to is then reported missing on top of that.
+    assert!(loaded.media.is_empty());
+    assert_eq!(loaded.warnings.len(), 2);
+    assert!(loaded
+        .warnings
+        .iter()
+        .any(|w| matches!(w, LoadWarning::UnreadableEntry { .. })));
+    assert!(loaded
+        .warnings
+        .iter()
+        .any(|w| matches!(w, LoadWarning::MissingMedia { .. })));
+}
+
 #[allow(clippy::unwrap_used)]
 fn strip_media_entries(bytes: Vec<u8>) -> Vec<u8> {
     let mut source = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
@@ -156,6 +179,32 @@ fn strip_media_entries(bytes: Vec<u8>) -> Vec<u8> {
             out.start_file(name, zip::write::SimpleFileOptions::default())
                 .unwrap();
             std::io::copy(&mut entry, &mut out).unwrap();
+        }
+        out.finish().unwrap();
+    }
+    sink.into_inner()
+}
+
+// A truthful ZIP throughout: only the payload under the media/ entry's own name is swapped, so
+// nothing about the archive's structure is forged, just its content — the reader is expected to
+// notice via the content hash, not via anything special about the container.
+#[allow(clippy::unwrap_used)]
+fn tamper_media_entries(bytes: Vec<u8>) -> Vec<u8> {
+    let mut source = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let mut sink = Cursor::new(Vec::new());
+    {
+        let mut out = zip::ZipWriter::new(&mut sink);
+        for index in 0..source.len() {
+            let mut entry = source.by_index(index).unwrap();
+            let name = entry.name().to_string();
+            out.start_file(&name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            if name.starts_with("media/") {
+                std::io::Write::write_all(&mut out, b"tampered bytes, not the real content")
+                    .unwrap();
+            } else {
+                std::io::copy(&mut entry, &mut out).unwrap();
+            }
         }
         out.finish().unwrap();
     }

@@ -55,19 +55,28 @@ fn unknown_fields_are_preserved_and_do_not_warn() {
 
 #[test]
 fn malformed_json_fails_loudly() {
-    assert!(migrate::load("{ not json").is_err());
+    assert!(matches!(
+        migrate::load("{ not json"),
+        Err(CoreError::NotAProject(_))
+    ));
 }
 
 #[test]
 fn a_float_schema_version_is_rejected_not_silently_treated_as_v1() {
     let sneaky = MINIMAL_V1.replace("\"schemaVersion\": 1", "\"schemaVersion\": 99.0");
-    assert!(migrate::load(&sneaky).is_err());
+    assert!(matches!(
+        migrate::load(&sneaky),
+        Err(CoreError::NotAProject(_))
+    ));
 }
 
 #[test]
 fn a_string_schema_version_is_rejected() {
     let sneaky = MINIMAL_V1.replace("\"schemaVersion\": 1", "\"schemaVersion\": \"99\"");
-    assert!(migrate::load(&sneaky).is_err());
+    assert!(matches!(
+        migrate::load(&sneaky),
+        Err(CoreError::NotAProject(_))
+    ));
 }
 
 #[test]
@@ -83,7 +92,7 @@ fn a_schema_version_beyond_u32_is_rejected_as_unsupported_not_wrapped_to_a_small
     let sneaky = MINIMAL_V1.replace("\"schemaVersion\": 1", "\"schemaVersion\": 4294967296");
     assert!(matches!(
         migrate::load(&sneaky),
-        Err(CoreError::UnsupportedSchema(_))
+        Err(CoreError::UnsupportedSchema(4294967296))
     ));
 }
 

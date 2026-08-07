@@ -5,12 +5,11 @@ use crate::model::{Project, SCHEMA_VERSION};
 use crate::{CoreError, Result};
 
 pub fn load(raw: &str) -> Result<(Project, Vec<LoadWarning>)> {
-    let mut document: Value = serde_json::from_str(raw)?;
+    let mut document: Value =
+        serde_json::from_str(raw).map_err(|error| CoreError::NotAProject(error.to_string()))?;
     let found = detect_version(&document)?;
     if found > u64::from(SCHEMA_VERSION) {
-        return Err(CoreError::UnsupportedSchema(
-            found.min(u64::from(u32::MAX)) as u32
-        ));
+        return Err(CoreError::UnsupportedSchema(found));
     }
     // Safe: bounded by SCHEMA_VERSION (a u32) just above, so this never truncates.
     let found = found as u32;

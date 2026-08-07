@@ -106,7 +106,7 @@ impl MediaAsset {
     }
 }
 
-fn is_safe_extension(ext: &str) -> bool {
+pub(crate) fn is_safe_extension(ext: &str) -> bool {
     !ext.is_empty() && ext.len() <= 8 && ext.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 

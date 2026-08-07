@@ -40,5 +40,5 @@ pub enum CoreError {
     NotAProject(String),
 
     #[error("unsupported schema version {0}")]
-    UnsupportedSchema(u32),
+    UnsupportedSchema(u64),
 }

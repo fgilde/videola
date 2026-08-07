@@ -70,7 +70,15 @@ fn write_media<W: Write + Seek>(
     Ok(())
 }
 
+// Sanitised here too, not just at `MediaAsset::extension()`'s call site: this function is a
+// public entry-name builder future callers (Tasks 14-16) can reach directly, and the guarantee
+// against path-traversal / oversized extensions must hold no matter who calls it.
 pub fn media_entry_name(id: &MediaId, extension: &str) -> String {
+    let extension = if crate::model::media::is_safe_extension(extension) {
+        extension
+    } else {
+        "bin"
+    };
     format!("{MEDIA_PREFIX}{}.{extension}", id.content_hash())
 }
 
