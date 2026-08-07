@@ -1,0 +1,52 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    # Die Doku-Seite haengt an keinem Rust- oder App-Code, also loest nur der Doku-Ordner
+    # selbst aus - plus die Workspace-Dateien, ohne die `--frozen-lockfile` scheitert.
+    paths:
+      - apps/docs/**
+      - .github/workflows/pages.yml
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+      # Kein wasm-Schritt und kein Artefakt-Download: apps/docs importiert @videola/core nicht,
+      # also braucht der Seitenbau packages/core/src/wasm nicht. Ein `pnpm build` ueber den
+      # ganzen Workspace wuerde es brauchen - deshalb baut hier nur videola-docs.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter videola-docs build
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/docs/.vitepress/dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
