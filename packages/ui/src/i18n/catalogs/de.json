@@ -43,5 +43,5 @@
   "error.actionFailed": "Aktion fehlgeschlagen: {reason}",
   "error.unsupportedMedia": "Dieser Dateityp wird nicht unterstützt.",
   "warning.missingMedia": "{count} Medium fehlt im Projekt | {count} Medien fehlen im Projekt",
-  "empty.noTracks": "Noch keine Spuren. Ziehe Medien hierher, um anzufangen."
+  "empty.noTracks": "Noch keine Spuren. Lege die erste über „Spur hinzufügen“ in der Kopfzeile an."
 }
