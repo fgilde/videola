@@ -39,8 +39,8 @@ Bestätigt im Brainstorming:
 | Entscheidung | Wahl | Begründung |
 |---|---|---|
 | Stack | React + TypeScript (UI) über Rust-Kern, Tauri 2 als Shell | Tauri 2 deckt Windows/macOS/Linux/iOS/Android aus einer Codebase (A4). Echte Web-App bleibt erhalten (A1). Beste Video-Performance und größtes Ökosystem für WebCodecs/WebGPU. |
-| Render-Pfad | Drei Backends hinter einem Interface: `NativeFfmpeg`, `ServerFfmpeg`, `WebCodecs` | Erfüllt gleichzeitig A3 (Browser exportiert offline), A5 (Docker rendert headless) und liefert nativ HW-Encoding. |
-| Audio | Vollständiger DSP-Ausbau jetzt, AI-Features (Stems/Whisper/TTS) als späteres Plugin hinter einem Interface | Python-Bootstrap + Modell-Downloads + GPU-Erkennung funktionieren auf iOS/Android praktisch nicht und würden das Packaging (A4) sprengen. |
+| Render-Pfad | Ein Interface, mehrere Backends: `NativeFfmpeg` (Desktop), `NativePlatform` (Mobile), `ServerFfmpeg`, `WebCodecs` | Erfüllt gleichzeitig A3 (Browser exportiert offline), A5 (Docker rendert headless) und liefert nativ HW-Encoding. |
+| Audio | Vollständiger DSP-Ausbau im Umfang (Zeitpunkt: M4), AI-Features (Stems/Whisper/TTS) als späteres Plugin hinter einem Interface | Python-Bootstrap + Modell-Downloads + GPU-Erkennung funktionieren auf iOS/Android praktisch nicht und würden das Packaging (A4) sprengen. |
 | Erster Milestone | Vertikaler Durchstich durch alle Schichten | Beweist Format, Command-Bus, Engine und Packaging früh; danach ist Breite additiv. |
 
 ### 2.1 Kernentscheidung: eine Wahrheit, drei Hosts
@@ -371,11 +371,12 @@ Offline-Export. Ein Algorithmus, zwei Ausführungsorte, identisches Ergebnis.
 
 ### 7.4 Export-Backends
 
-Ein Interface, drei Implementierungen, automatische Auswahl mit manueller Übersteuerung:
+Ein Interface, mehrere Implementierungen, automatische Auswahl mit manueller Übersteuerung:
 
 | Backend | Wann | Wie |
 |---|---|---|
-| `NativeFfmpeg` | Desktop, Mobile | wgpu-Compositor + FFmpeg-Encode, Hardware-Encoder wenn vorhanden, Audio offline über Rust-DSP (schneller als Echtzeit) |
+| `NativeFfmpeg` | Desktop | wgpu-Compositor + FFmpeg-Encode, Hardware-Encoder wenn vorhanden, Audio offline über Rust-DSP (schneller als Echtzeit) |
+| `NativePlatform` | iOS, Android | wgpu-Compositor + Plattform-Encoder (VideoToolbox / MediaCodec) statt eines vollen FFmpeg-Builds — siehe Abschnitt 11. Gleiches Interface, andere Encoder-Anbindung |
 | `ServerFfmpeg` | Browser mit erreichbarem Server, Headless/Agent-Betrieb | `POST /api/render`, Job-Queue, Progress über WS, Ergebnis als Download |
 | `WebCodecs` | Browser ohne Server (A3) | `VideoEncoder` + `OfflineAudioContext` + mp4/webm-Muxer im Worker |
 
@@ -557,7 +558,7 @@ WASM-Bindings mit generierten TS-Typen, App-Shell mit Theme und i18n, CI-Grundge
 ✓ Preview-Playback 1080p mit ≥24 fps, Audio synchron
 ✓ Export H.264/AAC über mindestens zwei der drei Backends
 ✓ MCP-Tools: open, import, split, set_param, render, get_frame
-✓ Builds grün: Web, Windows, Docker
+✓ Builds grün: Web, Windows, Docker  (setzt die Lizenzentscheidung aus 11.1 voraus)
 ✓ Golden-Frame-Test läuft und vergleicht Browser gegen Rust
 ```
 
