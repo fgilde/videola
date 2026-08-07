@@ -7,3 +7,6 @@ export { probe, rationalizeFps, readChunks } from "./decode/demuxer";
 export type { AudioTrackInfo, MediaInfo, TrackId, VideoTrackInfo } from "./decode/demuxer";
 export { DEFAULT_FRAME_BUDGET_BYTES, FrameCache } from "./decode/frame-cache";
 export { VideoSource } from "./decode/video-source";
+export { createContext } from "./render/context";
+export type { GlContext } from "./render/context";
+export { compileProgram, setUniforms } from "./render/program";

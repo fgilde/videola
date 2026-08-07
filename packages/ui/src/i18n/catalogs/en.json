@@ -49,6 +49,7 @@
   "error.mediaStoreUnavailable": "Media storage is unavailable.",
   "error.mediaMissing": "This medium's data is no longer in storage.",
   "error.mediaTooLarge": "This project's media exceed the size a project file can hold.",
+  "error.webglUnavailable": "This device provides no WebGL2, so there is no preview.",
   "warning.missingMedia": "{count} medium is missing from the project | {count} media are missing from the project",
   "empty.noTracks": "No tracks yet. Create the first one with “Add track” in the top bar."
 }

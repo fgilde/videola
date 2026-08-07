@@ -49,6 +49,7 @@
   "error.mediaStoreUnavailable": "Der Medienspeicher ist nicht verfügbar.",
   "error.mediaMissing": "Die Daten dieses Mediums liegen nicht mehr im Speicher.",
   "error.mediaTooLarge": "Die Medien dieses Projekts sind zu groß für eine Projektdatei.",
+  "error.webglUnavailable": "Dieses Gerät stellt kein WebGL2 bereit, deshalb gibt es keine Vorschau.",
   "warning.missingMedia": "{count} Medium fehlt im Projekt | {count} Medien fehlen im Projekt",
   "empty.noTracks": "Noch keine Spuren. Lege die erste über „Spur hinzufügen“ in der Kopfzeile an."
 }
