@@ -38,9 +38,9 @@ Mehrere Tasks bilden eine Kompiliereinheit: `model/mod.rs` re-exportiert alle Mo
 
 | Gruppe | Tasks | Grund |
 |---|---|---|
-| A | 1 | eigenständig |
-| B | 2, 3, 4, 5, 9 | `model/mod.rs` kompiliert erst, wenn alle Modelldateien existieren |
-| C | 6, 7, 8 | `command/mod.rs` routet an `project::apply` und `clip::apply` |
+| A | 1 | eigenständig — **erledigt**, Commit `2d8da9b` |
+| B | 2, 3, 4, 5, 9 | `model/mod.rs` kompiliert erst, wenn alle Modelldateien existieren — **erledigt**, Commits `915b5ce..928baa4`, 57 Tests |
+| C | 6, 7, 8 | `command/mod.rs` routet an die Handler — **erledigt**, Commits `8b5a42b..911ecb1`, 111 Tests |
 | D | 10 | eigenständig |
 | E | 11, 12 | Reader ruft `migrate::load` |
 | F–N | 13, 14, 15, 16, 17, 18, 19, 20, 21 | jeweils eigenständig |
@@ -1614,6 +1614,20 @@ keyframete Parameter schlagen statische."
 
 ### Task 6: Document, Command-Bus und Patch-basiertes Undo
 
+**Status: erledigt** (mit Tasks 7 und 8), Commits `8b5a42b..911ecb1`. Drei Review-Runden haben folgende Fehler im Plan-Code selbst korrigiert — der umgesetzte Stand weicht hier bewusst ab:
+
+| Korrektur | Grund |
+|---|---|
+| `#[serde(rename_all_fields = "camelCase")]` am `Command`-Enum | `rename_all` benennt nur Varianten um, nicht deren Felder. Ohne das gingen `toTrack`, `preservePitch`, `effectType` als snake_case über die Leitung, während der TypeScript-Client camelCase sendet — drei von achtzehn Commands hätten sich nicht deserialisieren lassen. |
+| `dispatch` löscht den Redo-Stack in **beiden** Zweigen | `push` löschte ihn, `replace_last` nicht. Nach einem Undo hinterließ ein Coalescing-Dispatch einen Redo-Eintrag, dessen Patch gegen einen verlassenen Zustand berechnet war — genau auf dem Drag-Pfad. |
+| `undo`/`redo` wenden den Patch **vor** der Stack-Mutation an | Vorher wanderte der Eintrag zwischen den Stapeln, bevor die fehlbare Patch-Anwendung lief; ein Fehlschlag verlor ihn dauerhaft. |
+| Leerer Patch erzeugt keinen History-Eintrag | Ein No-op-Command (Effekt doppelt hinzufügen, Titel auf denselben Wert setzen) hinterließ sonst einen Undo-Schritt, der nichts tut. |
+| `Time::checked_add`/`checked_sub` plus `Time::MAX_REASONABLE` (24 h) | `Time` wickelt `i64` mit ungeprüften `+`/`-`. Ein `delta` von `i64::MAX` aus einem API-Request paniced im Debug-Build und wickelt im Release auf eine negative Dauer. |
+| Nicht-endliche `f32`-Werte werden abgewiesen | `f32::clamp` gibt NaN unverändert zurück; `serde_json` schreibt NaN als `null`, und das nächste `undo` scheitert dann in `from_value`. |
+| `Project::normalize()` ist fallibel und prüft alle `Time`-Felder, rekursiv in `ClipSource::Compound` mit `MAX_COMPOUND_DEPTH = 8` | Handler prüfen ihre Eingaben, aber ein deserialisiertes Projekt bringt ungeprüfte Zeiten direkt in `Clip::end()`. Eine Prüfung an der einen Stelle, durch die jedes geladene Projekt läuft. |
+| `History`-Interna sind `pub(crate)` | Die Invariante „`inverse` ist die exakte Umkehrung von `patch` zur selben Basis" ist nur in `Document` durchsetzbar. |
+| `Command::apply` routet exhaustiv, ohne Catch-all-Arm | Ein Catch-all hätte die später ergänzten `media.*`-Varianten stillschweigend an den Clip-Handler geschickt. |
+
 **Files:**
 - Create: `crates/videola-core/src/command/mod.rs`, `crates/videola-core/src/history.rs`, `crates/videola-core/src/document.rs`
 - Modify: `crates/videola-core/src/lib.rs`
@@ -2378,6 +2392,14 @@ git commit -m "feat(core): Projekt- und Track-Commands"
 ---
 
 ### Task 8: Clip-Commands inklusive Split
+
+**Status: erledigt** (mit Tasks 6 und 7). Zwei inhaltliche Korrekturen gegenüber dem Code unten:
+
+**`split` und `trim` müssen `speed.reverse` und `speed.rate` berücksichtigen.** `source_time_at` bildet bei einem rückwärts laufenden Clip den Timeline-*Anfang* auf das Quell-*Ende* ab. Die linke Timeline-Hälfte verbraucht also den oberen Teil des Quellbereichs. Der Code unten lässt `in_point` unbesehen links und schiebt ihn rechts weiter — bei `reverse` tauschen die beiden Hälften dadurch ihren Inhalt, ein Schnitt schneidet also um. Richtig: bei `reverse` behält die **rechte** Hälfte `in_point`, die **linke** bekommt `in_point + (consumed_total − consumed_left)`. Bei `trim` invertieren sich Kopf und Fuß entsprechend: `TrimEdge::Start` lässt `in_point` unangetastet, `TrimEdge::End` schiebt ihn.
+
+Die Invariante, gegen die zu testen ist: **für jedes `t` im überlebenden Timeline-Bereich gilt `neu.source_time_at(t) == alt.source_time_at(t)`.** Getestet über eine Matrix aus `rate ∈ {0.5, 1.0, 2.0} × reverse ∈ {false, true}`.
+
+**Der Split-Grenzwert wird strukturell abgeleitet, nicht neu gerechnet.** Erst `left.duration = consumed` setzen, dann `right.in_point = left.out_point()`. Der Code unten rechnet den Offset über `f64`-Sekunden, während `consumed_source()` in Flicks multipliziert — zwei Rundungen desselben Wertes, die um einen Flick auseinanderliegen können.
 
 **Files:**
 - Create: `crates/videola-core/src/command/clip.rs`
@@ -3782,7 +3804,7 @@ pub fn load(raw: &str) -> Result<(Project, Vec<LoadWarning>)> {
     }
     let warnings = upgrade(&mut document, found);
     let mut project: Project = serde_json::from_value(document)?;
-    project.normalize();
+    project.normalize()?;
     Ok((project, warnings))
 }
 
@@ -3805,7 +3827,9 @@ fn upgrade(document: &mut Value, from: u32) -> Vec<LoadWarning> {
 }
 ```
 
-`load` ist die Deserialisierungsgrenze und ruft deshalb `Project::normalize()` — danach sind alle Keyframe-Spuren nach Zeit sortiert, was `evaluate` voraussetzt. Ergänze dafür einen Test: ein Projekt-JSON mit absichtlich verdrehter Keyframe-Spur wird geladen und die Spur ist danach sortiert.
+`load` ist die Deserialisierungsgrenze und ruft deshalb `Project::normalize()`. Danach sind alle Keyframe-Spuren nach Zeit sortiert (was `evaluate` voraussetzt) und alle `Time`-Felder liegen innerhalb `Time::MAX_REASONABLE` — auch in verschachtelten Compound-Timelines, bis `MAX_COMPOUND_DEPTH = 8`. `normalize` ist fallibel, der Aufruf braucht also `?`: ein Projekt mit unmöglichen Zeiten scheitert laut beim Laden statt still zu kippen.
+
+Zwei Tests dafür: ein Projekt-JSON mit absichtlich verdrehter Keyframe-Spur wird geladen und die Spur ist danach sortiert; ein Projekt-JSON mit `start = i64::MAX` scheitert mit `InvalidArgument`.
 
 `upgrade` hat mit `SCHEMA_VERSION == 1` noch keine Schritte zu tun. Ab Version 2 kommt pro Sprung eine Funktion `fn v1_to_v2(document: &mut Value)` hinzu, die `upgrade` in Reihenfolge aufruft — die Signatur steht deshalb jetzt schon.
 
