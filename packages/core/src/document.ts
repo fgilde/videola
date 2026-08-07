@@ -7,12 +7,14 @@ export class VideolaDocument {
   #backend: DocumentBackend;
   #listeners = new Set<Listener>();
   #project: Project;
+  #warnings: LoadWarning[];
   #canUndo = false;
   #canRedo = false;
 
   constructor(backend: DocumentBackend) {
     this.#backend = backend;
     this.#project = backend.state();
+    this.#warnings = backend.warnings();
   }
 
   get state(): Project {
@@ -28,7 +30,7 @@ export class VideolaDocument {
   }
 
   get warnings(): LoadWarning[] {
-    return this.#backend.warnings();
+    return this.#warnings;
   }
 
   subscribe(listener: Listener): () => void {
@@ -75,6 +77,7 @@ export class VideolaDocument {
 
   #notify(): void {
     this.#project = this.#backend.state();
+    this.#warnings = this.#backend.warnings();
     for (const listener of this.#listeners) {
       // A listener's own bug must not undo a dispatch that already succeeded, nor
       // block sibling listeners from seeing it.

@@ -27,7 +27,9 @@ function emptyProject(): Project {
 function fakeBackend(): DocumentBackend {
   let project = emptyProject();
   return {
-    state: () => project,
+    // A fresh object every call mirrors the real backend, which fully
+    // re-serializes the project on each state() invocation.
+    state: () => ({ ...project }),
     dispatch: vi.fn((dispatch) => {
       if (dispatch.command.type === "track.add") {
         project = {
@@ -71,6 +73,13 @@ describe("VideolaDocument", () => {
     expect(doc.state).toBe(before);
     doc.dispatch(cmd.trackAdd("video", "V1"));
     expect(doc.state).not.toBe(before);
+  });
+
+  it("caches warnings the same way, so repeated reads share identity between mutations", () => {
+    const before = doc.warnings;
+    expect(doc.warnings).toBe(before);
+    doc.dispatch(cmd.trackAdd("video", "V1"));
+    expect(doc.warnings).not.toBe(before);
   });
 
   it("tracks undo and redo availability from the backend result", () => {
