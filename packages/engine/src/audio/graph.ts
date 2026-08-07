@@ -24,6 +24,7 @@ export class AudioGraph {
   #voices: Voice[] = [];
   #live: AudioNode[] = [];
   #playing: AudioBufferSourceNode[] = [];
+  #generation = 0;
 
   constructor(ctx: BaseAudioContext, source: AudioBufferSource) {
     this.#ctx = ctx;
@@ -38,18 +39,23 @@ export class AudioGraph {
   // timer and release what has played -- which needs the clock from Task 9 to drive it.
   async prepare(project: Project): Promise<void> {
     this.stop();
-    this.#master.gain.value = project.master.volume;
-    this.#tracks = project.timeline.tracks;
+    this.#generation += 1;
+    const generation = this.#generation;
     const library = new Map(project.library.map((asset) => [asset.id, asset]));
     const voices: Voice[] = [];
-    for (const track of this.#tracks) {
+    for (const track of project.timeline.tracks) {
       for (const clip of track.clips) {
         const hash = audibleHash(clip, library);
         if (hash === undefined) continue;
-        const buffer = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
-        voices.push({ clip, track, buffer });
+        const buffer = await this.#load(hash, clip);
+        if (buffer !== undefined) voices.push({ clip, track, buffer });
       }
     }
+    // Two edits in quick succession leave two prepares in flight, and decoding times decide
+    // nothing about which project state is current. Whoever started last owns the graph.
+    if (generation !== this.#generation) return;
+    this.#master.gain.value = project.master.volume;
+    this.#tracks = project.timeline.tracks;
     this.#voices = voices;
   }
 
@@ -75,8 +81,20 @@ export class AudioGraph {
     this.#master.gain.setTargetAtTime(volume, this.#ctx.currentTime, MASTER_GLIDE_SECONDS);
   }
 
+  // One medium missing must not take the rest of the timeline with it. The library is where a
+  // gap gets reported to the user; here it costs one clip its sound and nothing else.
+  async #load(hash: string, clip: Clip): Promise<AudioBuffer | undefined> {
+    try {
+      return await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+    } catch (error) {
+      console.error(error);
+      return undefined;
+    }
+  }
+
   // Mute and solo land here rather than on the clip gains, so a track that is silenced mid-fade
-  // stays silenced and the fade automation underneath it is left untouched.
+  // stays silenced and the fade automation underneath it is left untouched. Mute beats solo: a
+  // track that is both stays silent, and soloing it silences everything else all the same.
   #bus(track: Track, soloing: boolean): AudioNode {
     const gain = this.#ctx.createGain();
     gain.gain.value = soloing && !track.solo ? 0 : track.muted ? 0 : track.volume;
@@ -92,7 +110,8 @@ export class AudioGraph {
     const end = clip.start + clip.duration;
     if (end <= projectTime) return;
     const gain = this.#ctx.createGain();
-    automateFades(gain.gain, clip, contextTime + timeToSeconds(clip.start - projectTime));
+    const clipStart = contextTime + timeToSeconds(clip.start - projectTime);
+    automate(gain.gain, envelope(clip, clipStart), contextTime);
     const node = this.#ctx.createBufferSource();
     node.buffer = buffer;
     node.playbackRate.value = clip.speed.rate;
@@ -111,31 +130,67 @@ export class AudioGraph {
   }
 }
 
+interface Point {
+  at: number;
+  value: number;
+}
+
 // The whole point of Task 8: the envelope is scheduled once, in advance, and the audio thread
 // interpolates it per sample. A gain written per animation frame is a staircase, and a staircase
 // in an amplitude is a click.
-function automateFades(gain: AudioParam, clip: Clip, clipStart: number): void {
-  const target = clip.volume;
-  const fadeIn = timeToSeconds(clip.fades.inDuration);
-  const fadeOut = timeToSeconds(clip.fades.outDuration);
-  const clipEnd = clipStart + timeToSeconds(clip.duration);
-  gain.setValueAtTime(fadeIn > 0 ? 0 : target, notBeforeStart(clipStart));
-  if (fadeIn > 0) gain.linearRampToValueAtTime(target, notBeforeStart(clipStart + fadeIn));
-  if (fadeOut <= 0) return;
-  // Overlapping fades would otherwise put a hold in the middle of the rising ramp, which reads as
-  // a step rather than as the crossed pair the two durations describe.
-  const outStart = Math.max(clipStart + fadeIn, clipEnd - fadeOut);
-  gain.setValueAtTime(target, notBeforeStart(outStart));
-  gain.linearRampToValueAtTime(0, notBeforeStart(clipEnd));
+//
+// Everything before `from` is folded into a single starting value, because automation times are
+// absolute and must not be negative -- and a clip whose fade began before playback did is the
+// ordinary case, not an edge one. Pushing those events to zero instead would flatten the ramp
+// onto a different slope; interpolating once and scheduling only the future keeps the shape.
+function automate(gain: AudioParam, points: readonly Point[], from: number): void {
+  gain.setValueAtTime(valueAt(points, from), from);
+  for (const point of points) {
+    if (point.at > from) gain.linearRampToValueAtTime(point.value, point.at);
+  }
 }
 
-// Automation times are absolute and cannot be negative. Playing from the middle of a clip puts
-// its nominal start behind the context's zero only in an offline render, where the context is
-// born at the moment playback begins; a live AudioContext has been running for seconds by then
-// and the clamp never fires. The events kept in place still describe the right ramp, because the
-// spec computes a value from the surrounding events whether or not they are in the past.
-function notBeforeStart(when: number): number {
-  return Math.max(0, when);
+// A hold reads as a ramp between two equal values, so the whole envelope is one list of corners
+// and `automate` never has to know which kind of segment it is walking through.
+function envelope(clip: Clip, clipStart: number): Point[] {
+  const target = clip.volume;
+  const [fadeIn, fadeOut] = fadeDurations(clip);
+  const clipEnd = clipStart + timeToSeconds(clip.duration);
+  const points: Point[] = [{ at: clipStart, value: fadeIn > 0 ? 0 : target }];
+  if (fadeIn > 0) points.push({ at: clipStart + fadeIn, value: target });
+  if (fadeOut > 0) {
+    points.push({ at: clipEnd - fadeOut, value: target });
+    points.push({ at: clipEnd, value: 0 });
+  }
+  return points;
+}
+
+// Trimming and splitting leave the fades alone, so a clip shorter than its own fades is reachable
+// without anyone touching a fade handle. Scaling both down by the same factor keeps their ratio
+// and lets the envelope peak where the two would have crossed. Clamping only the longer one, or
+// leaving them, puts the descent before the rise -- and the automation list is sorted by time,
+// not by insertion, so that comes out as silence rather than as an error.
+function fadeDurations(clip: Clip): [number, number] {
+  const fadeIn = Math.max(0, timeToSeconds(clip.fades.inDuration));
+  const fadeOut = Math.max(0, timeToSeconds(clip.fades.outDuration));
+  const duration = timeToSeconds(clip.duration);
+  const total = fadeIn + fadeOut;
+  if (total <= duration) return [fadeIn, fadeOut];
+  return [(fadeIn * duration) / total, (fadeOut * duration) / total];
+}
+
+function valueAt(points: readonly Point[], when: number): number {
+  const first = points[0]!;
+  if (when <= first.at) return first.value;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1]!;
+    const point = points[index]!;
+    if (when >= point.at) continue;
+    const span = point.at - previous.at;
+    if (span <= 0) return point.value;
+    return previous.value + ((point.value - previous.value) * (when - previous.at)) / span;
+  }
+  return points[points.length - 1]!.value;
 }
 
 // ponytail: a reversed clip stays silent -- an AudioBufferSourceNode has no negative playback

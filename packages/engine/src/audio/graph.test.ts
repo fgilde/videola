@@ -1,6 +1,6 @@
 import { timeToSeconds } from "@videola/core";
 import { OfflineAudioContext } from "node-web-audio-api";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
 
@@ -104,17 +104,28 @@ function project(tracks: Track[], masterVolume = 1): Project {
   } as unknown as Project;
 }
 
+interface RenderOptions {
+  projectTime?: Time;
+  // An offline context is born at zero, a live one has been running for a while. Both have to be
+  // exercised: the two are the same code path only if nothing gets clamped along the way.
+  contextTime?: number;
+  before?: (graph: AudioGraph) => void;
+}
+
 async function render(
   ctx: BaseAudioContext,
   source: AudioBufferSource,
   built: Project,
-  projectTime: Time = 0,
-  before: (graph: AudioGraph) => void = () => {},
+  options: RenderOptions = {},
 ): Promise<Float32Array> {
   const graph = new AudioGraph(ctx, source);
   await graph.prepare(built);
-  before(graph);
-  graph.startAt(ctx.currentTime, projectTime);
+  options.before?.(graph);
+  graph.startAt(options.contextTime ?? ctx.currentTime, options.projectTime ?? 0);
+  return drain(ctx);
+}
+
+async function drain(ctx: BaseAudioContext): Promise<Float32Array> {
   const rendered = await (ctx as unknown as OfflineAudioContext).startRendering();
   return rendered.getChannelData(0) as unknown as Float32Array;
 }
@@ -194,9 +205,9 @@ describe("AudioGraph", () => {
 
   it("follows setMasterVolume", async () => {
     const ctx = context(1);
-    const out = await render(ctx, dc(ctx), project([track("A1", [clip()])]), 0, (graph) =>
-      graph.setMasterVolume(0.25),
-    );
+    const out = await render(ctx, dc(ctx), project([track("A1", [clip()])]), {
+      before: (graph) => graph.setMasterVolume(0.25),
+    });
 
     expect(at(out, 0.9)).toBeCloseTo(0.25, 2);
   });
@@ -207,7 +218,7 @@ describe("AudioGraph", () => {
       ctx,
       signal(ctx, (progress) => progress),
       project([track("A1", [clip()])]),
-      SECOND / 2,
+      { projectTime: SECOND / 2 },
     );
 
     expect(out[0]).toBeCloseTo(0.5, 2);
@@ -216,7 +227,9 @@ describe("AudioGraph", () => {
 
   it("stays silent for a clip that ended before the start point", async () => {
     const ctx = context(0.5);
-    const out = await render(ctx, dc(ctx), project([track("A1", [clip()])]), 2 * SECOND);
+    const out = await render(ctx, dc(ctx), project([track("A1", [clip()])]), {
+      projectTime: 2 * SECOND,
+    });
 
     expect(Math.max(...out)).toBe(0);
   });
@@ -248,8 +261,210 @@ describe("AudioGraph", () => {
     await graph.prepare(project([track("A1", [clip()])]));
     graph.startAt(ctx.currentTime, 0);
     graph.stop();
-    const rendered = await (ctx as unknown as OfflineAudioContext).startRendering();
 
-    expect(Math.max(...(rendered.getChannelData(0) as unknown as Float32Array))).toBe(0);
+    expect(Math.max(...(await drain(ctx)))).toBe(0);
+  });
+});
+
+// Resuming is the ordinary case -- press play with the playhead anywhere but zero -- and the
+// envelope has to pick up where it stands rather than start over. The context time is varied
+// alongside it, because a live context is never at zero when playback begins.
+describe("AudioGraph, starting inside a fade", () => {
+  it("picks the fade-in up at its interpolated value, offline context", async () => {
+    const ctx = context(1.5);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({ duration: 3 * SECOND, fades: { inDuration: 2 * SECOND, outDuration: 0 } }),
+        ]),
+      ]),
+      { projectTime: SECOND },
+    );
+
+    expect(out[0]).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.5)).toBeCloseTo(0.75, 2);
+    expect(at(out, 1)).toBeCloseTo(1, 2);
+    expect(at(out, 1.25)).toBeCloseTo(1, 2);
+  });
+
+  it("picks the fade-in up at its interpolated value on a context already running", async () => {
+    const ctx = context(1.5);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({ duration: 3 * SECOND, fades: { inDuration: 2 * SECOND, outDuration: 0 } }),
+        ]),
+      ]),
+      { projectTime: SECOND, contextTime: 0.2 },
+    );
+
+    expect(at(out, 0.2)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.7)).toBeCloseTo(0.75, 2);
+    expect(at(out, 1.2)).toBeCloseTo(1, 2);
+  });
+
+  it("picks the fade-out up on its way down instead of jumping to full gain", async () => {
+    const ctx = context(1.2);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({ duration: 4 * SECOND, fades: { inDuration: 0, outDuration: 2 * SECOND } }),
+        ]),
+      ]),
+      { projectTime: 3 * SECOND },
+    );
+
+    expect(out[0]).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.5)).toBeCloseTo(0.25, 2);
+    expect(at(out, 0.99)).toBeCloseTo(0, 2);
+  });
+});
+
+// `trim` and `split` leave `fades` alone (crates/videola-core/src/command/clip.rs), so a clip
+// shorter than its own fades is reachable without the inspector ever being opened. The rule:
+// fades that do not fit are scaled down together, keeping their ratio, until they exactly fill
+// the clip.
+describe("AudioGraph, fades longer than the clip", () => {
+  it("scales a fade-in that alone outlasts the clip", async () => {
+    const ctx = context(0.6);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({
+            duration: Math.round(0.4 * SECOND),
+            fades: {
+              inDuration: Math.round(0.8 * SECOND),
+              outDuration: Math.round(0.2 * SECOND),
+            },
+          }),
+        ]),
+      ]),
+    );
+
+    // 0.8 and 0.2 into a 0.4 s clip scale by 0.4 -> 0.32 s in, 0.08 s out.
+    expect(at(out, 0.16)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.32)).toBeCloseTo(1, 2);
+    expect(at(out, 0.36)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.38)).toBeCloseTo(0.25, 2);
+  });
+
+  it("meets in the middle when both fades are equal and too long", async () => {
+    const ctx = context(0.6);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({
+            duration: Math.round(0.4 * SECOND),
+            fades: {
+              inDuration: Math.round(0.3 * SECOND),
+              outDuration: Math.round(0.3 * SECOND),
+            },
+          }),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.1)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.2)).toBeCloseTo(1, 2);
+    expect(at(out, 0.3)).toBeCloseTo(0.5, 2);
+  });
+});
+
+describe("AudioGraph, mute and solo together", () => {
+  it("silences a track that is soloed and muted at once, and everything else with it", async () => {
+    const ctx = context(0.3);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [clip()], { solo: true, muted: true }),
+        track("A2", [clip({ id: "clp_2" })]),
+      ]),
+    );
+
+    expect(Math.max(...out)).toBe(0);
+  });
+
+  it("keeps every soloed track audible", async () => {
+    const ctx = context(0.3);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [clip({ volume: 0.25 })], { solo: true }),
+        track("A2", [clip({ id: "clp_2", volume: 0.5 })], { solo: true }),
+        track("A3", [clip({ id: "clp_3", volume: 0.125 })]),
+      ]),
+    );
+
+    expect(at(out, 0.1)).toBeCloseTo(0.75, 2);
+  });
+});
+
+describe("AudioGraph, prepare under load", () => {
+  it("keeps the newest prepare even when an older one finishes last", async () => {
+    const ctx = context(0.3);
+    const gates: Array<() => void> = [];
+    let call = 0;
+    const source: AudioBufferSource = {
+      async bufferFor(_hash, from, to) {
+        const level = call === 0 ? 1 : 0.25;
+        call += 1;
+        await new Promise<void>((resolve) => gates.push(resolve));
+        const frames = Math.round(timeToSeconds(to - from) * SAMPLE_RATE);
+        const buffer = ctx.createBuffer(2, frames, SAMPLE_RATE);
+        const data = new Float32Array(frames).fill(level);
+        buffer.copyToChannel(data, 0);
+        buffer.copyToChannel(data, 1);
+        return buffer;
+      },
+    };
+    const graph = new AudioGraph(ctx, source);
+
+    const first = graph.prepare(project([track("A1", [clip()])]));
+    await Promise.resolve();
+    const second = graph.prepare(project([track("A1", [clip({ id: "clp_2" })])]));
+    await Promise.resolve();
+    gates[1]!();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    gates[0]!();
+    await Promise.all([first, second]);
+    graph.startAt(ctx.currentTime, 0);
+
+    expect(at(await drain(ctx), 0.1)).toBeCloseTo(0.25, 2);
+  });
+
+  it("drops only the clip whose medium is gone", async () => {
+    const ctx = context(0.3);
+    const good = dc(ctx);
+    let call = 0;
+    const source: AudioBufferSource = {
+      async bufferFor(hash, from, to) {
+        if (call > 0) return good.bufferFor(hash, from, to);
+        call += 1;
+        throw new Error("error.mediaMissing");
+      },
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = await render(
+      ctx,
+      source,
+      project([
+        track("A1", [clip()], { volume: 0.5 }),
+        track("A2", [clip({ id: "clp_2" })], { volume: 0.25 }),
+      ]),
+    );
+
+    expect(at(out, 0.1)).toBeCloseTo(0.25, 2);
   });
 });
