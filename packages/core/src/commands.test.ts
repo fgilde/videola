@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { cmd, secondsToTime, timeToSeconds } from "./index";
+import { cmd, FLICKS_PER_SECOND, framesToTime, secondsToTime, timeToSeconds } from "./commands";
+import type { Command } from "./generated";
+import { COMMAND_LABELS } from "./generated";
 
 describe("command factories", () => {
   it("emits the wire format the Rust core expects", () => {
@@ -21,6 +23,22 @@ describe("command factories", () => {
     expect(command).toEqual({ type: "clip.split", clip: "clp_1", at: 1058400000 });
     expect(Number.isInteger(command.at)).toBe(true);
   });
+
+  it("has a factory for every Command variant the WASM layer can reach from JS", () => {
+    // media.import is not reachable from JS by design: the WASM layer derives the
+    // media id from a content hash of the bytes, so a caller can never supply one.
+    const unreachableFromJs = new Set(["media.import"]);
+    const expectedTypes = new Set(
+      COMMAND_LABELS.map((label) => label.replace(/^cmd\./, "")).filter(
+        (type) => !unreachableFromJs.has(type),
+      ),
+    );
+
+    const factories = Object.values(cmd) as ((...args: unknown[]) => Command)[];
+    const coveredTypes = new Set(factories.map((factory) => factory("x", "x", "x", "x", "x").type));
+
+    expect(coveredTypes).toEqual(expectedTypes);
+  });
 });
 
 describe("time conversion", () => {
@@ -32,5 +50,14 @@ describe("time conversion", () => {
 
   it("stays inside the safe integer range for a four hour timeline", () => {
     expect(secondsToTime(4 * 3600)).toBeLessThan(Number.MAX_SAFE_INTEGER);
+  });
+
+  it("converts a frame number to flicks using a fps rate", () => {
+    expect(framesToTime(1, { numerator: 25, denominator: 1 })).toBe(FLICKS_PER_SECOND / 25);
+  });
+
+  it("rounds a non-integral frame rate to an integer flick time", () => {
+    const ntsc30 = { numerator: 30000, denominator: 1001 };
+    expect(Number.isInteger(framesToTime(1, ntsc30))).toBe(true);
   });
 });

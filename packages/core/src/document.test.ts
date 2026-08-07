@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DocumentBackend } from "./backend";
-import { cmd, VideolaDocument } from "./index";
+import { cmd } from "./commands";
+import { VideolaDocument } from "./document";
 import type { Project } from "./generated";
 
 function emptyProject(): Project {
@@ -37,10 +38,16 @@ function fakeBackend(): DocumentBackend {
       }
       throw new Error("boom");
     }),
-    undo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: false, canRedo: true })),
+    // canUndo/canRedo both true is a combination no "toggle after undo/redo"
+    // heuristic produces by accident — it can only come from actually reading
+    // the backend's result.
+    undo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: true, canRedo: true })),
     redo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: true, canRedo: false })),
     save: vi.fn(() => new Uint8Array([1, 2, 3])),
-    importMedia: vi.fn(() => "med_abc"),
+    importMedia: vi.fn(() => ({
+      id: "med_abc",
+      result: { patch: [], label: "cmd.media.import", canUndo: true, canRedo: false },
+    })),
     warnings: () => [],
   };
 }
@@ -59,14 +66,27 @@ describe("VideolaDocument", () => {
     expect(seen).toEqual([1]);
   });
 
+  it("caches the project so repeated reads share identity between mutations", () => {
+    const before = doc.state;
+    expect(doc.state).toBe(before);
+    doc.dispatch(cmd.trackAdd("video", "V1"));
+    expect(doc.state).not.toBe(before);
+  });
+
   it("tracks undo and redo availability from the backend result", () => {
     expect(doc.canUndo).toBe(false);
     doc.dispatch(cmd.trackAdd("video", "V1"));
     expect(doc.canUndo).toBe(true);
     expect(doc.canRedo).toBe(false);
     doc.undo();
-    expect(doc.canUndo).toBe(false);
+    expect(doc.canUndo).toBe(true);
     expect(doc.canRedo).toBe(true);
+  });
+
+  it("moves undo/redo flags on a successful media import, not just after dispatch", () => {
+    expect(doc.canUndo).toBe(false);
+    doc.importMedia({ name: "a.mp4", type: "video/mp4" }, new Uint8Array());
+    expect(doc.canUndo).toBe(true);
   });
 
   it("does not notify subscribers when a dispatch throws", () => {
@@ -76,14 +96,72 @@ describe("VideolaDocument", () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it("does not move undo/redo flags or notify when undo throws", () => {
+    const backend = { ...fakeBackend(), undo: vi.fn(() => { throw new Error("boom"); }) };
+    const document = new VideolaDocument(backend);
+    document.dispatch(cmd.trackAdd("video", "V1"));
+    const listener = vi.fn();
+    document.subscribe(listener);
+    const canUndoBefore = document.canUndo;
+    const canRedoBefore = document.canRedo;
+
+    expect(() => document.undo()).toThrow();
+
+    expect(document.canUndo).toBe(canUndoBefore);
+    expect(document.canRedo).toBe(canRedoBefore);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("does not move undo/redo flags or notify when redo throws", () => {
+    const backend = { ...fakeBackend(), redo: vi.fn(() => { throw new Error("boom"); }) };
+    const document = new VideolaDocument(backend);
+    document.dispatch(cmd.trackAdd("video", "V1"));
+    const listener = vi.fn();
+    document.subscribe(listener);
+    const canUndoBefore = document.canUndo;
+    const canRedoBefore = document.canRedo;
+
+    expect(() => document.redo()).toThrow();
+
+    expect(document.canUndo).toBe(canUndoBefore);
+    expect(document.canRedo).toBe(canRedoBefore);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("does not move undo/redo flags or notify when importMedia throws", () => {
+    const backend = { ...fakeBackend(), importMedia: vi.fn(() => { throw new Error("boom"); }) };
+    const document = new VideolaDocument(backend);
+    const listener = vi.fn();
+    document.subscribe(listener);
+    const canUndoBefore = document.canUndo;
+    const canRedoBefore = document.canRedo;
+
+    expect(() =>
+      document.importMedia({ name: "a.mp4", type: "video/mp4" }, new Uint8Array()),
+    ).toThrow();
+
+    expect(document.canUndo).toBe(canUndoBefore);
+    expect(document.canRedo).toBe(canRedoBefore);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("forwards a coalesce key so drags collapse into one undo step", () => {
     const backend = fakeBackend();
     const document = new VideolaDocument(backend);
     document.dispatch(cmd.trackAdd("video", "V1"), "drag");
-    expect(backend.dispatch).toHaveBeenCalledWith({
+    const [call] = vi.mocked(backend.dispatch).mock.calls[0]!;
+    expect(call).toStrictEqual({
       command: { type: "track.add", kind: "video", name: "V1", index: null },
       coalesceKey: "drag",
     });
+  });
+
+  it("omits the coalesce key entirely when none is given", () => {
+    const backend = fakeBackend();
+    const document = new VideolaDocument(backend);
+    document.dispatch(cmd.trackAdd("video", "V1"));
+    const [call] = vi.mocked(backend.dispatch).mock.calls[0]!;
+    expect("coalesceKey" in call).toBe(false);
   });
 
   it("stops notifying after unsubscribe", () => {

@@ -6,15 +6,17 @@ type Listener = (project: Project) => void;
 export class VideolaDocument {
   #backend: DocumentBackend;
   #listeners = new Set<Listener>();
+  #project: Project;
   #canUndo = false;
   #canRedo = false;
 
   constructor(backend: DocumentBackend) {
     this.#backend = backend;
+    this.#project = backend.state();
   }
 
   get state(): Project {
-    return this.#backend.state();
+    return this.#project;
   }
 
   get canUndo(): boolean {
@@ -38,8 +40,7 @@ export class VideolaDocument {
     const result = this.#backend.dispatch(
       coalesceKey === undefined ? { command } : { command, coalesceKey },
     );
-    this.#absorb(result);
-    return result;
+    return this.#absorb(result);
   }
 
   undo(): DispatchResult {
@@ -51,8 +52,13 @@ export class VideolaDocument {
   }
 
   importMedia(file: { name: string; type: string }, bytes: Uint8Array): string {
-    const id = this.#backend.importMedia(file.name, file.type, mediaKind(file.type), bytes);
-    this.#notify();
+    const { id, result } = this.#backend.importMedia(
+      file.name,
+      file.type,
+      mediaKind(file.type),
+      bytes,
+    );
+    this.#absorb(result);
     return id;
   }
 
@@ -68,9 +74,15 @@ export class VideolaDocument {
   }
 
   #notify(): void {
-    const project = this.#backend.state();
+    this.#project = this.#backend.state();
     for (const listener of this.#listeners) {
-      listener(project);
+      // A listener's own bug must not undo a dispatch that already succeeded, nor
+      // block sibling listeners from seeing it.
+      try {
+        listener(this.#project);
+      } catch (error) {
+        console.error(error);
+      }
     }
   }
 }
@@ -80,5 +92,5 @@ function mediaKind(mime: string): MediaKind {
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("font/")) return "font";
-  throw new Error(`unsupported media type: ${mime}`);
+  throw new Error("unsupportedMediaType");
 }

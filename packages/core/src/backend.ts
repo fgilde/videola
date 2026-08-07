@@ -8,12 +8,17 @@ export interface SaveOptions {
   slim: boolean;
 }
 
+export interface ImportMediaResult {
+  id: string;
+  result: DispatchResult;
+}
+
 export interface DocumentBackend {
   state(): Project;
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
   save(options: SaveOptions): Uint8Array;
-  importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): string;
+  importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
   warnings(): LoadWarning[];
 }
