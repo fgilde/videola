@@ -36,7 +36,9 @@ export function recordingGl(overrides: Record<string, unknown> = {}): Recording 
       if (/^[A-Z][A-Z0-9_]*$/.test(key)) return token(tokens, key);
       return (...args: unknown[]) => {
         calls.push({ name: key, args });
-        return token(tokens, `${key}()`);
+        // A fresh object per call, so two createTexture handles are as distinguishable here as
+        // they are in a driver.
+        return { token: `${key}()`, call: calls.length };
       };
     },
   });

@@ -9,4 +9,7 @@ export { DEFAULT_FRAME_BUDGET_BYTES, FrameCache } from "./decode/frame-cache";
 export { VideoSource } from "./decode/video-source";
 export { createContext } from "./render/context";
 export type { GlContext } from "./render/context";
+export { Compositor } from "./render/compositor";
+export { blendState, drawList } from "./render/draw-list";
+export type { BlendState, DrawItem, DrawList } from "./render/draw-list";
 export { compileProgram, setUniforms } from "./render/program";
