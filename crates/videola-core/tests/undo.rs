@@ -1,5 +1,8 @@
-use videola_core::command::{Command, Dispatch};
-use videola_core::model::{ClipSource, MediaId, Project, Time, TrackKind};
+use videola_core::command::{Command, Dispatch, TrimEdge, ALL_COMMAND_LABELS};
+use videola_core::model::{
+    ClipId, ClipSource, Generator, MediaAsset, MediaId, MediaKind, ParamValue, Project,
+    ProjectSettings, Time, TrackId, TrackKind,
+};
 use videola_core::Document;
 
 fn add_track(name: &str) -> Dispatch {
@@ -186,4 +189,180 @@ fn dispatch_reports_the_patch_it_produced() {
     assert_eq!(ops.len(), 1);
     assert_eq!(ops[0]["op"], "add");
     assert_eq!(ops[0]["path"], "/timeline/tracks/0");
+}
+
+// A fresh document with a track, a second (empty) track, a clip with an effect on the first
+// track, and one imported medium — enough state that every command variant below has something
+// real to act on and produces a genuine (non-empty) patch, which a no-op patch would otherwise
+// undo the wrong history entry for (see Document::dispatch).
+#[allow(clippy::unwrap_used)]
+fn undo_coverage_fixture() -> (Document, TrackId, TrackId, ClipId, MediaId) {
+    let mut doc = Document::new();
+    doc.dispatch(add_track("V1")).unwrap();
+    doc.dispatch(add_track("V2")).unwrap();
+    let track = doc.project().timeline.tracks[0].id.clone();
+    let other_track = doc.project().timeline.tracks[1].id.clone();
+
+    doc.dispatch(Dispatch::new(Command::ClipAdd {
+        track: track.clone(),
+        source: ClipSource::Generator {
+            generator: Generator::Solid {
+                color: "#00ff00".into(),
+            },
+        },
+        start: Time::ZERO,
+        duration: Time::from_seconds(2.0),
+    }))
+    .unwrap();
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::EffectAdd {
+        clip: clip.clone(),
+        effect_type: "brightness".into(),
+    }))
+    .unwrap();
+
+    let media = MediaId::from_bytes(b"undo coverage fixture medium");
+    doc.dispatch(Dispatch::new(Command::MediaImport {
+        asset: MediaAsset::new(
+            media.clone(),
+            "a.mp4".into(),
+            "video/mp4".into(),
+            MediaKind::Video,
+            5,
+        ),
+    }))
+    .unwrap();
+
+    (doc, track, other_track, clip, media)
+}
+
+// I8: the M0 DoD claims every command has working undo, but only 4 of 20 command variants ever
+// had an undo() call anywhere in the test suite. The inverse mechanism is uniform
+// (Document::dispatch's diff/apply_patch), so it likely works everywhere — but `clip.split`
+// mints a fresh ClipId and `media.remove` deletes across nested timelines, exactly the cases a
+// uniform mechanism could still get subtly wrong. This exercises all 20 and turns the claim into
+// a fact instead of an assumption.
+#[test]
+fn every_command_undoes_to_the_exact_prior_state() {
+    type Build = fn(&TrackId, &TrackId, &ClipId, &MediaId) -> Command;
+    let commands: &[Build] = &[
+        |_, _, _, _| Command::ProjectSetTitle {
+            title: "Renamed".into(),
+        },
+        |_, _, _, _| Command::ProjectSetSettings {
+            settings: ProjectSettings {
+                width: 1280,
+                ..ProjectSettings::default()
+            },
+        },
+        |_, _, _, _| Command::TrackAdd {
+            kind: TrackKind::Audio,
+            name: "V3".into(),
+            index: None,
+        },
+        |_, other, _, _| Command::TrackRemove {
+            track: other.clone(),
+        },
+        |_, other, _, _| Command::TrackReorder {
+            track: other.clone(),
+            to_index: 0,
+        },
+        |track, _, _, _| Command::TrackRename {
+            track: track.clone(),
+            name: "Renamed".into(),
+        },
+        |track, _, _, _| Command::TrackSetVolume {
+            track: track.clone(),
+            volume: 0.5,
+        },
+        |track, _, _, _| Command::TrackSetPan {
+            track: track.clone(),
+            pan: 0.5,
+        },
+        |track, _, _, _| Command::TrackSetFlags {
+            track: track.clone(),
+            muted: Some(true),
+            solo: None,
+            locked: None,
+            hidden: None,
+        },
+        |track, _, _, _| Command::ClipAdd {
+            track: track.clone(),
+            source: ClipSource::Generator {
+                generator: Generator::Solid {
+                    color: "#ff0000".into(),
+                },
+            },
+            start: Time::from_seconds(5.0),
+            duration: Time::from_seconds(1.0),
+        },
+        |_, _, clip, _| Command::ClipRemove { clip: clip.clone() },
+        |_, other, clip, _| Command::ClipMove {
+            clip: clip.clone(),
+            to_track: other.clone(),
+            start: Time::from_seconds(1.0),
+        },
+        |_, _, clip, _| Command::ClipTrim {
+            clip: clip.clone(),
+            edge: TrimEdge::End,
+            delta: Time::from_seconds(-0.5),
+        },
+        |_, _, clip, _| Command::ClipSplit {
+            clip: clip.clone(),
+            at: Time::from_seconds(1.0),
+        },
+        |_, _, clip, _| Command::ClipSetSpeed {
+            clip: clip.clone(),
+            rate: 2.0,
+            reverse: false,
+            preserve_pitch: true,
+        },
+        |_, _, clip, _| Command::ClipSetVolume {
+            clip: clip.clone(),
+            volume: 0.5,
+        },
+        |_, _, clip, _| Command::EffectAdd {
+            clip: clip.clone(),
+            effect_type: "contrast".into(),
+        },
+        |_, _, clip, _| Command::EffectSetParam {
+            clip: clip.clone(),
+            effect_type: "brightness".into(),
+            key: "amount".into(),
+            value: ParamValue::Float(0.5),
+        },
+        |_, _, _, _| Command::MediaImport {
+            asset: MediaAsset::new(
+                MediaId::from_bytes(b"a second undo coverage medium"),
+                "b.mp4".into(),
+                "video/mp4".into(),
+                MediaKind::Video,
+                5,
+            ),
+        },
+        |_, _, _, media| Command::MediaRemove {
+            media: media.clone(),
+        },
+    ];
+    // Guards the table itself: a command variant added later without a matching entry here would
+    // otherwise silently keep passing.
+    assert_eq!(commands.len(), ALL_COMMAND_LABELS.len());
+
+    for build in commands {
+        let (mut doc, track, other_track, clip, media) = undo_coverage_fixture();
+        let before = serde_json::to_value(doc.project()).unwrap();
+        let command = build(&track, &other_track, &clip, &media);
+        let label = command.label();
+
+        doc.dispatch(Dispatch::new(command))
+            .unwrap_or_else(|error| panic!("{label} failed to dispatch: {error}"));
+        doc.undo()
+            .unwrap_or_else(|error| panic!("{label} failed to undo: {error}"));
+
+        assert_eq!(
+            serde_json::to_value(doc.project()).unwrap(),
+            before,
+            "undo did not restore the prior state for {label}"
+        );
+    }
 }
