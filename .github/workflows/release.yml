@@ -1,0 +1,114 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Anders als in der CI: ein halb abgebrochenes Release hinterlaesst ein Image
+  # ohne passende Installer.
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          # Die zweite Zeile wiederholt bei workflow_dispatch nur die erste, damit
+          # ein Lauf von einem Branch nicht :latest ueberschreibt.
+          tags: |
+            ghcr.io/fgilde/videola:${{ github.ref_name }}
+            ghcr.io/fgilde/videola:${{ startsWith(github.ref, 'refs/tags/') && 'latest' || github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - run: wasm-pack build crates/videola-core-wasm --target web --out-dir ../../packages/core/src/wasm --out-name videola_core
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+
+  desktop:
+    needs: wasm
+    strategy:
+      # Ein gescheiterter macOS-Build soll die fertigen Windows- und
+      # Linux-Installer nicht mitnehmen.
+      fail-fast: false
+      matrix:
+        # --bundles wird pro Plattform gesetzt, weil der Bundler nsis absichtlich
+        # nicht auf Windows beschraenkt: die Zielliste aus tauri.conf.json wuerde
+        # Linux und macOS einen Windows-Installer bauen lassen.
+        include:
+          - os: ubuntu-latest
+            bundles: deb,appimage
+          - os: windows-latest
+            bundles: nsis
+          - os: macos-latest
+            bundles: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # src-tauri ist ein eigener Workspace und bliebe sonst uncached.
+          workspaces: |
+            .
+            apps/desktop/src-tauri
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+      - name: Linux-Systemabhaengigkeiten
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Videola ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          args: --bundles ${{ matrix.bundles }}
