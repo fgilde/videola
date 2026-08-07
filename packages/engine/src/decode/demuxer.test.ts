@@ -129,6 +129,31 @@ describe("readChunks", () => {
     expect(chunks).toHaveLength(NTSC_FIXTURE.sampleCount);
   });
 
+  // With `to` at the last frame, "the packet covering `to`" and "read to the end" agree, so that
+  // case alone cannot tell a working end bound from a missing one. A `to` in the middle can.
+  it("stops after the packet covering a mid-file end and not at the file end", async () => {
+    const to = secondsToTime(fixtureFrameSeconds(NTSC_FIXTURE, 10));
+
+    const chunks = await collect(readChunks(tinyMp4(), "video", 0, to));
+
+    expect(chunks).toHaveLength(11);
+    // Truncated, not rounded: WebCodecs timestamps are integer microseconds and mediabunny takes
+    // Math.trunc to get there. Frame 10 of an NTSC file sits at 333666.67 us and travels as
+    // 333666. That floor is the codec boundary's, not ours -- flicks keep the exact value on both
+    // sides of it, which is why nothing derives a project time from a chunk timestamp.
+    expect(chunks.at(-1)?.timestamp).toBe(
+      Math.trunc(fixtureFrameSeconds(NTSC_FIXTURE, 10) * 1e6),
+    );
+  });
+
+  it("stops between two frames at the frame that is still showing", async () => {
+    const midway = (fixtureFrameSeconds(NTSC_FIXTURE, 5) + fixtureFrameSeconds(NTSC_FIXTURE, 6)) / 2;
+
+    const chunks = await collect(readChunks(tinyMp4(), "video", 0, secondsToTime(midway)));
+
+    expect(chunks).toHaveLength(6);
+  });
+
   it("yields nothing for a track the file does not have", async () => {
     const chunks = await collect(readChunks(tinyMp4(), "audio", 0, secondsToTime(1)));
 
