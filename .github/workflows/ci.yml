@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p videola-core --test export_types
+      - name: Generierte Typen sind aktuell
+        run: |
+          # git diff ignoriert unversionierte Dateien; ein neu erzeugter Typ wuerde sonst
+          # unbemerkt durchrutschen. Erst stagen, dann gegen den Index vergleichen.
+          git add -A -- packages/core/src/generated
+          git diff --cached --exit-code -- packages/core/src/generated
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: jetli/wasm-pack-action@v0.4.0
+      # Kein --no-opt hier: das ist nur auf manchen Entwicklerrechnern noetig, wo
+      # wasm-opt.exe abstuerzt. Auf den sauberen Ubuntu-Runnern laeuft es normal
+      # und die Optimierung soll auch stattfinden.
+      - run: wasm-pack build crates/videola-core-wasm --target web --out-dir ../../packages/core/src/wasm --out-name videola_core
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+
+  web:
+    runs-on: ubuntu-latest
+    needs: wasm
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm muss vor setup-node stehen: dessen "cache: pnpm" braucht die pnpm-Binary
+      # schon auf dem PATH, um den Store-Pfad zu ermitteln.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+      - name: WASM-Artefakt vorhanden
+        run: test -f packages/core/src/wasm/videola_core.js || (echo "wasm-Artefakt fehlt in packages/core/src/wasm" && exit 1)
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
