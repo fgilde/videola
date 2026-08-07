@@ -1,11 +1,13 @@
 ---
 layout: home
 hero:
-  name: Videola
   text: A video editor built on a Rust core
   tagline: >
-    Early work. The project model, the command bus and the application shell exist; the editing
-    surface does not.
+    The project model, the command bus and the application shell exist. The editing surface does
+    not: there is no timeline, no playback, no effects and no export yet.
+  image:
+    src: /videola-logo.webp
+    alt: Videola
   actions:
     - theme: brand
       text: Downloads
@@ -69,35 +71,35 @@ features:
 - **Packaging.** A Tauri shell that builds Windows, Linux and macOS installers, and a Docker image
   that serves the web app as static files.
 
-## What does not exist yet
+## What is not there yet
 
-There is no editing surface. No timeline UI, no playback, no preview, no effect rendering, no
-keyframe editing surface, no audio processing, no media import in the interface and no video export
-of any kind. FFmpeg is not integrated. There is no REST API and no MCP endpoint. Android and iOS
-exist as release jobs but are skipped until signing keys are configured.
+No timeline UI, no playback, no preview, no effect rendering, no keyframe editing surface, no audio
+processing, no media import in the interface, no video export. FFmpeg is not integrated, there is no
+REST API and no MCP endpoint, and the Android and iOS release jobs are skipped until signing keys are
+configured. An installer built today gives you a working application frame with nothing to edit in
+it.
 
-An installer built today gives you a working application frame with nothing to edit in it. That is
-the honest state of the project, and the [architecture chapter](/guide/architecture) marks which
-parts of the design are built and which are planned.
+The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
+design are built and which are planned.
 
 ## The shell
 
-The application shell in its dark theme, with the German catalogue active.
+<figure class="shot">
+  <img src="/shell-dark.png" alt="The Videola shell in its dark theme: a top bar carrying the wordmark, then New project, Open, Add track, Undo and Redo, a language and theme toggle and a Save button, with the project status below it">
+  <figcaption>The application shell in its dark theme, with the German catalogue active. Undo and Redo are disabled because nothing has been edited yet.</figcaption>
+</figure>
 
-![The Videola shell in its dark theme, showing the top bar with New, Open, Add track, Save, Undo and Redo, and the project status below it](/shell-dark.png)
+<figure class="shot">
+  <img src="/shell-light.png" alt="The Videola shell in its light theme, with the same controls on a light background">
+  <figcaption>The same shell in the light theme. Both themes are driven by CSS variables and follow <code>prefers-color-scheme</code> until the user overrides it; the choice is persisted.</figcaption>
+</figure>
 
-The same shell in the light theme. Both themes are driven by CSS variables and follow
-`prefers-color-scheme` until the user overrides it; the choice is persisted.
+<figure class="shot">
+  <img src="/shell-english.png" alt="The Videola shell in the light theme with the English catalogue active, showing English labels for the same controls">
+  <figcaption>Switching to English swaps the catalogue without a reload. Every user-visible string comes from a catalogue, including the errors the Rust core reports as codes.</figcaption>
+</figure>
 
-![The Videola shell in its light theme, with the same controls on a light background](/shell-light.png)
-
-Switching to English swaps the catalogue without a reload. Every user-visible string comes from a
-catalogue, including the errors the Rust core reports as codes.
-
-![The Videola shell in the light theme with the English catalogue active, showing English labels for the same controls](/shell-english.png)
-
-After adding a track the project reports one track and Undo becomes available; Redo stays disabled
-until something has been undone. Both read the JSON-Patch history described in [Commands and
-undo](/guide/commands-and-undo).
-
-![The Videola shell after a track has been added, showing a track count of one, an enabled Undo button and a still-disabled Redo button](/shell-track-added.png)
+<figure class="shot">
+  <img src="/shell-track-added.png" alt="The Videola shell after a track has been added, showing a track count of one, an enabled Undo button and a still-disabled Redo button">
+  <figcaption>After adding a track the project reports one track and Undo becomes available; Redo stays disabled until something has been undone. Both read the JSON-Patch history described under Commands and undo.</figcaption>
+</figure>

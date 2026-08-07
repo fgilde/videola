@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": [".vitepress/**/*.mts"]
+  "include": [".vitepress/**/*.ts", ".vitepress/**/*.mts"]
 }

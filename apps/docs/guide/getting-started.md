@@ -68,8 +68,8 @@ pnpm --filter videola-desktop bundle
 
 `beforeBuildCommand` builds the web app first and Tauri bundles `apps/web/dist`. The configured
 bundle targets are `nsis`, `deb`, `appimage` and `dmg`; a local build only produces the ones your
-platform can make, so pass `--bundles` if you want to be explicit. Note that the desktop app
-packages exactly the same shell as the web app — the installer is not a more capable build.
+platform can make, so pass `--bundles` if you want to be explicit. The shell it packages is the web
+app, unchanged.
 
 ## Run the Docker image
 
@@ -83,5 +83,5 @@ the workspace and builds the web app, and the final stage copies `apps/web/dist`
 `docker/nginx.conf` serves `.wasm` with the correct MIME type, marks the content-hashed JavaScript
 and CSS as immutable, keeps `index.html` uncached, and falls back to `index.html` for unknown paths.
 
-The image serves static files and nothing else. There is no API, no MCP endpoint and no render
-worker in it — those need `videola-server`, which does not exist yet.
+The image serves static files only. An API, an MCP endpoint and a render worker would need
+`videola-server`, which is not part of the workspace.

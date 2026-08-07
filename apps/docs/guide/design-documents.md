@@ -1,8 +1,7 @@
 # Design documents
 
 These are the original records the project was built from. **They are written in German** and are
-linked rather than translated, so that the record stays the record. Everything on this site that
-matters for using or building Videola is in English in the other chapters.
+linked rather than copied, so that the record stays the record.
 
 ## The design specification
 
@@ -36,3 +35,11 @@ The M7 plan: the Tauri shell, the six build targets, the release workflow, the s
 notarisation secrets, and the Docker image. It was carried out before M1 to M6, so packaging exists
 while the editor it packages does not. [Building and
 releasing](/guide/building-and-releasing) describes the result.
+
+[`docs/superpowers/plans/2026-08-07-videola-m1-editor.md`](https://github.com/fgilde/videola/blob/main/docs/superpowers/plans/2026-08-07-videola-m1-editor.md)
+
+The M1 plan: media import into OPFS, a timeline, a WebGL2 compositor and audio graph in a new
+`@videola/engine` package, one keyframeable effect and transition, and MP4 export through WebCodecs.
+This one is not implemented yet, so it is the clearest statement of what comes next. It also records
+three deliberate departures from the specification and why — WebGL2 before WebGPU, media in OPFS
+instead of WASM memory, and no golden-frame test until a second compositor exists to compare against.

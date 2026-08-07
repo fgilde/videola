@@ -100,11 +100,8 @@ Two things the workflow has to add itself because the Tauri templates do not:
   distribution certificate. `release-testing` or `debugging` would need a different certificate and
   would fail with an unhelpful Xcode message.
 
-### What an installer actually contains
-
-The same shell the web app is: no timeline, no playback, no effects, no export. FFmpeg is not
-bundled, and the Docker image serves static files only. The release notes say so, and the expected
-result of a release without mobile keys is four assets rather than six.
+The installers package the same shell the web app is, and the release notes say so. The expected
+result of a release without mobile signing keys is four assets, not six.
 
 ## The documentation site
 
