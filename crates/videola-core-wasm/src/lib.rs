@@ -10,6 +10,8 @@ use videola_core::DispatchResult;
 
 // A bare id string would drop the undo/redo flags the import itself just changed, leaving the
 // facade unable to tell the UI a new history entry landed and the redo stack was cleared.
+// This type can't move to core (it only exists at the JS boundary), so ts-rs never sees it —
+// keep in sync with the TypeScript facade's `ImportMediaResult`.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ImportOutcome {

@@ -80,6 +80,23 @@ fn save_then_open_restores_project_and_media() {
 }
 
 #[test]
+fn every_known_media_kind_string_is_accepted() {
+    for kind in ["video", "audio", "image", "font"] {
+        let mut host = DocumentHost::new();
+        let result = host.import_media(
+            "a.bin".into(),
+            "application/octet-stream".into(),
+            kind.into(),
+            vec![1],
+        );
+        assert!(
+            result.is_ok(),
+            "expected media kind {kind:?} to be accepted"
+        );
+    }
+}
+
+#[test]
 fn an_unknown_media_kind_is_rejected() {
     let mut host = DocumentHost::new();
     let error = host
@@ -114,6 +131,28 @@ fn a_wellformed_zip_without_a_project_entry_is_rejected_as_not_a_project() {
     assert!(matches!(error, CoreError::NotAProject(_)));
 }
 
+// Distinct from `opening_rubbish_fails_instead_of_panicking`: `b"not a zip"` never gets past
+// `ZipArchive::new`. A valid archive cut in half still has a real (if incomplete) central
+// directory to parse, so this exercises reader.rs's entry-reading failure paths instead — all of
+// which `reader::read` surfaces as the same `NotAProject`, so that's what's observable here even
+// though internally more than one branch can produce it.
+#[test]
+fn a_truncated_archive_is_rejected_not_panicked_on() {
+    let mut host = DocumentHost::new();
+    host.import_media(
+        "a.mp4".into(),
+        "video/mp4".into(),
+        "video".into(),
+        b"bytes".to_vec(),
+    )
+    .unwrap();
+    let bytes = host.save(save_options()).unwrap();
+    let truncated = &bytes[..bytes.len() / 2];
+
+    let error = DocumentHost::open(truncated).err().unwrap();
+    assert!(matches!(error, CoreError::NotAProject(_)));
+}
+
 #[test]
 fn opening_an_archive_missing_a_media_entry_still_opens_with_a_warning() {
     let mut host = DocumentHost::new();
@@ -145,14 +184,20 @@ fn media_bytes_for_an_unknown_id_is_none_not_an_error() {
 #[test]
 fn dispatch_then_undo_then_redo_round_trips_through_history() {
     let mut host = DocumentHost::new();
-    host.dispatch(Dispatch::new(Command::TrackAdd {
-        kind: TrackKind::Video,
-        name: "V1".into(),
-        index: None,
-    }))
-    .unwrap();
+    let result = host
+        .dispatch(Dispatch::new(Command::TrackAdd {
+            kind: TrackKind::Video,
+            name: "V1".into(),
+            index: None,
+        }))
+        .unwrap();
+    assert_eq!(result.label, videola_core::command::LABEL_TRACK_ADD);
+    assert!(result.patch.as_array().is_some_and(|ops| !ops.is_empty()));
     assert_eq!(host.project().timeline.tracks.len(), 1);
-    assert_eq!(host.history_labels().len(), 1);
+    assert_eq!(
+        host.history_labels(),
+        [videola_core::command::LABEL_TRACK_ADD]
+    );
 
     host.undo().unwrap();
     assert!(host.project().timeline.tracks.is_empty());
@@ -197,6 +242,9 @@ fn importing_media_after_an_undo_reports_the_redo_stack_cleared() {
     assert!(!result.can_redo);
 }
 
+// clippy.toml's allow-unwrap-in-tests only exempts #[test] items themselves, not helpers they
+// call, hence the explicit allow rather than relying on it — confined to tests/, no production
+// risk. Mirrors the same allow on the equivalent helper in videola-core/tests/format_roundtrip.rs.
 #[allow(clippy::unwrap_used)]
 fn strip_media_entries(bytes: Vec<u8>) -> Vec<u8> {
     let mut source = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();

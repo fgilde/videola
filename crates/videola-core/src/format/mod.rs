@@ -81,6 +81,13 @@ impl MemoryMediaStore {
         self.entries.insert(id, bytes);
     }
 
+    // A presence check that doesn't go through `read`: `read` clones the stored bytes, so using
+    // it just to ask "is this id here" would allocate and immediately drop a copy of whatever is
+    // stored — cheap for a thumbnail, a multi-hundred-MB liability for video.
+    pub fn contains(&self, id: &MediaId) -> bool {
+        self.entries.contains_key(id)
+    }
+
     pub fn take(self) -> BTreeMap<MediaId, Vec<u8>> {
         self.entries
     }

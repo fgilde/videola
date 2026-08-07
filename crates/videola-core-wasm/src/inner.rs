@@ -81,10 +81,15 @@ impl DocumentHost {
         bytes: Vec<u8>,
     ) -> Result<(MediaId, DispatchResult)> {
         // Hashed here, not accepted as a field from JS: the id is what makes MediaImport's
-        // validation (canonical med_ + 64 hex) meaningful. Trusting a caller-supplied id would
-        // let JS point the project at bytes it never actually gave us.
+        // validation (canonical med_ + 64 hex) meaningful for *this* path. `dispatch()` still
+        // takes a raw `Command::MediaImport` with a caller-supplied id and only checks its shape,
+        // not that JS actually holds the bytes it names — that sibling path is not guarded here.
         let id = MediaId::from_bytes(&bytes);
-        let already_stored = self.media.read(&id).is_ok();
+        // Resolved before anything is committed: an unknown kind must fail without charging the
+        // media budget or storing bytes, otherwise a rejected import still costs its budget slice
+        // forever, and a run of them locks out every legitimate import for the module's lifetime.
+        let media_kind = parse_kind(&kind)?;
+        let already_stored = self.media.contains(&id);
         if !already_stored {
             let projected = self.media_bytes_total + bytes.len() as u64;
             if projected > reader::MAX_TOTAL_MEDIA_BYTES {
@@ -100,7 +105,7 @@ impl DocumentHost {
             id.clone(),
             original_name,
             mime,
-            parse_kind(&kind)?,
+            media_kind,
             bytes.len() as u64,
         );
         self.media.insert(id.clone(), bytes);
@@ -111,10 +116,16 @@ impl DocumentHost {
     }
 
     pub fn media_bytes(&self, id: &str) -> Option<Vec<u8>> {
-        // ponytail: MemoryMediaStore::read only ever fails with MediaNotAvailable, so folding
-        // every error into None is safe today. Revisit once media can come from OPFS/streaming,
-        // where a genuine I/O error must not look like an unknown id to the caller.
-        self.media.read(&MediaId::from(id.to_string())).ok()
+        match self.media.read(&MediaId::from(id.to_string())) {
+            Ok(bytes) => Some(bytes),
+            Err(error) => {
+                // MemoryMediaStore::read only ever fails with MediaNotAvailable today. If that
+                // stops being true (OPFS/streaming media), a genuine I/O error must not silently
+                // present to JS as "unknown id".
+                debug_assert!(matches!(error, CoreError::MediaNotAvailable(_)));
+                None
+            }
+        }
     }
 
     pub fn save(&self, options: SaveOptions) -> Result<Vec<u8>> {
@@ -144,9 +155,44 @@ mod tests {
         }
     }
 
+    // A single test, not two: it must fail if the running total is never actually updated on
+    // acceptance (the first import would look free to every later check, and this would let the
+    // second import through instead of rejecting it).
     #[test]
-    fn importing_up_to_the_aggregate_media_cap_is_accepted() {
+    fn importing_media_accumulates_against_the_aggregate_cap() {
+        let mut host = host_with_media_bytes_total(reader::MAX_TOTAL_MEDIA_BYTES - 10);
+        host.import_media(
+            "a.bin".into(),
+            "application/octet-stream".into(),
+            "video".into(),
+            vec![0u8; 5],
+        )
+        .unwrap();
+
+        let error = host
+            .import_media(
+                "b.bin".into(),
+                "application/octet-stream".into(),
+                "video".into(),
+                vec![0u8; 6],
+            )
+            .unwrap_err();
+        assert!(matches!(error, CoreError::InvalidArgument(_)));
+    }
+
+    #[test]
+    fn a_rejected_kind_does_not_charge_the_media_budget() {
         let mut host = host_with_media_bytes_total(reader::MAX_TOTAL_MEDIA_BYTES - 5);
+        host.import_media(
+            "a.xyz".into(),
+            "application/x".into(),
+            "hologram".into(),
+            vec![0u8; 5],
+        )
+        .unwrap_err();
+
+        // If the rejected import above had already charged the budget, this legitimate one
+        // would be turned away too.
         let result = host.import_media(
             "a.bin".into(),
             "application/octet-stream".into(),
@@ -157,16 +203,27 @@ mod tests {
     }
 
     #[test]
-    fn importing_past_the_aggregate_media_cap_is_rejected() {
-        let mut host = host_with_media_bytes_total(reader::MAX_TOTAL_MEDIA_BYTES - 5);
-        let error = host
-            .import_media(
-                "a.bin".into(),
-                "application/octet-stream".into(),
-                "video".into(),
-                vec![0u8; 6],
-            )
-            .unwrap_err();
-        assert!(matches!(error, CoreError::InvalidArgument(_)));
+    fn open_seeds_the_media_byte_counter_from_loaded_media() {
+        let mut host = DocumentHost::new();
+        host.import_media(
+            "a.mp4".into(),
+            "video/mp4".into(),
+            "video".into(),
+            b"12345".to_vec(),
+        )
+        .unwrap();
+        let bytes = host
+            .save(SaveOptions {
+                app_version: "0.0.0".into(),
+                created: "c".into(),
+                modified: "m".into(),
+                locale: "de".into(),
+                slim: true,
+            })
+            .unwrap();
+
+        let reopened = DocumentHost::open(&bytes).unwrap();
+
+        assert_eq!(reopened.media_bytes_total, 5);
     }
 }
