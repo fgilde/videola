@@ -6477,7 +6477,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p videola-core --test export_types
       - name: Generierte Typen sind aktuell
-        run: git diff --exit-code -- packages/core/src/generated
+        run: |
+          git add -A -- packages/core/src/generated
+          git diff --cached --exit-code -- packages/core/src/generated
 
   wasm:
     runs-on: ubuntu-latest
@@ -6500,8 +6502,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -6516,7 +6516,11 @@ jobs:
       - run: pnpm build
 ```
 
-Der `types`-Job ist der eigentliche Wächter: er verhindert, dass eine Änderung am Rust-Modell mit veralteten TypeScript-Typen gemerged wird. Der `web`-Job zieht das WASM-Artefakt vom `wasm`-Job, damit Node keine Rust-Toolchain braucht.
+Der `types`-Job ist der eigentliche Wächter: er verhindert, dass eine Änderung am Rust-Modell mit veralteten TypeScript-Typen gemerged wird. `git add` vor dem Vergleich ist nötig, weil `git diff` unversionierte Dateien ignoriert — ein neu erzeugter Typ würde sonst durchrutschen. Den umgekehrten Fall (ein entfernter Typ hinterlässt eine veraltete, aber eingecheckte Datei) fängt der Barrel-Vollständigkeitstest in `export_types.rs` ab.
+
+`pnpm/action-setup` bekommt bewusst keine Version: es liest das `packageManager`-Feld aus der Root-`package.json`, sodass CI und Entwicklungsrechner nicht auseinanderlaufen können.
+
+Der `web`-Job zieht das WASM-Artefakt vom `wasm`-Job, damit Node keine Rust-Toolchain braucht.
 
 - [ ] **Step 2: Lokal nachfahren**
 
