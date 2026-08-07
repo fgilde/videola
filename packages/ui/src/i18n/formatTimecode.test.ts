@@ -44,4 +44,16 @@ describe("formatTimecode", () => {
       expect(frameField, JSON.stringify(fps)).toHaveLength(2);
     }
   });
+
+  it("stays well-formed instead of NaN when the denominator is zero", () => {
+    expect(formatTimecode(90, { numerator: 30, denominator: 0 })).toMatch(
+      /^-?\d{2}:\d{2}:\d{2}\.\d{2}$/,
+    );
+  });
+
+  it("stays well-formed instead of NaN for a sub-1-fps rate", () => {
+    expect(formatTimecode(90, { numerator: 1, denominator: 3 })).toMatch(
+      /^-?\d{2}:\d{2}:\d{2}\.\d{2}$/,
+    );
+  });
 });

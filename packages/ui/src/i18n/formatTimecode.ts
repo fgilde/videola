@@ -4,10 +4,16 @@ import type { Rate } from "@videola/core/src/generated/Rate";
 // NTSC-derived rates (29.97, 23.976, 59.94), so it drifts from wall-clock time over a
 // long timeline. That is what every editor shows until you explicitly ask for
 // drop-frame; add SMPTE drop-frame compensation if that need shows up.
+// ponytail: a zero denominator or a sub-1-fps rate is invalid project data - the real
+// fix is Project::normalize() rejecting it on load. This clamp is only the belt, for
+// UI code that builds a Rate itself; it turns garbage input into a well-formed but
+// meaningless timecode instead of NaN.
 export function formatTimecode(seconds: number, fps: Rate): string {
-  const nominal = Math.round(fps.numerator / fps.denominator);
+  const trueRate = fps.numerator / fps.denominator;
+  const nominal = Number.isFinite(trueRate) ? Math.max(1, Math.round(trueRate)) : 1;
+  const rate = Number.isFinite(trueRate) && trueRate > 0 ? trueRate : nominal;
   const sign = seconds < 0 ? "-" : "";
-  const totalFrames = Math.round((Math.abs(seconds) * fps.numerator) / fps.denominator);
+  const totalFrames = Math.round(Math.abs(seconds) * rate);
   const frames = totalFrames % nominal;
   const totalSeconds = Math.floor(totalFrames / nominal);
   const secondsPart = totalSeconds % 60;
