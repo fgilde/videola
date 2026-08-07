@@ -186,7 +186,7 @@ describe("VideolaDocument", () => {
     const document = new VideolaDocument(backend);
     expect(() =>
       document.importMedia({ name: "malware.exe", type: "application/x-msdownload" }, new Uint8Array()),
-    ).toThrow();
+    ).toThrow("error.unsupportedMedia");
     expect(backend.importMedia).not.toHaveBeenCalled();
   });
 });

@@ -6,7 +6,7 @@
   "action.save": "Save",
   "action.undo": "Undo",
   "action.redo": "Redo",
-  "action.import": "Import media",
+  "action.addTrack": "Add track",
   "theme.label": "Appearance",
   "theme.system": "System",
   "theme.dark": "Dark",

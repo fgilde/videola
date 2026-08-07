@@ -38,7 +38,7 @@ describe("AppShell", () => {
     act(() => screen.getByRole("button", { name: "Deutsch / English" }).click());
     expect(screen.getByRole("button", { name: "New project" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import media" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add track" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Redo" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
@@ -80,7 +80,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
     expect(screen.getByTestId("app-shell").dataset.layout).toBe("phone");
-    for (const name of ["Neues Projekt", "Öffnen", "Medien importieren", "Rückgängig", "Wiederholen", "Speichern"]) {
+    for (const name of ["Neues Projekt", "Öffnen", "Spur hinzufügen", "Rückgängig", "Wiederholen", "Speichern"]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
   });

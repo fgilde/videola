@@ -27,7 +27,7 @@ export function TopBar(actions: TopBarActions): ReactElement {
         {t("action.open")}
       </button>
       <button className="v-button" onClick={actions.onImport} disabled={!actions.onImport}>
-        {t("action.import")}
+        {t("action.addTrack")}
       </button>
       <button className="v-button" onClick={actions.onUndo} disabled={actions.canUndo !== true}>
         {t("action.undo")}

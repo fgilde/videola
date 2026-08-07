@@ -6,7 +6,7 @@
   "action.save": "Speichern",
   "action.undo": "Rückgängig",
   "action.redo": "Wiederholen",
-  "action.import": "Medien importieren",
+  "action.addTrack": "Spur hinzufügen",
   "theme.label": "Erscheinungsbild",
   "theme.system": "System",
   "theme.dark": "Dunkel",

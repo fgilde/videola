@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 
-import { cmd, createWasmBackend, VideolaDocument, type Project } from "@videola/core";
+import { cmd, createWasmBackend, VideolaDocument, type LoadWarning, type Project } from "@videola/core";
 import { AppShell, useI18n } from "@videola/ui";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed";
@@ -14,6 +14,7 @@ interface ShellError {
 export function App(): ReactElement {
   const [doc, setDoc] = useState<VideolaDocument>();
   const [project, setProject] = useState<Project>();
+  const [warnings, setWarnings] = useState<LoadWarning[]>([]);
   const [flags, setFlags] = useState({ canUndo: false, canRedo: false });
   const [error, setError] = useState<ShellError>();
   const nextErrorId = useRef(0);
@@ -32,6 +33,7 @@ export function App(): ReactElement {
         const next = new VideolaDocument(backend);
         setDoc(next);
         setProject(next.state);
+        setWarnings(next.warnings);
         setFlags({ canUndo: next.canUndo, canRedo: next.canRedo });
       })
       .catch((err: unknown) => {
@@ -90,7 +92,6 @@ export function App(): ReactElement {
         created: now,
         modified: now,
         locale: navigator.language,
-        slim: true,
       });
       downloadBlob(bytes, `${project.meta.title || project.meta.id}.videola`);
       setError(undefined);
@@ -107,6 +108,7 @@ export function App(): ReactElement {
       const next = new VideolaDocument(backend);
       setDoc(next);
       setProject(next.state);
+      setWarnings(next.warnings);
       setFlags({ canUndo: next.canUndo, canRedo: next.canRedo });
       setError(undefined);
     } catch (err) {
@@ -126,6 +128,7 @@ export function App(): ReactElement {
       canRedo={flags.canRedo}
     >
       <ErrorBanner error={error} />
+      <WarningBanner warnings={warnings} />
       <Status project={project} />
     </AppShell>
   );
@@ -141,6 +144,20 @@ function ErrorBanner({ error }: { error?: ShellError }): ReactElement | null {
       style={{ padding: "var(--v-space-2) var(--v-space-6)", color: "var(--v-danger)" }}
     >
       {t(error.key, { reason: error.reason })}
+    </p>
+  );
+}
+
+function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement | null {
+  const { t } = useI18n();
+  const missingMedia = warnings.filter((warning) => warning.kind === "missingMedia").length;
+  if (missingMedia === 0) return null;
+  return (
+    <p
+      role="status"
+      style={{ padding: "var(--v-space-2) var(--v-space-6)", color: "var(--v-danger)" }}
+    >
+      {t("warning.missingMedia", { count: missingMedia })}
     </p>
   );
 }

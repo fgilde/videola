@@ -95,5 +95,5 @@ function mediaKind(mime: string): MediaKind {
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("font/")) return "font";
-  throw new Error("unsupportedMediaType");
+  throw new Error("error.unsupportedMedia");
 }
