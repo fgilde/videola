@@ -653,6 +653,10 @@ test("a rectangular mask keeps its inside and gives up its outside", () => {
   check("just inside the edge is still the clip", shot(4, 4), [255, 255, 255, 255]);
   check("just outside it is the background", shot(12, 12), [255, 0, 0, 255]);
   check("and the corner of the frame is background", shot(0, 0), [255, 0, 0, 255]);
+  // Both axes have to cut. A mask that only measured x keeps these two, and a diagonal check
+  // through the corner would never notice.
+  check("inside across but outside down is background", shot(8, 12), [255, 0, 0, 255]);
+  check("inside down but outside across is background", shot(12, 8), [255, 0, 0, 255]);
 });
 
 // The y contract, and the one check here that could not pass by accident. `v_uv` runs UP inside a
@@ -731,6 +735,17 @@ test("an ellipse is not its bounding box", () => {
   check("the ellipse does not", round(11, 11), [255, 0, 0, 255]);
   check("but keeps the same reach along an axis", round(11, 8), [255, 255, 255, 255]);
   check("and its middle", round(8, 8), [255, 255, 255, 255]);
+
+  // The ellipse's own inversion. Without this the parameter is a row in the inspector that no
+  // pixel ever answered for -- a mutation that dropped it entirely went unnoticed.
+  const cut = masked([ELLIPSE({ feather: 0.125, invert: 1 })]).at;
+  const kept = masked([ELLIPSE({ feather: 0.125 })]).at;
+  check("the middle is gone when inverted", cut(8, 8), [0, 0, 0, 255]);
+  check("and the corner has come back", cut(15, 15), [255, 255, 255, 255]);
+  for (const x of [8, 10, 11, 12, 15]) {
+    check("ellipse column " + x + " and its inverse make a whole",
+      kept(x, 8)[0] + cut(x, 8)[0], 255, 2);
+  }
 });
 
 // The reason a mask is an effect: two of them in one chain intersect for free, because each scales
