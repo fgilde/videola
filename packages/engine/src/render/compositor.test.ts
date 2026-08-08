@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { EffectParamSnapshot, Project } from "@videola/core";
+import type { EffectParamSnapshot, ParamValue, Project } from "@videola/core";
 
 import { Compositor } from "./compositor";
 import { createContext } from "./context";
@@ -283,5 +283,136 @@ describe("Compositor", () => {
     render(compositor, scene, 0, framesFor("clp_1"));
     expect(recording.named("deleteTexture")).toHaveLength(0);
     expect(recording.named("createTexture")).toHaveLength(1);
+  });
+});
+
+const amount = (value: number): EffectParamSnapshot =>
+  new Map([["eff_1", new Map([["amount", { kind: "float", value } as ParamValue]])]]);
+
+const withEffect = (id: string): Spot => ({
+  id,
+  effects: [{ id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} }],
+});
+
+const transition = (id: string): Spot => ({
+  ...withEffect(id),
+  effects: [],
+  transitionIn: { transitionType: "crossfade", duration: 1000, alignment: "in", params: {} },
+});
+
+describe("Compositor effect chain", () => {
+  // The cheap path has to stay cheap: a project nobody has put an effect on allocates no
+  // intermediate target and compiles no pass.
+  it("allocates nothing extra for a clip without effects", () => {
+    const { compositor, recording } = attached();
+    render(compositor, project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
+    expect(recording.named("createFramebuffer")).toHaveLength(0);
+    expect(recording.named("createProgram")).toHaveLength(1);
+  });
+
+  it("draws the clip into a target, runs the pass, and comes back to the screen", () => {
+    const { compositor, recording } = attached();
+    render(compositor, project([[withEffect("clp_1")]]), 0, framesFor("clp_1"), amount(2));
+
+    expect(recording.named("createFramebuffer")).toHaveLength(2);
+    // The clip into the target, the effect into the other one, the result onto the picture.
+    expect(recording.named("drawArrays")).toHaveLength(3);
+    // Off the screen for the clip, back onto it for the pass that composites the result.
+    const bound = recording.named("bindFramebuffer").map((call) => call.args[1] === null);
+    expect(bound.at(0)).toBe(true);
+    expect(bound.at(-1)).toBe(true);
+    expect(bound).toContain(false);
+  });
+
+  // The uniform name is the parameter key with `u_` in front, and nothing checks that at runtime:
+  // getUniformLocation answers null for a name the shader never declared and setUniforms moves on.
+  it("hands the resolved value to the uniform the shader declares", () => {
+    const { compositor, recording } = attached();
+    render(compositor, project([[withEffect("clp_1")]]), 0, framesFor("clp_1"), amount(2.5));
+
+    expect(recording.named("uniform1f").map((call) => call.args)).toContainEqual(["u_amount", 2.5]);
+  });
+
+  // Opacity belongs after the effects, so the clip goes into the target at full strength and the
+  // composite that follows carries it. Brightening a clip must not also un-fade it.
+  it("keeps opacity out of the chain and applies it when compositing", () => {
+    const { compositor, recording } = attached();
+    const scene = project([[{ ...withEffect("clp_1"), opacity: 0.5 }]]);
+
+    render(compositor, scene, 0, framesFor("clp_1"), amount(2));
+
+    const opacities = recording
+      .named("uniform1f")
+      .filter((call) => call.args[0] === "u_opacity")
+      .map((call) => call.args[1]);
+    expect(opacities).toEqual([1, 0.5]);
+  });
+
+  it("takes turns between two targets rather than reading the one it writes", () => {
+    const { compositor, recording } = attached();
+    const two: Spot = {
+      id: "clp_1",
+      effects: [
+        { id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+        { id: "eff_2", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+      ],
+    };
+
+    render(compositor, project([[two]]), 0, framesFor("clp_1"), amount(2));
+
+    const targets = recording
+      .named("bindFramebuffer")
+      .map((call) => call.args[1])
+      .filter((handle) => handle !== null);
+    expect(new Set(targets).size).toBe(2);
+    expect(recording.named("drawArrays")).toHaveLength(4);
+  });
+
+  it("compiles one program per effect type and keeps it", () => {
+    const { compositor, recording } = attached();
+    const scene = project([[withEffect("clp_1")]]);
+    render(compositor, scene, 0, framesFor("clp_1"), amount(2));
+    render(compositor, scene, 0, framesFor("clp_1"), amount(3));
+
+    // The clip quad, the composite, and the effect itself.
+    expect(recording.named("createProgram")).toHaveLength(3);
+  });
+
+  it("gives the chain back to the driver on dispose", () => {
+    const { compositor, recording } = attached();
+    render(compositor, project([[withEffect("clp_1")]]), 0, framesFor("clp_1"), amount(2));
+
+    compositor.dispose();
+
+    expect(recording.named("deleteFramebuffer")).toHaveLength(2);
+    expect(recording.named("deleteProgram")).toHaveLength(3);
+  });
+});
+
+describe("Compositor transitions", () => {
+  // A mix needs the picture underneath as a texture, and the pass cannot sample the buffer it is
+  // drawing into.
+  it("copies the screen before mixing into it", () => {
+    const { compositor, recording } = attached();
+    render(compositor, project([[transition("clp_1")]]), 500, framesFor("clp_1"));
+
+    expect(recording.named("copyTexImage2D")).toHaveLength(1);
+    expect(recording.named("uniform1f").map((call) => call.args)).toContainEqual([
+      "u_progress",
+      0.5,
+    ]);
+  });
+
+  // The mix already carries what was underneath. Blending it over that same picture would count
+  // the lower clip twice, which shows up as a transition that starts too bright.
+  it("writes the mix without blending it over what it already contains", () => {
+    const { compositor, recording } = attached();
+    render(compositor, project([[transition("clp_1")]]), 500, framesFor("clp_1"));
+
+    const last = recording.calls.map((call) => call.name).lastIndexOf("drawArrays");
+    const enables = recording.calls
+      .slice(0, last)
+      .filter((call) => call.name === "enable" || call.name === "disable");
+    expect(enables.at(-1)?.name).toBe("disable");
   });
 });
