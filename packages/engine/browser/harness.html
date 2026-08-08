@@ -228,6 +228,36 @@ async function main() {
     check("the sound is in there too", hasAudio, true);
   });
 
+  // The draw list maps into clip space from the project's own size, so a different output size is
+  // meant to cost nothing but pixels. Meant to is not the same as does.
+  await test("exporting at a size the project is not", async () => {
+    const handle = R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      options: options({ width: WIDTH / 2, height: HEIGHT / 2 }),
+      createWorker: worker,
+    });
+    const result = await handle.result;
+    const blob = new Blob([result.bytes], { type: "video/mp4" });
+    const info = await R.probe(blob);
+    check("the file is written at the size that was asked for", [info.video.width, info.video.height], [
+      WIDTH / 2,
+      HEIGHT / 2,
+    ]);
+    const input = new R.Input({ formats: R.ALL_FORMATS, source: new R.BlobSource(blob) });
+    try {
+      const sink = new R.VideoSampleSink(await input.getPrimaryVideoTrack());
+      const { context } = canvasOf(WIDTH / 2, HEIGHT / 2);
+      const first = await sink.getSample(0);
+      first.draw(context, 0, 0);
+      const pixel = context.getImageData(WIDTH / 4, HEIGHT / 4, 1, 1).data;
+      first.close();
+      check("and still shows the picture, only smaller", [pixel[0], pixel[1], pixel[2]], colourAt(0), 12);
+    } finally {
+      input.dispose();
+    }
+  });
+
   await test("cancelling mid-run leaves nothing behind", async () => {
     const handle = R.startExport({
       project: doc.state,
