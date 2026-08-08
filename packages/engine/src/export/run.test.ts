@@ -2,10 +2,11 @@ import { frameDuration, timeToSeconds } from "@videola/core";
 import { AudioBuffer, OfflineAudioContext } from "node-web-audio-api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AudioGraph } from "../audio/graph";
 import { EXPORT_FORMATS } from "./format";
 import { EXPORT_CANCELLED, exportFrames, frameTimes, startExport } from "./run";
 
-import type { Project, Time, Transform } from "@videola/core";
+import type { Effect, EffectParams, Keyframe, Project, Time, Transform } from "@videola/core";
 import type { ExportRequest } from "./encode";
 import type { ExportInput, ExportMessage } from "./run";
 
@@ -349,5 +350,89 @@ describe("startExport, the sound", () => {
     expect(worker.transfers[0]).toHaveLength(2);
     handle.cancel();
     await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  });
+});
+
+// The chain the mixer authors has to reach the file, not only the speakers. An export that built its
+// graph without the master's effects, or without the resolver that moves them, writes something
+// nobody ever approved -- which is the one divergence the shared `AudioGraph` exists to rule out.
+function mastered(effects: Effect[]): Project {
+  const built = audibleProject();
+  return { ...built, master: { volume: 1, effects } } as unknown as Project;
+}
+
+function limiter(keyframes: Record<string, Keyframe[]> = {}): Effect {
+  return {
+    id: "eff_limiter",
+    effectType: "limiter",
+    enabled: true,
+    params: { threshold: { kind: "float", value: -18 } },
+    keyframes,
+  } as unknown as Effect;
+}
+
+async function exported(overrides: Partial<ExportInput>): Promise<Float32Array> {
+  installRenderer();
+  const { worker, handle } = withWorker({
+    audioSource: steady,
+    options: { ...input().options, range: { from: 0, to: SECOND } },
+    ...overrides,
+  });
+  const request = await untilPosted(worker);
+  handle.cancel();
+  await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  const plane = request.audio?.channels[0];
+  if (plane === undefined) throw new Error("the export wrote no sound");
+  return plane;
+}
+
+describe("startExport, the mastering chain", () => {
+  it("writes the file through the master's effects and not around them", async () => {
+    const [open, limited] = await Promise.all([
+      exported({ project: mastered([]) }),
+      exported({ project: mastered([limiter()]) }),
+    ]);
+
+    // The clip fades in across the whole range, so the last sample is the loudest one there is.
+    expect(open[SAMPLE_RATE - 1]!).toBeCloseTo(1, 2);
+    expect(limited[SAMPLE_RATE - 1]!).toBeLessThan(0.8);
+    expect(limited[SAMPLE_RATE - 1]!).toBeGreaterThan(0.1);
+  });
+
+  // Effect and keyframe and export, crossed in one run. The threshold is keyframed, so an export
+  // that fell back to the static value -- or never asked the core at all -- lands on different
+  // samples than the preview did.
+  it("resolves a keyframed parameter through the same core the preview asks", async () => {
+    const swept = limiter({
+      threshold: [
+        { time: 0, value: { kind: "float", value: -40 }, interp: "linear" },
+        { time: SECOND, value: { kind: "float", value: 0 }, interp: "linear" },
+      ] as unknown as Keyframe[],
+    });
+    const project = mastered([swept]);
+    const params: EffectParams = (at) =>
+      new Map([
+        [swept.id, new Map([["threshold", { kind: "float", value: -40 + (40 * at) / SECOND }]])],
+      ]);
+
+    const file = await exported({ project, effectParams: params });
+
+    // The same graph the preview drives, at the same range, from the same resolver.
+    const ctx = new OfflineAudioContext(2, SAMPLE_RATE, SAMPLE_RATE);
+    const graph = new AudioGraph(ctx as unknown as BaseAudioContext, steady, params);
+    await graph.prepare(project);
+    graph.startAt(0, 0);
+    const heard = (await ctx.startRendering()).getChannelData(0);
+
+    for (const index of [0, SAMPLE_RATE / 4, SAMPLE_RATE / 2, SAMPLE_RATE - 1]) {
+      expect(file[index]!).toBeCloseTo(heard[index]!, 6);
+    }
+
+    // And the sweep really moved. The same chain with a threshold that stands still is still
+    // holding the level down where the swept one has let go, so the loudest sample of the two runs
+    // differs -- without which the four lines above would pass for two graphs that had both
+    // ignored the keyframes and rendered the same wrong thing.
+    const held = await exported({ project: mastered([limiter()]) });
+    expect(file[SAMPLE_RATE - 1]!).toBeGreaterThan(held[SAMPLE_RATE - 1]! * 1.2);
   });
 });
