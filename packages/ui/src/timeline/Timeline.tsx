@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -8,7 +9,15 @@ import {
   type RefObject,
 } from "react";
 
-import { cmd, FLICKS_PER_SECOND, type ClipId, type Command, type Project, type Time } from "@videola/core";
+import {
+  cmd,
+  FLICKS_PER_SECOND,
+  type ClipId,
+  type Command,
+  type MediaId,
+  type Project,
+  type Time,
+} from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
 import { mediaNameIndex } from "./Clip";
@@ -20,9 +29,12 @@ import {
   clampZoom,
   projectEnd,
   timeToX,
+  trackAt,
   trackHeight,
   visibleRange,
   xToTime,
+  type MediaDrop,
+  type MediaGrab,
   type TimeRange,
   type ZoomBy,
 } from "./geometry";
@@ -43,6 +55,16 @@ export interface TimelineProps {
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
   onSelectionChange?: (clip: ClipId | undefined) => void;
+  /**
+   * A medium the media library has under a pointer. The timeline judges the whole gesture from
+   * here on -- the drag threshold, the track under the finger and the time it lands on are all its
+   * own geometry, and a second opinion on any of them could disagree with the first.
+   */
+  grab?: MediaGrab;
+  /** Released over a track. One command, so one undo step. */
+  onDropMedia?: (drop: MediaDrop) => void;
+  /** Released anywhere else, or cancelled. The grab is over either way. */
+  onGrabEnd?: () => void;
 }
 
 export function Timeline({
@@ -51,6 +73,9 @@ export function Timeline({
   dispatch,
   onSeek,
   onSelectionChange,
+  grab,
+  onDropMedia,
+  onGrabEnd,
 }: TimelineProps): ReactElement {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -86,6 +111,15 @@ export function Timeline({
   });
 
   const tracks = project.timeline.tracks;
+  const dropping = useMediaDrop({
+    grab,
+    project,
+    flicksPerPixel,
+    surface: scrollRef,
+    tracksArea: tracksRef,
+    onDropMedia,
+    onGrabEnd,
+  });
   // Top row first, because tracks[0] is the one the compositor draws lowest.
   const rows = useMemo(() => tracks.map((track, index) => ({ track, index })).reverse(), [tracks]);
   const mediaNames = useMemo(() => mediaNameIndex(project.library), [project.library]);
@@ -161,10 +195,18 @@ export function Timeline({
                   mediaNames={mediaNames}
                   selected={selected}
                   trimZonePx={gestures.trimZonePx}
+                  dropTarget={dropping?.track === track.id}
                   onSelect={select}
                 />
               ))}
             </div>
+            {dropping !== undefined && (
+              <div
+                className="v-timeline__dropLine"
+                data-testid="timeline-dropline"
+                style={{ left: `${timeToX(dropping.at, flicksPerPixel)}px` }}
+              />
+            )}
             <div
               className="v-timeline__playhead"
               data-testid="timeline-playhead"
@@ -201,6 +243,92 @@ export function Timeline({
       )}
     </section>
   );
+}
+
+// Far enough that a tap on a library entry is not a drag, and the same threshold the timeline's
+// own gestures use -- one number for "the pointer has travelled", not two that could drift.
+const GRAB_THRESHOLD_PX = 3;
+
+interface MediaDropConfig {
+  grab: MediaGrab | undefined;
+  project: Project;
+  flicksPerPixel: number;
+  surface: RefObject<HTMLElement | null>;
+  tracksArea: RefObject<HTMLElement | null>;
+  onDropMedia: ((drop: MediaDrop) => void) | undefined;
+  onGrabEnd: (() => void) | undefined;
+}
+
+// A medium carried from the library onto a track. Listening on the window rather than on the
+// timeline's own surface, because the pointer went down in the other panel and never enters this
+// one as far as React's tree is concerned.
+function useMediaDrop(config: MediaDropConfig): MediaDrop | undefined {
+  const { grab, onDropMedia, onGrabEnd } = config;
+  const [drop, setDrop] = useState<MediaDrop>();
+  const latest = useRef(config);
+  latest.current = config;
+
+  useEffect(() => {
+    if (grab === undefined) {
+      setDrop(undefined);
+      return;
+    }
+    const resolve = (x: number, y: number): MediaDrop | undefined => {
+      const travelled = Math.abs(x - grab.x) >= GRAB_THRESHOLD_PX || Math.abs(y - grab.y) >= GRAB_THRESHOLD_PX;
+      if (!travelled) return undefined;
+      return dropAt(latest.current, grab.media, x, y);
+    };
+    const onMove = (event: PointerEvent) => setDrop(resolve(event.clientX, event.clientY));
+    const onUp = (event: PointerEvent) => {
+      const landed = resolve(event.clientX, event.clientY);
+      setDrop(undefined);
+      // The command goes out before the grab is cleared, so a caller that clears its own state in
+      // onGrabEnd cannot pull the medium out from under the drop.
+      if (landed !== undefined) latest.current.onDropMedia?.(landed);
+      latest.current.onGrabEnd?.();
+    };
+    // A cancelled pointer is the browser taking the gesture over. Placing a clip the user never
+    // let go of would be an edit they did not make.
+    const onCancel = () => {
+      setDrop(undefined);
+      latest.current.onGrabEnd?.();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+  }, [grab, onDropMedia, onGrabEnd]);
+
+  return drop;
+}
+
+// The track under the pointer and the time under it, or nothing if the pointer is not over the
+// tracks at all. The same two conversions the move gesture uses, from the same geometry.
+function dropAt(
+  config: MediaDropConfig,
+  media: MediaId,
+  clientX: number,
+  clientY: number,
+): MediaDrop | undefined {
+  const area = config.tracksArea.current;
+  const surface = config.surface.current;
+  if (area === null || surface === null) return undefined;
+  const box = area.getBoundingClientRect();
+  if (clientY < box.top || clientY > box.bottom) return undefined;
+  const across = surface.getBoundingClientRect();
+  if (clientX < across.left || clientX > across.right) return undefined;
+  const row = trackAt(config.project.timeline.tracks, clientY - box.top);
+  const track = config.project.timeline.tracks[row];
+  if (track === undefined) return undefined;
+  return {
+    media,
+    track: track.id,
+    at: Math.max(0, xToTime(clientX - across.left + surface.scrollLeft, config.flicksPerPixel)),
+  };
 }
 
 interface Viewport {

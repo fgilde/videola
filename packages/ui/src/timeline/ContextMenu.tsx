@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactElement } from "react";
+import { useRef, type ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
+import { useDismiss } from "../useDismiss";
 import type { ClipMenu } from "./useTimelineGestures";
 
 export interface ContextMenuProps {
@@ -32,22 +33,4 @@ export function ContextMenu({ menu, canSplit, onSplit, onDelete, onClose }: Cont
       </button>
     </div>
   );
-}
-
-function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void): void {
-  useEffect(() => {
-    const onPointerDown = (event: Event) => {
-      if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
-      onClose();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [ref, onClose]);
 }

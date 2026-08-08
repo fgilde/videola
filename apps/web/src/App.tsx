@@ -54,7 +54,11 @@ import {
   type ExportFormatChoice,
   type ExportProgress,
   type ExportSelection,
+  type MediaDrop,
+  type MediaGrab,
 } from "@videola/ui";
+
+import { useThumbnails } from "./thumbnails";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed" | "error.importFailed";
 
@@ -80,6 +84,7 @@ export function App(): ReactElement {
   const [playing, setPlaying] = useState(false);
   const [missing, setMissing] = useState(NOTHING_MISSING);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
+  const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
   const [selectedClip, setSelectedClip] = useState<ClipId>();
@@ -99,6 +104,7 @@ export function App(): ReactElement {
   // The same pure function of the same window the shell reads, so the two cannot disagree. Passing
   // it down would mean turning AppShell's children into a render prop for one boolean.
   const layout = useLayoutMode("auto");
+  const thumbnails = useThumbnails(project?.library ?? []);
 
   // A stable identity per report, so an identical repeat error still replaces the DOM node
   // and gets re-announced by assistive tech instead of sitting there as unchanged content.
@@ -393,6 +399,25 @@ export function App(): ReactElement {
     [doc, reportError],
   );
 
+  // A medium carried out of the library and let go over a track. One command, so one undo step --
+  // and the track and the instant are the timeline's own, not a guess made here.
+  const dropMedia = useCallback(
+    ({ media, track, at }: MediaDrop) => {
+      if (doc === undefined) return;
+      try {
+        const asset = doc.state.library.find((entry) => entry.id === media);
+        if (asset === undefined) return;
+        doc.dispatch(
+          cmd.clipAdd(track, { kind: "media", media }, at, asset.duration ?? STILL_DURATION),
+        );
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
+
   const relink = useCallback(
     async (media: MediaId) => {
       const file = (await pickFiles(MEDIA_ACCEPT))[0];
@@ -562,19 +587,8 @@ export function App(): ReactElement {
                 onSeek={seek}
                 onStep={step}
               />
-              {doc !== undefined && (
-                <Inspector
-                  project={project}
-                  clip={selectedClip}
-                  playhead={playhead}
-                  effects={effectManifests()}
-                  effectParamsAt={doc.effectParamsAt}
-                  dispatch={edit}
-                  onSeek={seek}
-                />
-              )}
               {layout === "phone" && <PanelTabs panel={panel} onSelect={setPanel} />}
-              {/* Unmounted rather than hidden while the other panel shows: the timeline windows
+              {/* Unmounted rather than hidden while another panel shows: the timeline windows
                   its clips by the width it measures, and a display:none container measures zero.
                   It would come back empty. */}
               {(layout !== "phone" || panel === "library") && (
@@ -582,9 +596,17 @@ export function App(): ReactElement {
                   library={project.library}
                   missing={missing}
                   fps={project.settings.fps}
+                  thumbnails={thumbnails}
+                  // Only where the timeline is on screen at the same time. On a phone the two take
+                  // turns behind the tab bar, so there is nowhere to drag to.
+                  draggable={layout !== "phone"}
                   onImport={() => void pickFiles(MEDIA_ACCEPT).then(importMedia)}
+                  // The camera and the gallery are what a touch device has instead of a file
+                  // system, and `capture` only means anything to one.
+                  onCapture={layout === "desktop" ? undefined : (files) => void importMedia(files)}
                   onAdd={addToTimeline}
                   onRelink={(media) => void relink(media)}
+                  onGrab={setGrab}
                 />
               )}
               {(layout !== "phone" || panel === "timeline") && (
@@ -594,6 +616,20 @@ export function App(): ReactElement {
                   dispatch={edit}
                   onSeek={seek}
                   onSelectionChange={setSelectedClip}
+                  grab={grab}
+                  onDropMedia={dropMedia}
+                  onGrabEnd={() => setGrab(undefined)}
+                />
+              )}
+              {(layout !== "phone" || panel === "inspector") && (
+                <Inspector
+                  project={project}
+                  clip={selectedClip}
+                  playhead={playhead}
+                  effects={effectManifests()}
+                  effectParamsAt={doc.effectParamsAt}
+                  dispatch={edit}
+                  onSeek={seek}
                 />
               )}
             </>

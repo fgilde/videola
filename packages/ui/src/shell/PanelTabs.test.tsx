@@ -22,16 +22,26 @@ const pressed = (): Record<string, string | null> =>
   );
 
 describe("PanelTabs", () => {
-  it("offers both panels and says which one is showing", () => {
+  it("offers every panel and says which one is showing", () => {
     show("timeline");
 
-    expect(pressed()).toEqual({ Medien: "false", Zeitleiste: "true" });
+    expect(pressed()).toEqual({ Medien: "false", Zeitleiste: "true", Eigenschaften: "false" });
   });
 
   it("marks the library once that is the one showing", () => {
     show("library");
 
-    expect(pressed()).toEqual({ Medien: "true", Zeitleiste: "false" });
+    expect(pressed()).toEqual({ Medien: "true", Zeitleiste: "false", Eigenschaften: "false" });
+  });
+
+  // The properties panel is what carries effects, keyframes and transitions. Without a tab of its
+  // own it was squeezed between the transport and this bar, which made the phone a viewer.
+  it("puts the properties panel one tap away", () => {
+    const onSelect = show("timeline");
+
+    fireEvent.click(screen.getByText("Eigenschaften"));
+
+    expect(onSelect.mock.calls).toEqual([["inspector"]]);
   });
 
   it("reports the panel that was asked for", () => {

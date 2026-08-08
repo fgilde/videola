@@ -2,14 +2,17 @@ import type { ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
 
-export type EditorPanel = "library" | "timeline";
+export type EditorPanel = "library" | "timeline" | "inspector";
 
-// Two, because there are two panels. The spec's phone bar also names effects, text, audio and
-// export -- none of those exist yet, and a tab that opens nothing is worse than a tab that is
-// not there. Each one joins this list on the day its panel does.
+// Three, because there are three panels. The properties panel is what carries effects, keyframes,
+// transitions and speed, and while it sat squeezed between the transport and this bar the phone was
+// a viewer rather than an editor. Text, audio and export from the spec's bar have no panel of their
+// own; each joins this list on the day one exists, because a tab that opens nothing is worse than
+// a tab that is not there.
 const TABS = [
   { id: "library", label: "library.label" },
   { id: "timeline", label: "timeline.label" },
+  { id: "inspector", label: "inspector.label" },
 ] as const satisfies readonly { id: EditorPanel; label: string }[];
 
 export interface PanelTabsProps {

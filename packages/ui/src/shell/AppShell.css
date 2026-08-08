@@ -12,9 +12,46 @@
   padding: var(--v-space-2) var(--v-space-4);
   background: var(--v-bg-elevated);
   border-bottom: 1px solid var(--v-border);
-  /* Eight controls do not fit a phone width even squashed. Scrolling keeps every one
-     of them reachable instead of clipping or wrapping into an unreadable topbar. */
-  overflow-x: auto;
+  /* No sideways scroll. The project actions live in the overflow menu, which is what makes the
+     bar fit its window instead of parking half its controls outside the frame. A browser check
+     holds this to scrollWidth == clientWidth at 390 px. */
+  position: relative;
+}
+
+.v-topbar__more > summary {
+  /* A summary is a list-item box by default, and the marker sits inside the button. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--v-touch-target);
+  list-style: none;
+}
+
+.v-topbar__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Out of the bar's flow, or the widest item in the menu would set the width of the bar itself. */
+.v-topbar__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--v-space-1));
+  left: var(--v-space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  box-shadow: var(--v-shadow);
+}
+
+.v-topbar__menu .v-button {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .v-topbar__brand {
@@ -115,30 +152,32 @@
 /* One column on a phone: the picture stays put at the top and the panels take turns underneath,
    because 390 px cannot hold a library and a timeline side by side without both being useless.
    The preview row is capped rather than flexible -- a 16:9 picture in a 390 px column is 220 px
-   tall, and an even split would leave a third of the screen as empty letterbox. The inspector
-   sits between the transport and the tabs, capped, and is empty until a clip is selected. */
+   tall, and an even split would leave a third of the screen as empty letterbox.
+
+   The properties panel is one of the three that take turns, not a strip above them. Between the
+   transport and the tabs it had a third of the screen at its own 35vh cap and still could not show
+   an effect, which left the phone able to play a project but not to change one. */
 .v-shell[data-layout="phone"] .v-editor {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 32vh) auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 32vh) auto auto minmax(0, 1fr);
   grid-template-areas:
     "banners"
     "preview"
     "transport"
-    "inspector"
     "tabs"
     "panel";
 }
 
+.v-shell[data-layout="phone"] .v-editor .v-library,
+.v-shell[data-layout="phone"] .v-editor .v-timeline,
 .v-shell[data-layout="phone"] .v-editor > .v-inspector {
-  max-height: 35vh;
-  width: auto;
-  border-left: none;
-  border-top: 1px solid var(--v-border);
+  grid-area: panel;
 }
 
-.v-shell[data-layout="phone"] .v-editor .v-library,
-.v-shell[data-layout="phone"] .v-editor .v-timeline {
-  grid-area: panel;
+.v-shell[data-layout="phone"] .v-editor > .v-inspector {
+  width: auto;
+  border-left: none;
+  overflow-y: auto;
 }
 
 /* Five 44 px buttons and two timecodes do not fit 390 px on one line, and the position wrapping
