@@ -40,8 +40,8 @@ serialisiert das Ergebnis und bildet die Differenz in beide Richtungen. Vorwärt
 Umkehr-Patch landen als Paar auf dem Undo-Stack.
 
 Der Grund: ein handgeschriebenes Gegenstück pro Command ist der am seltensten ausgeführte Code im
-Editor und veraltet, sobald die Vorwärtsoperation geändert wird. Sechsundzwanzig Commands wären
-sechsundzwanzig Umkehrungen, die gepflegt werden müssen. Ein Diff ist einmal geschrieben und für den
+Editor und veraltet, sobald die Vorwärtsoperation geändert wird. Siebenunddreißig Commands wären
+siebenunddreißig Umkehrungen, die gepflegt werden müssten. Ein Diff ist einmal geschrieben und für den
 nächsten Command schon richtig, bevor er existiert.
 
 ## Zeit ist eine Ganzzahl

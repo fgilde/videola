@@ -80,7 +80,7 @@ features:
   transport for play/pause, frame stepping and jumping to either end.
 - **Effects and transitions.** A brightness effect and a crossfade, resolved from keyframes in the
   Rust core so the preview and any later export read the same values.
-- **The Rust core.** `videola-core` holds the project model, a bus of 26 commands, undo and redo
+- **The Rust core.** `videola-core` holds the project model, a bus of 37 commands, undo and redo
   built from JSON-Patch diffs, and the `.videola` reader and writer.
 - **One pointer path.** Mouse, pen and touch take the same code; hit areas grow to 44 px when the
   pointer is not a mouse.

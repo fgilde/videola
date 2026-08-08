@@ -244,11 +244,95 @@ test("context menu", function () {
   const menuEvent = new MouseEvent("contextmenu", Object.assign({ bubbles: true, cancelable: true }, at));
   T.flushSync(function () { q("[data-clip-id]").dispatchEvent(menuEvent); });
   const items = all('[role="menuitem"]');
-  check("both items are there", items.length, 2);
-  checkAtLeast("each item is a touch target", Math.round(items[1].getBoundingClientRect().height), 44);
+  check("every entry the clip menu promises is there", items.map(function (item) { return item.textContent; }),
+    ["Am Playhead teilen", "Clip löschen", "Löschen und Lücke schließen",
+     "Kopieren", "Ausschneiden", "Am Playhead einfügen", "Gruppieren",
+     "Gruppierung aufheben"]);
+  const short = items.filter(function (item) {
+    return Math.round(item.getBoundingClientRect().height) < 44;
+  });
+  check("no entry is smaller than a touch target", short.length, 0);
+  // Nothing has been copied, nothing else is selected: an entry that cannot act says so rather
+  // than sending a command the core would refuse.
+  check("paste and group are disabled until they can do something",
+    [items[5].disabled, items[6].disabled, items[3].disabled], [true, true, false]);
   const menuBox = q('[role="menu"]').getBoundingClientRect();
   check("the menu lands on the pointer",
     [Math.round(menuBox.left), Math.round(menuBox.top)], [at.clientX, at.clientY]);
+});
+
+// ---------------------------------------------------------------- markers
+
+test("markers", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 10)])],
+    [{ id: "mrk_1", time: 3 * SECOND, label: "chapter", colorHex: "#f0a030" }]));
+  reset();
+  const flag = q("[data-marker-id]");
+  const box = flag.getBoundingClientRect();
+  check("the marker stands at its own time", Math.round(box.left - surface().getBoundingClientRect().left), 300);
+  checkAtLeast("and is wide enough to be hit", Math.round(box.width), 10);
+  click(flag);
+  check("clicking it moves the playhead there", seeks[seeks.length - 1], 3 * SECOND);
+
+  const menuEvent = new MouseEvent("contextmenu", Object.assign({ bubbles: true, cancelable: true }, atSurface(300, 4)));
+  T.flushSync(function () { flag.dispatchEvent(menuEvent); });
+  const items = all('[role="menuitem"]');
+  check("its own menu offers exactly one thing to do", items.length, 1);
+  click(items[0]);
+  check("and that thing removes the marker", sent[sent.length - 1].command.type, "marker.remove");
+});
+
+// ---------------------------------------------------------------- the two drag modes
+
+function chooseMode(label, value) {
+  const select = all(".v-timeline__toolbar select").find(function (element) {
+    return element.getAttribute("aria-label") === label;
+  });
+  select.value = value;
+  T.flushSync(function () {
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+test("edge and drag modes", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 2), clip("clp_2", 2, 2)])]));
+  chooseMode("Kante ziehen", "ripple");
+  reset();
+  pointer("pointerdown", all('[data-edge="end"]')[0], atSurface(200, 90));
+  pointer("pointermove", surface(), atSurface(300, 90));
+  pointer("pointerup", surface(), atSurface(300, 90));
+  check("the edge mode decides which command an edge drag sends",
+    sent.length === 0 ? "nothing sent" : sent[0].command.type, "clip.rippleTrim");
+
+  draw(project([track("trk_1", [clip("clp_1", 0, 2), clip("clp_2", 2, 2)])]));
+  chooseMode("Clip ziehen", "slip");
+  reset();
+  pointer("pointerdown", q("[data-clip-id]"), atSurface(100, 90));
+  pointer("pointermove", surface(), atSurface(200, 90));
+  pointer("pointerup", surface(), atSurface(200, 90));
+  check("and the drag mode which command a clip drag sends",
+    sent.length === 0 ? "nothing sent" : sent[0].command.type, "clip.slip");
+});
+
+// ---------------------------------------------------------------- more than one clip at a time
+
+test("multiple selection", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 2), clip("clp_2", 3, 2)])]));
+  pointer("pointerdown", all("[data-clip-id]")[0], atSurface(100, 90));
+  pointer("pointerup", surface(), atSurface(100, 90));
+  pointer("pointerdown", all("[data-clip-id]")[1], Object.assign({ ctrlKey: true }, atSurface(350, 90)));
+  pointer("pointerup", surface(), Object.assign({ ctrlKey: true }, atSurface(350, 90)));
+  check("both clips read as selected",
+    all("[data-clip-id]").map(function (element) { return element.dataset.selected; }), ["true", "true"]);
+
+  reset();
+  pointer("pointerdown", all("[data-clip-id]")[1], atSurface(350, 90));
+  pointer("pointermove", surface(), atSurface(450, 90));
+  pointer("pointerup", surface(), atSurface(450, 90));
+  const last = sent.slice(-2);
+  check("a drag moves both by the same step",
+    last.map(function (entry) { return entry.command.start; }), [1 * SECOND, 4 * SECOND]);
+  check("in one undo step", last[0].key, last[1].key);
 });
 
 // ---------------------------------------------------------------- the buttons the mouse has

@@ -25,7 +25,9 @@ export interface SnapResult {
 export interface CandidateOptions {
   range: TimeRange;
   playhead?: Time;
-  exclude?: ClipId;
+  // A set, not one id: a drag moves the whole selection, and a clip travelling with the pointer
+  // must not offer its own edge as a line to snap to.
+  exclude?: ReadonlySet<ClipId>;
 }
 
 // When two lines are equally close the more deliberate one wins: a marker was placed by hand,
@@ -81,7 +83,7 @@ export function snapCandidates(project: Project, options: CandidateOptions): Sna
   }
   for (const track of project.timeline.tracks) {
     for (const clip of clipsInRange(track.clips, options.range)) {
-      if (clip.id === options.exclude) continue;
+      if (options.exclude?.has(clip.id) === true) continue;
       candidates.push(
         { time: clip.start, kind: "clipEdge" },
         { time: clip.start + clip.duration, kind: "clipEdge" },

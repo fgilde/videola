@@ -60,6 +60,7 @@ id_type!(TrackId, "trk");
 id_type!(ClipId, "clp");
 id_type!(EffectId, "eff");
 id_type!(MarkerId, "mrk");
+id_type!(GroupId, "grp");
 
 #[cfg(test)]
 mod tests {

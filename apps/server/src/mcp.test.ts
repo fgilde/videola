@@ -70,12 +70,16 @@ interface Fixture {
   track: string;
   otherTrack: string;
   clip: string;
+  neighbour: string;
+  clipJson: Record<string, unknown>;
+  marker: string;
   media: string;
 }
 
-// One project carrying everything the twenty-six commands need to address: two tracks so a reorder
-// has somewhere to go, a media clip, an effect with a keyframe on it. Built with the same commands
-// under test, so the fixture cannot describe a project the core would not accept.
+// One project carrying everything the commands need to address: two tracks so a reorder has
+// somewhere to go, two clips butted together so a roll has a cut and a slide has a neighbour, a
+// group to dissolve, a marker to rename, an effect with a keyframe on it. Built with the same
+// commands under test, so the fixture cannot describe a project the core would not accept.
 async function fixture(): Promise<Fixture> {
   const { id } = await api.create();
   api.apply(id, [
@@ -91,13 +95,34 @@ async function fixture(): Promise<Fixture> {
   ]);
   const tracks = api.state(id).timeline.tracks;
   const track = tracks[0]?.id ?? "";
-  api.apply(id, [cmd.clipAdd(track, { kind: "media", media: MEDIA_ID }, 0, secondsToTime(2))]);
-  const clip = api.state(id).timeline.tracks[0]?.clips[0]?.id ?? "";
+  api.apply(id, [
+    cmd.clipAdd(track, { kind: "media", media: MEDIA_ID }, 0, secondsToTime(2)),
+    cmd.clipAdd(track, { kind: "media", media: MEDIA_ID }, secondsToTime(2), secondsToTime(2)),
+  ]);
+  const placed = api.state(id).timeline.tracks[0]?.clips ?? [];
+  const clip = placed[0]?.id ?? "";
+  const neighbour = placed[1]?.id ?? "";
   api.apply(id, [
     cmd.effectAdd(clip, "brightness"),
     cmd.keyframeAdd(clip, "brightness", "amount", 0, { kind: "float", value: 1 }),
+    cmd.clipGroup([clip, neighbour]),
+    cmd.markerAdd(secondsToTime(1), "chapter"),
   ]);
-  return { project: id, track, otherTrack: tracks[1]?.id ?? "", clip, media: MEDIA_ID };
+  const state = api.state(id);
+  return {
+    project: id,
+    track,
+    otherTrack: tracks[1]?.id ?? "",
+    clip,
+    neighbour,
+    // The payload for `clip.paste` is a whole clip, and the honest source for one is a clip the
+    // core itself produced.
+    clipJson: JSON.parse(
+      JSON.stringify(state.timeline.tracks[0]?.clips[0] ?? {}),
+    ) as Record<string, unknown>,
+    marker: state.markers[0]?.id ?? "",
+    media: MEDIA_ID,
+  };
 }
 
 // A payload per command, written against the fixture. `effect.add` and `media.import` deliberately
@@ -204,6 +229,19 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
     },
   }),
   "media.remove": (f) => ({ media: f.media }),
+  "clip.rippleDelete": (f) => ({ clip: f.clip }),
+  "clip.rippleTrim": (f) => ({ clip: f.clip, edge: "end", delta: -secondsToTime(0.5) }),
+  // Rightwards: rolling this cut the other way would ask the second clip for material in front of
+  // its in point, which it does not have.
+  "clip.roll": (f) => ({ clip: f.clip, edge: "end", delta: secondsToTime(0.5) }),
+  "clip.slip": (f) => ({ clip: f.clip, delta: secondsToTime(0.5) }),
+  "clip.slide": (f) => ({ clip: f.neighbour, delta: secondsToTime(0.5) }),
+  "clip.paste": (f) => ({ track: f.track, clip: f.clipJson, start: secondsToTime(8) }),
+  "clip.group": (f) => ({ clips: [f.clip, f.neighbour] }),
+  "clip.ungroup": (f) => ({ clip: f.clip }),
+  "marker.add": () => ({ time: secondsToTime(3), label: "chapter two" }),
+  "marker.remove": (f) => ({ marker: f.marker }),
+  "marker.rename": (f) => ({ marker: f.marker, label: "renamed" }),
 };
 
 describe("the tool catalogue", () => {

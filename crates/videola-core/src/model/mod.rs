@@ -10,7 +10,7 @@ pub mod timeline;
 
 pub use clip::{BlendMode, Clip, ClipSource, Crop, Fades, Generator, Speed, Transform};
 pub use effect::{Effect, Transition, TransitionAlignment};
-pub use ids::{ClipId, EffectId, MarkerId, ProjectId, TrackId};
+pub use ids::{ClipId, EffectId, GroupId, MarkerId, ProjectId, TrackId};
 pub use keyframe::{evaluate, Interp, Keyframe};
 pub use media::{MediaAsset, MediaId, MediaKind};
 pub use param::ParamValue;

@@ -11,6 +11,7 @@ export type { Marker } from "./Marker";
 export type { MarkerId } from "./MarkerId";
 export type { Clip } from "./Clip";
 export type { ClipId } from "./ClipId";
+export type { GroupId } from "./GroupId";
 export type { ClipSource } from "./ClipSource";
 export type { Generator } from "./Generator";
 export type { Speed } from "./Speed";

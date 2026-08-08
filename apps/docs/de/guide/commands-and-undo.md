@@ -2,7 +2,7 @@
 
 ::: info Zusammenfassung
 Das vollständige Kapitel gibt es nur auf Englisch: [Commands and
-undo](/guide/commands-and-undo). Dort stehen alle sechsundzwanzig Commands mit ihren Feldern, das
+undo](/guide/commands-and-undo). Dort stehen alle siebenunddreißig Commands mit ihren Feldern, das
 Drahtformat und der Ablauf im Detail. Diese Seite fasst es zusammen.
 :::
 
@@ -10,21 +10,42 @@ Jede Bearbeitung ist ein serialisierbarer Command. Es gibt keinen Pfad, der das 
 verändert — daraus fallen Undo, die HTTP-API und der MCP-Server aus einem Mechanismus statt aus drei.
 Die beiden nach außen gerichteten stehen in [Die API und der MCP-Server](/de/guide/api-and-mcp).
 
-## Die sechsundzwanzig Commands
+## Die siebenunddreißig Commands
 
 | Gruppe | Commands |
 |---|---|
 | `project.*` | `setSettings`, `setTitle` |
 | `track.*` | `add`, `remove`, `reorder`, `rename`, `setVolume`, `setPan`, `setFlags` |
-| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `setSpeed`, `setVolume`, `setTransform`, `setTransition` |
+| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `setSpeed`, `setVolume`, `setTransform`, `setTransition` |
 | `effect.*` | `add`, `setParam` |
 | `keyframe.*` | `add`, `remove`, `move`, `setInterp` |
+| `marker.*` | `add`, `remove`, `rename` |
 | `media.*` | `import`, `remove` |
 
 `track.setFlags` nimmt jede Marke als nullbaren Wert, damit ein Command eine beliebige Teilmenge
 ändern kann; `null` heißt „unverändert lassen“. Rückwärtslauf ist `clip.setSpeed` mit
 `reverse: true`, kein eigener Clip-Typ. `media.remove` entfernt auch jeden Clip, der das Asset
 benutzt, und steigt dafür in verschachtelte Compound-Timelines ab.
+
+## Ripple, Roll, Slip und Slide
+
+Die fünf Kommandos neben `clip.trim` fassen mehr an als den Clip, den sie nennen.
+`clip.rippleDelete` entfernt einen Clip und zieht alles, was an seinem Ende oder danach beginnt, um
+seine Länge zurück — ein Clip, der über dieses Ende hinwegreicht, bleibt liegen, sonst tauschte
+das Schließen einer Lücke sie gegen eine Überlappung. `clip.rippleTrim` tut dasselbe für eine
+Trimmung; am *Kopf* bleibt der Start des Clips liegen, weil ein Ripple dort das Material bewegt.
+`clip.roll` verschiebt den Schnitt, den eine Kante mit dem anliegenden Clip teilt, und lehnt ab, wo
+keiner anliegt. `clip.slip` verschiebt das Material hinter einem liegenbleibenden Clip,
+`clip.slide` verschiebt den Clip und lässt die anliegenden Clips den Schritt aufnehmen. Alle
+lehnen ab, bevor irgendetwas geschrieben ist — eine halbe Slide ist keine Bearbeitung.
+
+`clip.paste` nimmt einen ganzen `Clip` entgegen und macht Kopieren, Duplizieren und Einfügen zu
+einer Sache. Der Kern vergibt frische Ids, auch für die Clips in einem geschachtelten Timeline,
+löst die mitgebrachte Gruppenzugehörigkeit und prüft die Nutzlast an derselben Schranke wie ein
+geladenes Projekt. `clip.group` bindet mindestens zwei Clips zusammen, `clip.ungroup` löst die
+Gruppe über alle Spuren hinweg.
+
+Marker liegen nach Zeit sortiert, in welcher Reihenfolge sie auch gesetzt wurden.
 
 ## Transformation und Übergang
 

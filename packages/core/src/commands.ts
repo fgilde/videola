@@ -1,4 +1,5 @@
 import type {
+  Clip,
   ClipSource,
   Command,
   Interp,
@@ -80,6 +81,35 @@ export const cmd = {
     delta,
   }),
   clipSplit: (clip: string, at: Time) => ({ type: "clip.split", clip, at }),
+  // Deleting without leaving a hole. `clip.remove` keeps the gap, this one closes it by pulling
+  // everything that starts at or after the clip's end back by its length.
+  clipRippleDelete: (clip: string) => ({ type: "clip.rippleDelete", clip }),
+  // Same delta rule as `clipTrim`: computed from the clip's current edge, never accumulated.
+  clipRippleTrim: (clip: string, edge: TrimEdge, delta: Time) => ({
+    type: "clip.rippleTrim",
+    clip,
+    edge,
+    delta,
+  }),
+  clipRoll: (clip: string, edge: TrimEdge, delta: Time) => ({
+    type: "clip.roll",
+    clip,
+    edge,
+    delta,
+  }),
+  clipSlip: (clip: string, delta: Time) => ({ type: "clip.slip", clip, delta }),
+  clipSlide: (clip: string, delta: Time) => ({ type: "clip.slide", clip, delta }),
+  // The whole clip travels, which is what makes this both paste and duplicate: the payload is a
+  // clip read out of a project, and the core mints new ids for it. `start` wins over the copy's
+  // own start field.
+  clipPaste: (track: string, clip: Clip, start: Time) => ({
+    type: "clip.paste",
+    track,
+    clip,
+    start,
+  }),
+  clipGroup: (clips: readonly string[]) => ({ type: "clip.group", clips: [...clips] }),
+  clipUngroup: (clip: string) => ({ type: "clip.ungroup", clip }),
   clipSetSpeed: (clip: string, rate: number, reverse: boolean, preservePitch = true) => ({
     type: "clip.setSpeed",
     clip,
@@ -150,6 +180,10 @@ export const cmd = {
     time: Time,
     interp: Interp,
   ) => ({ type: "keyframe.setInterp", clip, effectType, key, time, interp }),
+
+  markerAdd: (time: Time, label: string) => ({ type: "marker.add", time, label }),
+  markerRemove: (marker: string) => ({ type: "marker.remove", marker }),
+  markerRename: (marker: string, label: string) => ({ type: "marker.rename", marker, label }),
 
   // Since M1 the bytes live in OPFS rather than in WASM memory, so the caller is the only side
   // that ever sees them and has to supply the id it hashed them to. The core still checks the

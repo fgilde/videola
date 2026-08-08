@@ -8,9 +8,9 @@ The bus lives in `crates/videola-core/src/command`, the history in
 `crates/videola-core/src/history.rs`, and the two are joined by `Document` in
 `crates/videola-core/src/document.rs`.
 
-## The twenty-six commands
+## The thirty-seven commands
 
-`videola-core` defines twenty-six commands today. The design reserves a wider set still — masks,
+`videola-core` defines thirty-seven commands today. The design reserves a wider set still — masks,
 text, markers, audio chains, render and templates — but none of those exist yet.
 
 ### `project.*`
@@ -48,6 +48,14 @@ text, markers, audio chains, render and templates — but none of those exist ye
 | `clip.setVolume` | `clip`, `volume` |
 | `clip.setTransform` | `clip`, `transform` |
 | `clip.setTransition` | `clip`, `transition` |
+| `clip.rippleDelete` | `clip` |
+| `clip.rippleTrim` | `clip`, `edge`, `delta` |
+| `clip.roll` | `clip`, `edge`, `delta` |
+| `clip.slip` | `clip`, `delta` |
+| `clip.slide` | `clip`, `delta` |
+| `clip.paste` | `track`, `clip`, `start` |
+| `clip.group` | `clips` |
+| `clip.ungroup` | `clip` |
 
 `source` is one of three shapes: `{ kind: "media", media }`, `{ kind: "generator", generator }` for
 text, solid, shape, gradient and countdown clips that need no media file, or
@@ -71,6 +79,34 @@ nothing reads one: a transition is drawn by mixing the incoming clip into the pi
 already holds, so it belongs to the clip that arrives. A `Transition` is `{ transitionType,
 duration, alignment, params }` with `alignment` one of `in`, `out` or `center`. A cleared transition
 is *absent* from the clip rather than `null` — the field is skipped when it is none.
+
+The five editing commands next to `clip.trim` are the ones that touch more than the clip they name.
+`clip.rippleDelete` removes a clip and pulls everything that begins at or after its end back by its
+length; `clip.rippleTrim` does the same for a trim, and a trim of the *head* keeps the clip's start
+where it is because what a ripple moves there is the material. `clip.roll` moves the cut an edge
+shares with the clip that meets it and refuses where no clip does. `clip.slip` moves the material
+behind a clip that stays put, `clip.slide` moves the clip and lets the clips meeting it absorb the
+step. Each of them refuses a step that would empty a clip or read before the start of the material,
+and refuses it before writing anything — half a slide is not an edit anybody asked for.
+
+`clip.paste` takes a whole `Clip` off the wire and is how a copy, a duplicate and a paste are all
+the same operation. The core mints fresh ids for it, including for the clips inside a nested
+timeline, drops the group membership it came with, and puts it through the same gate a loaded
+project goes through. `start` wins over the `start` the payload carries.
+
+`clip.group` ties at least two clips together under a new group id and refuses to name a clip that
+does not exist — before writing any of the others. `clip.ungroup` dissolves the group of the clip it
+names, across every track it reaches.
+
+### `marker.*`
+
+| Command | Fields |
+|---|---|
+| `marker.add` | `time`, `label` |
+| `marker.remove` | `marker` |
+| `marker.rename` | `marker`, `label` |
+
+Markers are kept in time order, whatever order they were placed in.
 
 ### `effect.*`
 
@@ -207,7 +243,7 @@ of the diffing.
 
 A hand-written inverse is code that only runs when a user presses Ctrl+Z after that specific command.
 It is therefore the least-exercised code in the editor, and it goes stale the instant the forward
-operation changes without it. Twenty-six commands mean twenty-six inverses to keep honest, and the
+operation changes without it. Thirty-seven commands would mean thirty-seven inverses to keep honest, and the
 count only grows: the roadmap adds masks, nesting and an audio chain. The six commands this
 milestone added cost nothing on the undo side — a test asserts that every variant in the catalogue
 dispatches and undoes back to the exact prior state, and the new ones passed it the day they were
