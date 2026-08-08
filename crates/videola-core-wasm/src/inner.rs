@@ -8,7 +8,7 @@ use videola_core::command::{Command, Dispatch};
 use videola_core::format::{
     reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
 };
-use videola_core::model::{MediaAsset, MediaId, MediaKind, Project};
+use videola_core::model::{ClipId, MediaAsset, MediaId, MediaKind, Project, Time};
 use videola_core::{CoreError, DispatchResult, Document, Result};
 
 pub struct DocumentHost {
@@ -56,6 +56,18 @@ impl DocumentHost {
 
     pub fn warnings(&self) -> &[LoadWarning] {
         &self.warnings
+    }
+
+    // A batch, because playback asks at display rate: one crossing of the boundary per frame
+    // instead of one per clip per frame. Clips the moment does not touch are simply absent.
+    pub fn source_times_at(&self, at: Time) -> BTreeMap<ClipId, Time> {
+        self.project()
+            .timeline
+            .tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .filter_map(|clip| Some((clip.id.clone(), clip.readable_source_time_at(at)?)))
+            .collect()
     }
 
     pub fn history_labels(&self) -> Vec<&'static str> {
@@ -259,6 +271,62 @@ mod tests {
         let reopened = DocumentHost::open(&bytes).unwrap();
 
         assert_eq!(reopened.media_bytes_total, 5);
+    }
+
+    // Two clips overlapping on separate tracks, so the query has something to include *and*
+    // something to leave out at every moment it is asked about.
+    fn host_with_overlapping_clips() -> (DocumentHost, Vec<ClipId>) {
+        let mut host = DocumentHost::new();
+        let mut clips = Vec::new();
+        for start in [0.0, 3.0] {
+            host.dispatch(Dispatch::new(Command::TrackAdd {
+                kind: videola_core::model::TrackKind::Video,
+                name: "V".into(),
+                index: None,
+            }))
+            .unwrap();
+            let track = host.project().timeline.tracks.last().unwrap().id.clone();
+            host.dispatch(Dispatch::new(Command::ClipAdd {
+                track: track.clone(),
+                source: videola_core::model::ClipSource::Media {
+                    media: MediaId::from("med_x".to_string()),
+                },
+                start: Time::from_seconds(start),
+                duration: Time::from_seconds(4.0),
+            }))
+            .unwrap();
+            clips.push(
+                host.project().timeline.tracks.last().unwrap().clips[0]
+                    .id
+                    .clone(),
+            );
+        }
+        (host, clips)
+    }
+
+    #[test]
+    fn source_times_answer_for_every_clip_the_moment_touches() {
+        let (host, clips) = host_with_overlapping_clips();
+
+        let times = host.source_times_at(Time::from_seconds(3.5));
+
+        assert_eq!(
+            times,
+            BTreeMap::from([
+                (clips[0].clone(), Time::from_seconds(3.5)),
+                (clips[1].clone(), Time::from_seconds(0.5)),
+            ])
+        );
+    }
+
+    #[test]
+    fn source_times_drop_a_clip_at_its_exclusive_end() {
+        let (host, clips) = host_with_overlapping_clips();
+
+        let times = host.source_times_at(Time::from_seconds(4.0));
+
+        assert_eq!(times.keys().collect::<Vec<_>>(), vec![&clips[1]]);
+        assert!(host.source_times_at(Time::from_seconds(9.0)).is_empty());
     }
 
     fn options() -> SaveOptions {

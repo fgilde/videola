@@ -9,7 +9,7 @@ use wasm_bindgen::JsCast;
 use inner::DocumentHost;
 use videola_core::command::Dispatch;
 use videola_core::format::SaveOptions;
-use videola_core::model::MediaId;
+use videola_core::model::{MediaId, Time};
 use videola_core::DispatchResult;
 
 // A bare id string would drop the undo/redo flags the import itself just changed, leaving the
@@ -49,6 +49,16 @@ impl WasmDocument {
 
     pub fn warnings(&self) -> std::result::Result<JsValue, JsError> {
         to_js_value(self.host.warnings())
+    }
+
+    // Not `to_js_value`: this one stays a JS `Map`, because the caller only ever looks clips up
+    // by id and never serialises it, and a Map keyed by an opaque id beats an object literal.
+    #[wasm_bindgen(js_name = sourceTimesAt)]
+    pub fn source_times_at(&self, at: JsValue) -> std::result::Result<JsValue, JsError> {
+        let at: Time = serde_wasm_bindgen::from_value(at)?;
+        Ok(serde_wasm_bindgen::to_value(
+            &self.host.source_times_at(at),
+        )?)
     }
 
     #[wasm_bindgen(js_name = historyLabels)]
