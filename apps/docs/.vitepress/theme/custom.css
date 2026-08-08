@@ -134,3 +134,100 @@
     transition: none;
   }
 }
+
+/* The sibling-project card at the foot of the home page. It is advertising, so it gets a real
+   card rather than a link in the footer -- and it lives here because both language pages use it. */
+.sibling {
+  max-width: 1152px;
+  margin: 5rem auto 0;
+  padding: 0 24px 1rem;
+}
+
+.sibling-card {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1.75rem 2rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgba(120, 60, 220, 0.16), rgba(20, 160, 230, 0.13));
+  color: inherit;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+
+.sibling-card:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-2px);
+}
+
+/* The mark ships with its own near-black ground baked in, like the Videola one, so it keeps a
+   rounded plate instead of being matted against the card. */
+.sibling-card img {
+  flex: none;
+  width: 132px;
+  height: 132px;
+  border-radius: 12px;
+}
+
+.sibling-kicker {
+  margin: 0;
+  color: var(--vp-c-text-3);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sibling-copy h2 {
+  margin: 0.15rem 0 0.5rem;
+  border: 0;
+  padding: 0;
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
+}
+
+.sibling-copy p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  line-height: 1.6;
+}
+
+.sibling-cta {
+  display: inline-block;
+  margin-top: 0.85rem;
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .sibling-card {
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .sibling-card img {
+    width: 108px;
+    height: 108px;
+  }
+}
+
+/* The whole card is one anchor, and `.vp-doc a` underlines it -- which underlines the kicker, the
+   heading and the copy along with it. Beating that needs the container in the selector. */
+.vp-doc .sibling-card,
+.vp-doc .sibling-card:hover {
+  text-decoration: none;
+}
+
+/* The footer marks sit in a centred paragraph, so they have to stay inline; VitePress gives images
+   `display: block` further up and the icon would otherwise drop to its own line. */
+.VPFooter .message img {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+  margin-right: 0.4em;
+}

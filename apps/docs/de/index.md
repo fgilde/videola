@@ -76,46 +76,49 @@ features:
 
 ## Was heute funktioniert
 
-- **Der Rust-Kern.** `videola-core` enthält das Datenmodell, einen Bus aus 20 Commands, Undo und
-  Redo sowie das Lesen und Schreiben von `.videola`.
-- **WASM-Bindings.** `videola-core-wasm` kapselt den Kern für den Browser; `@videola/core` ist die
-  TypeScript-Fassade darüber, deren Modelltypen ts-rs erzeugt.
-- **Der Anwendungsrahmen.** `@videola/ui` bringt ein Theme für dunkel, hell und Systemvorgabe,
-  deutsche und englische Kataloge und die Layout-Erkennung für Telefon, Tablet und Desktop.
-- **Die Web-App.** Sie öffnet ein Projekt, schaltet Theme und Sprache um, fügt eine Spur hinzu,
-  macht rückgängig und wieder her, schreibt eine `.videola`-Datei und liest sie zurück.
-- **Packaging.** Eine Tauri-Hülle, die Installer für Windows, Linux und macOS baut, und ein
+- **Schneiden.** Import per Ziehen-und-Ablegen oder Dateiauswahl, Clips über Spuren hinweg
+  verschieben und trimmen, scrubben, teilen und löschen, an Clipkanten und Playhead einrasten,
+  vom Einzelbild bis zum ganzen Projekt zoomen.
+- **Wiedergabe.** WebCodecs-Dekodierung in einen WebGL2-Compositor, mit der Audio-Uhr als Führung
+  und einem Transport für Abspielen/Pause, Einzelbildschritte und Sprünge an beide Enden.
+- **Effekte und Übergänge.** Ein Helligkeitseffekt und eine Überblendung, aus Keyframes im
+  Rust-Kern aufgelöst — Vorschau und ein späterer Export lesen dieselben Werte.
+- **Der Rust-Kern.** `videola-core` hält Datenmodell, einen Bus aus 26 Commands, Rückgängig und
+  Wiederholen aus JSON-Patch-Differenzen sowie das Lesen und Schreiben von `.videola`.
+- **Ein Zeigerpfad.** Maus, Stift und Finger nehmen denselben Code; Trefferflächen wachsen auf
+  44 px, sobald der Zeiger keine Maus ist.
+- **Auslieferung.** Eine Tauri-Hülle, die Installer für Windows, Linux und macOS baut, und ein
   Docker-Image, das die Web-App als statische Dateien ausliefert.
 
 ## Was noch fehlt
 
-Keine Timeline, keine Wiedergabe, keine Vorschau, kein Effekt-Rendering, keine Oberfläche für
-Keyframes, keine Audio-Verarbeitung, kein Medienimport im Interface, kein Video-Export. FFmpeg ist
-nicht eingebunden, es gibt keine REST-API und keinen MCP-Endpunkt, und die Release-Jobs für Android
-und iOS werden übersprungen, solange keine Signaturschlüssel hinterlegt sind. Ein heute gebauter
-Installer liefert einen funktionierenden Anwendungsrahmen, in dem es nichts zu schneiden gibt.
+Kein Export, es kann also noch nichts die Anwendung verlassen. Kein Inspector, keine
+Medienbibliothek, keine Vorlagen. FFmpeg ist nicht eingebunden, es gibt keine REST-Schnittstelle
+und keinen MCP-Endpunkt, und die Release-Jobs für Android und iOS werden übersprungen, solange
+keine Signaturschlüssel hinterlegt sind.
 
 Das [Architektur-Kapitel](/de/guide/architecture) hält Entscheidung für Entscheidung fest, welche
 Teile des Entwurfs gebaut und welche geplant sind.
 
-## Der Anwendungsrahmen
+## Der Editor
 
 <figure class="shot">
-  <img src="/shell-dark.png" alt="Der Videola-Rahmen im dunklen Theme: eine Kopfzeile mit der Wortmarke, dann Neues Projekt, Öffnen, Spur hinzufügen, Rückgängig und Wiederholen, Umschaltern für Sprache und Theme und einer Speichern-Schaltfläche, darunter der Projektstatus">
-  <figcaption>Der Anwendungsrahmen im dunklen Theme mit aktivem deutschen Katalog. Rückgängig und Wiederholen sind deaktiviert, weil noch nichts bearbeitet wurde.</figcaption>
+  <img src="/editor-preview.png" alt="Der Videola-Editor: ein dekodiertes Videobild in der Vorschau, ein Transport mit 00:00:00.00 von 00:00:02.00 und aktivem Pause-Knopf, und ein Clip namens fixture.mp4 auf Spur V1">
+  <figcaption>Ein echtes Bild, im Browser dekodiert und komponiert. Der Screenshot stammt aus einem Test, der die Anwendung baut, sie in headless Chrome fährt und eine Videodatei hineinzieht — derselbe Lauf, der eine Vorschau-Canvas gefunden hat, die nie über ihre Ausgangsgröße hinauswuchs.</figcaption>
 </figure>
 
-<figure class="shot">
-  <img src="/shell-light.png" alt="Derselbe Videola-Rahmen im hellen Theme mit denselben Bedienelementen auf hellem Grund">
-  <figcaption>Derselbe Rahmen im hellen Theme. Beide Themes hängen an CSS-Variablen und folgen <code>prefers-color-scheme</code>, bis der Nutzer es überschreibt; die Wahl wird gespeichert.</figcaption>
-</figure>
+Theme und Sprache wechseln ohne Neuladen. Jeder sichtbare Text kommt aus einem Katalog,
+einschließlich der Fehler, die der Rust-Kern als Codes meldet.
 
-<figure class="shot">
-  <img src="/shell-english.png" alt="Der Videola-Rahmen im hellen Theme mit aktivem englischem Katalog: dieselben Bedienelemente mit englischen Beschriftungen">
-  <figcaption>Der Wechsel auf Englisch tauscht den Katalog ohne Neuladen. Jeder sichtbare Text kommt aus einem Katalog, auch die Fehler, die der Rust-Kern als Codes meldet.</figcaption>
-</figure>
+<section class="sibling">
+  <a class="sibling-card" href="https://www.audiola.de" target="_blank" rel="noreferrer">
+    <img src="/audiola-logo.webp" alt="Audiola" width="180" height="180" loading="lazy">
+    <div class="sibling-copy">
+      <p class="sibling-kicker">Aus derselben Werkstatt</p>
+      <h2>Audiola</h2>
+      <p>Das Audio-Werkzeug nebenan — und die Herkunft von Videolas eigener Tonarbeit.</p>
+      <span class="sibling-cta">audiola.de &rarr;</span>
+    </div>
+  </a>
+</section>
 
-<figure class="shot">
-  <img src="/shell-track-added.png" alt="Der Videola-Rahmen nach dem Hinzufügen einer Spur: eine Spur, aktives Rückgängig, weiterhin deaktiviertes Wiederholen">
-  <figcaption>Nach dem Hinzufügen einer Spur meldet das Projekt eine Spur und Rückgängig wird aktiv; Wiederholen bleibt deaktiviert, bis etwas zurückgenommen wurde. Beide lesen die JSON-Patch-Historie aus dem Kapitel Commands und Undo.</figcaption>
-</figure>
