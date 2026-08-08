@@ -28,7 +28,6 @@ export interface ParamRowProps {
   value: number;
   min: number;
   max: number;
-  step: number;
   disabled?: boolean;
   onChange: (value: number, coalesceKey?: string) => void;
   keyframes?: KeyframeStrip;
@@ -41,7 +40,6 @@ export function ParamRow({
   value,
   min,
   max,
-  step,
   disabled,
   onChange,
   keyframes,
@@ -68,7 +66,10 @@ export function ParamRow({
         type="range"
         min={min}
         max={max}
-        step={step}
+        // A stepped range snaps whatever is assigned to it onto the nearest notch, so a row over
+        // a keyframed parameter would report 0.48 where the core holds 0.5 -- the readout has to
+        // be the core's number, not the widget's idea of it.
+        step="any"
         value={value}
         disabled={disabled === true}
         onPointerDown={() => {

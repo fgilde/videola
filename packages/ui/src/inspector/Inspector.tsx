@@ -104,19 +104,18 @@ interface TransformField {
   key: "x" | "y" | "scaleX" | "scaleY" | "rotation" | "opacity";
   min: number;
   max: number;
-  step: number;
 }
 
 // Anchor and crop are not here. Both are fractions of the source with no visible handle to grab,
 // and a slider for a pivot point is worse than none -- they wait for an on-canvas gizmo.
 function transformFields(settings: ProjectSettings): readonly TransformField[] {
   return [
-    { key: "x", min: -settings.width, max: settings.width, step: 1 },
-    { key: "y", min: -settings.height, max: settings.height, step: 1 },
-    { key: "scaleX", min: 0, max: 4, step: 0.01 },
-    { key: "scaleY", min: 0, max: 4, step: 0.01 },
-    { key: "rotation", min: -180, max: 180, step: 1 },
-    { key: "opacity", min: 0, max: 1, step: 0.01 },
+    { key: "x", min: -settings.width, max: settings.width },
+    { key: "y", min: -settings.height, max: settings.height },
+    { key: "scaleX", min: 0, max: 4 },
+    { key: "scaleY", min: 0, max: 4 },
+    { key: "rotation", min: -180, max: 180 },
+    { key: "opacity", min: 0, max: 1 },
   ];
 }
 
@@ -144,7 +143,6 @@ function Transform_({
           value={clip.transform[field.key]}
           min={field.min}
           max={field.max}
-          step={field.step}
           onChange={(value, coalesceKey) => set({ [field.key]: value }, coalesceKey)}
         />
       ))}
@@ -195,7 +193,6 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
         value={clip.volume}
         min={0}
         max={2}
-        step={0.01}
         onChange={(value, coalesceKey) => send(cmd.clipSetVolume(clip.id, value), coalesceKey)}
       />
       <ParamRow
@@ -203,7 +200,6 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
         value={clip.speed.rate}
         min={0.1}
         max={4}
-        step={0.01}
         onChange={(value, coalesceKey) => send(speed(value, clip.speed.reverse), coalesceKey)}
       />
       <div className="v-param">
@@ -264,7 +260,6 @@ function Transitions({
           value={timeToSeconds(current.duration)}
           min={0.1}
           max={5}
-          step={0.05}
           onChange={(value, coalesceKey) =>
             send(
               cmd.clipSetTransition(clip.id, { ...current, duration: secondsToTime(value) }),
@@ -342,7 +337,6 @@ function Effects({
                   value={value}
                   min={param.min}
                   max={param.max}
-                  step={sliderStep(param)}
                   // A keyframed parameter can only be written at a moment the clip covers, and
                   // its static value is ignored -- so with the playhead elsewhere the slider has
                   // nothing it could truthfully do.
@@ -419,12 +413,6 @@ function Effects({
 
 function float(value: number): ParamValue {
   return { kind: "float", value };
-}
-
-// A hundred steps over the declared range, so a slider reaches both ends of any parameter without
-// the manifest having to say how fine it is.
-function sliderStep(param: EffectParamDescriptor): number {
-  return (param.max - param.min) / 100;
 }
 
 // The same rule `clampParam` applies before a value becomes a uniform, so the row reports what

@@ -43,14 +43,16 @@
   font-size: 0.9rem;
 }
 
-/* Label on its own line, then the slider with its readout and the keyframe controls beside it --
-   at 300 px there is no room for a label column that still leaves a usable slider. */
+/* Three lines, not three columns. The keyframe controls are four targets wide, and beside the
+   readout in a 300 px panel they squeezed the slider down to 18 px on a phone -- measured, not
+   guessed. One layout for every pointer, so the coarse rules below only change sizes. */
 .v-param {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "label label label"
-    "slider value keys";
+    "label label"
+    "slider value"
+    "keys keys";
   align-items: center;
   gap: var(--v-space-1) var(--v-space-2);
 }
@@ -84,7 +86,7 @@
   grid-area: keys;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--v-space-1);
 }
 
 .v-param__key {

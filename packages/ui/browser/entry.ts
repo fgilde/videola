@@ -5,6 +5,7 @@ import "../src/theme/tokens.css";
 
 export { createElement, createRoot };
 export { I18nProvider } from "../src/i18n/I18nProvider";
+export { Inspector } from "../src/inspector/Inspector";
 export { Timeline } from "../src/timeline/Timeline";
 export {
   clampZoom,
