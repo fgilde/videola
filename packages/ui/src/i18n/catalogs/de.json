@@ -162,5 +162,16 @@
   "error.templateBakeFailed": "Aus dieser Vorlage liess sich kein Projekt erstellen.",
   "error.templateOpenFailed": "Diese Datei ist keine brauchbare Vorlage.",
   "error.templateSaveFailed": "Dieses Projekt liess sich nicht als Vorlage speichern.",
-  "error.templateShortMedia": "Diese Datei ist zu kurz fuer den Platzhalter."
+  "error.templateShortMedia": "Diese Datei ist zu kurz fuer den Platzhalter.",
+  "mixer.label": "Mischpult",
+  "mixer.volume": "Lautstärke {name}",
+  "mixer.pan": "Panorama {name}",
+  "mixer.mute": "Stumm {name}",
+  "mixer.solo": "Solo {name}",
+  "mixer.measure": "Lautheit messen",
+  "mixer.measuring": "Messe…",
+  "mixer.lufs": "{value} LUFS",
+  "mixer.silent": "Stille",
+  "mixer.unmeasured": "Nicht gemessen",
+  "panel.mixer": "Mischpult"
 }

@@ -7,6 +7,7 @@ import {
   createWasmBackend,
   FLICKS_PER_SECOND,
   readTemplateFile,
+  timeToSeconds,
   VideolaDocument,
   type ClipId,
   type Command,
@@ -27,6 +28,7 @@ import {
   effectManifests,
   EXPORT_FORMATS,
   formatSupport,
+  measureLoudness,
   Playback,
   probe,
   startExport,
@@ -41,6 +43,7 @@ import {
   ExportDialog,
   Inspector,
   MediaLibrary,
+  Mixer,
   PanelTabs,
   pickFiles,
   Preview,
@@ -81,6 +84,8 @@ export function App(): ReactElement {
   const [playing, setPlaying] = useState(false);
   const [missing, setMissing] = useState(NOTHING_MISSING);
   const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
+  const [loudness, setLoudness] = useState<number>();
+  const [measuring, setMeasuring] = useState(false);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -220,6 +225,9 @@ export function App(): ReactElement {
     // The strips come from the buffers `load` decoded, so they can only be read once it resolves.
     // Dropping a superseded result is what keeps a drag from painting the strips of a project state
     // that two pointer movements have already replaced.
+    // A reading belongs to the project it was taken from. Any edit can change it, so it goes rather
+    // than standing there as a number about a timeline that no longer exists.
+    setLoudness(undefined);
     void playback.load(project).then(() => {
       if (!cancelled) setWaveforms(playback.waveforms());
     });
@@ -238,6 +246,24 @@ export function App(): ReactElement {
     },
     [doc],
   );
+
+  // Measuring means rendering the whole timeline offline, so it happens when it is asked for and
+  // never per frame. Its own context, because the one driving playback is running and rendering into
+  // it would fight the transport for the same graph.
+  const measure = useCallback(() => {
+    if (project === undefined) return;
+    const seconds = timeToSeconds(projectEnd(project));
+    if (seconds <= 0) {
+      setLoudness(Number.NEGATIVE_INFINITY);
+      return;
+    }
+    setMeasuring(true);
+    const rate = project.settings.sampleRate;
+    const ctx = new OfflineAudioContext(2, Math.ceil(seconds * rate), rate);
+    measureLoudness(ctx, project, new AudioSource())
+      .then(setLoudness, (err: unknown) => reportError("error.actionFailed", err))
+      .finally(() => setMeasuring(false));
+  }, [project, reportError]);
 
   const addTrack = useCallback(() => {
     if (doc === undefined) return;
@@ -596,6 +622,15 @@ export function App(): ReactElement {
                   onImport={() => void pickFiles(MEDIA_ACCEPT).then(importMedia)}
                   onAdd={addToTimeline}
                   onRelink={(media) => void relink(media)}
+                />
+              )}
+              {(layout !== "phone" || panel === "mixer") && (
+                <Mixer
+                  project={project}
+                  loudness={loudness}
+                  measuring={measuring}
+                  dispatch={edit}
+                  onMeasure={measure}
                 />
               )}
               {(layout !== "phone" || panel === "timeline") && (
