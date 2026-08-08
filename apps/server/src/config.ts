@@ -1,17 +1,30 @@
-export interface Config {
+export interface ApiConfig {
+  readonly storageRoot: string;
+  readonly maxProjects: number;
+  readonly locale: string;
+}
+
+export interface Config extends ApiConfig {
   readonly host: string;
   readonly port: number;
   readonly token: string | undefined;
-  readonly storageRoot: string;
-  readonly maxProjects: number;
   readonly maxBodyBytes: number;
-  readonly locale: string;
   readonly webRoot: string | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
 export class ConfigError extends Error {}
+
+// What a host needs whether or not it listens on a socket. The MCP server speaks over stdio and
+// takes only this: a bind address it never uses must not be able to stop it from starting.
+export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfig {
+  return {
+    storageRoot: env.VIDEOLA_STORAGE_ROOT ?? process.cwd(),
+    maxProjects: integer(env.VIDEOLA_MAX_PROJECTS, 8, "VIDEOLA_MAX_PROJECTS"),
+    locale: env.VIDEOLA_LOCALE ?? "en",
+  };
+}
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const host = env.VIDEOLA_HOST ?? "127.0.0.1";
@@ -26,13 +39,11 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   return {
+    ...apiConfigFromEnv(env),
     host,
     port: integer(env.VIDEOLA_PORT, 7331, "VIDEOLA_PORT"),
     token,
-    storageRoot: env.VIDEOLA_STORAGE_ROOT ?? process.cwd(),
-    maxProjects: integer(env.VIDEOLA_MAX_PROJECTS, 8, "VIDEOLA_MAX_PROJECTS"),
     maxBodyBytes: integer(env.VIDEOLA_MAX_BODY_BYTES, 512 * 1024 * 1024, "VIDEOLA_MAX_BODY_BYTES"),
-    locale: env.VIDEOLA_LOCALE ?? "en",
     webRoot: env.VIDEOLA_WEB_ROOT === "" ? undefined : env.VIDEOLA_WEB_ROOT,
   };
 }

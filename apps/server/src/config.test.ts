@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ConfigError, configFromEnv } from "./config";
+import { apiConfigFromEnv, ConfigError, configFromEnv } from "./config";
 
 describe("configFromEnv", () => {
   it("binds loopback without a token", () => {
@@ -30,6 +30,12 @@ describe("configFromEnv", () => {
     );
   });
 
+  it("takes the web root from the environment and treats an empty one as absent", () => {
+    expect(configFromEnv({ VIDEOLA_WEB_ROOT: "/app/web" }).webRoot).toBe("/app/web");
+    expect(configFromEnv({ VIDEOLA_WEB_ROOT: "" }).webRoot).toBeUndefined();
+    expect(configFromEnv({}).webRoot).toBeUndefined();
+  });
+
   it("rejects a port that is not a positive integer", () => {
     expect(() => configFromEnv({ VIDEOLA_PORT: "0" })).toThrow(ConfigError);
     expect(() => configFromEnv({ VIDEOLA_PORT: "eighty" })).toThrow(ConfigError);
@@ -52,5 +58,20 @@ describe("configFromEnv", () => {
       storageRoot: "/srv/projects",
       locale: "de",
     });
+  });
+});
+
+// The MCP server listens on nothing, so a bind address meant for the HTTP server must not be able
+// to stop it -- which is exactly what a container that sets VIDEOLA_HOST for the API would do.
+describe("apiConfigFromEnv", () => {
+  it("ignores the bind address instead of refusing it", () => {
+    const config = apiConfigFromEnv({ VIDEOLA_HOST: "0.0.0.0", VIDEOLA_STORAGE_ROOT: "/data" });
+
+    expect(config.storageRoot).toBe("/data");
+    expect(config).not.toHaveProperty("host");
+  });
+
+  it("still refuses a limit that is not a positive integer", () => {
+    expect(() => apiConfigFromEnv({ VIDEOLA_MAX_PROJECTS: "-1" })).toThrow(ConfigError);
   });
 });
