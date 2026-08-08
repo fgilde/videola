@@ -3,6 +3,7 @@ import { useId, useRef, type ReactElement } from "react";
 import type { Interp, Keyframe, Time } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
+import { Icon } from "../primitives/Icon";
 import "./Inspector.css";
 
 // Bezier is missing on purpose: M1 has no curve editing, and a handle nobody can drag is a
@@ -25,6 +26,12 @@ export interface KeyframeStrip {
 
 export interface ParamRowProps {
   label: string;
+  /**
+   * What a screen reader hears, when that has to say more than the label shows. A mixer strip
+   * writes "Lautstärke" beside the fader and the track is named at the top of the strip -- but
+   * out of that context a row called "Lautstärke" is one of four identical ones.
+   */
+  name?: string;
   value: number;
   min: number;
   max: number;
@@ -37,6 +44,7 @@ let gesture = 0;
 
 export function ParamRow({
   label,
+  name,
   value,
   min,
   max,
@@ -61,6 +69,7 @@ export function ParamRow({
         id={id}
         className="v-param__slider"
         type="range"
+        aria-label={name}
         min={min}
         max={max}
         // A stepped range snaps whatever is assigned to it onto the nearest notch, so a row over
@@ -80,7 +89,7 @@ export function ParamRow({
       <output className="v-param__value" htmlFor={id}>
         {formatNumber(value)}
       </output>
-      {keyframes !== undefined && <Keys strip={keyframes} name={label} />}
+      {keyframes !== undefined && <Keys strip={keyframes} name={name ?? label} />}
     </div>
   );
 }
@@ -100,7 +109,7 @@ function Keys({ strip, name }: { strip: KeyframeStrip; name: string }): ReactEle
         disabled={previous === undefined}
         onClick={() => previous !== undefined && strip.onGoTo(previous.time)}
       >
-        <span aria-hidden="true">◀</span>
+        <Icon name="chevronLeft" />
       </button>
       <button
         type="button"
@@ -110,7 +119,7 @@ function Keys({ strip, name }: { strip: KeyframeStrip; name: string }): ReactEle
         disabled={!strip.settable}
         onClick={() => (here === undefined ? strip.onAdd() : strip.onRemove())}
       >
-        <span aria-hidden="true">{here === undefined ? "◇" : "◆"}</span>
+        <Icon name={here === undefined ? "keyframe" : "keyframeSet"} />
       </button>
       <button
         type="button"
@@ -119,7 +128,7 @@ function Keys({ strip, name }: { strip: KeyframeStrip; name: string }): ReactEle
         disabled={next === undefined}
         onClick={() => next !== undefined && strip.onGoTo(next.time)}
       >
-        <span aria-hidden="true">▶</span>
+        <Icon name="chevronRight" />
       </button>
       {here !== undefined && (
         <select

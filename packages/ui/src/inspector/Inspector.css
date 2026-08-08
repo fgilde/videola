@@ -17,17 +17,21 @@
   color: var(--v-text-muted);
 }
 
+/* The gap here is what separates one parameter from the next, and it has to beat the gap inside a
+   row -- a label sitting 35 px above its own slider and 45 px below the one before it belongs to
+   neither. Everything a row needs of its own space is set to zero below. */
 .v-inspector__group {
   display: flex;
   flex-direction: column;
-  gap: var(--v-space-2);
+  gap: var(--v-space-4);
 }
 
 .v-inspector__title {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-strong);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--v-tracking-wide);
   color: var(--v-text-muted);
 }
 
@@ -43,7 +47,8 @@
 
 .v-inspector__effectName {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-strong);
 }
 
 /* Three lines, not three columns. The keyframe controls are four targets wide, and beside the
@@ -57,12 +62,17 @@
     "slider value"
     "keys keys";
   align-items: center;
-  gap: var(--v-space-1) var(--v-space-2);
+  /* No row gap on purpose: a range input is a 20 px box around an 8 px track and a touch one is a
+     44 px box, so each row already carries its own air. Adding gap on top is what pushed the
+     label out of its own row. */
+  gap: 0 var(--v-space-2);
+  max-width: var(--v-control-max);
 }
 
 .v-param__label {
   grid-area: label;
-  font-size: 0.85rem;
+  font-size: var(--v-text-sm);
+  line-height: var(--v-leading-tight);
   color: var(--v-text-muted);
 }
 
@@ -80,7 +90,7 @@
 
 .v-param__value {
   font-family: var(--v-font-mono);
-  font-size: 0.85rem;
+  font-size: var(--v-text-sm);
   text-align: right;
   min-width: 4ch;
 }
@@ -90,29 +100,51 @@
   display: flex;
   align-items: center;
   gap: var(--v-space-1);
+  /* The switches belong to the slider above them, so the seam goes on this side of the row. */
+  margin-top: var(--v-space-1);
 }
 
+/* Symbol rank, the same one the transport and the timeline tools carry: no fill and no border
+   until a pointer comes near, and the accent as a tint rather than as a second primary action.
+   The switch was a bordered box with a lozenge typed into it, which read as a fourth kind of
+   button in a surface that has exactly four. */
 .v-param__key {
-  min-width: 24px;
-  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
   padding: 0;
-  background: var(--v-surface);
-  color: var(--v-text);
-  border: 1px solid var(--v-border);
+  background: none;
+  color: var(--v-text-muted);
+  border: 1px solid transparent;
   border-radius: var(--v-radius-sm);
   font: inherit;
   cursor: pointer;
+  transition:
+    background var(--v-transition),
+    color var(--v-transition);
+}
+
+.v-param__key:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+  color: var(--v-text);
 }
 
 .v-param__key[aria-pressed="true"] {
-  background: var(--v-accent);
-  color: var(--v-accent-contrast);
-  border-color: transparent;
+  background: var(--v-accent-soft);
+  color: var(--v-accent);
 }
 
 .v-param__key:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* As wide as a control rather than as wide as the panel. */
+.v-addEffect {
+  align-self: flex-start;
+  max-width: var(--v-control-max);
 }
 
 .v-param__select,
@@ -122,7 +154,7 @@
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-sm);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--v-text-sm);
 }
 
 /* A finger has no thumb to aim at. The shell already decides this for .v-button from the layout
@@ -130,12 +162,17 @@
 @media (any-pointer: coarse) {
   .v-param__key,
   .v-param__interp,
-  .v-param__select {
+  .v-param__select,
+  .v-addEffect {
     min-width: var(--v-touch-target);
     min-height: var(--v-touch-target);
   }
 
-  .v-param__slider {
+  /* Qualified by its element, and that is the whole point of the change: `input[type="range"]` in
+     the control layer is an attribute selector, which outranks the bare class this used to be --
+     so every slider stayed 20 px tall under a finger while the rule read as a kept promise. The
+     two rules below never had the problem: they carry a `.v-shell` of their own. */
+  input[type="range"].v-param__slider {
     height: var(--v-touch-target);
   }
 }
@@ -145,7 +182,9 @@
 .v-shell[data-layout="tablet"] .v-param__interp,
 .v-shell[data-layout="phone"] .v-param__interp,
 .v-shell[data-layout="tablet"] .v-param__select,
-.v-shell[data-layout="phone"] .v-param__select {
+.v-shell[data-layout="phone"] .v-param__select,
+.v-shell[data-layout="tablet"] .v-addEffect,
+.v-shell[data-layout="phone"] .v-addEffect {
   min-width: var(--v-touch-target);
   min-height: var(--v-touch-target);
 }

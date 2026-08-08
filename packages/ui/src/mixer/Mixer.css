@@ -1,14 +1,14 @@
 .v-mixer {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2) var(--v-space-3);
   overflow: auto;
 }
 
 .v-mixer__strips {
   display: flex;
-  gap: 12px;
+  gap: var(--v-space-2);
   align-items: flex-start;
   overflow-x: auto;
 }
@@ -16,12 +16,12 @@
 .v-mixer__strip {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  /* Wide enough for a slider, its readout and the keyframe arrows to share one row. */
-  min-width: 200px;
-  padding: 8px;
+  gap: var(--v-space-1);
+  /* Wide enough for a label, its fader and the readout on one line -- see .v-mixer .v-param. */
+  min-width: 220px;
+  padding: var(--v-space-2);
   background: var(--v-surface);
-  border-radius: var(--v-radius-sm);
+  border-radius: var(--v-radius-md);
 }
 
 /* Set apart because everything to its left ends up in it, and grabbing the wrong fader on the way
@@ -30,83 +30,82 @@
   border: 1px solid var(--v-border-strong);
 }
 
+/* One line per control, not two. A strip that stacks a label over every fader is 340 px tall
+   before a project has an effect on it, and the band along the bottom of the editor is 180 --
+   which is how a mixer came to be cut off through the middle of its first slider. */
+.v-mixer .v-param {
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label slider value"
+    "keys keys keys";
+  max-width: none;
+}
+
+.v-mixer .v-param__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .v-mixer__chain {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-/* The offers wrap along a row rather than stacking. Three 44 px buttons in a column is 132 px of
-   strip before a project has a single effect on it, and that height comes straight out of the
-   picture above. */
-.v-mixer__chain > .v-button {
-  display: inline-block;
-  width: fit-content;
+  gap: var(--v-space-1);
 }
 
 .v-mixer__effect {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 6px;
+  gap: var(--v-space-1);
+  padding-top: var(--v-space-1);
   border-top: 1px solid var(--v-border-strong);
 }
 
 .v-mixer__effectName {
   margin: 0;
-  font-size: 0.75rem;
-  opacity: 0.8;
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-strong);
+  color: var(--v-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--v-tracking-wide);
 }
 
 .v-mixer__name {
-  padding-left: 6px;
+  padding-left: var(--v-space-2);
   border-left: 3px solid var(--v-border-strong);
-  font-size: 0.8rem;
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-strong);
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
 }
 
-.v-mixer__fader {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 6px;
-  align-items: center;
-}
-
-.v-mixer__faderLabel {
-  grid-column: 1 / -1;
-  font-size: 0.7rem;
-  opacity: 0.75;
-}
-
 .v-mixer__flags {
   display: flex;
-  gap: 6px;
+  gap: var(--v-space-1);
 }
 
+/* Two letters at symbol rank. They were a bordered box each, filled with the accent when pressed,
+   which made the loudest thing in a mixer strip the state of a mute nobody had set. */
 .v-mixer__flag {
-  /* The touch target the rest of the editor holds to, so a mixer is usable on a tablet. */
-  min-width: 44px;
-  min-height: 44px;
-  background: none;
-  color: inherit;
-  border: 1px solid var(--v-border-strong);
-  border-radius: var(--v-radius-sm);
-  cursor: pointer;
-}
-
-.v-mixer__flag[aria-pressed="true"] {
-  background: var(--v-accent);
-  border-color: var(--v-accent);
+  font-weight: var(--v-weight-strong);
 }
 
 .v-mixer__loudness {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: var(--v-space-2);
+  justify-content: space-between;
 }
 
 .v-mixer__reading {
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
   font-variant-numeric: tabular-nums;
+  color: var(--v-text-muted);
+}
+
+.v-mixer__empty {
+  margin: 0;
+  color: var(--v-text-muted);
 }

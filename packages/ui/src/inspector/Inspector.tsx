@@ -21,6 +21,7 @@ import {
 } from "@videola/core";
 
 import { useI18n, type Locale } from "../i18n/useI18n";
+import { AddEffect } from "../primitives/AddEffect";
 import { findClip } from "../timeline/useTimelineGestures";
 import { keyframeAt, ParamRow, shownValue } from "./ParamRow";
 import "./Inspector.css";
@@ -335,7 +336,7 @@ function Effects({
                 clip={clip.id}
                 effect={authored}
                 param={param}
-                value={shown(param, resolved.get(authored.id)?.get(param.key)?.value)}
+                value={shownValue(param, resolved.get(authored.id)?.get(param.key)?.value)}
                 playhead={playhead}
                 inside={inside}
                 send={send}
@@ -345,16 +346,10 @@ function Effects({
           </div>
         );
       })}
-      {addable.map((manifest) => (
-        <button
-          key={manifest.id}
-          type="button"
-          className="v-button"
-          onClick={() => send(cmd.effectAdd(on.clip(clip.id), manifest.id))}
-        >
-          {t("inspector.addEffect", { name: manifest.name[locale] })}
-        </button>
-      ))}
+      <AddEffect
+        offers={addable}
+        onAdd={(id) => send(cmd.effectAdd(on.clip(clip.id), id))}
+      />
     </Group>
   );
 }
@@ -423,5 +418,3 @@ function EffectParam({
 function float(value: number): ParamValue {
   return { kind: "float", value };
 }
-
-const shown = shownValue;

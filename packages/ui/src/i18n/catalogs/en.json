@@ -128,7 +128,7 @@
   "inspector.transitionNone": "None",
   "inspector.transitionDuration": "Duration (seconds)",
   "inspector.effects": "Effects",
-  "inspector.addEffect": "Add {name}",
+  "inspector.addEffect": "Add effect",
   "inspector.keyframe": "Keyframe for {name} at the playhead",
   "inspector.keyframePrev": "To the previous keyframe of {name}",
   "inspector.keyframeNext": "To the next keyframe of {name}",
@@ -218,5 +218,7 @@
   "mixer.unmeasured": "Not measured",
   "panel.mixer": "Mixer",
   "update.available": "Videola {version} is available. Install it now?",
-  "update.installed": "The update is installed. Restart Videola to use it."
+  "update.installed": "The update is installed. Restart Videola to use it.",
+  "mixer.volumeShort": "Volume",
+  "mixer.panShort": "Pan"
 }

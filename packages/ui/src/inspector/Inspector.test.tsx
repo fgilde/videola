@@ -143,6 +143,14 @@ function press(name: string): void {
   act(() => void screen.getByRole("button", { name }).click());
 }
 
+/** The effect types the picker is holding out, or nothing when there is no picker at all. */
+function offered(): string[] {
+  const picker = screen.queryByLabelText("Effekt hinzufügen") as HTMLSelectElement | null;
+  return picker === null
+    ? []
+    : [...picker.options].map((option) => option.value).filter((value) => value !== "");
+}
+
 function slide(input: HTMLInputElement, value: number): void {
   act(() => void fireEvent.change(input, { target: { value: String(value) } }));
 }
@@ -378,17 +386,34 @@ describe("the inspector", () => {
   it("offers only single-input effects to add to a clip", () => {
     show();
 
-    expect(screen.getByRole("button", { name: "Helligkeit hinzufügen" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Ueberblendung hinzufügen/u })).toBeNull();
+    expect(offered()).toEqual(["brightness"]);
     // And the other way round: an effect with one input is not a transition either.
     const select = screen.getByLabelText("Übergang") as HTMLSelectElement;
     expect([...select.options].map((option) => option.value)).toEqual(["", "crossfade"]);
   });
 
+  // The picker is a choice that acts, so what it is worth is the command it sends.
+  it("adds the effect that was picked", () => {
+    const rig = show();
+
+    act(
+      () =>
+        void fireEvent.change(screen.getByLabelText("Effekt hinzufügen"), {
+          target: { value: "brightness" },
+        }),
+    );
+
+    expect(rig.sent.map((entry) => entry.command)).toEqual([
+      { type: "effect.add", target: { kind: "clip", clip: "clp_1" }, effectType: "brightness" },
+    ]);
+  });
+
   it("stops offering an effect the clip already carries", () => {
     show({ clip: clipWithMedia(withBrightness()) });
 
-    expect(screen.queryByRole("button", { name: "Helligkeit hinzufügen" })).toBeNull();
+    // Brightness is the only offer this rig has, so the whole picker goes with it. The row below
+    // is what says the effect landed rather than the control simply having been forgotten.
+    expect(offered()).toEqual([]);
     expect(screen.getByLabelText("Staerke")).toBeTruthy();
   });
 

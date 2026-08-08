@@ -109,10 +109,15 @@
    against the grid, and the picture is what pays for it. Both flexible rows carry minmax(0, ...)
    so a canvas or a scroll container inside them can shrink; a bare 1fr floors at its content and
    pushes the timeline off-screen. */
+/* Why fit-content and not minmax for the two bottom rows: grid maximizes non-flexible tracks before
+   it expands the flexible ones, so `minmax(160px, 30%)` is not "up to 30%" -- it is "30%, always",
+   and a timeline holding one 72 px track kept 250 px of empty rows open while the picture above it
+   went without. fit-content(30%) is the rule that was meant: as tall as the tracks are, and never
+   more than a third of the editor. */
 .v-editor {
   display: grid;
   grid-template-columns: minmax(190px, 250px) minmax(0, 1fr) minmax(0, 300px);
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(160px, 30%) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto fit-content(30%) fit-content(38%);
   grid-template-areas:
     "banners  banners   banners"
     "library  preview   inspector"
@@ -126,25 +131,16 @@
    same width the timeline has. Without an area of its own it landed in an implicit row and squeezed
    the preview to nothing, which is exactly what the tablet check catches.
 
-   An `auto` row on its own stopped being enough once a strip carried an insert chain: "its own
-   height" is then a fader plus however many effects the project holds, and an unbounded auto row
-   takes all of it out of the `1fr` above. The cap turns further growth into scrolling -- `.v-mixer`
-   already scrolls -- so a fourth effect cannot collapse the picture. Left off on a phone, where the
-   mixer is a full panel of its own and has the room. */
+   The row is sized to a strip and not to a share of the window. A share is what cut the mixer in
+   half: 20vh was 180 px and a strip that stacked two labelled faders over a mute, a solo and three
+   offer buttons was 342, so the fader on screen was the only part of it anybody ever saw. What made
+   a strip grow without bound was the chain -- every effect the engine can build, as a button -- and
+   that is now one picker, so the strip has a size again and the row can simply be it. The cap above
+   only bites once a project really has effects on its buses, and past it the mixer scrolls. */
 .v-editor > .v-mixer {
   grid-area: mixer;
-  /* And a ceiling, because "its own height" grew with every track and with every insert until the
-     picture was a stamp at the top of the window. A share of the window rather than a fixed number,
-     so a tall screen gives the strip more and a short one protects the picture. Past the cap the
-     strip scrolls inside itself. */
-  max-height: 20vh;
   background: var(--v-bg-elevated);
   border-top: 1px solid var(--v-border);
-}
-
-/* No ceiling on a phone: there the mixer is a tab of its own and has the whole panel. */
-.v-shell[data-layout="phone"] .v-editor > .v-mixer {
-  max-height: none;
 }
 
 .v-editor > .v-banners {
@@ -217,9 +213,8 @@
   grid-area: panel;
 }
 
-/* Behind a tab it is the whole screen, so the desktop ceiling has nothing to do here. */
+/* Behind a tab it is the whole screen, and the seam belongs to the tab bar above it. */
 .v-shell[data-layout="phone"] .v-editor > .v-mixer {
-  max-height: none;
   border-top: none;
 }
 
@@ -256,10 +251,10 @@
    thing a phone cannot offer, and it is what makes a drag from the one to the other possible. */
 .v-shell[data-layout="tablet"] .v-editor {
   grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
-  /* The picture takes the slack and the properties panel gets a share it scrolls inside. The
-     other way round -- 1fr on the properties row -- collapsed the preview to nothing, because a
-     canvas has no height of its own to hold the row open with. */
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 22vh) minmax(180px, 26%) auto;
+  /* The picture and the properties panel share what the three content-sized rows leave. Both carry
+     a floor rather than one of them a fixed share: a canvas has no height of its own to hold its
+     row open with, so a bare 1fr on the properties panel collapsed the preview to nothing. */
+  grid-template-rows: auto minmax(200px, 1fr) auto minmax(160px, 1fr) fit-content(26%) fit-content(34%);
   grid-template-areas:
     "banners  banners"
     "library  preview"

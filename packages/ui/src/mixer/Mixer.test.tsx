@@ -218,6 +218,20 @@ const withEffects = (effects: Effect[]): Track => audio("trk_1", { effects });
 const stripOf = (id: string): HTMLElement =>
   document.querySelector<HTMLElement>(`[data-track-id="${id}"]`)!;
 
+/** The effect types one strip is holding out, in the order it lists them. */
+const offeredIn = (strip: HTMLElement): string[] => {
+  const picker = within(strip).queryByLabelText("Effekt hinzufügen") as HTMLSelectElement | null;
+  return picker === null
+    ? []
+    : [...picker.options].map((option) => option.value).filter((value) => value !== "");
+};
+
+const pick = (strip: HTMLElement, effectType: string): void => {
+  fireEvent.change(within(strip).getByLabelText("Effekt hinzufügen"), {
+    target: { value: effectType },
+  });
+};
+
 function masterOf(project: Project, effects: Effect[]): Project {
   return { ...project, master: { volume: project.master.volume, effects } } as Project;
 }
@@ -274,26 +288,20 @@ describe("Mixer effect chains", () => {
   it("offers every effect the engine can build, on a track and on the master", () => {
     show(<Mixer project={makeProject([audio("trk_1")])} effects={OFFERED} dispatch={() => {}} />);
 
-    expect(screen.getAllByRole("button", { name: "Equalizer hinzufügen" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Limiter hinzufügen" })).toHaveLength(2);
+    expect(offeredIn(stripOf("trk_1"))).toEqual(["eq", "limiter"]);
+    expect(offeredIn(screen.getByTestId("mixer-master"))).toEqual(["eq", "limiter"]);
   });
 
-  it("aims the add button at the chain it was pressed on", () => {
+  it("aims the picker at the chain it was used on", () => {
     const dispatch = vi.fn<(command: Command, key?: string) => void>();
     show(<Mixer project={makeProject([audio("trk_1")])} effects={OFFERED} dispatch={dispatch} />);
 
-    fireEvent.click(
-      within(screen.getByTestId("mixer-master")).getByRole("button", {
-        name: "Limiter hinzufügen",
-      }),
-    );
+    pick(screen.getByTestId("mixer-master"), "limiter");
     expect(dispatch).toHaveBeenCalledWith(
       { type: "effect.add", target: { kind: "project" }, effectType: "limiter" },
     );
 
-    fireEvent.click(
-      within(stripOf("trk_1")).getByRole("button", { name: "Equalizer hinzufügen" }),
-    );
+    pick(stripOf("trk_1"), "eq");
     expect(dispatch).toHaveBeenCalledWith(
       { type: "effect.add", target: { kind: "track", track: "trk_1" }, effectType: "eq" },
     );
@@ -310,9 +318,9 @@ describe("Mixer effect chains", () => {
       />,
     );
 
-    expect(within(stripOf("trk_1")).queryByRole("button", { name: "Equalizer hinzufügen" })).toBeNull();
+    expect(offeredIn(stripOf("trk_1"))).toEqual(["limiter"]);
     // The master has not gained one, so the offer is gone from that chain and no other.
-    expect(screen.getAllByRole("button", { name: "Equalizer hinzufügen" })).toHaveLength(1);
+    expect(offeredIn(screen.getByTestId("mixer-master"))).toEqual(["eq", "limiter"]);
   });
 
   it("moves a parameter with a command aimed at the same chain", () => {

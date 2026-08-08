@@ -14,6 +14,11 @@ const OUTLINED = {
   flag: "M6 3v18M6 4.5h11l-2.4 3.75L17 12H6",
   plus: "M12 5v14M5 12h14",
   link: "M10.5 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 1 0-5.7-5.7l-1.2 1.2M13.5 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 1 0 5.7 5.7l1.2-1.2",
+  chevronLeft: "M14.5 6 8.5 12l6 6",
+  chevronRight: "M9.5 6l6 6-6 6",
+  // The empty diamond is "no keyframe here"; the filled one below is "there is one". A shape that
+  // fills is what a switch looks like when a tint alone has to carry pressed and disabled as well.
+  keyframe: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
 } as const;
 
 // Filled rather than stroked: a transport symbol is a solid shape at every size, and a 1.8 px
@@ -25,6 +30,7 @@ const FILLED = {
   skipEnd: "M15.8 6H18v12h-2.2zM5 6v12l9-6z",
   stepBack: "M13 6v12l-8-6zM15 6h2.4v12H15z",
   stepForward: "M11 6v12l8-6zM6.6 6H9v12H6.6z",
+  keyframeSet: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
 } as const;
 
 export type IconName = keyof typeof OUTLINED | keyof typeof FILLED;

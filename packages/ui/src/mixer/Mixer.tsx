@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 
 import {
   cmd,
@@ -17,6 +17,7 @@ import {
 import { useI18n, type Locale } from "../i18n/useI18n";
 import { keyframeAt, ParamRow, shownValue } from "../inspector/ParamRow";
 import type { EffectParamDescriptor } from "../inspector/Inspector";
+import { AddEffect } from "../primitives/AddEffect";
 import "./Mixer.css";
 
 // The accepted maximum for a track gain, as the core states it in `track.setVolume`.
@@ -85,24 +86,17 @@ export function Mixer({
           <Strip key={track.id} track={track} dispatch={dispatch} chain={chain} />
         ))}
         {/* Last, where a desk puts it: everything to its left feeds it. */}
-        <MasterStrip project={project} dispatch={dispatch} chain={chain} />
+        <MasterStrip
+          project={project}
+          dispatch={dispatch}
+          chain={chain}
+          loudness={loudness}
+          measuring={measuring}
+          onMeasure={onMeasure}
+        />
       </div>
 
       {tracks.length === 0 && <p className="v-mixer__empty">{t("empty.noTracks")}</p>}
-
-      <div className="v-mixer__loudness">
-        <button
-          type="button"
-          className="v-button"
-          disabled={measuring === true || onMeasure === undefined}
-          onClick={() => onMeasure?.()}
-        >
-          {t(measuring === true ? "mixer.measuring" : "mixer.measure")}
-        </button>
-        <output className="v-mixer__reading" data-testid="mixer-loudness">
-          {formatLufs(loudness, t)}
-        </output>
-      </div>
     </section>
   );
 }
@@ -123,14 +117,17 @@ function Strip({
       <span className="v-mixer__name" style={{ borderLeftColor: track.colorHex }}>
         {track.name}
       </span>
-      <Fader
-        label={t("mixer.volume", { name: track.name })}
+      <ParamRow
+        label={t("mixer.volumeShort")}
+        name={t("mixer.volume", { name: track.name })}
         value={track.volume}
+        min={0}
         max={MAX_GAIN}
         onChange={(value, key) => dispatch(cmd.trackSetVolume(track.id, value), key)}
       />
-      <Fader
-        label={t("mixer.pan", { name: track.name })}
+      <ParamRow
+        label={t("mixer.panShort")}
+        name={t("mixer.pan", { name: track.name })}
         value={track.pan}
         min={-1}
         max={1}
@@ -141,7 +138,7 @@ function Strip({
             that is both stays silent, and pressing solo on it must not quietly clear its mute. */}
         <button
           type="button"
-          className="v-mixer__flag"
+          className="v-button v-button--icon v-mixer__flag"
           aria-label={t("mixer.mute", { name: track.name })}
           aria-pressed={track.muted}
           onClick={() => dispatch(cmd.trackSetFlags(track.id, !track.muted))}
@@ -150,7 +147,7 @@ function Strip({
         </button>
         <button
           type="button"
-          className="v-mixer__flag"
+          className="v-button v-button--icon v-mixer__flag"
           aria-label={t("mixer.solo", { name: track.name })}
           aria-pressed={track.solo}
           onClick={() => dispatch(cmd.trackSetFlags(track.id, null, !track.solo))}
@@ -166,14 +163,24 @@ function Strip({
 // The last strip, and the only one with no clips under it. Its fader is the project's, which is why
 // it dispatches a project command rather than a track one -- and its chain is the mastering chain,
 // the last thing the mix passes through before it leaves.
+//
+// The programme loudness lives here as well. It is a measurement of what leaves the master and of
+// nothing else, and as a bar under the strips it was a row of its own across the whole editor for
+// one button and one number.
 function MasterStrip({
   project,
   dispatch,
   chain,
+  loudness,
+  measuring,
+  onMeasure,
 }: {
   project: Project;
   dispatch: Send;
   chain: ChainContext;
+  loudness?: number;
+  measuring?: boolean;
+  onMeasure?: () => void;
 }): ReactElement {
   const { t } = useI18n();
   const name = t("mixer.master");
@@ -181,12 +188,27 @@ function MasterStrip({
   return (
     <div className="v-mixer__strip v-mixer__strip--master" data-testid="mixer-master">
       <span className="v-mixer__name">{name}</span>
-      <Fader
-        label={t("mixer.volume", { name })}
+      <ParamRow
+        label={t("mixer.volumeShort")}
+        name={t("mixer.volume", { name })}
         value={project.master.volume}
+        min={0}
         max={MAX_GAIN}
         onChange={(value, key) => dispatch(cmd.projectSetMasterVolume(value), key)}
       />
+      <div className="v-mixer__loudness">
+        <button
+          type="button"
+          className="v-button v-button--quiet"
+          disabled={measuring === true || onMeasure === undefined}
+          onClick={() => onMeasure?.()}
+        >
+          {t(measuring === true ? "mixer.measuring" : "mixer.measure")}
+        </button>
+        <output className="v-mixer__reading" data-testid="mixer-loudness">
+          {formatLufs(loudness, t)}
+        </output>
+      </div>
       <Chain {...chain} target={on.project} authored={project.master.effects} />
     </div>
   );
@@ -211,7 +233,7 @@ function Chain({
   target,
   authored,
 }: ChainContext & { target: EffectTarget; authored: readonly Effect[] }): ReactElement | null {
-  const { t, locale } = useI18n();
+  const { locale } = useI18n();
   const addable = offered.filter(
     (manifest) => !authored.some((entry) => entry.effectType === manifest.id),
   );
@@ -243,16 +265,7 @@ function Chain({
           </div>
         );
       })}
-      {addable.map((manifest) => (
-        <button
-          key={manifest.id}
-          type="button"
-          className="v-button"
-          onClick={() => send(cmd.effectAdd(target, manifest.id))}
-        >
-          {t("inspector.addEffect", { name: manifest.name[locale] })}
-        </button>
-      ))}
+      <AddEffect offers={addable} onAdd={(id) => send(cmd.effectAdd(target, id))} />
     </div>
   );
 }
@@ -320,52 +333,6 @@ function ChainParam({
 
 function float(value: number): ParamValue {
   return { kind: "float", value };
-}
-
-let gesture = 0;
-
-// The same one-drag-one-undo-step rule the inspector's rows follow, and for the same reason: a
-// fader pulled across its travel is one edit, not one per pixel.
-function Fader({
-  label,
-  value,
-  min = 0,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min?: number;
-  max: number;
-  onChange: (value: number, coalesceKey?: string) => void;
-}): ReactElement {
-  const { formatNumber } = useI18n();
-  const id = useId();
-  const coalesceKey = useRef<string | undefined>(undefined);
-
-  return (
-    <div className="v-mixer__fader">
-      <label className="v-mixer__faderLabel" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step="any"
-        value={value}
-        onPointerDown={() => {
-          coalesceKey.current = `mixer-${(gesture += 1)}`;
-        }}
-        onKeyDown={() => {
-          coalesceKey.current = undefined;
-        }}
-        onChange={(event) => onChange(Number(event.target.value), coalesceKey.current)}
-      />
-      <output htmlFor={id}>{formatNumber(value)}</output>
-    </div>
-  );
 }
 
 // A silent programme has no loudness, and -Infinity LUFS on screen reads as a broken readout rather
