@@ -1,15 +1,28 @@
 use std::ops::{Add, Sub};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub const FLICKS_PER_SECOND: i64 = 705_600_000;
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize, TS,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    Serialize,
+    Deserialize,
+    TS,
+    JsonSchema,
 )]
 #[serde(transparent)]
 #[ts(type = "number")]
+#[schemars(description = "A position or duration in flicks; 705600000 flicks are one second.")]
 pub struct Time(i64);
 
 impl Time {
@@ -99,7 +112,7 @@ impl Sub for Time {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Rate {
     pub numerator: u32,

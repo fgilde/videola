@@ -1,5 +1,6 @@
 use std::fmt;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
@@ -7,10 +8,21 @@ use uuid::Uuid;
 macro_rules! id_type {
     ($name:ident, $prefix:literal) => {
         #[derive(
-            Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS,
+            Debug,
+            Clone,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Serialize,
+            Deserialize,
+            TS,
+            JsonSchema,
         )]
         #[serde(transparent)]
         #[ts(type = "string")]
+        #[schemars(description = concat!("Id of the form `", $prefix, "_<hex>`."))]
         pub struct $name(String);
 
         impl $name {

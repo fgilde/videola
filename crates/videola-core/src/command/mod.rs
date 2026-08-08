@@ -1,6 +1,7 @@
 mod clip;
 mod project;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -10,34 +11,43 @@ use crate::model::{
 };
 use crate::Result;
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
 pub enum Command {
+    /// Replace the whole render setting block: resolution, frame rate, sample rate, colour space.
     #[serde(rename = "project.setSettings")]
     ProjectSetSettings { settings: ProjectSettings },
+    /// Rename the project.
     #[serde(rename = "project.setTitle")]
     ProjectSetTitle { title: String },
 
+    /// Add a track. Without `index` it goes last; index 0 is the bottom of the stack.
     #[serde(rename = "track.add")]
     TrackAdd {
         kind: TrackKind,
         name: String,
         index: Option<usize>,
     },
+    /// Remove a track and every clip on it.
     #[serde(rename = "track.remove")]
     TrackRemove { track: TrackId },
+    /// Move a track to another position in the stack.
     #[serde(rename = "track.reorder")]
     TrackReorder { track: TrackId, to_index: usize },
+    /// Rename a track.
     #[serde(rename = "track.rename")]
     TrackRename { track: TrackId, name: String },
+    /// Set a track's gain, where 1 is unity and 4 the accepted maximum.
     #[serde(rename = "track.setVolume")]
     TrackSetVolume { track: TrackId, volume: f32 },
+    /// Set a track's stereo position from -1 (left) through 0 (centre) to 1 (right).
     #[serde(rename = "track.setPan")]
     TrackSetPan { track: TrackId, pan: f32 },
+    /// Change any subset of a track's flags; a field left null keeps its current value.
     #[serde(rename = "track.setFlags")]
     TrackSetFlags {
         track: TrackId,
@@ -47,6 +57,8 @@ pub enum Command {
         hidden: Option<bool>,
     },
 
+    /// Place a new clip on a track. `source` names a medium already in the library, a generator,
+    /// or a nested timeline.
     #[serde(rename = "clip.add")]
     ClipAdd {
         track: TrackId,
@@ -54,22 +66,28 @@ pub enum Command {
         start: Time,
         duration: Time,
     },
+    /// Delete a clip.
     #[serde(rename = "clip.remove")]
     ClipRemove { clip: ClipId },
+    /// Move a clip to a new start time, on its own track or another one.
     #[serde(rename = "clip.move")]
     ClipMove {
         clip: ClipId,
         to_track: TrackId,
         start: Time,
     },
+    /// Drag one edge of a clip by `delta`. Always compute the delta from the clip's current edge;
+    /// a rejected step must not be carried into the next one.
     #[serde(rename = "clip.trim")]
     ClipTrim {
         clip: ClipId,
         edge: TrimEdge,
         delta: Time,
     },
+    /// Cut a clip in two at a timeline position strictly inside it.
     #[serde(rename = "clip.split")]
     ClipSplit { clip: ClipId, at: Time },
+    /// Set playback rate and direction. `rate` is a factor in (0, 100]; 1 is unchanged.
     #[serde(rename = "clip.setSpeed")]
     ClipSetSpeed {
         clip: ClipId,
@@ -77,20 +95,25 @@ pub enum Command {
         reverse: bool,
         preserve_pitch: bool,
     },
+    /// Set a clip's gain, where 1 is unity and 4 the accepted maximum.
     #[serde(rename = "clip.setVolume")]
     ClipSetVolume { clip: ClipId, volume: f32 },
+    /// Replace a clip's whole geometry block. Read the current transform and change one field.
     #[serde(rename = "clip.setTransform")]
     ClipSetTransform { clip: ClipId, transform: Transform },
     // A transition belongs to the incoming edge of a clip — the only edge the compositor reads
     // (see `mixPass` in draw-list.ts). `null` clears it, so one command adds, retimes and removes.
+    /// Set or clear the transition on a clip's incoming edge; `null` removes it.
     #[serde(rename = "clip.setTransition")]
     ClipSetTransition {
         clip: ClipId,
         transition: Option<Transition>,
     },
 
+    /// Append an effect to a clip's chain. Adding the same `effectType` twice is a no-op.
     #[serde(rename = "effect.add")]
     EffectAdd { clip: ClipId, effect_type: String },
+    /// Set one static parameter of an effect already on the clip.
     #[serde(rename = "effect.setParam")]
     EffectSetParam {
         clip: ClipId,
@@ -102,6 +125,8 @@ pub enum Command {
     // Keyframes address an effect parameter by `effectType`, the same way `effect.setParam` does.
     // `keyframe.add` is an upsert: sending it repeatedly under one coalesce key is what turns a
     // slider drag over a keyframed parameter into a single undo step.
+    /// Add or replace the keyframe at `time` on an effect parameter. A keyframed parameter
+    /// overrides the static value from `effect.setParam`.
     #[serde(rename = "keyframe.add")]
     KeyframeAdd {
         clip: ClipId,
@@ -111,6 +136,7 @@ pub enum Command {
         value: ParamValue,
         interp: Interp,
     },
+    /// Remove the keyframe at `time`.
     #[serde(rename = "keyframe.remove")]
     KeyframeRemove {
         clip: ClipId,
@@ -118,6 +144,7 @@ pub enum Command {
         key: String,
         time: Time,
     },
+    /// Move a keyframe from one time to another, keeping its value and interpolation.
     #[serde(rename = "keyframe.move")]
     KeyframeMove {
         clip: ClipId,
@@ -126,6 +153,7 @@ pub enum Command {
         from: Time,
         to: Time,
     },
+    /// Change how a keyframe interpolates towards the next one.
     #[serde(rename = "keyframe.setInterp")]
     KeyframeSetInterp {
         clip: ClipId,
@@ -135,13 +163,16 @@ pub enum Command {
         interp: Interp,
     },
 
+    /// Put an asset into the library. The id must be `med_` followed by the SHA-256 of the file's
+    /// bytes, so importing the same file twice yields the same id.
     #[serde(rename = "media.import")]
     MediaImport { asset: MediaAsset },
+    /// Remove an asset from the library along with every clip that uses it.
     #[serde(rename = "media.remove")]
     MediaRemove { media: MediaId },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TrimEdge {
     Start,
@@ -333,7 +364,7 @@ pub const ALL_COMMAND_LABELS: [&str; 26] = [
     LABEL_MEDIA_REMOVE,
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Dispatch {
     pub command: Command,

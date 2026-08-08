@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
@@ -20,7 +21,7 @@ pub(crate) const MAX_COMPOUND_DEPTH: usize = 8;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub schema_version: u32,
@@ -348,7 +349,7 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
     sample_rate_bounded(settings.sample_rate)
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectMeta {
     pub id: ProjectId,
@@ -361,7 +362,7 @@ pub struct ProjectMeta {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettings {
     pub width: u32,
@@ -385,7 +386,7 @@ impl Default for ProjectSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MasterSettings {
     pub volume: f32,
