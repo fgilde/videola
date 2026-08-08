@@ -1,11 +1,6 @@
 .v-shell {
   display: grid;
   grid-template-rows: auto 1fr;
-  /* The window, not the widest row in it. A grid column defaults to max-content, and the topbar's
-     eight unshrinkable buttons are 900 px of it -- which made every row below inherit that width
-     and pushed the preview half out of a phone screen while `overflow: hidden` here hid the
-     evidence. The topbar scrolls itself; nothing else may be dragged along. */
-  grid-template-columns: minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
 }

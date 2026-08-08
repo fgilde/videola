@@ -222,7 +222,11 @@
       44,
     );
     check("the timeline is what the editor opens on", q('[data-testid="library"]'), null);
-    check("the editor fits the window instead of overflowing it", box(".v-editor").width, innerWidth);
+    check(
+      "the editor fits the window, and the picture and the panel get all of it",
+      [box(".v-editor").width, box(".v-preview").width, box(".v-timeline").width],
+      [innerWidth, innerWidth, innerWidth],
+    );
 
     const clip = await dropFixture();
     check("the import raised nothing", banner(), "");
@@ -237,6 +241,14 @@
       true,
     );
     checkAtLeast("and the panel below it is worth showing", box(".v-timeline").height, 200);
+    // The preview row is capped rather than flexible for one reason: a 16:9 picture in a 390 px
+    // column is 220 px tall, and an even split would hand a third of the screen to letterbox that
+    // the timeline needs. Measured as the slack around the picture, not as the cap itself.
+    check(
+      "the picture pane is not mostly empty space",
+      box(".v-preview").height - box(".v-preview__canvas").height <= 90,
+      true,
+    );
 
     // Cutting with a finger: grab the clip in its middle, well inside the 44 px trim zones at
     // either end, and carry it a second and a bit to the right across empty timeline.
