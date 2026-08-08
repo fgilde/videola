@@ -28,7 +28,7 @@ FROM node:22-alpine
 # esbuild bundles both entry points down to plain ESM with nothing left to
 # resolve, so the runtime layer needs no node_modules -- only the .wasm, which
 # is data and stays a file.
-COPY --from=build /src/apps/server/dist/serve.mjs /src/apps/server/dist/mcp.mjs /app/
+COPY --from=build /src/apps/server/dist/serve.mjs /src/apps/server/dist/mcp.mjs /src/apps/server/dist/cli.mjs /app/
 COPY --from=build /src/packages/core/src/wasm/videola_core_bg.wasm /app/
 COPY --from=build /src/apps/web/dist /app/web
 

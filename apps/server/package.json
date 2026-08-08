@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "videola": "./dist/cli.mjs",
     "videola-mcp": "./dist/mcp.mjs",
     "videola-serve": "./dist/serve.mjs"
   },
@@ -11,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:bundle": "node bundle/run.mjs",
-    "build": "esbuild src/bin/serve.ts src/bin/mcp.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist --out-extension:.js=.mjs",
+    "build": "esbuild src/bin/serve.ts src/bin/mcp.ts src/bin/cli.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist --out-extension:.js=.mjs",
     "serve": "node dist/serve.mjs",
     "mcp": "node dist/mcp.mjs"
   },

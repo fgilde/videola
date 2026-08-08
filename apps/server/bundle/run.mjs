@@ -120,9 +120,40 @@ async function checkServeBundle() {
   }
 }
 
+async function checkCliBundle() {
+  process.stdout.write("dist/cli.mjs from a shell\n");
+  const commands = join(root, "cmds.json");
+  const archive = join(root, "cli.videola");
+  await writeFile(commands, JSON.stringify([{ type: "track.add", kind: "video", name: "V1" }]));
+
+  const applied = await runCli(["apply", "--commands", commands, "--out", archive]);
+  check("applies a commands file", applied.code === 0 && applied.stdout.includes("wrote"));
+
+  const described = await runCli(["describe", archive]);
+  check("reads back what it wrote", described.stdout.includes('video "V1"'));
+
+  const refused = await runCli(["schema", "clip.teleport"]);
+  // A message on stdout would end up inside whatever the caller is piping the schema into.
+  check("keeps refusals off stdout", refused.code === 1 && refused.stdout === "");
+}
+
+function runCli(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [join(dist, "cli.mjs"), ...args], {
+      env: { ...process.env, VIDEOLA_STORAGE_ROOT: root },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.on("error", reject);
+    child.on("exit", (code) => resolve({ code, stdout }));
+  });
+}
+
 try {
   await checkMcpBundle();
   await checkServeBundle();
+  await checkCliBundle();
 } finally {
   await rm(root, { recursive: true, force: true });
 }
