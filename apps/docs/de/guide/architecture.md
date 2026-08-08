@@ -89,7 +89,8 @@ zwei Eingängen und einem `progress`-Parameter, kein zweites Subsystem.
 | Nativer Link des Kerns in die Tauri-Hülle und in einen Server | geplant |
 | Timeline, Vorschau, Wiedergabe, Audio-Graph | geplant |
 | Effekt-Registry, WGSL-Shader, Compositor über WebGPU/WebGL2/wgpu | geplant |
-| Export in jeder Form; FFmpeg | geplant |
+| Export nach MP4/WebM über WebCodecs in einem Worker | gebaut |
+| FFmpeg, natives Rendern, Server-Rendern | geplant |
 | REST-API, MCP-Server, generierter Command-Katalog | geplant |
 | Template-Modus (`.videolat`, Galerie, Wizard) | geplant |
 

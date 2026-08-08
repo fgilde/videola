@@ -14,6 +14,7 @@ function sidebar(prefix: string, text: string, items: [string, string][]): Defau
 const CHAPTERS: [string, string][] = [
   ["Getting started", "getting-started"],
   ["Architecture", "architecture"],
+  ["Exporting", "exporting"],
   ["The .videola format", "videola-format"],
   ["Commands and undo", "commands-and-undo"],
   ["Building and releasing", "building-and-releasing"],
@@ -23,6 +24,7 @@ const CHAPTERS: [string, string][] = [
 const KAPITEL: [string, string][] = [
   ["Einstieg", "getting-started"],
   ["Architektur", "architecture"],
+  ["Exportieren", "exporting"],
   ["Das .videola-Format", "videola-format"],
   ["Commands und Undo", "commands-and-undo"],
   ["Bauen und Ausliefern", "building-and-releasing"],

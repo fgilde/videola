@@ -2,9 +2,8 @@
 
 # Videola
 
-Videola is a browser-based video editor. It is early: the project core and the application shell
-exist, the editing surface does not. There is no timeline UI, no preview, no effects rendering and
-no export.
+Videola is a browser-based video editor. It is early, but the chain runs end to end: import a
+video, cut it on a timeline, and export a file a player opens. There is no effects rendering yet.
 
 ## What works today
 
@@ -18,6 +17,9 @@ no export.
   layout detection for phone, tablet and desktop.
 - The web app opens, switches theme and language, adds a track, undoes and redoes, saves a
   `.videola` file and reads it back.
+- Export to MP4 with H.264 and AAC, or to WebM with VP9 and Opus where the browser cannot encode
+  H.264. It runs in a worker through the same WebGL2 compositor as the preview, with progress and a
+  cancel that really stops it. See [Exporting](https://fgilde.github.io/videola/guide/exporting).
 - CI runs fmt, clippy, the Rust tests, a check that the generated TypeScript types are current, the
   wasm build, and the web typecheck, tests and build.
 
@@ -40,6 +42,18 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+Two checks need a real browser and are not part of `pnpm test`. They find Chrome on their own;
+`CHROME_PATH` overrides the search.
+
+```
+pnpm --filter @videola/engine test:gpu      # the compositor against a real WebGL2 driver
+pnpm --filter @videola/engine test:export   # a real export, verified with ffprobe and ffmpeg
+pnpm --filter @videola/ui test:browser      # the timeline against real layout
+```
+
+`test:export` needs `ffprobe` and `ffmpeg` on the path: it hands the file it produced to a decoder
+that shares no code with this repository.
 
 If `wasm-opt` crashes on your machine, run the `wasm` script from `package.json` directly with
 `--no-opt` added. That changes the output size only. CI builds without the flag.
