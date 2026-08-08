@@ -6,6 +6,7 @@ export interface Config {
   readonly maxProjects: number;
   readonly maxBodyBytes: number;
   readonly locale: string;
+  readonly webRoot: string | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -32,6 +33,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     maxProjects: integer(env.VIDEOLA_MAX_PROJECTS, 8, "VIDEOLA_MAX_PROJECTS"),
     maxBodyBytes: integer(env.VIDEOLA_MAX_BODY_BYTES, 512 * 1024 * 1024, "VIDEOLA_MAX_BODY_BYTES"),
     locale: env.VIDEOLA_LOCALE ?? "en",
+    webRoot: env.VIDEOLA_WEB_ROOT === "" ? undefined : env.VIDEOLA_WEB_ROOT,
   };
 }
 
