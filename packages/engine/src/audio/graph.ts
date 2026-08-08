@@ -4,6 +4,8 @@ import { mediaHash, peaks } from "@videola/media";
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
 import type { Peaks } from "@videola/media";
 
+import { integratedLufs } from "./loudness";
+
 export interface AudioBufferSource {
   bufferFor(hash: string, from: Time, to: Time): Promise<AudioBuffer>;
 }
@@ -176,6 +178,29 @@ export class AudioGraph {
     this.#live.push(node, gain);
     this.#playing.push(node);
   }
+}
+
+// Programme loudness of a whole project, to R128, from a real render of the real graph -- clip gains,
+// fades, track buses, mute and solo and the master all included, because they are all things that
+// change the number. Measuring the decoded buffers instead would report the loudness of the material
+// rather than of the programme.
+//
+// The context is the caller's: the browser has `OfflineAudioContext` and so does the test runner, and
+// a factory parameter for one line of construction would be an interface with one implementation.
+// Its length is what decides how much of the timeline is measured.
+export async function measureLoudness(
+  ctx: OfflineAudioContext,
+  project: Project,
+  source: AudioBufferSource,
+): Promise<number> {
+  const graph = new AudioGraph(ctx as unknown as BaseAudioContext, source);
+  await graph.prepare(project);
+  graph.startAt(ctx.currentTime, 0);
+  const rendered = await ctx.startRendering();
+  const planes = Array.from({ length: rendered.numberOfChannels }, (_, channel) =>
+    rendered.getChannelData(channel),
+  );
+  return integratedLufs(planes, rendered.sampleRate);
 }
 
 interface Point {

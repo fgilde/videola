@@ -1,4 +1,5 @@
-export { AudioGraph, hasAudibleClips } from "./audio/graph";
+export { AudioGraph, hasAudibleClips, measureLoudness } from "./audio/graph";
+export { integratedLufs, LOUDNESS_BLOCK_SECONDS, peakDbfs } from "./audio/loudness";
 export type { AudioBufferSource } from "./audio/graph";
 export { Clock } from "./clock";
 export type { ClockSource } from "./clock";

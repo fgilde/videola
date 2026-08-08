@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
 
-import { AudioGraph, hasAudibleClips } from "./graph";
+import { AudioGraph, hasAudibleClips, measureLoudness } from "./graph";
+import { integratedLufs } from "./loudness";
 import type { AudioBufferSource } from "./graph";
 
 const SAMPLE_RATE = 48_000;
@@ -638,5 +639,96 @@ describe("AudioGraph, waveform peaks", () => {
     graph.waveforms(16);
 
     expect(decode).toHaveBeenCalledOnce();
+  });
+});
+
+// R128 loudness of the programme, not of the material: the number has to move when a fader does, or
+// it is measuring the wrong thing. Read from a real offline render of the real graph.
+describe("measureLoudness", () => {
+  // A full-scale 1 kHz sine through a graph at unity reads the same as the same sine handed straight
+  // to the meter, which is the only way to know the graph is not quietly changing the level.
+  const tone = (ctx: BaseAudioContext): AudioBufferSource =>
+    signal(ctx, (progress) => Math.sin(2 * Math.PI * 1000 * progress));
+
+  it("measures a project at unity gain as the material's own loudness", async () => {
+    const ctx = context(1);
+    const measured = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(ctx),
+    );
+
+    const material = new Float32Array(SAMPLE_RATE);
+    for (let i = 0; i < material.length; i += 1) {
+      material[i] = Math.sin(2 * Math.PI * 1000 * (i / material.length));
+    }
+    // The same samples handed straight to the meter. A graph that changes the level anywhere along
+    // clip gain, bus, panner or master shows up here as a difference.
+    expect(measured).toBeCloseTo(integratedLufs([material, material], SAMPLE_RATE), 1);
+    // And full scale at 1 kHz is 0 LUFS, which ties this to the compliance cases next door.
+    expect(measured).toBeCloseTo(0, 1);
+  });
+
+  it("follows the track fader", async () => {
+    const ctx = context(1);
+    const quiet = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()], { volume: 0.5 })]),
+      tone(ctx),
+    );
+    const loudCtx = context(1);
+    const loud = await measureLoudness(
+      loudCtx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(loudCtx),
+    );
+
+    expect(loud - quiet).toBeCloseTo(6.02, 1);
+  });
+
+  it("follows the master fader", async () => {
+    const ctx = context(1);
+    const measured = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])], 0.5),
+      tone(ctx),
+    );
+    const fullCtx = context(1);
+    const full = await measureLoudness(
+      fullCtx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(fullCtx),
+    );
+
+    expect(full - measured).toBeCloseTo(6.02, 1);
+  });
+
+  it("has no reading for a muted project", async () => {
+    const ctx = context(1);
+    const measured = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()], { muted: true })]),
+      tone(ctx),
+    );
+
+    expect(measured).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  // The fades are automation on the clip gain, so they are in the render and therefore in the number.
+  it("counts a fade as the quieter programme it makes", async () => {
+    const ctx = context(1);
+    const faded = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip({ fades: { inDuration: SECOND / 2, outDuration: 0 } })])]),
+      tone(ctx),
+    );
+    const flatCtx = context(1);
+    const flat = await measureLoudness(
+      flatCtx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(flatCtx),
+    );
+
+    expect(faded).toBeLessThan(flat);
   });
 });
