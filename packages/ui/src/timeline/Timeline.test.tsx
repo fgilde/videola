@@ -173,12 +173,17 @@ describe("Timeline", () => {
     const width = () => Number.parseFloat(document.querySelector<HTMLElement>("[data-clip-id]")?.style.width ?? "0");
     const before = width();
 
+    const scroll = stubViewport();
     act(() => {
       const button = screen.getByRole("button", { name: "Vergrößern" });
       for (let step = 0; step < 4; step += 1) button.click();
     });
 
     expect(width()).toBe(before * 16);
+    // The anchor belongs to the first step of the burst: 4.5 s sat under the viewport centre,
+    // and sixteen times in it must still be there. Only the first call sees a scroll offset the
+    // layout effect has not already invalidated.
+    expect(scroll.scrollLeft).toBe(4.5 * 1600 - 450);
   });
 
   // Asserting the width against MAX_ELEMENT_WIDTH_PX would only restate the definition of the

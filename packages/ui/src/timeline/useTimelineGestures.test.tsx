@@ -706,6 +706,24 @@ describe("clip context menu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
+  // The clip can also go without the menu being the one that removed it -- another view, a
+  // command from the shell, an undo. The menu must not outlive what it points at.
+  it("closes when the clip disappears from under it", () => {
+    const withClip = makeProject([makeTrack("trk_1", [makeClip("clp_1", 0, 10 * SECOND)])]);
+    const at = (scene: typeof withClip) => (
+      <I18nProvider>
+        <Timeline project={scene} playhead={3 * SECOND} dispatch={() => {}} onSeek={() => {}} />
+      </I18nProvider>
+    );
+    const view = render(at(withClip));
+    fireEvent.contextMenu(clipElement(), { clientX: 100, clientY: 40 });
+    expect(screen.getByRole("menu")).toBeTruthy();
+
+    view.rerender(at(makeProject([makeTrack("trk_1", [])])));
+
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it("offers no split when the playhead is outside the clip", async () => {
     const doc = await documentWithOneClip(SECOND);
     render(<Harness doc={doc} />);
