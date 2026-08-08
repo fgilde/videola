@@ -6,6 +6,7 @@ import { mediaKind } from "@videola/core";
 import type { Command, DispatchResult, LoadWarning, Project } from "@videola/core";
 import type { DocumentBackend } from "@videola/core";
 
+import { RenderError, renderStills, type RenderCode } from "./frames";
 import { describeProject, validateProject, type Finding } from "./inspect";
 import { PathOutsideRoot, Storage, writeAtomic } from "./paths";
 import { openBackend } from "./wasm";
@@ -207,6 +208,22 @@ export class Api {
     return validateProject(this.state(id));
   }
 
+  // The one tool that lets an agent see its work rather than assert it. Nothing here decides what
+  // is on screen: the archive carries the project the core normalised, and the renderer walks the
+  // same draw list the editor draws. What the server owns is how big the answer may get.
+  async frames(id: string, times: readonly number[], width?: number): Promise<Uint8Array[]> {
+    const settings = this.state(id).settings;
+    const size = fit(settings.width, settings.height, width);
+    try {
+      return await renderStills({ archive: this.archive(id), times: instants(times), ...size });
+    } catch (error) {
+      if (error instanceof RenderError) {
+        throw new ApiError(RENDER_STATUS[error.code], error.code, error.message);
+      }
+      throw error;
+    }
+  }
+
   #step(id: string, run: (backend: DocumentBackend) => DispatchResult): ApplyResult {
     const session = this.#session(id);
     try {
@@ -284,6 +301,45 @@ export class Api {
       throw new ApiError(404, "noSuchFile", messageOf(error));
     }
   }
+}
+
+const RENDER_STATUS: Record<RenderCode, number> = {
+  rendererUnavailable: 503,
+  renderFailed: 500,
+  renderTimeout: 504,
+};
+
+// Small enough that a picture costs an agent a fraction of what a frame of the project would, big
+// enough to see a cut, a title and a colour grade in. The project's own aspect ratio decides the
+// height, so a still is never a letterboxed lie about the shape of the timeline.
+export const DEFAULT_FRAME_WIDTH = 640;
+const MIN_FRAME_WIDTH = 16;
+const MAX_FRAME_WIDTH = 1920;
+const MAX_FRAMES_PER_CALL = 8;
+
+function fit(
+  projectWidth: number,
+  projectHeight: number,
+  width?: number,
+): { width: number; height: number } {
+  if (width !== undefined && !Number.isSafeInteger(width)) {
+    throw new ApiError(400, "badWidth", "width must be a whole number of pixels");
+  }
+  const chosen = Math.min(MAX_FRAME_WIDTH, Math.max(MIN_FRAME_WIDTH, width ?? DEFAULT_FRAME_WIDTH));
+  return { width: chosen, height: Math.max(1, Math.round((chosen * projectHeight) / projectWidth)) };
+}
+
+function instants(times: readonly number[]): number[] {
+  if (times.length === 0) throw new ApiError(400, "noTimes", "give at least one time in flicks");
+  if (times.length > MAX_FRAMES_PER_CALL) {
+    throw new ApiError(400, "tooManyFrames", `at most ${MAX_FRAMES_PER_CALL} times per call`);
+  }
+  return times.map((at) => {
+    if (!Number.isSafeInteger(at) || at < 0) {
+      throw new ApiError(400, "badTime", `not a time in flicks: ${at}`);
+    }
+    return at;
+  });
 }
 
 function hasChange(result: DispatchResult): boolean {

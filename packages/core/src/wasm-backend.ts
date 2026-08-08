@@ -78,6 +78,7 @@ function wrap(handle: WasmDocument): DocumentBackend {
       handle.saveAsTemplate(options, id) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
+    mediaBytes: (id: string) => handle.mediaBytes(id) as Uint8Array<ArrayBuffer> | undefined,
     warnings: () => handle.warnings() as LoadWarning[],
   };
 }
