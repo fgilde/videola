@@ -369,12 +369,11 @@ fn meeting(clips: &[Clip], current: &Clip, edge: TrimEdge) -> Option<usize> {
         TrimEdge::Start => current.start,
         TrimEdge::End => current.end(),
     };
-    clips.iter().position(|other| {
-        other.id != current.id
-            && match edge {
-                TrimEdge::Start => other.end() == cut,
-                TrimEdge::End => other.start == cut,
-            }
+    // No guard against matching `current` itself: that would need its own end to equal its own
+    // start, and a clip with a duration of zero is refused everywhere one can be made.
+    clips.iter().position(|other| match edge {
+        TrimEdge::Start => other.end() == cut,
+        TrimEdge::End => other.start == cut,
     })
 }
 

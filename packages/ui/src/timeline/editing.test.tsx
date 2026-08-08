@@ -243,6 +243,29 @@ describe("multi selection", () => {
     expect(starts(doc.state)).toEqual([0, 2]);
   });
 
+  // Every clip travelling with the pointer has to drop out of the snap candidates, not just the one
+  // under it: a fellow member of the selection is at its old position while the drag runs, and its
+  // edge would pull the dragged clip onto a line that is about to move away.
+  it("does not snap the dragged selection to its own members", async () => {
+    const doc = await documentWithClips(0);
+    const track = doc.state.timeline.tracks[0]?.id ?? "";
+    const source = { kind: "generator", generator: { type: "solid", color: "#ff0000" } } as const;
+    // The second clip sits off the grid on purpose, so at the drop point it is the only line within
+    // the catch radius -- the ruler's own ticks are four hundred milliseconds away.
+    doc.dispatch(cmd.clipAdd(track, source, 0, 2 * SECOND));
+    doc.dispatch(cmd.clipAdd(track, source, 5.63 * SECOND, 2 * SECOND));
+    render(<Harness doc={doc} />);
+
+    down(clipAt(0), 100);
+    down(clipAt(1), 600, { ctrlKey: true });
+    down(clipAt(0), 100);
+    move(104);
+    move(460);
+    up(460);
+
+    expect(clips(doc.state)[0]?.start).toBe(3.6 * SECOND);
+  });
+
   // Dragging past zero used to squeeze the selection together, because `clip.move` pins every
   // start at zero on its own.
   it("keeps the spacing when the selection is dragged past the start", async () => {

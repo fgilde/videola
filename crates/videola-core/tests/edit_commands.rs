@@ -772,6 +772,31 @@ fn a_group_naming_a_clip_that_does_not_exist_groups_nothing() {
     assert!(clip_of(doc.project(), &second).group_id.is_none());
 }
 
+// `Document::dispatch` applies to a clone and throws it away on error, so through that path a
+// half-written group would never be visible. `Command::apply` is public too, and a caller holding a
+// `Project` directly has no such rollback -- which is what the lookup pass in `group` is for, and
+// this is the only place it can be seen.
+#[test]
+fn a_group_applied_straight_to_a_project_writes_nothing_when_one_id_is_unknown() {
+    let (doc, _, ids) = doc_with_a_run();
+    let mut project = doc.project().clone();
+
+    let refused = Command::ClipGroup {
+        clips: vec![
+            ids[0].clone(),
+            ids[1].clone(),
+            ClipId::from("clp_nope".to_string()),
+        ],
+    }
+    .apply(&mut project);
+
+    assert!(refused.is_err());
+    assert!(project.timeline.tracks[0]
+        .clips
+        .iter()
+        .all(|clip| clip.group_id.is_none()));
+}
+
 #[test]
 fn two_groups_get_two_different_ids() {
     let (mut doc, track) = doc_with_track();
