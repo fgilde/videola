@@ -15,6 +15,8 @@ apps/web/browser/phone.png
 apps/web/browser/phone-library.png
 packages/engine/browser/bundle.js
 packages/engine/browser/worker.js
+packages/ui/browser/bundle.js
+packages/ui/browser/bundle.css
 
 # Tauri
 src-tauri/target

@@ -13,7 +13,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const bundle = join(here, "bundle.js");
 
 const CHROME_CANDIDATES = [
-  process.env.CHROME_PATH,
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
   "/usr/bin/google-chrome",
@@ -22,10 +21,15 @@ const CHROME_CANDIDATES = [
 ];
 
 function chrome() {
-  const found = CHROME_CANDIDATES.find((path) => path !== undefined && existsSync(path));
-  if (found === undefined) {
-    throw new Error("no Chrome found -- set CHROME_PATH to the executable");
+  // A set CHROME_PATH is an instruction, not a candidate: as one of the candidates a typo falls
+  // through to some other Chrome, which in CI is one without the flags the wrapper adds.
+  const wanted = process.env.CHROME_PATH;
+  if (wanted !== undefined) {
+    if (!existsSync(wanted)) throw new Error(`CHROME_PATH points at nothing: ${wanted}`);
+    return wanted;
   }
+  const found = CHROME_CANDIDATES.find((path) => existsSync(path));
+  if (found === undefined) throw new Error("no Chrome found -- set CHROME_PATH to the executable");
   return found;
 }
 
