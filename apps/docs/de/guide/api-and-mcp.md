@@ -39,13 +39,41 @@ Schnittstelle heißt das: **Import** nimmt einen Pfad im Storage-Root oder einen
 niemals base64. **Export** heißt eine `.videola`-Datei schreiben; einen Video-Encoder gibt es auf dem
 Server nicht. Medien-Ids sind Inhaltshashes, ein zweiter Import derselben Datei kostet also nichts.
 
+Beim Import wird die Datei mit demselben Demuxer geprüft, den auch der Browser benutzt: der
+Bibliothekseintrag trägt Dauer, Maße, Bildrate und Kanalzahl. Eine Datei, die kein Demuxer lesen
+kann, wird abgelehnt, statt als Eintrag zu landen, aus dem nie ein Clip gezeichnet werden könnte.
+
+## Das Ergebnis sehen
+
+`project_getFrame` rendert das Projekt zu einem Zeitpunkt und liefert ein PNG. Dieses Werkzeug ist der
+Unterschied zwischen einem Agenten, der Commands schickt, und einem, der sein Ergebnis beurteilen
+kann; alles andere in dieser Schnittstelle ist Buchhaltung.
+
+Einen Compositor außerhalb des Browsers gibt es nicht — `videola-render` und `videola-compositor`
+existieren nicht, und ein zweiter Renderer wären zwei Renderer, die man synchron halten müsste. Also
+fährt der Server den echten: er startet ein **Headless-Chrome**, reicht ihm über einen Loopback-Port
+hinter einem nicht erratbaren Pfad eine Seite, übergibt das Projekt als `.videola`-Archiv, und die
+Seite läuft denselben WebGL2-Compositor, dieselben Decoder und dieselbe Zeichenliste wie die Vorschau
+des Editors. `project_getAudioPeaks` fährt auf derselben Seite durch denselben Offline-Audiographen,
+mit dem auch der Export rendert.
+
+Ein Einzelbild kann damit von Bauart her nichts anderes zeigen als der Editor. Der Preis, klar
+benannt:
+
+* **Chrome oder Chromium muss auf der Maschine sein.** Ohne scheitert das Werkzeug mit
+  `rendererUnavailable` und sagt das. Es antwortet nie mit einem leeren Bild.
+* **Ein Browserstart je Aufruf**, dazu ein frisches Profil: das erste Bild kostet ein bis zwei
+  Sekunden. Lieber mehrere Zeitpunkte in einem Aufruf verlangen als mehrere Aufrufe.
+* **`pnpm --filter videola-server build` muss gelaufen sein**, denn die Seite ist ein Bundle
+  (`apps/server/renderer/bundle.js`). Ein fehlendes Bundle ist derselbe ehrliche Fehler.
+* Das Docker-Image bringt keinen Browser mit. Entweder `CHROME_PATH` auf einen zeigen lassen oder
+  hinnehmen, dass dort diese beiden Werkzeuge scheitern, während alles andere läuft.
+
 ## Was es nicht gibt
 
 | Fehlt | Warum |
 |---|---|
-| `get_frame` | Braucht einen Compositor. Der des Browsers ist WebGL2 in `@videola/engine`, den in Rust gibt es nicht. Ein Agent kann sein Ergebnis hier nicht **sehen**. |
-| `render`, Export als Video | Dazu noch ein Encoder. `.videola` ist die einzige Ausgabe. |
-| `get_audio_peaks` | Braucht einen Decoder außerhalb des Browsers. |
+| `render`, Export als Video | Braucht einen Encoder zusätzlich zum Compositor. `.videola` ist die einzige Ausgabe. |
 | Templates | Das Format ist M5. |
 | WebSocket `/api/events`, MCP über SSE | Es gibt noch nichts zu schieben: die Command-Antwort trägt den Patch schon, und einen Render-Fortschritt gibt es nicht. MCP läuft nur über stdio. |
 
@@ -60,7 +88,9 @@ node apps/server/dist/mcp.mjs     # MCP über stdio
 
 Eingestellt wird ausschließlich über die Umgebung: `VIDEOLA_HOST` (Vorgabe `127.0.0.1`),
 `VIDEOLA_PORT` (`7331`), `VIDEOLA_TOKEN`, `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` (`8`),
-`VIDEOLA_MAX_BODY_BYTES` (512 MiB), `VIDEOLA_LOCALE`, `VIDEOLA_WASM`.
+`VIDEOLA_MAX_BODY_BYTES` (512 MiB), `VIDEOLA_LOCALE`, `VIDEOLA_WASM`, `CHROME_PATH`,
+`VIDEOLA_RENDERER`. Ein gesetztes `CHROME_PATH` ist eine Anweisung, kein Kandidat: zeigt es ins
+Leere, ist das ein Fehler und kein Rückfall auf irgendein anderes Chrome.
 
 Eine Adresse außerhalb von Loopback **ohne** Token wird nicht gebunden, sondern mit einer Begründung
 abgelehnt. Ist ein Token gesetzt, braucht jede Anfrage `Authorization: Bearer …`; verglichen wird in
@@ -99,17 +129,47 @@ Unterstrich statt Punkt (`clip.split` wird `clip_split`). Jedes nimmt die Felder
 festlegt. Ein neuer Command im Rust-Enum wird zu einem Werkzeug, ohne dass jemand den Server
 anfasst.
 
-Dazu dreizehn eigene: `project_create`, `project_open`, `project_list`, `project_get`,
-`project_describe`, `project_validate`, `project_save`, `project_close`, `media_importFile`,
-`history_undo`, `history_redo`, `effects_list`.
+Dazu fünfzehn eigene: `project_create`, `project_open`, `project_list`, `project_get`,
+`project_describe`, `project_getFrame`, `project_getAudioPeaks`, `project_validate`, `project_save`,
+`project_close`, `media_importFile`, `history_undo`, `history_redo`, `effects_list`.
 
 Über HTTP entsprechen dem `GET /api/health`, `GET /api/schema`, `GET|POST /api/projects`,
 `GET|DELETE /api/projects/:id`, `POST /api/projects/:id/commands`, `…/undo`, `…/redo`, `…/describe`,
-`…/validate`, `POST …/media`, `GET|PUT …/file`.
+`…/validate`, `GET …/frame?at=…&width=…` (liefert `image/png`), `GET …/peaks?from=…&to=…&buckets=…`,
+`POST …/media`, `GET|PUT …/file`.
 
-`project_describe` ist wichtiger, als seine Größe vermuten lässt: ohne Einzelbild-Renderer ist es der
-einzige Weg, auf dem ein Agent prüfen kann, was er wirklich gebaut hat. Nach jeder Änderung lesen,
-nicht annehmen.
+`project_describe` und `project_getFrame` gehören nach jeder Änderung zusammen gelesen: das erste
+sagt, was auf der Timeline liegt, das zweite, wie es aussieht. Ein falscher Clip auf der richtigen
+Spur besteht das erste und fällt beim zweiten durch.
+
+## Ein Ablauf: schneiden und dann nachsehen
+
+```
+project_create                          → { id: "prj_…" }
+media_importFile   project, "raw/interview.mp4"
+                                        → { mediaId: "med_<sha256>" }
+track_add          project, kind "video", name "V1"
+project_describe   project              → Spur-Id und Länge des Mediums
+clip_add           project, track, source { kind: "media", media: mediaId },
+                   start 0, duration 705600000
+project_describe   project              → Clip-Id
+clip_split         project, clip, at 352800000
+clip_remove        project, <die hintere Hälfte>
+
+project_getFrame   project, at [0, 264600000, 352800000], width 480
+                                        → drei PNGs: der Anfang, ein Bild kurz vor dem
+                                          Schnitt und der erste Moment danach
+project_getAudioPeaks project, from 0, to 352800000, buckets 32
+                                        → die Form des Tons über das, was übrig ist
+project_save       project, "out/interview-cut.videola"
+```
+
+Der dritte Zeitpunkt ist der, auf den es ankommt: der erste Moment hinter dem Schnitt. Hat das
+Entfernen gestimmt, ist dort der Projekthintergrund zu sehen — ist dort noch das Interview, wurde die
+falsche Hälfte entfernt. Das zeigt keine Beschreibung so unmittelbar.
+
+`project_getFrame` nimmt ein Feld von Zeitpunkten. Jeder Aufruf ist ein Browserstart, also lieber
+alles Interessante in einem Aufruf verlangen.
 
 ## Fallstricke
 
