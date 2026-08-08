@@ -95,6 +95,7 @@
   "timeline.paste": "Am Playhead einfügen",
   "timeline.group": "Gruppieren",
   "timeline.ungroup": "Gruppierung aufheben",
+  "timeline.nest": "Verschachteln",
   "timeline.addMarker": "Marker setzen",
   "timeline.deleteMarker": "Marker löschen",
   "timeline.marker": "Marker: {label}",

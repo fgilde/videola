@@ -95,6 +95,7 @@
   "timeline.paste": "Paste at playhead",
   "timeline.group": "Group",
   "timeline.ungroup": "Ungroup",
+  "timeline.nest": "Nest",
   "timeline.addMarker": "Set marker",
   "timeline.deleteMarker": "Delete marker",
   "timeline.marker": "Marker: {label}",
