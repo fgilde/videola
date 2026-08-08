@@ -259,53 +259,57 @@ export function Timeline({
       {/* Symbols, not words. Six German labels at 44 px each are a whole row of the screen on a
           tablet, and every one of them is a tool a person reaches for by shape. */}
       <div className="v-timeline__toolbar">
-        <IconButton
-          icon="zoomOut"
-          label={t("timeline.zoomOut")}
-          onClick={() => zoom(ZOOM_FACTOR, viewport.width / 2)}
-        />
-        <IconButton
-          icon="zoomIn"
-          label={t("timeline.zoomIn")}
-          onClick={() => zoom(1 / ZOOM_FACTOR, viewport.width / 2)}
-        />
-        <IconButton
-          icon="magnet"
-          label={t("timeline.snap")}
-          pressed={snapEnabled}
-          onClick={() => setSnapEnabled((on) => !on)}
-        />
-        <span className="v-timeline__toolbarRule" aria-hidden="true" />
+        <div className="v-timeline__tools">
+          <IconButton
+            icon="zoomOut"
+            label={t("timeline.zoomOut")}
+            onClick={() => zoom(ZOOM_FACTOR, viewport.width / 2)}
+          />
+          <IconButton
+            icon="zoomIn"
+            label={t("timeline.zoomIn")}
+            onClick={() => zoom(1 / ZOOM_FACTOR, viewport.width / 2)}
+          />
+          <IconButton
+            icon="magnet"
+            label={t("timeline.snap")}
+            pressed={snapEnabled}
+            onClick={() => setSnapEnabled((on) => !on)}
+          />
+          <IconButton
+            icon="flag"
+            label={t("timeline.addMarker")}
+            onClick={() => dispatch(cmd.markerAdd(playhead, ""))}
+          />
+        </div>
         {/* Two plain selects rather than modifier keys: a finger has no modifiers, and the mode a
-            drag is in has to be readable before the drag, not guessed from what it just did. */}
-        <select
-          aria-label={t("timeline.edgeMode")}
-          value={edgeMode}
-          onChange={(event) => setEdgeMode(event.target.value as EdgeMode)}
-        >
-          {EDGE_MODES.map((mode) => (
-            <option key={mode} value={mode}>
-              {t(`timeline.edgeMode.${mode}`)}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={t("timeline.dragMode")}
-          value={dragMode}
-          onChange={(event) => setDragMode(event.target.value as DragMode)}
-        >
-          {DRAG_MODES.map((mode) => (
-            <option key={mode} value={mode}>
-              {t(`timeline.dragMode.${mode}`)}
-            </option>
-          ))}
-        </select>
-        <span className="v-timeline__toolbarRule" aria-hidden="true" />
-        <IconButton
-          icon="flag"
-          label={t("timeline.addMarker")}
-          onClick={() => dispatch(cmd.markerAdd(playhead, ""))}
-        />
+            drag is in has to be readable before the drag, not guessed from what it just did.
+            A group of its own, so on a phone the two of them wrap together instead of leaving one
+            symbol stranded on a line by itself. */}
+        <div className="v-timeline__modes">
+          <select
+            aria-label={t("timeline.edgeMode")}
+            value={edgeMode}
+            onChange={(event) => setEdgeMode(event.target.value as EdgeMode)}
+          >
+            {EDGE_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {t(`timeline.edgeMode.${mode}`)}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={t("timeline.dragMode")}
+            value={dragMode}
+            onChange={(event) => setDragMode(event.target.value as DragMode)}
+          >
+            {DRAG_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {t(`timeline.dragMode.${mode}`)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="v-timeline__body">

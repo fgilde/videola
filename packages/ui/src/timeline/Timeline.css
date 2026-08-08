@@ -7,22 +7,23 @@
   border-top: 1px solid var(--v-border);
 }
 
+/* Two groups: the tools, and the two questions a drag is answered by. Wrapping rather than
+   scrolling, and by group -- on a phone the mode pickers drop to a second line together. A control
+   on a second line is still a control; one that has scrolled off the right is not. */
 .v-timeline__toolbar {
   display: flex;
   align-items: center;
-  gap: var(--v-space-1);
-  /* Wrapping rather than scrolling: on a phone the two mode pickers drop to a second line, and a
-     control on a second line is still a control. One that has scrolled off the right is not. */
   flex-wrap: wrap;
-  padding: var(--v-space-2) var(--v-space-2);
+  gap: var(--v-space-1) var(--v-space-4);
+  padding: var(--v-space-2);
   border-bottom: 1px solid var(--v-border);
 }
 
-.v-timeline__toolbarRule {
-  align-self: stretch;
-  width: 1px;
-  margin: 0 var(--v-space-2);
-  background: var(--v-border);
+.v-timeline__tools,
+.v-timeline__modes {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
 }
 
 .v-timeline__body {
@@ -169,15 +170,16 @@
   z-index: 1;
 }
 
-/* Behind the label and the trim handles, and out of the way of the pointer: the gestures read the
-   clip element and its trim zones, and an SVG child would otherwise become the event target. */
+/* The lower two thirds of the clip, not the whole of it: the name keeps a clean band at the top,
+   and the signal reads as the ground the clip is made of rather than as a stripe drawn over it.
+   Behind the label and the trim handles, and out of the way of the pointer -- the gestures read
+   the clip element and its trim zones, and an SVG child would otherwise become the event target. */
 .v-clip__wave {
   position: absolute;
-  inset: 0;
+  inset: 34% 0 0;
   width: 100%;
-  height: 100%;
   fill: var(--v-clip-edge);
-  opacity: 0.4;
+  opacity: 0.35;
   pointer-events: none;
 }
 
