@@ -1,0 +1,284 @@
+.v-timeline {
+  --v-ruler-height: 28px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  background: var(--v-bg-sunken);
+  border-top: 1px solid var(--v-border);
+}
+
+.v-timeline__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2) var(--v-space-3);
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-timeline__body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.v-timeline__headers {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 140px;
+  background: var(--v-bg-elevated);
+  border-right: 1px solid var(--v-border);
+}
+
+.v-timeline__rulerSpacer {
+  height: var(--v-ruler-height);
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-timeline__header {
+  /* The track colour lives here, not on the row: a row starts at content x 0 and scrolls out of
+     sight, the header column is sticky and keeps showing it. */
+  border-left: 3px solid transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 var(--v-space-3);
+  border-bottom: 1px solid var(--v-border);
+  overflow: hidden;
+}
+
+.v-timeline__headerName {
+  color: var(--v-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.v-timeline__headerKind {
+  color: var(--v-text-muted);
+  font-size: 0.75rem;
+}
+
+.v-timeline__scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Panning belongs to the browser -- the gestures implement none, and the surface is wider
+     than the viewport by design. Only pinch is taken away, because two pointers zoom here.
+     Clips and the ruler opt out again below, where a drag is ours. */
+  touch-action: pan-x pan-y;
+}
+
+.v-timeline__content {
+  position: relative;
+}
+
+.v-ruler {
+  position: relative;
+  height: var(--v-ruler-height);
+  border-bottom: 1px solid var(--v-border);
+  color: var(--v-text-muted);
+  font-family: var(--v-font-mono);
+  font-size: 0.72rem;
+  user-select: none;
+  /* Scrubbing is the gesture's. */
+  touch-action: none;
+}
+
+.v-ruler__tick {
+  position: absolute;
+  top: 0;
+  padding-left: 4px;
+  border-left: 1px solid var(--v-border-strong);
+  line-height: var(--v-ruler-height);
+  white-space: nowrap;
+}
+
+.v-track {
+  position: relative;
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  box-sizing: border-box;
+  min-width: 2px;
+  background: var(--v-surface);
+  /* An outline rather than a border: the trim zones are positioned against the padding box, so
+     a border would leave its own width of the clip's outer edge outside the hit area. */
+  outline: 1px solid var(--v-border-strong);
+  outline-offset: -1px;
+  border: none;
+  border-radius: var(--v-radius-sm);
+  /* Dragging a clip is the gesture's, not the browser's pan. */
+  touch-action: none;
+  color: var(--v-text);
+  overflow: hidden;
+  user-select: none;
+  cursor: grab;
+}
+
+.v-clip[data-selected="true"] {
+  outline-color: var(--v-accent);
+  box-shadow: inset 0 0 0 1px var(--v-accent);
+}
+
+/* Behind the label and the trim handles, and out of the way of the pointer: the gestures read the
+   clip element and its trim zones, and an SVG child would otherwise become the event target. */
+.v-clip__wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: var(--v-accent);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.v-clip__label {
+  display: block;
+  /* The inset lives on the label, so a clip narrower than the padding still draws its own
+     width instead of being inflated to fit text it cannot show anyway. */
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.v-clip__trim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: ew-resize;
+}
+
+.v-clip__trim[data-edge="start"] {
+  left: 0;
+}
+
+.v-clip__trim[data-edge="end"] {
+  right: 0;
+}
+
+.v-clip__trim::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  width: 2px;
+  background: var(--v-border-strong);
+}
+
+.v-clip__trim[data-edge="start"]::after {
+  left: 1px;
+}
+
+.v-clip__trim[data-edge="end"]::after {
+  right: 1px;
+}
+
+.v-timeline__toolbar select {
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  color: var(--v-text);
+  font: inherit;
+}
+
+/* A flag on the ruler line, wide enough to be hit by a finger without covering the clip below. */
+.v-timeline__marker {
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 2px 2px 2px 0;
+  cursor: pointer;
+  z-index: 4;
+}
+
+.v-timeline__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--v-danger);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.v-timeline__snapLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--v-focus);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Where a medium carried out of the library would land. Wider than the snap line and in the accent
+   colour, because it answers a question the user is asking right now. */
+.v-timeline__dropLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--v-accent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.v-track[data-drop-target] {
+  background: var(--v-surface-hover);
+  outline: 1px solid var(--v-accent);
+  outline-offset: -1px;
+}
+
+.v-timeline__empty {
+  padding: var(--v-space-4) var(--v-space-6);
+  color: var(--v-text-muted);
+}
+
+.v-timeline__menu {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  min-width: 180px;
+  padding: var(--v-space-1);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  box-shadow: var(--v-shadow);
+}
+
+.v-timeline__menu button {
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-3);
+  background: none;
+  border: none;
+  border-radius: var(--v-radius-sm);
+  color: var(--v-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.v-timeline__menu button:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+}
+
+.v-timeline__menu button:disabled {
+  color: var(--v-text-muted);
+  cursor: default;
+}

@@ -1,50 +1,111 @@
-import type { ReactElement } from "react";
+import { useRef, type ReactElement, type ReactNode } from "react";
 
 import { useI18n } from "../i18n/useI18n";
+import { useDismiss } from "../useDismiss";
 import { SettingsMenu } from "./SettingsMenu";
 import wordmark from "./videola-wordmark.png";
 
 export interface TopBarActions {
   onNew?: () => void;
+  onTemplates?: () => void;
   onOpen?: () => void;
   onSave?: () => void;
-  onImport?: () => void;
+  onImportMedia?: () => void;
+  onAddTrack?: () => void;
+  onExport?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
 }
 
-export function TopBar(actions: TopBarActions): ReactElement {
+export interface TopBarProps extends TopBarActions {
+  /**
+   * A phone. Undo and redo stay on the bar because they are the two a finger reaches for
+   * constantly; everything else joins the menu, because ten controls do not fit 390 px at
+   * 44 px each and a bar that scrolls sideways hides half of itself in its resting state.
+   */
+  compact?: boolean;
+}
+
+export function TopBar({ compact = false, ...actions }: TopBarProps): ReactElement {
   const { t } = useI18n();
+
+  const project = (
+    <>
+      <Action label={t("action.new")} onClick={actions.onNew} />
+      <Action label={t("action.templates")} onClick={actions.onTemplates} />
+      <Action label={t("action.open")} onClick={actions.onOpen} />
+      <Action label={t("action.importMedia")} onClick={actions.onImportMedia} />
+      <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
+    </>
+  );
+  const output = (
+    <>
+      <Action label={t("action.export")} onClick={actions.onExport} />
+      <SettingsMenu />
+      <Action label={t("action.save")} onClick={actions.onSave} primary />
+    </>
+  );
 
   return (
     <header className="v-topbar">
-      <img className="v-topbar__brand" src={wordmark} alt={t("app.title")} />
-      <button className="v-button" onClick={actions.onNew} disabled={!actions.onNew}>
-        {t("action.new")}
-      </button>
-      <button className="v-button" onClick={actions.onOpen} disabled={!actions.onOpen}>
-        {t("action.open")}
-      </button>
-      <button className="v-button" onClick={actions.onImport} disabled={!actions.onImport}>
-        {t("action.addTrack")}
-      </button>
-      <button className="v-button" onClick={actions.onUndo} disabled={actions.canUndo !== true}>
-        {t("action.undo")}
-      </button>
-      <button className="v-button" onClick={actions.onRedo} disabled={actions.canRedo !== true}>
-        {t("action.redo")}
-      </button>
+      {!compact && <img className="v-topbar__brand" src={wordmark} alt={t("app.title")} />}
+      <Overflow label={t("action.more")}>
+        {project}
+        {compact && output}
+      </Overflow>
       <span className="v-topbar__spacer" />
-      <SettingsMenu />
-      <button
-        className="v-button v-button--primary"
-        onClick={actions.onSave}
-        disabled={!actions.onSave}
-      >
-        {t("action.save")}
-      </button>
+      <Action label={t("action.undo")} onClick={actions.onUndo} enabled={actions.canUndo} />
+      <Action label={t("action.redo")} onClick={actions.onRedo} enabled={actions.canRedo} />
+      {!compact && output}
     </header>
+  );
+}
+
+function Action({
+  label,
+  onClick,
+  enabled,
+  primary = false,
+}: {
+  label: string;
+  onClick?: () => void;
+  /** Undo and redo are the two the caller gates on its own history rather than on a handler. */
+  enabled?: boolean;
+  primary?: boolean;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      className={primary ? "v-button v-button--primary" : "v-button"}
+      onClick={onClick}
+      disabled={enabled === undefined ? onClick === undefined : enabled !== true}
+    >
+      {label}
+    </button>
+  );
+}
+
+// <details> already is a disclosure: it carries its own open state, its own keyboard handling and
+// its own accessible name. A button plus useState plus aria-expanded would be a reimplementation
+// of all three. Closing on a click inside is the one thing it does not do by itself, because the
+// element cannot know that an item was chosen rather than a label read.
+function Overflow({ label, children }: { label: string; children: ReactNode }): ReactElement {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const close = (): void => {
+    if (ref.current !== null) ref.current.open = false;
+  };
+  useDismiss(ref, close);
+
+  return (
+    <details className="v-topbar__more" ref={ref}>
+      <summary className="v-button" aria-label={label}>
+        ☰
+      </summary>
+      <div className="v-topbar__menu" onClick={close}>
+        {children}
+      </div>
+    </details>
   );
 }

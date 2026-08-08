@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
@@ -7,7 +8,7 @@ use ts_rs::TS;
 use super::keyframe::{evaluate, Keyframe};
 use super::{EffectId, ParamValue, Time};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Effect {
     pub id: EffectId,
@@ -45,7 +46,7 @@ impl Effect {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Transition {
     pub transition_type: String,
@@ -66,7 +67,7 @@ impl Transition {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TransitionAlignment {
     Center,

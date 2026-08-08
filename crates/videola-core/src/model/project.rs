@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
+
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
-use super::clip::{Clip, ClipSource, Generator};
+use super::clip::{Clip, ClipSource, Generator, Transform};
 use super::effect::{Effect, Transition};
-use super::keyframe::sort_track;
+use super::keyframe::{sort_track, Keyframe};
 use super::media::MediaAsset;
 use super::param::ParamValue;
 use super::timeline::{Marker, Timeline, Track};
@@ -18,7 +21,7 @@ pub(crate) const MAX_COMPOUND_DEPTH: usize = 8;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
     pub schema_version: u32,
@@ -103,6 +106,7 @@ fn normalize_timeline(timeline: &mut Timeline, depth: usize) -> Result<()> {
 fn normalize_track(track: &mut Track, depth: usize) -> Result<()> {
     finite(track.volume)?;
     finite(track.pan)?;
+    hex_color(&track.color_hex)?;
     for clip in &mut track.clips {
         normalize_clip(clip, depth)?;
     }
@@ -117,15 +121,20 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     bounded(clip.fades.out_duration)?;
     speed_rate_bounded(clip.speed.rate)?;
     clip_scalars_finite(clip)?;
+    // An empty group id would make every clip carrying one a member of the same group, so a single
+    // `clip.ungroup` would dissolve unrelated groups across the project.
+    if clip
+        .group_id
+        .as_ref()
+        .is_some_and(|id| id.as_str().is_empty())
+    {
+        return Err(CoreError::InvalidArgument(
+            "a group id must not be empty".into(),
+        ));
+    }
     normalize_transition(&clip.transition_in)?;
     normalize_transition(&clip.transition_out)?;
-    for keyframes in clip.keyframes.values_mut() {
-        sort_track(keyframes);
-        for keyframe in keyframes.iter() {
-            bounded(keyframe.time)?;
-            param_value_finite(&keyframe.value)?;
-        }
-    }
+    normalize_keyframes(&mut clip.keyframes)?;
     match &mut clip.source {
         ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
         ClipSource::Generator {
@@ -160,7 +169,11 @@ pub(crate) fn param_value_finite(value: &ParamValue) -> Result<()> {
 fn clip_scalars_finite(clip: &Clip) -> Result<()> {
     finite(clip.volume)?;
     finite(clip.pan)?;
-    let transform = &clip.transform;
+    transform_finite(&clip.transform)
+}
+
+// Shared with `command::clip::set_transform`, which takes a whole `Transform` off the wire.
+pub(crate) fn transform_finite(transform: &Transform) -> Result<()> {
     for value in [
         transform.x,
         transform.y,
@@ -182,9 +195,17 @@ fn clip_scalars_finite(clip: &Clip) -> Result<()> {
 
 fn normalize_transition(transition: &Option<Transition>) -> Result<()> {
     match transition {
-        Some(transition) => bounded(transition.duration),
+        Some(transition) => transition_bounded(transition),
         None => Ok(()),
     }
+}
+
+// Shared with `command::clip::set_transition`, which takes a whole `Transition` off the wire.
+// `params` are unread by the M1 renderer but still cross into JS, where a non-finite float
+// becomes `null` without anything raising.
+pub(crate) fn transition_bounded(transition: &Transition) -> Result<()> {
+    bounded(transition.duration)?;
+    transition.params.values().try_for_each(param_value_finite)
 }
 
 fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
@@ -192,13 +213,31 @@ fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
         for value in effect.params.values() {
             param_value_finite(value)?;
         }
-        for keyframes in effect.keyframes.values_mut() {
-            sort_track(keyframes);
-            for keyframe in keyframes.iter() {
-                bounded(keyframe.time)?;
-                param_value_finite(&keyframe.value)?;
-            }
-        }
+        normalize_keyframes(&mut effect.keyframes)?;
+    }
+    Ok(())
+}
+
+fn normalize_keyframes(tracks: &mut BTreeMap<String, Vec<Keyframe>>) -> Result<()> {
+    for keyframes in tracks.values_mut() {
+        sort_track(keyframes);
+        keyframes.iter().try_for_each(keyframe_bounded)?;
+    }
+    Ok(())
+}
+
+// Shared with every `keyframe.*` command, so a keyframe one route accepts is never one the other
+// route would refuse to load back. The handles are the reason this is a function rather than two
+// lines: `Interp::Bezier` feeds them into `cubic_bezier_y_at`, and a NaN there propagates through
+// `lerp` into the interpolated value — the same non-finite-into-JS hole `finite` closes elsewhere.
+pub(crate) fn keyframe_bounded(keyframe: &Keyframe) -> Result<()> {
+    bounded(keyframe.time)?;
+    param_value_finite(&keyframe.value)?;
+    for handle in [keyframe.handle_in, keyframe.handle_out]
+        .into_iter()
+        .flatten()
+    {
+        handle.iter().try_for_each(|c| finite(*c).map(|_| ()))?;
     }
     Ok(())
 }
@@ -206,6 +245,7 @@ fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
 fn normalize_markers(markers: &[Marker]) -> Result<()> {
     for marker in markers {
         bounded(marker.time)?;
+        hex_color(&marker.color_hex)?;
     }
     Ok(())
 }
@@ -291,7 +331,10 @@ const MAX_REASONABLE_DIMENSION: u32 = 16_384;
 // oversampled pro-audio pipeline without accepting values that only a corrupt file would carry.
 const MAX_REASONABLE_SAMPLE_RATE: u32 = 384_000;
 
-fn dimension_bounded(value: u32) -> Result<()> {
+// Shared with `template::Frame`, which offers alternative output sizes that end up in exactly
+// these two fields — an aspect ratio a template offers must not be one the resulting project
+// could never carry.
+pub(crate) fn dimension_bounded(value: u32) -> Result<()> {
     if value == 0 || value > MAX_REASONABLE_DIMENSION {
         Err(CoreError::InvalidArgument(
             "width and height must be between 1 and 16384".into(),
@@ -319,10 +362,31 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
     rate_bounded(settings.fps)?;
     dimension_bounded(settings.width)?;
     dimension_bounded(settings.height)?;
-    sample_rate_bounded(settings.sample_rate)
+    sample_rate_bounded(settings.sample_rate)?;
+    hex_color(&settings.background)
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+// The renderer's own reading of this field (`parseColor` in draw-list.ts) falls back to opaque
+// black for anything it cannot parse, which means a typo becomes a colour rather than a complaint.
+// Checked here so the one gate that judges settings judges all of them -- template colour slots
+// write straight into this field and must not be able to smuggle in a value the compositor
+// silently reinterprets.
+//
+// Track and marker colours go through the same check: both end up in an inline style in the
+// timeline, where anything unparsable is dropped without a word.
+fn hex_color(value: &str) -> Result<()> {
+    let digits = value.strip_prefix('#').unwrap_or("");
+    let shaped = matches!(digits.len(), 3 | 6 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit());
+    if shaped {
+        Ok(())
+    } else {
+        Err(CoreError::InvalidArgument(
+            "background must be a hex colour such as #101820".into(),
+        ))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectMeta {
     pub id: ProjectId,
@@ -335,7 +399,7 @@ pub struct ProjectMeta {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettings {
     pub width: u32,
@@ -359,7 +423,7 @@ impl Default for ProjectSettings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MasterSettings {
     pub volume: f32,
@@ -800,6 +864,84 @@ mod tests {
         let mut p: Project =
             serde_json::from_str(&project_json_with_settings(1920, 1080, 0)).unwrap();
         assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_background_that_is_not_a_hex_colour_fails_to_load() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(1920, 1080, 48_000)).unwrap();
+        p.settings.background = "chartreuse".into();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn the_three_hex_lengths_a_compositor_reads_all_load() {
+        for background in ["#fff", "#3366cc", "#80808080", "#ABCDEF"] {
+            let mut p: Project =
+                serde_json::from_str(&project_json_with_settings(1920, 1080, 48_000)).unwrap();
+            p.settings.background = background.into();
+            assert!(p.normalize().is_ok(), "{background} should be accepted");
+        }
+    }
+
+    // Both colours end up in an inline style in the timeline, where an unparsable value is dropped
+    // without a word -- the same silent reinterpretation `settings.background` is checked against.
+    #[test]
+    fn a_track_colour_that_is_not_a_hex_colour_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.color_hex = "javascript:alert(1)".into();
+        p.timeline.tracks.push(track);
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_marker_colour_that_is_not_a_hex_colour_fails_to_load() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(1920, 1080, 48_000)).unwrap();
+        p.markers.push(super::Marker {
+            id: crate::model::MarkerId::new(),
+            time: Time::ZERO,
+            label: "x".into(),
+            color_hex: "rebeccapurple".into(),
+        });
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    // An empty group id would put every clip carrying one in the same group, so one `clip.ungroup`
+    // anywhere would dissolve groups the author never touched.
+    #[test]
+    fn a_clip_with_an_empty_group_id_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.group_id = Some(crate::model::GroupId::from(String::new()));
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_clip_with_a_real_group_id_still_loads() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.group_id = Some(crate::model::GroupId::new());
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        assert!(p.normalize().is_ok());
     }
 
     #[test]

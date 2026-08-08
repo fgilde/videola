@@ -30,6 +30,8 @@ function fakeBackend(): DocumentBackend {
     // A fresh object every call mirrors the real backend, which fully
     // re-serializes the project on each state() invocation.
     state: () => ({ ...project }),
+    sourceTimesAt: () => new Map(),
+    effectParamsAt: () => new Map(),
     dispatch: vi.fn((dispatch) => {
       if (dispatch.command.type === "track.add") {
         project = {
@@ -45,7 +47,9 @@ function fakeBackend(): DocumentBackend {
     // the backend's result.
     undo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: true, canRedo: true })),
     redo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: true, canRedo: false })),
+    rollback: vi.fn(),
     save: vi.fn(() => new Uint8Array([1, 2, 3])),
+    saveAsTemplate: vi.fn(() => new Uint8Array([4, 5, 6])),
     importMedia: vi.fn(() => ({
       id: "med_abc",
       result: { patch: [], label: "cmd.media.import", canUndo: true, canRedo: false },

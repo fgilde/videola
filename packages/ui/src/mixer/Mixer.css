@@ -1,0 +1,77 @@
+.v-mixer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.v-mixer__strips {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+}
+
+.v-mixer__strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 140px;
+  padding: 8px;
+  background: var(--v-surface);
+  border-radius: var(--v-radius-sm);
+}
+
+.v-mixer__name {
+  padding-left: 6px;
+  border-left: 3px solid var(--v-border-strong);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.v-mixer__fader {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 6px;
+  align-items: center;
+}
+
+.v-mixer__faderLabel {
+  grid-column: 1 / -1;
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+.v-mixer__flags {
+  display: flex;
+  gap: 6px;
+}
+
+.v-mixer__flag {
+  /* The touch target the rest of the editor holds to, so a mixer is usable on a tablet. */
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  color: inherit;
+  border: 1px solid var(--v-border-strong);
+  border-radius: var(--v-radius-sm);
+  cursor: pointer;
+}
+
+.v-mixer__flag[aria-pressed="true"] {
+  background: var(--v-accent);
+  border-color: var(--v-accent);
+}
+
+.v-mixer__loudness {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.v-mixer__reading {
+  font-variant-numeric: tabular-nums;
+}

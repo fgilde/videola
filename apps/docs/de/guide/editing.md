@@ -47,12 +47,17 @@ Bild.
 
 | Geste | Wirkung |
 |---|---|
-| Klick auf einen Clip | wählt ihn aus |
-| Ziehen in der Clipmitte | verschiebt ihn, auch über Spuren hinweg |
+| Klick auf einen Clip | wählt ihn aus, und die ganze Gruppe, wenn er in einer ist |
+| Strg/Cmd- oder Umschalt-Klick | nimmt einen Clip in die Auswahl auf oder wieder heraus |
+| Ziehen in der Clipmitte | verschiebt die ganze Auswahl, bei einem Clip auch über Spuren hinweg |
 | Ziehen an einer Clipkante | trimmt diese Kante |
 | Ziehen im Lineal | scrubbt |
 | Zwei Zeiger | zoomen über die Abstandsänderung |
-| Langes Drücken | öffnet das Kontextmenü — am Playhead teilen, löschen |
+| Langes Drücken, rechte Maustaste | öffnet das Kontextmenü des Clips oder des Markers darunter |
+
+Ein Druck innerhalb einer mehrteiligen Auswahl behält sie — sonst hätte der Druck, der den Zug
+beginnt, gerade das weggeworfen, was er gleich bewegen soll. Loslassen ohne Zug engt auf den einen
+Clip ein.
 
 Alles läuft über Pointer Events, damit Maus, Stift und Finger denselben Weg nehmen. Ist der Zeiger
 keine Maus, wachsen die Trimm-Zonen auf 44 px — ein 4 px breites Ziel am Clipende ist mit dem
@@ -69,6 +74,67 @@ Parameter zu einem Eintrag im Verlauf statt zu zweihundert Keyframes an derselbe
 jeder Spur, Marker und ein Raster. Der Fangradius wird in **Pixeln** gerechnet und in Flicks
 umgerechnet, nie umgekehrt — so bleibt er auf jeder Zoomstufe gleich groß auf dem Schirm. Eine
 gedrückte Modifikatortaste während des Zugs setzt ihn aus.
+
+### Kanten- und Zugmodus
+
+Zwei Listen in der Werkzeugleiste entscheiden, welches Kommando ein Zug schickt. Listen statt
+Modifikatortasten, weil ein Finger keine Modifikatoren hat und weil der Modus **vor** dem Zug
+lesbar sein muss, nicht aus dem erschlossen, was er gerade angerichtet hat.
+
+| Kante ziehen | Was sich bewegt |
+|---|---|
+| **Trimmen** | diese Kante, sonst nichts |
+| **Ripple** | diese Kante, und jeder spätere Clip derselben Spur um denselben Schritt |
+| **Roll** | der Schnitt, den diese Kante mit dem Nachbarn teilt: das Paar behält seine Gesamtlänge |
+
+| Clip ziehen | Was sich bewegt |
+|---|---|
+| **Verschieben** | der Clip, entlang der Spur und über Spuren hinweg |
+| **Slip** | das Material hinter dem Clip; der Clip bleibt liegen und behält seine Länge |
+| **Slide** | der Clip entlang der Spur, wobei die anliegenden Clips den Schritt aufnehmen |
+
+Roll lehnt ab, wo kein Clip an dieser Kante liegt, und alle lehnen einen Schritt ab, der einen Clip
+leeren oder vor dem Anfang des Materials lesen würde. Eine Ablehnung während eines Zugs ist
+gewöhnlich: die Bearbeitung findet einfach nicht statt, und gemeldet wird dafür nichts.
+
+Ein Ripple am **Kopf** sieht befremdlich aus, bis man ihn benutzt: der Clip bleibt liegen und sein
+Material wandert, denn genau darum geht es beim Ripple — der Clip bleibt an dem kleben, was vor ihm
+liegt. Was der Zeiger dort ändert, ist die Länge, nicht die Position.
+
+### Löschen, ausschneiden, einfügen
+
+| Taste | Wirkung |
+|---|---|
+| <kbd>Entf</kbd> | entfernt die Auswahl und lässt die Lücke stehen |
+| <kbd>Umschalt</kbd>+<kbd>Entf</kbd> | entfernt sie und schließt die Lücke: jeder spätere Clip der Spur rückt auf |
+| <kbd>Strg</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> | kopieren, ausschneiden, am Playhead einfügen |
+| <kbd>Strg</kbd>+<kbd>G</kbd> / <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>G</kbd> | gruppieren, Gruppierung aufheben |
+| <kbd>M</kbd> | setzt einen Marker am Playhead |
+
+Alles steht auch im Kontextmenü des Clips, und ein Eintrag, der nichts bewirken kann — Einfügen
+ohne Zwischenablage, Gruppieren mit einem einzigen Clip — ist deaktiviert, statt ein Kommando zu
+schicken, das der Kern ablehnen würde.
+
+Ripple-Delete bewegt nur, was am Ende des gelöschten Clips oder danach beginnt. Ein Clip, der über
+dieses Ende hinwegreicht, bleibt liegen: das Schließen einer Lücke darf keine Überlappung erzeugen,
+die niemand gebaut hat.
+
+Die Zwischenablage hält ganze Clips, keine Verweise — Geschwindigkeit, Transformation, Effekte,
+Keyframes und der Materialversatz reisen mit. Ein Einfügen setzt den frühesten auf den Playhead und
+behält die Abstände der übrigen, auf der Spur, von der jeder kam, sofern es sie noch gibt. Die Ids
+vergibt der Kern, ein zweimal eingefügter Clip ist also zweimal ein Clip und nicht einmal ein Clip
+mit zwei Erwähnungen.
+
+Gruppierte Clips werden zusammen ausgewählt und zusammen gezogen, und eine Gruppe überlebt alles
+außer **Gruppierung aufheben**. Eine eingefügte Kopie tritt keiner Gruppe bei: sie trägt Material
+und Aussehen des Originals, nicht seine Mitgliedschaft.
+
+### Marker
+
+**Marker setzen** in der Werkzeugleiste oder <kbd>M</kbd> setzt einen am Playhead. Ein Klick auf
+einen Marker springt mit dem Playhead dorthin; sein eigenes Kontextmenü löscht ihn. Marker sind
+Fangkandidaten, und dafür sind sie vor allem da — `marker.rename` gibt es als Kommando für die API
+und den MCP-Server, ein Textfeld dafür hat die Oberfläche noch nicht.
 
 ### Zoom
 
@@ -139,20 +205,68 @@ fortsetzen; der erste Druck auf Abspielen tut deshalb etwas mehr als die folgend
 ![Die Medienbibliothek auf einem Telefon, die Vorschau bleibt darüber stehen](/phone-library.png)
 
 Unter 768 px wechselt der Editor in eine Spalte: Vorschau und Transport bleiben oben stehen, eine
-Leiste darunter wechselt zwischen **Medien** und **Zeitleiste**. Das Bild muss sichtbar bleiben,
-während man darunter arbeitet, und 390 px tragen Bibliothek, Vorschau und Timeline nicht
-nebeneinander, ohne dass alle drei unbrauchbar werden.
+Leiste darunter wechselt zwischen **Medien**, **Zeitleiste** und **Eigenschaften**. Das Bild muss
+sichtbar bleiben, während man darunter arbeitet, und 390 px tragen Bibliothek, Vorschau und Timeline
+nicht nebeneinander, ohne dass alle drei unbrauchbar werden.
 
-Zwei Bereiche, nicht die sechs aus dem Entwurf. Effekte, Text, Ton und Export haben noch keine
-Fläche; ein Reiter, der nichts öffnet, ist schlimmer als ein Reiter, den es nicht gibt — jeder
-kommt an dem Tag dazu, an dem seine Fläche kommt.
+Drei Bereiche, nicht die sechs aus dem Entwurf. Text, Ton und Export haben noch keine eigene Fläche;
+ein Reiter, der nichts öffnet, ist schlimmer als ein Reiter, den es nicht gibt — jeder kommt an dem
+Tag dazu, an dem seine Fläche kommt. **Eigenschaften** ist der dritte, weil dort Effekte, Keyframes,
+Übergänge und Tempo liegen: als Streifen zwischen Transport und Reiterleiste hatte der Bereich ein
+Drittel des Schirms und konnte trotzdem keinen einzigen Effekt zeigen, was das Telefon zum Betrachter
+statt zum Werkzeug machte.
 
 Der Bereich, der gerade nicht dran ist, wird ausgehängt statt versteckt. Die Timeline fenstert ihre
 Clips nach der Breite, die sie misst, und ein `display: none`-Behälter misst null — sie käme leer
 zurück.
 
-Sonst ändert sich nichts. Derselbe Pointer-Events-Pfad trägt Maus, Stift und Finger, die
-Trefferflächen waren schon 44 px, und alles, was am Schreibtisch erreichbar ist, ist es auch hier.
+Derselbe Pointer-Events-Pfad trägt Maus, Stift und Finger, die Trefferflächen sind 44 px.
+
+### Die Kopfzeile
+
+Die Kopfzeile trägt zehn Bedienelemente, und die passen bei 44 px nicht auf 390 px. Die
+Projektaktionen — neu, Vorlage, öffnen, importieren, Spur hinzufügen — liegen hinter dem **☰** links,
+auf dem Telefon zusätzlich Export, Speichern sowie Sprach- und Themenumschalter. Auf der Leiste
+bleiben Rückgängig und Wiederholen, die beiden, nach denen ein Daumen ständig greift.
+
+Es ist ein `<details>`-Element statt eines selbstgebauten Menüs: Offen-Zustand, Tastaturbedienung und
+zugänglicher Name kommen mit.
+
+Vorher scrollte die Leiste einfach seitwärts. Jeder Knopf blieb im Grundsatz erreichbar, und im
+Ruhezustand stand die Hälfte davon außerhalb des Fensters — „Medien importie…“ am rechten Rand
+abgeschnitten. Kein Test sah das, weil kein Test fragte, ob die Leiste ins Fenster passt. Jetzt tut
+es einer: bei 390 px muss ihre `scrollWidth` gleich ihrer `clientWidth` sein.
+
+### Kamera und Galerie
+
+Auf Telefon und Tablet bietet die Bibliothek neben **Medien importieren** auch **Aufnehmen** und
+**Aus der Galerie**. Beides sind gewöhnliche `<input type="file" accept="video/*">`; das erste trägt
+zusätzlich `capture="environment"`, und genau das fragt ein Telefon nach seiner rückwärtigen Kamera
+statt nach seinem Dateisystem.
+
+Dieses Attribut ist das ganze Feature, und so weit reicht auch der Nachweis: ein headless Browser hat
+weder Kamera noch Galerie. Die Harness prüft, dass das Feld da ist, mit dem richtigen `accept` und
+`capture`, und dass es eine 44-px-Fläche ist. Was ein echtes Telefon daraus macht, ist nicht
+beobachtet.
+
+## Auf dem Tablet
+
+![Der Editor auf einem Tablet, zwei Medien auf zwei Spuren](/tablet.png)
+
+Zwischen 768 px und 1280 px — und auf allem ohne feinen Zeiger, gleich welcher Breite — legt der
+Editor sich in zwei Spalten: die Medienbibliothek links, Bild, Transport und Eigenschaften
+übereinander rechts, die Zeitleiste über die ganze Breite unten.
+
+Zwei Spalten statt der drei vom Schreibtisch, weil ein Tablet im Hochformat knapp an Breite und
+reichlich an Höhe ist. Bei 834 px ließen drei Flächen nebeneinander der mittleren rund 330 px —
+schmaler als der Transport selbst, und die Zeitanzeige brach mitten in der Ziffer ab.
+
+Bibliothek und Zeitleiste sind gleichzeitig sichtbar, und das ist der Sinn des Modus: nur so lässt
+sich **ein Medium aus der Bibliothek auf eine Spur ziehen**, was das Telefon nicht anbieten kann,
+weil beide dort nie zusammen zu sehen sind. Eintrag drücken, über die Zeitleiste führen — die
+Zielspur leuchtet auf und eine Linie zeigt, wo der Clip beginnen würde — und loslassen. Ein Kommando,
+also ein Undo-Schritt. Der Knopf **Auf die Zeitleiste** bleibt daneben bestehen: ein Zug ist nicht
+mit der Tastatur bedienbar und wäre sonst der einzige Weg auf die Zeitleiste.
 
 ## Speichern
 
@@ -174,15 +288,24 @@ Bild am ersten Keyframe auf 0 zurück, in der Mitte auf die Hälfte und am zweit
 ursprüngliche Helligkeit — die Interpolation ist die des Kerns, die Pixel sind die des Compositors,
 und beide Hälften laufen in einem Durchgang.
 
-Das Phone-Layout wird auf einem echten 390×844-Viewport bei doppelter Pixeldichte gefahren, über das
-Devtools-Protokoll: Chrome unter Windows verweigert ein Fenster schmaler als 500 CSS-Pixel, mit
-`--window-size` allein hätte man also ein kleines Tablet vermessen und Telefon dazu gesagt. Import,
-ein Fingerzug, Rückgängig, beide Bereiche und die Wiedergabe werden dort geprüft, und die
-Schirmbilder oben stammen aus diesem Lauf.
+Das Phone-Layout wird auf einem echten 390×844-Viewport bei doppelter Pixeldichte gefahren, das
+Tablet auf 834×1112, beides über das Devtools-Protokoll mit eingeschalteter Berührung: Chrome unter
+Windows verweigert ein Fenster schmaler als 500 CSS-Pixel und beschneidet das Schirmbild, statt es zu
+skalieren — mit `--window-size` allein hätte man also ein kleines Tablet vermessen und Telefon dazu
+gesagt. Auf dem Telefon werden Import, ein Fingerzug, Rückgängig, jeder Reiter, ein auf einen Clip
+gelegter Effekt und die Wiedergabe geprüft; auf dem Tablet zwei Medien auf zwei Spuren, der Zug aus
+der Bibliothek auf eine Spur, und dass Bild, Transport und Flächen jeweils eine Box im Fenster
+bekommen. Die Schirmbilder oben stammen aus diesen Läufen.
+
+Vorschaubilder werden als Bilder geprüft, nicht als Elemente: das `<img>` muss eine `naturalWidth`
+ungleich null bei 160×90 melden, die beiden Medien im Tablet-Lauf müssen sich voneinander
+unterscheiden, und ein Standbild darf keine einzelne Fläche einer Farbe sein — ein Platzhalter, ein
+schwarzes Bild und ein fehlgeschlagenes Dekodieren fallen daran alle durch.
 
 Nicht geprüft: Lippensynchronität, weil headless Chrome keine Tonausgabe hat; die dauerhafte
-Bildrate bei 1080p; das Zurücklesen der Pixel in Telefongröße — der Zeichenpuffer ist fort, sobald
-die Seite ihn komponiert hat, und der Telefonlauf braucht die Wanduhr, damit sein Layout verlässlich
-ist, der Screenshot ist also der Beleg, dass die Vorschau auch dort dekodiert; und ein über den
-Inspector gesetzter Übergang ist nie gezeichnet worden, weil eine Überblendung zwei überlappende
-Clips braucht und die Harness eine Datei ablegt.
+Bildrate bei 1080p; was eine echte Kamera oder Galerie mit `capture` tut, weil ein headless Browser
+beides nicht hat; das Zurücklesen der Pixel in Telefongröße — der Zeichenpuffer ist fort, sobald die
+Seite ihn komponiert hat, und der Telefonlauf braucht die Wanduhr, damit sein Layout verlässlich ist,
+der Screenshot ist also der Beleg, dass die Vorschau auch dort dekodiert; und ein über den Inspector
+gesetzter Übergang ist nie gezeichnet worden, weil eine Überblendung zwei überlappende Clips über
+demselben Schnitt braucht.

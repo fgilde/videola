@@ -8,10 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test:browser": "node browser/run.mjs",
     "test": "echo \"no app-level tests yet\""
   },
   "dependencies": {
     "@videola/core": "workspace:*",
+    "@videola/engine": "workspace:*",
+    "@videola/media": "workspace:*",
     "@videola/ui": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

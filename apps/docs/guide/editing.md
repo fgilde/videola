@@ -44,12 +44,16 @@ and every clip pointing at it would quietly show the wrong picture.
 
 | Gesture | Result |
 |---|---|
-| Click a clip | selects it |
-| Drag the middle of a clip | moves it, across tracks too |
+| Click a clip | selects it, and the whole group if it is in one |
+| Ctrl/Cmd or Shift click | adds a clip to the selection, or takes it out again |
+| Drag the middle of a clip | moves the whole selection, across tracks when one clip is dragged |
 | Drag a clip edge | trims that edge |
 | Drag in the ruler | scrubs |
 | Two pointers | zooms by the change in distance |
-| Long press | opens the context menu — split at the playhead, delete |
+| Long press, right click | opens the context menu of the clip or the marker under the pointer |
+
+A press inside a selection of several clips keeps it — otherwise the press that starts a drag would
+have thrown away what it is about to move. Releasing without dragging narrows it to the one clip.
 
 Everything runs through Pointer Events, so mouse, pen and finger take the same path. When the
 pointer is not a mouse the trim zones grow to 44 px, because a 4 px target at the end of a clip is
@@ -66,6 +70,65 @@ the undo stack instead of two hundred keyframes on the same spot.
 markers and a grid. The catch radius is computed in pixels and converted to flicks, never the other
 way round, so it stays the same size on screen at every zoom level. Holding a modifier during a
 drag suspends it.
+
+### Edge and clip modes
+
+Two lists in the toolbar decide which command a drag sends. They are lists rather than modifier
+keys because a finger has no modifiers, and because the mode has to be readable *before* the drag
+rather than guessed from what it just did.
+
+| Edge drag | What moves |
+|---|---|
+| **Trim** | that edge, and nothing else |
+| **Ripple** | that edge, and every clip after it on the same track by the same step |
+| **Roll** | the cut this edge shares with its neighbour: the pair keeps its total length |
+
+| Clip drag | What moves |
+|---|---|
+| **Move** | the clip, along the track and across tracks |
+| **Slip** | the material behind the clip, which stays where it is and keeps its length |
+| **Slide** | the clip along the track, with the clips that meet it absorbing the step |
+
+Roll refuses where no clip meets that edge, and every one of them refuses a step that would empty a
+clip or read from before the start of the material. A refusal during a drag is ordinary: the edit
+simply does not happen, and no error is reported for it.
+
+A ripple of the *head* is the one that looks odd until you try it: the clip stays where it is and
+its material moves, because leaving the clip glued to what is in front of it is the whole point of a
+ripple. What the pointer changes there is the length, not the position.
+
+### Deleting, cutting and pasting
+
+| Key | Result |
+|---|---|
+| <kbd>Delete</kbd> | removes the selection and leaves the gap |
+| <kbd>Shift</kbd>+<kbd>Delete</kbd> | removes it and closes the gap: every later clip on the track moves up |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> | copy, cut, paste at the playhead |
+| <kbd>Ctrl</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> | group, ungroup |
+| <kbd>M</kbd> | sets a marker at the playhead |
+
+All of them sit in the clip's context menu as well, and an entry that cannot do anything — paste
+with an empty clipboard, group with one clip selected — is disabled rather than sending a command
+the core would refuse.
+
+Ripple delete only moves what begins at or after the end of the deleted clip. A clip that reaches
+across that end stays where it is: closing a gap must not create an overlap nobody authored.
+
+The clipboard holds whole clips, not references — speed, transform, effects, keyframes and the
+material offset travel with them. A paste puts the earliest one on the playhead and keeps the
+spacing of the rest, on the track each came from where that track still exists. Ids are minted by
+the core, so a clip pasted twice is two clips and not one clip mentioned twice.
+
+Grouped clips are selected together and dragged together, and a group survives everything except
+**Ungroup**. A pasted copy joins no group: it carries the original's material and look, not its
+membership.
+
+### Markers
+
+**Set marker** in the toolbar, or <kbd>M</kbd>, puts one at the playhead. Clicking a marker moves
+the playhead there; its own context menu deletes it. Markers are snap candidates, which is what they
+are mostly for — `marker.rename` exists as a command for the API and the MCP server, but the
+surface offers no text field for it yet.
 
 ### Zoom
 
@@ -134,19 +197,66 @@ first press of play does slightly more work than the ones after it.
 ![The media library on a phone, with the preview staying above it](/phone-library.png)
 
 Below 768 px the editor switches to a single column: the preview and the transport stay at the top,
-and a tab bar underneath swaps between **Media** and **Timeline**. The picture has to stay visible
-while you work below it, and 390 px cannot hold a library, a preview and a timeline side by side
-without all three being useless.
+and a tab bar underneath swaps between **Media**, **Timeline** and **Properties**. The picture has
+to stay visible while you work below it, and 390 px cannot hold a library, a preview and a timeline
+side by side without all three being useless.
 
-Two tabs, not the six the design sketch names. Effects, text, audio and export have no panel yet;
+Three tabs, not the six the design sketch names. Text, audio and export have no panel of their own;
 a tab that opens nothing is worse than a tab that is not there, and each one joins the bar on the
-day its panel does.
+day its panel does. **Properties** is the third because it carries effects, keyframes, transitions
+and speed — while it sat as a strip between the transport and the tab bar it had a third of the
+screen and still could not show a single effect, which made the phone a viewer rather than an
+editor.
 
 The panel that is not showing is unmounted rather than hidden. The timeline windows its clips by
 the width it measures, and a `display: none` container measures zero — it would come back empty.
 
-Nothing else changes. The same Pointer Events path carries mouse, pen and finger, the touch targets
-were already 44 px, and every action reachable on a desktop is reachable here.
+The same Pointer Events path carries mouse, pen and finger, and the touch targets are 44 px.
+
+### The header
+
+The topbar carries ten controls, which do not fit 390 px at 44 px each. The project actions — new,
+template, open, import, add track — live behind the **☰** disclosure at the left, and on a phone
+export, save and the language and theme switches join them. What stays on the bar is undo and redo,
+the two a thumb reaches for constantly.
+
+It is a `<details>` element rather than a menu built by hand: the open state, the keyboard handling
+and the accessible name all come with it.
+
+Before this the bar simply scrolled sideways. Every button stayed reachable in principle, and in
+its resting state half of them sat outside the window — "Import medi…" cut off at the right edge.
+No test saw it, because no test asked whether the bar fitted the window. One does now: at 390 px
+its `scrollWidth` must equal its `clientWidth`.
+
+### Camera and gallery
+
+On a phone and a tablet the library offers **Record** and **From the gallery** beside **Import
+media**. Both are ordinary `<input type="file" accept="video/*">`; the first adds
+`capture="environment"`, which is what asks a phone for its rear camera instead of its file system.
+
+That attribute is the whole feature, and it is as far as verification goes: a headless browser has
+no camera and no gallery. The harness checks that the input is there with the right `accept` and
+`capture`, that it is a 44 px target, and nothing beyond that. What a real phone does with it has
+not been observed.
+
+## On a tablet
+
+![The editor on a tablet, two media on two tracks](/tablet.png)
+
+Between 768 px and 1280 px — and on anything without a fine pointer, whatever its width — the
+editor lays out in two columns: the media library down the left, the picture, the transport and the
+properties panel stacked on the right, and the timeline across the bottom.
+
+Two columns rather than the desktop's three, because a portrait tablet is short of width and long
+on height. At 834 px, three panels side by side left the middle about 330 px — narrower than the
+transport itself, which cut the timecode off mid-digit.
+
+The library and the timeline are on screen together, and that is the point of the mode: it is what
+lets you **drag a medium out of the library onto a track**, which a phone cannot offer because the
+two never show at the same time. Press an entry, carry it over the timeline — the target track
+lights up and a line shows where the clip would start — and let go. One command, so one undo step.
+The **Add to timeline** button stays as well: a drag is not keyboard-operable, and it is the only
+other way onto the timeline.
 
 ## Saving
 
@@ -166,13 +276,21 @@ at three moments. Against the same three frames without the effect, the picture 
 the first keyframe, at half in the middle and at the original brightness at the second — the
 interpolation is the core's, the pixels are the compositor's, and both halves run in one pass.
 
-The phone layout is driven at a real 390×844 viewport at twice the pixel density, over the devtools
-protocol: Chrome on Windows refuses a window narrower than 500 CSS pixels, so `--window-size` alone
-would have measured a small tablet and called it a phone. Import, a finger drag, undo, both tabs and
-playback are checked there, and the screenshots above come out of that run.
+The phone layout is driven at a real 390×844 viewport at twice the pixel density, and the tablet at
+834×1112, both over the devtools protocol with touch emulation on: Chrome on Windows refuses a
+window narrower than 500 CSS pixels and clips the screenshot instead of scaling it, so
+`--window-size` alone would have measured a small tablet and called it a phone. Import, a finger
+drag, undo, every tab, an effect put on a clip and playback are checked on the phone; on the tablet,
+two media on two tracks, the drag from the library onto a track, and that the picture, the transport
+and the panels each get a box inside the window. The screenshots above come out of those runs.
+
+Thumbnails are checked as pictures, not as elements: the `<img>` must report a non-zero
+`naturalWidth` at 160×90, the two media in the tablet run must differ from each other, and a still
+must not be one flat colour — a placeholder, a black frame and a failed decode all fail that.
 
 Not verified: lip-sync, because headless Chrome has no audio output; sustained frame rate at 1080p;
-pixel readback at phone size — the drawing buffer is gone once the page has composited it, and the
-phone run needs the wall clock for its layout to be trustworthy, so the screenshot is the evidence
-that the preview decodes there; and a transition set through the inspector has never been drawn,
-because a cross dissolve needs two overlapping clips and the harness drops one file.
+what a real camera or gallery does with `capture`, because a headless browser has neither; pixel
+readback at phone size — the drawing buffer is gone once the page has composited it, and the phone
+run needs the wall clock for its layout to be trustworthy, so the screenshot is the evidence that
+the preview decodes there; and a transition set through the inspector has never been drawn, because
+a cross dissolve needs two overlapping clips over the same cut.

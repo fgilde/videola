@@ -7,9 +7,12 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "node browser/run.mjs"
   },
   "dependencies": {
+    "@videola/core": "workspace:*",
+    "@videola/media": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -18,7 +21,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@videola/core": "workspace:*",
+    "esbuild": "^0.28.1",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

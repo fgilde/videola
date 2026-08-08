@@ -1,0 +1,358 @@
+<body><pre id="out">pending</pre>
+<script type="module">
+import * as R from "./bundle.js";
+
+const results = [];
+let file = null;
+
+// Exact unless a tolerance is named, and a named tolerance compares numbers however deeply they
+// are nested. A comparison that decides for itself which rule to use lets a mismatch of strings
+// fall into the numeric path and come out as NaN, which is neither equal nor unequal.
+function check(name, got, want, tolerance = 0) {
+  const ok = tolerance > 0 ? near(got, want, tolerance) : JSON.stringify(got) === JSON.stringify(want);
+  results.push({ name, ok, got, want });
+}
+
+function near(got, want, slack) {
+  const left = [got].flat(Infinity);
+  const right = [want].flat(Infinity);
+  return left.length === right.length && left.every((v, i) => Math.abs(v - right[i]) <= slack);
+}
+
+async function test(name, fn) {
+  try {
+    await fn();
+  } catch (error) {
+    results.push({
+      name,
+      ok: false,
+      got: `THREW ${error.name}: ${error.message}`,
+      want: "no throw",
+    });
+  }
+}
+
+const WIDTH = 160;
+const HEIGHT = 120;
+const FPS = { numerator: 30, denominator: 1 };
+const SECOND = 705_600_000;
+const OUTPUT_FRAMES = 30;
+const HALF = 705_600_000 / 2;
+const CUT_AT = 15;
+const TONE_HERTZ = 440;
+
+// Distinguishable after a lossy encode and back, and far apart from one end of the clip to the
+// other, so a frame written out of order or dropped altogether cannot pass for its neighbour.
+function colourAt(index) {
+  return [20 + index * 7, 128, 240 - index * 7];
+}
+
+// The cut restarts the source, so the second half repeats the first half's pictures.
+function expectedAt(index) {
+  return colourAt(index < CUT_AT ? index : index - CUT_AT);
+}
+
+function canvasOf(width, height) {
+  const canvas = new OffscreenCanvas(width, height);
+  return { canvas, context: canvas.getContext("2d") };
+}
+
+// A real H.264 file, made the way any file arrives: encoded, muxed, handed over as bytes. Its
+// pictures are what the export has to carry through into its own output.
+async function makeVideoFixture() {
+  const { canvas, context } = canvasOf(WIDTH, HEIGHT);
+  const target = new R.BufferTarget();
+  const output = new R.Output({ format: new R.Mp4OutputFormat(), target });
+  const source = new R.CanvasSource(canvas, {
+    codec: "avc",
+    quality: new R.Quality({ bitrate: 4_000_000 }),
+  });
+  output.addVideoTrack(source, { frameRate: 30 });
+  await output.start();
+  for (let index = 0; index < OUTPUT_FRAMES; index += 1) {
+    const [r, g, b] = colourAt(index);
+    context.fillStyle = `rgb(${r} ${g} ${b})`;
+    context.fillRect(0, 0, WIDTH, HEIGHT);
+    await source.add(index / 30, 1 / 30);
+  }
+  await output.finalize();
+  return new File([target.buffer], "pattern.mp4", { type: "video/mp4" });
+}
+
+// One second of a steady tone, so the export has something to put in an audio track and an
+// independent decoder has something to find there.
+async function makeAudioFixture() {
+  const sampleRate = 48000;
+  const buffer = new AudioBuffer({ length: sampleRate, numberOfChannels: 2, sampleRate });
+  const tone = new Float32Array(sampleRate);
+  for (let i = 0; i < sampleRate; i += 1) {
+    tone[i] = 0.5 * Math.sin((2 * Math.PI * TONE_HERTZ * i) / sampleRate);
+  }
+  buffer.copyToChannel(tone, 0);
+  buffer.copyToChannel(tone, 1);
+  const target = new R.BufferTarget();
+  const output = new R.Output({ format: new R.WavOutputFormat(), target });
+  const source = new R.AudioBufferSource({ codec: "pcm-s16" });
+  output.addAudioTrack(source);
+  await output.start();
+  await source.add(buffer);
+  await output.finalize();
+  return new File([target.buffer], "tone.wav", { type: "audio/wav" });
+}
+
+// The real import path into the real core: hash, OPFS, probe, dispatch. Nothing below is told
+// where a clip reads from -- the core is asked, over the wasm boundary, as playback asks it.
+async function buildProject() {
+  const doc = new R.VideolaDocument(await R.createWasmBackend());
+  const video = await R.importFile(await makeVideoFixture(), doc, R.probe);
+  const audio = await R.importFile(await makeAudioFixture(), doc, R.probe);
+  doc.dispatch(R.cmd.trackAdd("video", "V1"));
+  doc.dispatch(R.cmd.trackAdd("audio", "A1"));
+  const tracks = doc.state.timeline.tracks;
+  // Two clips, cut halfway: the second one starts its own medium over again. A run that composes
+  // every frame at the same instant, or that dates a frame from where its source reads rather than
+  // from where it sits, cannot tell one clip from the other on an unbroken timeline -- and both of
+  // those survived a mutation until this cut existed.
+  doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, 0, HALF));
+  doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, HALF, HALF));
+  doc.dispatch(R.cmd.clipAdd(tracks[1].id, { kind: "media", media: audio }, 0, SECOND));
+  return doc;
+}
+
+function worker() {
+  return new Worker("./worker.js", { type: "module" });
+}
+
+function options(over) {
+  return {
+    format: R.EXPORT_FORMATS[0],
+    width: WIDTH,
+    height: HEIGHT,
+    fps: FPS,
+    videoBitrate: 4_000_000,
+    audioBitrate: 128_000,
+    range: { from: 0, to: SECOND },
+    ...over,
+  };
+}
+
+// Reads the file back the way anything else would: through this package's own demuxer, and
+// through a decoder that knows nothing about how the file was made.
+async function readBack(bytes) {
+  const blob = new Blob([bytes], { type: "video/mp4" });
+  const info = await R.probe(blob);
+  const input = new R.Input({ formats: R.ALL_FORMATS, source: new R.BlobSource(blob) });
+  try {
+    const sink = new R.VideoSampleSink(await input.getPrimaryVideoTrack());
+    const { context } = canvasOf(WIDTH, HEIGHT);
+    const frames = [];
+    for await (const sample of sink.samples()) {
+      sample.draw(context, 0, 0);
+      const pixel = context.getImageData(WIDTH / 2, HEIGHT / 2, 1, 1).data;
+      frames.push({ timestamp: sample.timestamp, pixel: [pixel[0], pixel[1], pixel[2]] });
+      sample.close();
+    }
+    return { info, frames, hasAudio: (await input.getPrimaryAudioTrack()) !== null };
+  } finally {
+    input.dispose();
+  }
+}
+
+async function failureOf(handle) {
+  try {
+    await handle.result;
+    return "resolved";
+  } catch (error) {
+    return error.message;
+  }
+}
+
+async function main() {
+  await test("the browser can encode what the menu offers", async () => {
+    const support = await R.formatSupport({
+      width: WIDTH,
+      height: HEIGHT,
+      sampleRate: 48000,
+      channels: 2,
+    });
+    check("H.264 in MP4 is offered here", support[0].video, true);
+    check("and so is its sound", support[0].audio, true);
+  });
+
+  const doc = await buildProject();
+
+  await test("a one second export comes back as a file", async () => {
+    const seen = [];
+    const handle = R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      options: options(),
+      createWorker: worker,
+      onProgress: (done, total) => seen.push([done, total]),
+    });
+    const result = await handle.result;
+    file = result.bytes;
+
+    check("progress reaches the last frame and not the one before it", seen[seen.length - 1], [
+      OUTPUT_FRAMES,
+      OUTPUT_FRAMES,
+    ]);
+    check("progress counts every frame once", seen.length, OUTPUT_FRAMES);
+    check("the file is not empty", result.bytes.length > 1000, true);
+    check(
+      "and it is labelled as what it is",
+      [result.mimeType, result.extension],
+      ["video/mp4", "mp4"],
+    );
+
+    const { info, frames, hasAudio } = await readBack(result.bytes);
+    check(
+      "the demuxer reads its resolution back",
+      [info.video.width, info.video.height],
+      [WIDTH, HEIGHT],
+    );
+    check(
+      "and its frame rate as a rational",
+      [info.video.fps.numerator, info.video.fps.denominator],
+      [30, 1],
+    );
+    check("and its length", info.duration / SECOND, 1, 0.02);
+    check("it holds one frame per output frame", frames.length, OUTPUT_FRAMES);
+    check(
+      "whose timestamps are one frame apart",
+      frames.map((frame) => Math.round(frame.timestamp * 1000)),
+      Array.from({ length: OUTPUT_FRAMES }, (_, index) => Math.round((index * 1000) / 30)),
+      1,
+    );
+    check(
+      "every picture is the one that clip reads at that instant",
+      frames.map((frame) => frame.pixel),
+      Array.from({ length: OUTPUT_FRAMES }, (_, index) => expectedAt(index)),
+      12,
+    );
+    check("and the cut really restarts the source", frames[CUT_AT].pixel, colourAt(0), 12);
+    check("the sound is in there too", hasAudio, true);
+  });
+
+  // The draw list maps into clip space from the project's own size, so a different output size is
+  // meant to cost nothing but pixels. Meant to is not the same as does.
+  await test("exporting at a size the project is not", async () => {
+    const handle = R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      options: options({ width: WIDTH / 2, height: HEIGHT / 2 }),
+      createWorker: worker,
+    });
+    const result = await handle.result;
+    const blob = new Blob([result.bytes], { type: "video/mp4" });
+    const info = await R.probe(blob);
+    check("the file is written at the size that was asked for", [info.video.width, info.video.height], [
+      WIDTH / 2,
+      HEIGHT / 2,
+    ]);
+    const input = new R.Input({ formats: R.ALL_FORMATS, source: new R.BlobSource(blob) });
+    try {
+      const sink = new R.VideoSampleSink(await input.getPrimaryVideoTrack());
+      const { context } = canvasOf(WIDTH / 2, HEIGHT / 2);
+      const first = await sink.getSample(0);
+      first.draw(context, 0, 0);
+      const pixel = context.getImageData(WIDTH / 4, HEIGHT / 4, 1, 1).data;
+      first.close();
+      check("and still shows the picture, only smaller", [pixel[0], pixel[1], pixel[2]], colourAt(0), 12);
+    } finally {
+      input.dispose();
+    }
+  });
+
+  // A generator has no medium behind it, so it is the one thing on screen that the export gathers
+  // differently from everything else -- and a title that is in the preview and not in the file is a
+  // divergence nobody finds until the file is delivered. A solid rather than text on purpose: what is
+  // in question is whether a painted picture reaches the encoder, and a flat colour survives a lossy
+  // encode as a number this can compare against.
+  await test("a generator reaches the file, not just the preview", async () => {
+    const doc = new R.VideolaDocument(await R.createWasmBackend());
+    doc.dispatch(R.cmd.trackAdd("video", "V1"));
+    const track = doc.state.timeline.tracks[0];
+    doc.dispatch(
+      R.cmd.clipAdd(track.id, { kind: "generator", generator: { type: "solid", color: "#ff00ff" } },
+        0, SECOND),
+    );
+    check("the core took a generator clip", doc.state.timeline.tracks[0].clips.length, 1);
+
+    const handle = R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      options: options(),
+      createWorker: worker,
+    });
+    const result = await handle.result;
+    const { frames } = await readBack(result.bytes);
+    check("the file holds a frame for every output frame", frames.length, OUTPUT_FRAMES);
+    check("and every one of them is the colour that was painted",
+      [frames[0].pixel, frames[OUTPUT_FRAMES - 1].pixel], [[255, 0, 255], [255, 0, 255]], 14);
+  });
+
+  await test("cancelling mid-run leaves nothing behind", async () => {
+    const handle = R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      options: options(),
+      createWorker: worker,
+      onProgress: (done) => {
+        if (done === 1) handle.cancel();
+      },
+    });
+    check(
+      "the export ends as cancelled rather than as a file",
+      await failureOf(handle),
+      R.EXPORT_CANCELLED,
+    );
+  });
+
+  await test("an empty range is refused rather than written", async () => {
+    const handle = R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      options: options({ range: { from: 0, to: 0 } }),
+      createWorker: worker,
+    });
+    check("and says so with a catalogue key", await failureOf(handle), "error.exportEmptyRange");
+  });
+}
+
+// Posted back rather than read out of a DOM dump: `--virtual-time-budget` runs the page's clock
+// far faster than the encoders answer on their own threads, so the dump lands before the work does.
+async function report() {
+  if (file !== null) await fetch("/file", { method: "POST", body: file });
+  await fetch("/result", {
+    method: "POST",
+    body: JSON.stringify({
+      results,
+      fileName: "export.mp4",
+      expected: {
+        size: [WIDTH, HEIGHT],
+        frameRate: "30/1",
+        frames: OUTPUT_FRAMES,
+        seconds: OUTPUT_FRAMES / 30,
+        hertz: TONE_HERTZ,
+      },
+    }),
+  });
+  document.getElementById("out").textContent = "reported";
+}
+
+main().then(report, (error) => {
+  results.push({
+    name: "harness",
+    ok: false,
+    got: `THREW ${error.name}: ${error.message}`,
+    want: "no throw",
+  });
+  return report();
+});
+</script></body>

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::{Cursor, Write};
 
 use videola_core::command::{Command, Dispatch};
@@ -66,7 +67,7 @@ fn save_then_open_restores_project_and_media() {
             b"bytes".to_vec(),
         )
         .unwrap();
-    let bytes = host.save(save_options()).unwrap();
+    let bytes = host.save(save_options(), BTreeMap::new()).unwrap();
 
     let reopened = DocumentHost::open(&bytes).unwrap();
 
@@ -146,7 +147,7 @@ fn a_corrupted_project_entry_is_rejected_not_panicked_on() {
         b"bytes".to_vec(),
     )
     .unwrap();
-    let bytes = host.save(save_options()).unwrap();
+    let bytes = host.save(save_options(), BTreeMap::new()).unwrap();
     let corrupted = corrupt_entry_payload(bytes, "project.json");
 
     let error = DocumentHost::open(&corrupted).err().unwrap();
@@ -163,7 +164,7 @@ fn opening_an_archive_missing_a_media_entry_still_opens_with_a_warning() {
         b"bytes".to_vec(),
     )
     .unwrap();
-    let bytes = host.save(save_options()).unwrap();
+    let bytes = host.save(save_options(), BTreeMap::new()).unwrap();
     let stripped = strip_media_entries(bytes);
 
     let reopened = DocumentHost::open(&stripped).unwrap();

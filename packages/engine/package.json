@@ -1,0 +1,27 @@
+{
+  "name": "@videola/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:gpu": "node gpu/run.mjs",
+    "test:export": "node browser/run.mjs"
+  },
+  "dependencies": {
+    "@videola/core": "workspace:*",
+    "@videola/media": "workspace:*",
+    "mediabunny": "^1.52.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
+    "jsdom": "^30.0.1",
+    "node-web-audio-api": "^2.1.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

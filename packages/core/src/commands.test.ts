@@ -24,15 +24,77 @@ describe("command factories", () => {
     expect(Number.isInteger(command.at)).toBe(true);
   });
 
-  it("has a factory for every Command variant the WASM layer can reach from JS", () => {
-    // media.import is not reachable from JS by design: the WASM layer derives the
-    // media id from a content hash of the bytes, so a caller can never supply one.
-    const unreachableFromJs = new Set(["media.import"]);
-    const expectedTypes = new Set(
-      COMMAND_LABELS.map((label) => label.replace(/^cmd\./, "")).filter(
-        (type) => !unreachableFromJs.has(type),
-      ),
-    );
+  it("clears a transition with an explicit null rather than omitting the field", () => {
+    expect(cmd.clipSetTransition("clp_1", null)).toEqual({
+      type: "clip.setTransition",
+      clip: "clp_1",
+      transition: null,
+    });
+  });
+
+  it("keyframes linearly unless told otherwise", () => {
+    const command = cmd.keyframeAdd("clp_1", "brightness", "amount", 0, {
+      kind: "float",
+      value: 0.5,
+    });
+    expect(command).toEqual({
+      type: "keyframe.add",
+      clip: "clp_1",
+      effectType: "brightness",
+      key: "amount",
+      time: 0,
+      value: { kind: "float", value: 0.5 },
+      interp: "linear",
+    });
+  });
+
+  // The type checker already guarantees the field *names*; what a runtime test can still catch is
+  // two arguments landing in each other's field, which is why these pass values that cannot be
+  // mistaken for one another.
+  it("puts every argument of an edit command in its own field", () => {
+    expect(cmd.clipRippleTrim("clp_1", "end", 7)).toEqual({
+      type: "clip.rippleTrim",
+      clip: "clp_1",
+      edge: "end",
+      delta: 7,
+    });
+    expect(cmd.clipRoll("clp_1", "start", -7)).toEqual({
+      type: "clip.roll",
+      clip: "clp_1",
+      edge: "start",
+      delta: -7,
+    });
+    expect(cmd.clipSlip("clp_1", 3)).toEqual({ type: "clip.slip", clip: "clp_1", delta: 3 });
+    expect(cmd.clipSlide("clp_1", 3)).toEqual({ type: "clip.slide", clip: "clp_1", delta: 3 });
+    expect(cmd.markerAdd(9, "chapter")).toEqual({ type: "marker.add", time: 9, label: "chapter" });
+    expect(cmd.markerRename("mrk_1", "chapter")).toEqual({
+      type: "marker.rename",
+      marker: "mrk_1",
+      label: "chapter",
+    });
+  });
+
+  // A copied clip must reach the core whole -- the core is what mints new ids and refuses a
+  // payload it could not load back.
+  it("carries the whole clip in a paste and takes the start from the argument", () => {
+    const clip = { id: "clp_1", start: 100, duration: 50 } as unknown as Parameters<
+      typeof cmd.clipPaste
+    >[1];
+    const command = cmd.clipPaste("trk_1", clip, 900);
+    expect(command).toEqual({ type: "clip.paste", track: "trk_1", clip, start: 900 });
+  });
+
+  // Copied, not aliased: the caller's array is often the live selection, which changes while the
+  // command is still on its way through the queue.
+  it("copies the clip list of a group", () => {
+    const selection = ["clp_1", "clp_2"];
+    const command = cmd.clipGroup(selection);
+    selection.push("clp_3");
+    expect(command.clips).toEqual(["clp_1", "clp_2"]);
+  });
+
+  it("has a factory for every Command variant", () => {
+    const expectedTypes = new Set(COMMAND_LABELS.map((label) => label.replace(/^cmd\./, "")));
 
     const factories = Object.values(cmd) as ((...args: unknown[]) => Command)[];
     const coveredTypes = new Set(factories.map((factory) => factory("x", "x", "x", "x", "x").type));

@@ -29,6 +29,7 @@ const CHAPTERS: [string, string][] = [
   ["Commands and undo", "commands-and-undo"],
   ["The API and the MCP server", "api-and-mcp"],
   ["Effects and transitions", "effects-and-transitions"],
+  ["Audio", "audio"],
   ["Building and releasing", "building-and-releasing"],
   ["Design documents", "design-documents"],
 ];
@@ -43,6 +44,7 @@ const KAPITEL: [string, string][] = [
   ["Commands und Undo", "commands-and-undo"],
   ["Die API und der MCP-Server", "api-and-mcp"],
   ["Effekte und Übergänge", "effects-and-transitions"],
+  ["Ton", "audio"],
   ["Bauen und Ausliefern", "building-and-releasing"],
   ["Design-Dokumente", "design-documents"],
 ];

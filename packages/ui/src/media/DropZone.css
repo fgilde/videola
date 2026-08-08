@@ -1,0 +1,20 @@
+/* The zone is the whole editor, so it must not become a box of its own in the layout. */
+.v-dropzone {
+  display: contents;
+}
+
+.v-dropzone__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(11 13 16 / 72%);
+  color: #e8ecf2;
+  font-size: 20px;
+  border: 3px dashed var(--v-accent);
+  /* The overlay appears under the cursor that is dragging the file; catching the pointer would
+     mean the drop lands on the overlay instead of on the zone that reports it. */
+  pointer-events: none;
+}

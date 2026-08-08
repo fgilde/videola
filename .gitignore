@@ -9,6 +9,17 @@ dist
 .vite
 *.tsbuildinfo
 .pnpm-store
+packages/engine/gpu/bundle.js
+apps/web/browser/preview.png
+apps/web/browser/templates.png
+apps/web/browser/phone.png
+apps/web/browser/phone-library.png
+apps/web/browser/phone-inspector.png
+apps/web/browser/tablet.png
+packages/engine/browser/bundle.js
+packages/engine/browser/worker.js
+packages/ui/browser/bundle.js
+packages/ui/browser/bundle.css
 
 # Tauri
 src-tauri/target
@@ -34,3 +45,6 @@ Thumbs.db
 # Test output
 /test-output
 **/__diff__
+
+# Prozessdokumentation der Agenten: Arbeitsmaterial, keine Quelle.
+.superpowers/

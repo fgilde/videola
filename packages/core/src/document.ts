@@ -1,4 +1,10 @@
-import type { DocumentBackend, SaveOptions } from "./backend";
+import type {
+  DocumentBackend,
+  EffectParams,
+  MediaBytes,
+  SaveOptions,
+  SourceTimes,
+} from "./backend";
 import type { Command, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
 
 type Listener = (project: Project) => void;
@@ -33,6 +39,12 @@ export class VideolaDocument {
     return this.#warnings;
   }
 
+  // Bound to the instance, because playback holds it as a plain function for the length of a
+  // session and never sees the document it came from.
+  sourceTimesAt: SourceTimes = (at) => this.#backend.sourceTimesAt(at);
+
+  effectParamsAt: EffectParams = (at) => this.#backend.effectParamsAt(at);
+
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
@@ -64,8 +76,12 @@ export class VideolaDocument {
     return id;
   }
 
-  save(options: SaveOptions): Uint8Array<ArrayBuffer> {
-    return this.#backend.save(options);
+  save(options: SaveOptions, media: MediaBytes): Uint8Array<ArrayBuffer> {
+    return this.#backend.save(options, media);
+  }
+
+  saveAsTemplate(options: SaveOptions, id: string): Uint8Array<ArrayBuffer> {
+    return this.#backend.saveAsTemplate(options, id);
   }
 
   #absorb(result: DispatchResult): DispatchResult {
@@ -90,7 +106,7 @@ export class VideolaDocument {
   }
 }
 
-function mediaKind(mime: string): MediaKind {
+export function mediaKind(mime: string): MediaKind {
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("image/")) return "image";

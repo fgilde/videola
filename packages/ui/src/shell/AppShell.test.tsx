@@ -16,6 +16,28 @@ function stubEnvironment(width = 1440): void {
   );
 }
 
+// Where a control sits, not merely that it exists. jsdom lays nothing out, so "the topbar fits"
+// can only be answered in a real browser -- but "this button is inside the overflow menu rather
+// than on the bar" is a DOM fact, and it is the one that decides whether the bar can fit at all.
+const inMenu = (name: string): boolean =>
+  screen.getByRole("button", { name }).closest(".v-topbar__menu") !== null;
+
+function renderPhone(): void {
+  render(
+    <AppShell
+      layoutPreference="phone"
+      onNew={() => {}}
+      onOpen={() => {}}
+      onImportMedia={() => {}}
+      onAddTrack={() => {}}
+      onSave={() => {}}
+      onExport={() => {}}
+    >
+      content
+    </AppShell>,
+  );
+}
+
 describe("AppShell", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -39,6 +61,7 @@ describe("AppShell", () => {
     act(() => screen.getByRole("button", { name: "Deutsch / English" }).click());
     expect(screen.getByRole("button", { name: "New project" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import media" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add track" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Redo" })).toBeTruthy();
@@ -70,20 +93,50 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Wiederholen" }).hasAttribute("disabled")).toBe(false);
   });
 
-  // jsdom does no layout, so this only guards against a button vanishing from the DOM (e.g.
-  // a future collapse-to-menu). It cannot see the CSS overflow-x fix that keeps buttons
-  // reachable on real phone widths - only a real-browser check catches that regressing.
-  it("keeps every action button in the DOM at phone width", () => {
+  it("keeps every action reachable at phone width", () => {
     stubEnvironment(390);
-    render(
-      <AppShell layoutPreference="phone" onNew={() => {}} onOpen={() => {}} onImport={() => {}}>
-        content
-      </AppShell>,
-    );
+    renderPhone();
     expect(screen.getByTestId("app-shell").dataset.layout).toBe("phone");
-    for (const name of ["Neues Projekt", "Öffnen", "Spur hinzufügen", "Rückgängig", "Wiederholen", "Speichern"]) {
+    for (const name of ["Neues Projekt", "Öffnen", "Medien importieren", "Spur hinzufügen", "Rückgängig", "Wiederholen", "Speichern", "Exportieren"]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+  });
+
+  // The bar itself may hold only the overflow toggle and the two controls a finger reaches for
+  // constantly. Anything else on it is what pushed "Medien importie…" off the right edge.
+  it("leaves nothing but undo and redo on the bar at phone width", () => {
+    stubEnvironment(390);
+    renderPhone();
+    // By tag rather than by role: a <summary> is the native disclosure widget and carries no
+    // button role, which is also why the browser harness cannot look it up as one.
+    const onBar = [...document.querySelectorAll(".v-topbar button, .v-topbar summary")]
+      .filter((node) => node.closest(".v-topbar__menu") === null)
+      .map((node) => node.getAttribute("aria-label") ?? node.textContent);
+    expect(onBar).toEqual(["Weitere Aktionen", "Rückgängig", "Wiederholen"]);
+  });
+
+  it("moves saving, exporting and the settings into the menu at phone width", () => {
+    stubEnvironment(390);
+    renderPhone();
+    for (const name of ["Speichern", "Exportieren", "Deutsch / English", "Hell"]) {
+      expect(inMenu(name)).toBe(true);
+    }
+  });
+
+  // The desktop bar has room for those three, and burying an editor's save button where there is
+  // space for it would be the same mistake in the other direction.
+  it("keeps saving, exporting and the settings on the bar on a desktop", () => {
+    render(<AppShell onSave={() => {}} onExport={() => {}}>content</AppShell>);
+    for (const name of ["Speichern", "Exportieren", "Deutsch / English", "Hell"]) {
+      expect(inMenu(name)).toBe(false);
+    }
+    expect(inMenu("Medien importieren")).toBe(true);
+  });
+
+  it("hides the wordmark on a phone, where the width it costs is a button", () => {
+    stubEnvironment(390);
+    renderPhone();
+    expect(screen.queryByRole("img", { name: "Videola" })).toBeNull();
   });
 
   it("toggles the theme when the appearance button is clicked", () => {

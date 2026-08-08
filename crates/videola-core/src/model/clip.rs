@@ -1,21 +1,22 @@
 use std::collections::BTreeMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
 use super::effect::{Effect, Transition};
 use super::keyframe::Keyframe;
-use super::{ClipId, MediaId, Time};
+use super::{ClipId, GroupId, MediaId, Time};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Clip {
     pub id: ClipId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub group_id: Option<String>,
+    pub group_id: Option<GroupId>,
     pub source: ClipSource,
     pub start: Time,
     pub duration: Time,
@@ -103,6 +104,14 @@ impl Clip {
         })
     }
 
+    // What a decoder may be handed. `source_time_at` maps the head of a reversed clip onto the
+    // exclusive end of the consumed range, and that is a flick past the last sample there is.
+    pub fn readable_source_time_at(&self, t: Time) -> Option<Time> {
+        let last = (self.out_point() - Time::from_flicks(1)).max(self.in_point);
+        self.source_time_at(t)
+            .map(|at| at.clamp(self.in_point, last))
+    }
+
     pub fn consumed_source(&self) -> Time {
         Time::from_flicks(
             (self.duration.as_flicks() as f64 * self.speed.rate as f64).round() as i64,
@@ -110,7 +119,7 @@ impl Clip {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ClipSource {
     Media {
@@ -124,7 +133,7 @@ pub enum ClipSource {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -152,7 +161,7 @@ pub enum Generator {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Speed {
     pub rate: f32,
@@ -170,7 +179,7 @@ impl Default for Speed {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform {
     pub x: f32,
@@ -200,7 +209,7 @@ impl Default for Transform {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Crop {
     pub left: f32,
@@ -209,7 +218,7 @@ pub struct Crop {
     pub bottom: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum BlendMode {
     Normal,
@@ -223,7 +232,7 @@ pub enum BlendMode {
     Darken,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Fades {
     pub in_duration: Time,
@@ -312,6 +321,42 @@ mod tests {
         clip.speed.rate = 2.0;
         clip.speed.reverse = true;
         assert_eq!(clip.source_time_at(Time::ZERO).unwrap().as_seconds(), 14.0);
+    }
+
+    #[test]
+    fn readable_source_time_keeps_a_reversed_head_inside_the_consumed_range() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.in_point = Time::from_seconds(10.0);
+        clip.speed.rate = 2.0;
+        clip.speed.reverse = true;
+        let at = clip.readable_source_time_at(Time::ZERO).unwrap();
+        assert_eq!(at, clip.out_point() - Time::from_flicks(1));
+        assert!(at < clip.out_point());
+    }
+
+    #[test]
+    fn readable_source_time_leaves_every_other_point_alone() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.in_point = Time::from_seconds(10.0);
+        clip.speed.reverse = true;
+        assert_eq!(
+            clip.readable_source_time_at(Time::from_seconds(1.0)),
+            clip.source_time_at(Time::from_seconds(1.0))
+        );
+
+        let forward = media_clip(0.0, 2.0);
+        assert_eq!(
+            forward.readable_source_time_at(Time::from_seconds(1.5)),
+            forward.source_time_at(Time::from_seconds(1.5))
+        );
+    }
+
+    #[test]
+    fn readable_source_time_outside_the_clip_is_none() {
+        let clip = media_clip(2.0, 1.0);
+        assert!(clip
+            .readable_source_time_at(Time::from_seconds(5.0))
+            .is_none());
     }
 
     #[test]

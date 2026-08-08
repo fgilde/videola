@@ -119,7 +119,11 @@ Für die Oberflächenkomponenten nennt der Plan die Schnittstelle, das Verhalten
 **Files:** `packages/media/package.json`, `packages/media/src/opfs.ts`, `packages/media/src/opfs.test.ts`
 
 **Interfaces:**
-- Produces: `putMedia(hash: string, bytes: Uint8Array): Promise<void>`, `getMedia(hash: string): Promise<Uint8Array | undefined>`, `hasMedia(hash: string): Promise<boolean>`, `deleteMedia(hash: string)`, `mediaSize(hash: string): Promise<number | undefined>`, `storageEstimate(): Promise<{usage: number, quota: number}>`
+- Produces: `putMedia(hash: string, bytes: Uint8Array): Promise<void>`, `getMedia(hash: string): Promise<Uint8Array | undefined>`, **`mediaBlob(hash: string): Promise<File | undefined>`**, `hasMedia(hash: string): Promise<boolean>`, `deleteMedia(hash: string)`, `mediaSize(hash: string): Promise<number | undefined>`, `storageEstimate(): Promise<{usage: number, quota: number}>`
+
+`mediaBlob` ist der Weg, den alle späteren Tasks nehmen: ein `File` ist ein Griff auf die Datei, kein Abzug im Speicher. `getMedia` existiert für kleine Dateien und Tests — wer es auf Videomaterial anwendet, hat die OPFS-Abweichung wieder aufgehoben.
+
+**Folge, die dieser Plan zunächst übersehen hat:** M0 hielt in `packages/core/src/commands.test.ts` fest, dass `media.import` von JS aus unerreichbar sei, weil die WASM-Schicht die Bytes selbst hasht. Mit OPFS stimmt das nicht mehr — der Import läuft jetzt über `cmd.mediaImport`, und `mediaKind` muss aus `@videola/core` exportiert sein. Die Ausnahme in jenem Test entfällt.
 
 Die Ablage ist inhaltsadressiert und benutzt denselben Hash, den `MediaId` im Kern trägt — `med_` gefolgt von 64 Hex-Zeichen, wobei hier nur der Hex-Teil als Dateiname dient. Damit ist ein Medium in OPFS und im Projekt dieselbe Sache, und ein zweimal importiertes Video liegt einmal auf der Platte.
 
@@ -143,12 +147,29 @@ Die Reihenfolge ist bindend: erst OPFS, dann Dispatch. Andernfalls kennt der Ker
 
 Tests: eine kleine Datei ergibt dieselbe Id wie `MediaId::from_bytes` in Rust über dieselben Bytes — dieser Test ist der wichtigste des Tasks und muss die Rust-Seite tatsächlich befragen, nicht einen erwarteten Wert festhalten; Import derselben Datei zweimal ergibt eine Bibliothek mit einem Eintrag; eine Datei ohne Videospur wird abgewiesen, bevor ein Command fliegt.
 
+### Task 2b: Speichern mit Medien aus OPFS
+
+**Nachträglich ergänzt.** Die OPFS-Abweichung hat die Medien aus dem WASM-Speicher geholt, aber der `.videola`-Writer holt sie weiter von dort: `inner.rs::save` reicht `&self.media` an `writer::write`, und `format/writer.rs` ruft für jeden Bibliothekseintrag `media.read(&asset.id)?`. Nach einem Import über OPFS ist dieser Speicher leer, und `save` wirft `media not available`. Ein Meilenstein, der importieren aber nicht speichern kann, ist kaputt — und kein anderer Task deckte das ab.
+
+**Files:** `crates/videola-core-wasm/src/inner.rs`, `crates/videola-core-wasm/src/lib.rs`, `packages/core/src/document.ts`, `packages/core/src/backend.ts`, `packages/media/src/index.ts`, plus Tests
+
+**Interfaces:**
+- Produces: `WasmDocument.save` nimmt zusätzlich eine Abbildung von Medien-Id auf Bytes; `VideolaDocument.save(options, media: Map<string, Uint8Array>)`; eine Hilfsfunktion in `@videola/media`, die für ein Projekt die benötigten Einträge aus OPFS sammelt
+
+Der einfache Weg, der für M1 trägt: JS sammelt vor dem Speichern die Bytes der Bibliothekseinträge aus OPFS und übergibt sie. Der Kern bleibt unverändert, der Writer bekommt einen gefüllten Store.
+
+**Das hebt die OPFS-Ersparnis beim Speichern wieder auf** — für die Dauer des Schreibens liegt das gesamte Projektmaterial im Speicher. Setz dafür einen `ponytail:`-Marker, der das benennt und den Ausweg nennt: ein streamender Writer, der Medieneinträge einzeln aus einem `Blob` in das ZIP schiebt, statt sie als `Vec<u8>` entgegenzunehmen. Und setz eine Obergrenze, die laut scheitert statt den Speicher zu sprengen — `MAX_TOTAL_MEDIA_BYTES` aus dem Reader ist die passende Zahl.
+
+Tests: importieren, speichern, wieder öffnen, und der Clip zeigt weiter auf dasselbe Medium — der Roundtrip über OPFS, der heute bricht. Ein Projekt, dessen Medien die Obergrenze überschreiten, scheitert mit einem erkennbaren Fehler statt mit einem Absturz.
+
 ### Task 3: Demuxer
 
 **Files:** `packages/engine/package.json`, `packages/engine/src/decode/demuxer.ts`, Tests
 
 **Interfaces:**
-- Produces: `probe(bytes: Uint8Array): Promise<MediaInfo>` mit `MediaInfo { duration: Time, video?: VideoTrackInfo, audio?: AudioTrackInfo }`, `VideoTrackInfo { codec: string, width: number, height: number, fps: Rate, description?: Uint8Array }`, `AudioTrackInfo { codec: string, sampleRate: number, channels: number }`, und `readChunks(bytes, trackId, from: Time, to: Time): AsyncIterable<EncodedVideoChunk | EncodedAudioChunk>`
+- Produces: `probe(source: Blob): Promise<MediaInfo>` mit `MediaInfo { duration: Time, video?: VideoTrackInfo, audio?: AudioTrackInfo }`, `VideoTrackInfo { codec: string, width: number, height: number, fps: Rate, description?: Uint8Array }`, `AudioTrackInfo { codec: string, sampleRate: number, channels: number }`, und `readChunks(source: Blob, trackId, from: Time, to: Time): AsyncIterable<EncodedVideoChunk | EncodedAudioChunk>`
+
+**Korrektur nach Gruppe A:** Diese Signaturen hießen ursprünglich `probe(bytes: Uint8Array)`. Das war falsch und hätte die ganze Datei in den Speicher zurückgeholt — also genau das, wogegen die OPFS-Abweichung dieses Plans existiert. `Blob` ist auch das, was mediabunny über `BlobSource` ohnehin erwartet. Task 1 liefert dafür `mediaBlob(hash): Promise<File | undefined>` neben `getMedia`; benutze das und nicht `getMedia`.
 
 `mediabunny` ist die eine Abhängigkeit für Demux und später Mux. Prüfe die aktuelle API gegen ihre Dokumentation, bevor du schreibst — sie ist jung und der Plan darf hier nicht raten.
 
@@ -334,6 +355,14 @@ Tests mit einem gefälschten `AudioContext`, dessen `currentTime` der Test steue
 - Produces: `Playback` mit `attach(canvas)`, `load(project: Project)`, `play()`, `pause()`, `seek(t)`, `stepFrame(dir: 1 | -1)`, `onTime(cb)`, `dispose()`
 
 Orchestriert und arbeitet nicht: pro Tick fragt es für jeden sichtbaren Clip den Quellzeitpunkt beim Kern ab, holt Frames aus Cache oder Quelle, und ruft `Compositor.render`. Fehlt ein Frame noch, wird der letzte gezeigte behalten, statt schwarz zu blitzen.
+
+**Zwei Dinge, die Gruppe B aufgedeckt hat und die dieser Task erledigen muss:**
+
+`Clip::source_time_at` ist zwar im Rust-Kern richtig, aber **von JavaScript aus nicht erreichbar** — `crates/videola-core-wasm/src/lib.rs` exportiert es nicht. Dieser Task erweitert die WASM-Grenze. Die richtige Form ist eine Stapelabfrage: alle sichtbaren Clips für einen Zeitpunkt in einem Aufruf, nicht einer pro Clip, weil pro Frame sonst ein Dutzend Grenzübertritte anfallen. `VideoSource` arbeitet bewusst in Quellzeit und kennt keine `ClipId` — die Abbildung Timeline nach Quelle gehört hierher.
+
+**Chunk-Zeitstempel sind keine Projektzeit.** `EncodedPacket.microsecondTimestamp` in mediabunny ist `Math.trunc`, nicht `Math.round` — Frame 10 einer NTSC-Datei liegt bei 333.666,67 µs und reist als 333.666. Das ist die Genauigkeitsgrenze von WebCodecs, nicht unsere. Nichts darf eine Projektzeit aus einem Chunk-Zeitstempel ableiten; Projektzeit kommt aus dem Modell und wird zur Quelle hin umgerechnet, nie zurück. Gilt genauso für Task 20.
+
+**Rückwärts laufende Clips brauchen eine Klemmung.** Bei `t == clip.start` gibt `source_time_at` das *exklusive* Ende des verbrauchten Quellbereichs zurück, also einen Flick hinter dem letzten gültigen Sample. Wer das ungeprüft an den Dekoder gibt, bekommt für das erste Bild eines rückwärts laufenden Clips nichts oder Schwarz. Klemme in `[in_point, in_point + consumed_source)`. Das steht als Kommentar in `model/clip.rs` und war in keinem Plan — es stammt aus einer Review-Runde in M0.
 
 `stepFrame` rechnet über die Projekt-Framerate als Rational, nicht über eine Sekundenzahl.
 

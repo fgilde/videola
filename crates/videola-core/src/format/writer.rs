@@ -3,8 +3,11 @@ use std::io::{Seek, Write};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-use super::{Manifest, MediaStore, SaveOptions, MANIFEST_ENTRY, MEDIA_PREFIX, PROJECT_ENTRY};
+use super::{
+    Manifest, MediaStore, SaveOptions, MANIFEST_ENTRY, MEDIA_PREFIX, PROJECT_ENTRY, TEMPLATE_ENTRY,
+};
 use crate::model::{MediaId, Project, SCHEMA_VERSION};
+use crate::template::{Template, TemplateManifest};
 use crate::{CoreError, Result};
 
 pub fn write<W: Write + Seek>(
@@ -13,9 +16,38 @@ pub fn write<W: Write + Seek>(
     media: &dyn MediaStore,
     options: &SaveOptions,
 ) -> Result<()> {
+    write_container(sink, project, media, options, None)
+}
+
+/// A `.videolat`: the same container, plus the manifest that turns the project into a recipe.
+pub fn write_template<W: Write + Seek>(
+    sink: W,
+    template: &Template,
+    media: &dyn MediaStore,
+    options: &SaveOptions,
+) -> Result<()> {
+    write_container(
+        sink,
+        &template.project,
+        media,
+        options,
+        Some(&template.manifest),
+    )
+}
+
+fn write_container<W: Write + Seek>(
+    sink: W,
+    project: &Project,
+    media: &dyn MediaStore,
+    options: &SaveOptions,
+    template: Option<&TemplateManifest>,
+) -> Result<()> {
     let mut archive = ZipWriter::new(sink);
     write_json(&mut archive, MANIFEST_ENTRY, &manifest(project, options))?;
     write_json(&mut archive, PROJECT_ENTRY, project)?;
+    if let Some(template) = template {
+        write_json(&mut archive, TEMPLATE_ENTRY, template)?;
+    }
     write_media(&mut archive, project, media)?;
     // `finish()` hands back the inner writer; for a buffered sink (e.g. &mut BufWriter<File>)
     // that buffer's tail is only guaranteed on disk once flushed, and a dropped `&mut` reference
