@@ -197,6 +197,7 @@ export function App(): ReactElement {
       graph: new AudioGraph(audio, new AudioSource()),
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
     });
     setPlayback(next);
     return () => {
@@ -356,6 +357,7 @@ export function App(): ReactElement {
         project,
         sourceTimes: doc.sourceTimesAt,
         effectParams: doc.effectParamsAt,
+        transforms: doc.transformsAt,
         options: {
           format,
           width: options.width,

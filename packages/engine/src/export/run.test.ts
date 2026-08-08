@@ -52,6 +52,7 @@ function input(overrides: Partial<ExportInput> = {}): ExportInput {
     project: PROJECT,
     sourceTimes: (at: Time) => new Map([["clp_0", at * 2]]),
     effectParams: () => new Map(),
+    transforms: () => new Map(),
     // jsdom has no encoders at all, so without this the export would correctly decide the sound
     // cannot be written and skip it -- which is the behaviour these tests exist to look past.
     encodeProbe: { video: async () => true, audio: async () => true },

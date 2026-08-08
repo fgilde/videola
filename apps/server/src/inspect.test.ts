@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cmd, secondsToTime } from "@videola/core";
+import { cmd, on, secondsToTime } from "@videola/core";
 import type { MediaAsset, Project } from "@videola/core";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -73,8 +73,8 @@ describe("describeProject", () => {
       const clip = api.state(id).timeline.tracks[0]?.clips[0]?.id ?? "";
       api.apply(id, [
         cmd.clipSetSpeed(clip, 2, true),
-        cmd.effectAdd(clip, "brightness"),
-        cmd.keyframeAdd(clip, "brightness", "amount", 0, { kind: "float", value: 1 }),
+        cmd.effectAdd(on.clip(clip), "brightness"),
+        cmd.keyframeAdd(on.clip(clip), "brightness", "amount", 0, { kind: "float", value: 1 }),
       ]);
     });
 

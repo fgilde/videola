@@ -32,6 +32,7 @@ function fakeBackend(): DocumentBackend {
     state: () => ({ ...project }),
     sourceTimesAt: () => new Map(),
     effectParamsAt: () => new Map(),
+    transformsAt: () => new Map(),
     dispatch: vi.fn((dispatch) => {
       if (dispatch.command.type === "track.add") {
         project = {

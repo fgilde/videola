@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type {
   Clip,
   EffectParamSnapshot,
+  TransformSnapshot,
   MediaAsset,
   Project,
   Track,
@@ -14,8 +15,13 @@ import type { DrawList } from "./draw-list";
 
 // The resolved parameter batch is empty unless a case supplies its own -- most of these projects
 // have no effect on any clip.
-function list(project: Project, at: number, params: EffectParamSnapshot = new Map()): DrawList {
-  return drawList(project, at, params);
+function list(
+  project: Project,
+  at: number,
+  params: EffectParamSnapshot = new Map(),
+  transforms: TransformSnapshot = new Map(),
+): DrawList {
+  return drawList(project, at, params, transforms);
 }
 
 const SECOND = 705_600_000;

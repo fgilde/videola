@@ -4,6 +4,7 @@ import type {
   MediaBytes,
   SaveOptions,
   SourceTimes,
+  Transforms,
 } from "./backend";
 import type { Command, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
 
@@ -44,6 +45,8 @@ export class VideolaDocument {
   sourceTimesAt: SourceTimes = (at) => this.#backend.sourceTimesAt(at);
 
   effectParamsAt: EffectParams = (at) => this.#backend.effectParamsAt(at);
+
+  transformsAt: Transforms = (at) => this.#backend.transformsAt(at);
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);

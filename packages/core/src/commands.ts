@@ -2,6 +2,7 @@ import type {
   Clip,
   ClipSource,
   Command,
+  EffectTarget,
   Interp,
   MediaAsset,
   ParamValue,
@@ -33,9 +34,20 @@ export function frameDuration(fps: Rate): Time {
   return Math.round(FLICKS_PER_SECOND / rate);
 }
 
+// The three places an effect chain lives, written the way the wire wants them. A literal at every
+// call site would be the same three shapes spelled out fifty times, and one of them spelled wrong.
+export const on = {
+  clip: (clip: string): EffectTarget => ({ kind: "clip", clip }),
+  track: (track: string): EffectTarget => ({ kind: "track", track }),
+  project: { kind: "project" } as EffectTarget,
+};
+
 export const cmd = {
   projectSetSettings: (settings: ProjectSettings) => ({ type: "project.setSettings", settings }),
   projectSetTitle: (title: string) => ({ type: "project.setTitle", title }),
+  // The one fader the whole mix passes through. Clamped in the core to the same 0..4 a track's is,
+  // so a drag can send whatever the slider produces.
+  projectSetMasterVolume: (volume: number) => ({ type: "project.setMasterVolume", volume }),
 
   trackAdd: (kind: TrackKind, name: string, index: number | null = null) => ({
     type: "track.add",
@@ -134,14 +146,16 @@ export const cmd = {
     transition,
   }),
 
-  effectAdd: (clip: string, effectType: string) => ({
+  // `target` is `on.clip(id)`, `on.track(id)` or `on.project`: an equaliser on a bus and a blur on
+  // a clip are the same command pointed at a different chain.
+  effectAdd: (target: EffectTarget, effectType: string) => ({
     type: "effect.add",
-    clip,
+    target,
     effectType,
   }),
-  effectSetParam: (clip: string, effectType: string, key: string, value: ParamValue) => ({
+  effectSetParam: (target: EffectTarget, effectType: string, key: string, value: ParamValue) => ({
     type: "effect.setParam",
-    clip,
+    target,
     effectType,
     key,
     value,
@@ -150,36 +164,46 @@ export const cmd = {
   // Sending this again at the same `time` replaces the keyframe there, so a slider drag over a
   // keyframed parameter is the same shape as a clip drag: one dispatch per pointer move, all of
   // them under one coalesce key, one entry on the undo stack.
+  //
+  // `effectType` of `null` addresses the clip's own transform instead of an effect -- the keys are
+  // then `x`, `y`, `scaleX`, `scaleY`, `rotation`, `anchorX`, `anchorY`, `opacity` and the four
+  // `crop*`, and only a clip target has them.
   keyframeAdd: (
-    clip: string,
-    effectType: string,
+    target: EffectTarget,
+    effectType: string | null,
     key: string,
     time: Time,
     value: ParamValue,
     interp: Interp = "linear",
-  ) => ({ type: "keyframe.add", clip, effectType, key, time, value, interp }),
-  keyframeRemove: (clip: string, effectType: string, key: string, time: Time) => ({
+  ) => ({ type: "keyframe.add", target, effectType, key, time, value, interp }),
+  keyframeRemove: (target: EffectTarget, effectType: string | null, key: string, time: Time) => ({
     type: "keyframe.remove",
-    clip,
+    target,
     effectType,
     key,
     time,
   }),
-  keyframeMove: (clip: string, effectType: string, key: string, from: Time, to: Time) => ({
+  keyframeMove: (
+    target: EffectTarget,
+    effectType: string | null,
+    key: string,
+    from: Time,
+    to: Time,
+  ) => ({
     type: "keyframe.move",
-    clip,
+    target,
     effectType,
     key,
     from,
     to,
   }),
   keyframeSetInterp: (
-    clip: string,
-    effectType: string,
+    target: EffectTarget,
+    effectType: string | null,
     key: string,
     time: Time,
     interp: Interp,
-  ) => ({ type: "keyframe.setInterp", clip, effectType, key, time, interp }),
+  ) => ({ type: "keyframe.setInterp", target, effectType, key, time, interp }),
 
   markerAdd: (time: Time, label: string) => ({ type: "marker.add", time, label }),
   markerRemove: (marker: string) => ({ type: "marker.remove", marker }),

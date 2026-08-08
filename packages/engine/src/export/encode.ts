@@ -10,7 +10,13 @@ import {
   WebMOutputFormat,
 } from "mediabunny";
 
-import type { EffectParamSnapshot, Project, Rate, Time } from "@videola/core";
+import type {
+  EffectParamSnapshot,
+  Project,
+  Rate,
+  Time,
+  TransformSnapshot,
+} from "@videola/core";
 import type { AudioEncodingConfig, OutputFormat, VideoEncodingConfig } from "mediabunny";
 
 import { VideoSource } from "../decode/video-source";
@@ -30,6 +36,7 @@ export interface ExportFrame {
   at: Time;
   sources: ReadonlyMap<string, Time>;
   params: EffectParamSnapshot;
+  transforms: TransformSnapshot;
 }
 
 export interface ExportAudio {
@@ -126,7 +133,13 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
     // Nothing is awaited between the last frame arriving and the upload, and `CanvasSource.add`
     // captures the canvas before it returns -- so the pictures are alive for the render and the
     // render is on the canvas before anything else can touch it.
-    pass.compositor.render(request.project, frame.at, pictures, frame.params);
+    pass.compositor.render(
+      request.project,
+      frame.at,
+      pictures,
+      frame.params,
+      frame.transforms,
+    );
     await pass.video.add(timeToSeconds(frame.at - origin), step);
     index += 1;
     pass.onProgress?.(index, request.frames.length);
@@ -142,7 +155,7 @@ async function gather(
   project: Project,
   frame: ExportFrame,
 ): Promise<Map<string, VideoFrame>> {
-  const items = drawList(project, frame.at, frame.params).items;
+  const items = drawList(project, frame.at, frame.params, frame.transforms).items;
   const pictures = pass.generated.pictures(project, new Set(items.map((item) => item.clip)));
   for (const item of items) {
     const hash = hashes.get(item.clip);

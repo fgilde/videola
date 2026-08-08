@@ -413,7 +413,7 @@ describe("the inspector", () => {
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.add",
-      clip: "clp_1",
+      target: { kind: "clip", clip: "clp_1" },
       effectType: "brightness",
       key: "amount",
       time: SECOND,
@@ -435,7 +435,7 @@ describe("the inspector", () => {
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.remove",
-      clip: "clp_1",
+      target: { kind: "clip", clip: "clp_1" },
       effectType: "brightness",
       key: "amount",
       time: SECOND,
@@ -453,7 +453,7 @@ describe("the inspector", () => {
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.add",
-      clip: "clp_1",
+      target: { kind: "clip", clip: "clp_1" },
       effectType: "brightness",
       key: "amount",
       time: 0,
@@ -470,7 +470,7 @@ describe("the inspector", () => {
 
     expect(rig.sent[0]?.command).toEqual({
       type: "effect.setParam",
-      clip: "clp_1",
+      target: { kind: "clip", clip: "clp_1" },
       effectType: "brightness",
       key: "amount",
       value: float(3),
@@ -492,7 +492,7 @@ describe("the inspector", () => {
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.setInterp",
-      clip: "clp_1",
+      target: { kind: "clip", clip: "clp_1" },
       effectType: "brightness",
       key: "amount",
       time: SECOND,

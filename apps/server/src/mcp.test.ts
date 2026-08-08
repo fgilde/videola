@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { cmd, secondsToTime } from "@videola/core";
+import { cmd, on, secondsToTime } from "@videola/core";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Api } from "./api";
@@ -103,8 +103,8 @@ async function fixture(): Promise<Fixture> {
   const clip = placed[0]?.id ?? "";
   const neighbour = placed[1]?.id ?? "";
   api.apply(id, [
-    cmd.effectAdd(clip, "brightness"),
-    cmd.keyframeAdd(clip, "brightness", "amount", 0, { kind: "float", value: 1 }),
+    cmd.effectAdd(on.clip(clip), "brightness"),
+    cmd.keyframeAdd(on.clip(clip), "brightness", "amount", 0, { kind: "float", value: 1 }),
     cmd.clipGroup([clip, neighbour]),
     cmd.markerAdd(secondsToTime(1), "chapter"),
   ]);
@@ -140,6 +140,7 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
     },
   }),
   "project.setTitle": () => ({ title: "Reel" }),
+  "project.setMasterVolume": () => ({ volume: 0.6 }),
   "track.add": () => ({ kind: "text", name: "T1" }),
   "track.remove": (f) => ({ track: f.otherTrack }),
   "track.reorder": (f) => ({ track: f.track, toIndex: 1 }),
@@ -182,15 +183,17 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
       params: {},
     },
   }),
-  "effect.add": (f) => ({ clip: f.clip, effectType: "crossfade" }),
+  // Pointed at the project rather than at a clip, so the address itself is exercised: a target
+  // the handler ignored would put this on a clip and the assertion on `master` would fail.
+  "effect.add": () => ({ target: { kind: "project" }, effectType: "limiter" }),
   "effect.setParam": (f) => ({
-    clip: f.clip,
+    target: { kind: "clip", clip: f.clip },
     effectType: "brightness",
     key: "amount",
     value: { kind: "float", value: 1.5 },
   }),
   "keyframe.add": (f) => ({
-    clip: f.clip,
+    target: { kind: "clip", clip: f.clip },
     effectType: "brightness",
     key: "amount",
     time: secondsToTime(1),
@@ -198,20 +201,20 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
     interp: "linear",
   }),
   "keyframe.remove": (f) => ({
-    clip: f.clip,
+    target: { kind: "clip", clip: f.clip },
     effectType: "brightness",
     key: "amount",
     time: 0,
   }),
   "keyframe.move": (f) => ({
-    clip: f.clip,
+    target: { kind: "clip", clip: f.clip },
     effectType: "brightness",
     key: "amount",
     from: 0,
     to: secondsToTime(0.5),
   }),
   "keyframe.setInterp": (f) => ({
-    clip: f.clip,
+    target: { kind: "clip", clip: f.clip },
     effectType: "brightness",
     key: "amount",
     time: 0,

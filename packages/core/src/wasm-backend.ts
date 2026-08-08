@@ -6,6 +6,7 @@ import type {
   ImportMediaResult,
   MediaBytes,
   SaveOptions,
+  TransformSnapshot,
 } from "./backend";
 import type {
   Dispatch,
@@ -64,6 +65,7 @@ function wrap(handle: WasmDocument): DocumentBackend {
     state: () => handle.state() as Project,
     sourceTimesAt: (at: Time) => handle.sourceTimesAt(at) as ReadonlyMap<string, Time>,
     effectParamsAt: (at: Time) => handle.effectParamsAt(at) as EffectParamSnapshot,
+    transformsAt: (at: Time) => handle.transformsAt(at) as TransformSnapshot,
     dispatch: (dispatch: Dispatch) => handle.dispatch(dispatch) as DispatchResult,
     undo: () => handle.undo() as DispatchResult,
     redo: () => handle.redo() as DispatchResult,

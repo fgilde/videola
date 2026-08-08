@@ -3,7 +3,7 @@ import { blendState, drawList } from "./draw-list";
 import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
-import type { EffectParamSnapshot, Project, Time } from "@videola/core";
+import type { EffectParamSnapshot, Project, Time, TransformSnapshot } from "@videola/core";
 import type { GlContext } from "./context";
 import type { DrawItem } from "./draw-list";
 
@@ -129,9 +129,10 @@ export class Compositor {
     at: Time,
     frames: ReadonlyMap<string, VideoFrame>,
     params: EffectParamSnapshot,
+    transforms: TransformSnapshot,
   ): void {
     if (this.#disposed || this.#gl.isContextLost()) return;
-    const list = drawList(project, at, params);
+    const list = drawList(project, at, params, transforms);
     const resources = this.#resources ?? this.#build();
     this.#begin(list.background);
     for (const item of list.items) {

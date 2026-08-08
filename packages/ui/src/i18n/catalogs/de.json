@@ -22,6 +22,7 @@
   "project.trackCount": "{count} Spur | {count} Spuren",
   "cmd.project.setSettings": "Projekteinstellungen geändert",
   "cmd.project.setTitle": "Titel geändert",
+  "cmd.project.setMasterVolume": "Summenlautstärke geändert",
   "cmd.track.add": "Spur hinzugefügt",
   "cmd.track.remove": "Spur entfernt",
   "cmd.track.reorder": "Spur verschoben",

@@ -12,6 +12,7 @@ import type {
   Time,
   Track,
   Transform,
+  TransformSnapshot,
   Transition,
 } from "@videola/core";
 import type { EffectManifest } from "../effects/registry";
@@ -63,13 +64,18 @@ interface Size {
 //   rotation        degrees, positive turns clockwise on screen
 //   anchor          fraction of the uncropped source, so cropping does not move the pivot
 //   crop            fraction cut off each side
-export function drawList(project: Project, at: Time, params: EffectParamSnapshot): DrawList {
+export function drawList(
+  project: Project,
+  at: Time,
+  params: EffectParamSnapshot,
+  transforms: TransformSnapshot,
+): DrawList {
   const frame = { width: project.settings.width, height: project.settings.height };
   const items: DrawItem[] = [];
   for (const track of project.timeline.tracks) {
     if (!paints(track)) continue;
     for (const clip of track.clips) {
-      const item = drawItem(clip, at, project.library, frame, params);
+      const item = drawItem(clip, at, project.library, frame, params, transforms);
       if (item !== undefined) items.push(item);
     }
   }
@@ -130,12 +136,16 @@ function drawItem(
   library: readonly MediaAsset[],
   frame: Size,
   params: EffectParamSnapshot,
+  transforms: TransformSnapshot,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
+  // The core resolved the keyframes; `clip.transform` is the value at rest and is only reached for
+  // when the caller supplied no snapshot at all, which no renderer does.
+  const placed = transforms.get(clip.id) ?? clip.transform;
   // A title's in, out and loop animation is a transform, so it arrives here rather than in the
   // pixels -- which is also why a fade-in at its very first moment drops the clip from the list and
   // spares the decoder a frame nobody sees.
-  const transform = generatorMotion(clip, at, frame);
+  const transform = generatorMotion(clip, at, frame, placed);
   if (transform.opacity <= 0) return undefined;
   const source = sourceSize(clip, library, frame);
   if (source === undefined) return undefined;

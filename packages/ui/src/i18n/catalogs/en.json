@@ -22,6 +22,7 @@
   "project.trackCount": "{count} track | {count} tracks",
   "cmd.project.setSettings": "Project settings changed",
   "cmd.project.setTitle": "Title changed",
+  "cmd.project.setMasterVolume": "Master volume changed",
   "cmd.track.add": "Track added",
   "cmd.track.remove": "Track removed",
   "cmd.track.reorder": "Track moved",

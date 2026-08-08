@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { cmd, FLICKS_PER_SECOND } from "./commands";
+import { cmd, FLICKS_PER_SECOND, on } from "./commands";
 import { VideolaDocument } from "./document";
 import type { Clip } from "./generated";
 import { createWasmBackend } from "./wasm-backend";
@@ -103,8 +103,8 @@ describe("source times through the real WASM backend", () => {
     const doc = await timeline();
     doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
     const clip = clipOn(doc, 0);
-    doc.dispatch(cmd.effectAdd(clip.id, "brightness"));
-    doc.dispatch(cmd.effectSetParam(clip.id, "brightness", "amount", { kind: "float", value: 1.5 }));
+    doc.dispatch(cmd.effectAdd(on.clip(clip.id), "brightness"));
+    doc.dispatch(cmd.effectSetParam(on.clip(clip.id), "brightness", "amount", { kind: "float", value: 1.5 }));
     const effect = clipOn(doc, 0).effects[0]!;
 
     const params = doc.effectParamsAt(SECOND);
@@ -120,11 +120,11 @@ describe("source times through the real WASM backend", () => {
     const doc = await timeline();
     doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
     const clip = clipOn(doc, 0);
-    doc.dispatch(cmd.effectAdd(clip.id, "brightness"));
-    doc.dispatch(cmd.effectSetParam(clip.id, "brightness", "amount", { kind: "float", value: 9 }));
-    doc.dispatch(cmd.keyframeAdd(clip.id, "brightness", "amount", 0, { kind: "float", value: 0 }));
+    doc.dispatch(cmd.effectAdd(on.clip(clip.id), "brightness"));
+    doc.dispatch(cmd.effectSetParam(on.clip(clip.id), "brightness", "amount", { kind: "float", value: 9 }));
+    doc.dispatch(cmd.keyframeAdd(on.clip(clip.id), "brightness", "amount", 0, { kind: "float", value: 0 }));
     doc.dispatch(
-      cmd.keyframeAdd(clip.id, "brightness", "amount", 2 * SECOND, { kind: "float", value: 1 }),
+      cmd.keyframeAdd(on.clip(clip.id), "brightness", "amount", 2 * SECOND, { kind: "float", value: 1 }),
     );
     const effect = clipOn(doc, 0).effects[0]!;
     const amountAt = (at: number): unknown => doc.effectParamsAt(at).get(effect.id)?.get("amount");
@@ -135,16 +135,16 @@ describe("source times through the real WASM backend", () => {
 
     // Stretching the ramp: the later key moves out to 4 s, so one second in is a quarter of the
     // way. A `from`/`to` the wrong way round would refuse instead of quietly doing something else.
-    doc.dispatch(cmd.keyframeMove(clip.id, "brightness", "amount", 2 * SECOND, 4 * SECOND));
+    doc.dispatch(cmd.keyframeMove(on.clip(clip.id), "brightness", "amount", 2 * SECOND, 4 * SECOND));
     expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0.25 });
-    doc.dispatch(cmd.keyframeMove(clip.id, "brightness", "amount", 4 * SECOND, 2 * SECOND));
+    doc.dispatch(cmd.keyframeMove(on.clip(clip.id), "brightness", "amount", 4 * SECOND, 2 * SECOND));
 
-    doc.dispatch(cmd.keyframeSetInterp(clip.id, "brightness", "amount", 0, "hold"));
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip.id), "brightness", "amount", 0, "hold"));
     expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0 });
 
     // Off the clock again the static value takes over -- and it was there the whole time.
-    doc.dispatch(cmd.keyframeRemove(clip.id, "brightness", "amount", 0));
-    doc.dispatch(cmd.keyframeRemove(clip.id, "brightness", "amount", 2 * SECOND));
+    doc.dispatch(cmd.keyframeRemove(on.clip(clip.id), "brightness", "amount", 0));
+    doc.dispatch(cmd.keyframeRemove(on.clip(clip.id), "brightness", "amount", 2 * SECOND));
     expect(amountAt(SECOND)).toEqual({ kind: "float", value: 9 });
   });
 
@@ -191,12 +191,12 @@ describe("source times through the real WASM backend", () => {
     const doc = await timeline();
     doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
     const clip = clipOn(doc, 0);
-    doc.dispatch(cmd.effectAdd(clip.id, "brightness"));
+    doc.dispatch(cmd.effectAdd(on.clip(clip.id), "brightness"));
     const before = doc.state.timeline.tracks[0]!.clips[0]!.effects[0]!.keyframes;
 
     for (let step = 0; step < 200; step += 1) {
       doc.dispatch(
-        cmd.keyframeAdd(clip.id, "brightness", "amount", SECOND, {
+        cmd.keyframeAdd(on.clip(clip.id), "brightness", "amount", SECOND, {
           kind: "float",
           value: step / 200,
         }),

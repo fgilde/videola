@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { EffectParamSnapshot, ParamValue, Project } from "@videola/core";
+import type {
+  EffectParamSnapshot,
+  ParamValue,
+  Project,
+  TransformSnapshot,
+} from "@videola/core";
 
 import { Compositor } from "./compositor";
 import { createContext } from "./context";
@@ -94,8 +99,9 @@ function render(
   at: number,
   frames: ReadonlyMap<string, VideoFrame>,
   params: EffectParamSnapshot = new Map(),
+  transforms: TransformSnapshot = new Map(),
 ): void {
-  compositor.render(scene, at, frames, params);
+  compositor.render(scene, at, frames, params, transforms);
 }
 
 const uploads = (recording: Recording): unknown[] =>

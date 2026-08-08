@@ -1,6 +1,6 @@
 import { frameDuration, timeToSeconds } from "@videola/core";
 
-import type { EffectParams, Project, Rate, SourceTimes, Time } from "@videola/core";
+import type { EffectParams, Project, Rate, SourceTimes, Time, Transforms } from "@videola/core";
 
 import { AudioGraph, hasAudibleClips } from "../audio/graph";
 import { AudioSource } from "../decode/audio-source";
@@ -39,6 +39,7 @@ export interface ExportInput {
   project: Project;
   sourceTimes: SourceTimes;
   effectParams: EffectParams;
+  transforms: Transforms;
   options: ExportOptions;
   onProgress?: (done: number, total: number) => void;
   createWorker?: () => Worker;
@@ -75,6 +76,7 @@ export function exportFrames(input: ExportInput): ExportFrame[] {
     at,
     sources: input.sourceTimes(at),
     params: input.effectParams(at),
+    transforms: input.transforms(at),
   }));
 }
 

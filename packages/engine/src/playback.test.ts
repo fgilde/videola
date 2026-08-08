@@ -233,6 +233,7 @@ function rig(times: SourceTimes = () => new Map()): Rig {
     graph,
     sourceTimes,
     effectParams: () => new Map(),
+    transforms: () => new Map(),
     createFrameSource: sources.create,
   });
   const recording = recordingGl(LOSE_CONTEXT);
@@ -523,6 +524,7 @@ describe("Playback", () => {
       graph: new AudioGraph(ctx, tone(ctx)),
       sourceTimes: times((at) => [["clp_1", at]]),
       effectParams: () => new Map(),
+    transforms: () => new Map(),
       createFrameSource: sources.create,
     });
     await playback.load(project([clip("clp_1")]));
@@ -730,6 +732,7 @@ describe("Playback against the real core", () => {
       graph: new AudioGraph(ctx, tone(ctx)),
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       createFrameSource: sources.create,
     });
     const canvas = document.createElement("canvas");

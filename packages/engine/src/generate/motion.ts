@@ -34,9 +34,17 @@ const STILL: Phase = { opacity: 1, scale: 1, shift: 0 };
 // second interpolation next to it would be the divergence the core exists to prevent. This is a
 // declarative preset with no authored values in between, evaluated in the one place both renderers go
 // through.
-export function generatorMotion(clip: Clip, at: Time, frame: Size): Transform {
+// `base` is the clip's geometry as the core resolved it for this moment, so a keyframed title
+// animates *and* follows its preset; without one the static transform is the base, which is what
+// the value at rest means.
+export function generatorMotion(
+  clip: Clip,
+  at: Time,
+  frame: Size,
+  base: Transform = clip.transform,
+): Transform {
   const style = titleStyle(clip);
-  if (style === undefined) return clip.transform;
+  if (style === undefined) return base;
   const elapsed = at - clip.start;
   const phase = compose(
     arrive(style.animateIn, fraction(elapsed, style.animateInSeconds)),
@@ -44,12 +52,12 @@ export function generatorMotion(clip: Clip, at: Time, frame: Size): Transform {
     beat(style, elapsed),
   );
   return {
-    ...clip.transform,
-    opacity: clip.transform.opacity * phase.opacity,
-    scaleX: clip.transform.scaleX * phase.scale,
-    scaleY: clip.transform.scaleY * phase.scale,
+    ...base,
+    opacity: base.opacity * phase.opacity,
+    scaleX: base.scaleX * phase.scale,
+    scaleY: base.scaleY * phase.scale,
     // y runs down the picture, which is what makes a positive shift "below where it belongs".
-    y: clip.transform.y + phase.shift * frame.height,
+    y: base.y + phase.shift * frame.height,
   };
 }
 

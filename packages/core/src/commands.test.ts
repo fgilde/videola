@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cmd, secondsToTime, timeToSeconds } from "./commands";
+import { cmd, on, secondsToTime, timeToSeconds } from "./commands";
 import type { Command } from "./generated";
 import { COMMAND_LABELS } from "./generated";
 
@@ -33,13 +33,13 @@ describe("command factories", () => {
   });
 
   it("keyframes linearly unless told otherwise", () => {
-    const command = cmd.keyframeAdd("clp_1", "brightness", "amount", 0, {
+    const command = cmd.keyframeAdd(on.clip("clp_1"), "brightness", "amount", 0, {
       kind: "float",
       value: 0.5,
     });
     expect(command).toEqual({
       type: "keyframe.add",
-      clip: "clp_1",
+      target: { kind: "clip", clip: "clp_1" },
       effectType: "brightness",
       key: "amount",
       time: 0,

@@ -8,6 +8,8 @@ import type {
   Project,
   SourceTimes,
   Time,
+  Transforms,
+  TransformSnapshot,
 } from "@videola/core";
 
 import { Clock } from "./clock";
@@ -45,6 +47,7 @@ export interface PlaybackOptions {
   graph: AudioGraph;
   sourceTimes: SourceTimes;
   effectParams: EffectParams;
+  transforms: Transforms;
   createFrameSource?: () => FrameSource;
 }
 
@@ -56,6 +59,7 @@ export class Playback {
   #graph: AudioGraph;
   #sourceTimes: SourceTimes;
   #effectParams: EffectParams;
+  #transforms: Transforms;
   #createFrameSource: () => FrameSource;
   #clock: Clock;
   #context?: GlContext;
@@ -73,6 +77,7 @@ export class Playback {
     this.#graph = options.graph;
     this.#sourceTimes = options.sourceTimes;
     this.#effectParams = options.effectParams;
+    this.#transforms = options.transforms;
     this.#createFrameSource = options.createFrameSource ?? ((): FrameSource => new VideoSource());
     this.#clock = new Clock(options.audio);
     // Subscribed before anyone else, so a consumer's listener sees the time the picture is
@@ -228,8 +233,9 @@ export class Playback {
     // the picture that gets drawn then describe the same moment, even if the project changes
     // while a decode is in flight.
     const params = this.#effectParams(at);
-    const frames = await this.#frames(project, at, params);
-    compositor.render(project, at, frames, params);
+    const transforms = this.#transforms(at);
+    const frames = await this.#frames(project, at, params, transforms);
+    compositor.render(project, at, frames, params, transforms);
   }
 
   // ponytail: two clips of the same medium share one source, and decoding for the second can
@@ -240,8 +246,9 @@ export class Playback {
     project: Project,
     at: Time,
     params: EffectParamSnapshot,
+    transforms: TransformSnapshot,
   ): Promise<Map<string, VideoFrame>> {
-    const items = drawList(project, at, params).items;
+    const items = drawList(project, at, params, transforms).items;
     const sourceTimes = this.#sourceTimes(at);
     const found = await Promise.all(
       items.map((item) => this.#frameFor(item.clip, sourceTimes)),

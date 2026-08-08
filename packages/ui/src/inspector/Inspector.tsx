@@ -2,6 +2,7 @@ import { useMemo, type ReactElement } from "react";
 
 import {
   cmd,
+  on,
   secondsToTime,
   timeToSeconds,
   type Clip,
@@ -349,7 +350,7 @@ function Effects({
           key={manifest.id}
           type="button"
           className="v-button"
-          onClick={() => send(cmd.effectAdd(clip.id, manifest.id))}
+          onClick={() => send(cmd.effectAdd(on.clip(clip.id), manifest.id))}
         >
           {t("inspector.addEffect", { name: manifest.name[locale] })}
         </button>
@@ -384,7 +385,7 @@ function EffectParam({
   const track = effect.keyframes[param.key] ?? [];
   const keyframed = track.length > 0;
   const set = (next: number, interp: Interp = "linear"): Command =>
-    cmd.keyframeAdd(clip, effect.effectType, param.key, playhead, float(next), interp);
+    cmd.keyframeAdd(on.clip(clip), effect.effectType, param.key, playhead, float(next), interp);
 
   return (
     <ParamRow
@@ -401,7 +402,7 @@ function EffectParam({
           keyframed
             ? // Not a plain "linear": the upsert must not turn a held keyframe into a ramp.
               set(next, keyframeAt(track, playhead)?.interp ?? "linear")
-            : cmd.effectSetParam(clip, effect.effectType, param.key, float(next)),
+            : cmd.effectSetParam(on.clip(clip), effect.effectType, param.key, float(next)),
           coalesceKey,
         )
       }
@@ -410,10 +411,10 @@ function EffectParam({
         track,
         settable: inside,
         onAdd: () => send(set(value)),
-        onRemove: () => send(cmd.keyframeRemove(clip, effect.effectType, param.key, playhead)),
+        onRemove: () => send(cmd.keyframeRemove(on.clip(clip), effect.effectType, param.key, playhead)),
         onGoTo: onSeek,
         onInterp: (interp) =>
-          send(cmd.keyframeSetInterp(clip, effect.effectType, param.key, playhead, interp)),
+          send(cmd.keyframeSetInterp(on.clip(clip), effect.effectType, param.key, playhead, interp)),
       }}
     />
   );

@@ -6,6 +6,7 @@ import type {
   ParamValue,
   Project,
   Time,
+  Transform,
 } from "./generated";
 
 export interface SaveOptions {
@@ -38,10 +39,18 @@ export type SourceTimes = (at: Time) => ReadonlyMap<string, Time>;
 export type EffectParamSnapshot = ReadonlyMap<string, ReadonlyMap<string, ParamValue>>;
 export type EffectParams = (at: Time) => EffectParamSnapshot;
 
+// Where every clip the moment touches actually sits, with its keyframed fields already resolved.
+// `clip.transform` is only the value at rest; nothing that draws may read it directly, or the
+// preview and the export would each be free to interpolate their own way. Batched like the two
+// above, and for the same reason.
+export type TransformSnapshot = ReadonlyMap<string, Transform>;
+export type Transforms = (at: Time) => TransformSnapshot;
+
 export interface DocumentBackend {
   state(): Project;
   sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
   effectParamsAt(at: Time): EffectParamSnapshot;
+  transformsAt(at: Time): TransformSnapshot;
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
