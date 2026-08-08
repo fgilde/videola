@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { cmd, on, secondsToTime } from "@videola/core";
+import { NTSC_FIXTURE, tinyMp4 } from "@videola/engine/src/decode/fixture-mp4";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Api } from "./api";
@@ -60,9 +61,13 @@ function referencesIn(value: unknown): string[] {
   );
 }
 
-const MEDIA_BYTES = Buffer.from("pretend this is an mp4");
+// Two real, probeable files that differ: the import describes what it reads, so bytes no
+// demuxer can read never reach the library.
+const MEDIA_BYTES = Buffer.from(await tinyMp4().arrayBuffer());
 const MEDIA_ID = `med_${createHash("sha256").update(MEDIA_BYTES).digest("hex")}`;
-const OTHER_BYTES = Buffer.from("a second pretend mp4");
+const OTHER_BYTES = Buffer.from(
+  await tinyMp4({ ...NTSC_FIXTURE, sampleCount: 20 }).arrayBuffer(),
+);
 const OTHER_MEDIA_ID = `med_${createHash("sha256").update(OTHER_BYTES).digest("hex")}`;
 
 interface Fixture {
@@ -416,6 +421,27 @@ describe("failures an agent has to read", () => {
 
     expect(rejected.isError).toBe(true);
     expect(rejected.text).toContain("trk_nope");
+  });
+
+  it("reports a time that is not a whole number of flicks instead of rounding it", async () => {
+    const created = parse((await call("project_create")).text);
+
+    const refused = await call("project_getFrame", { project: created.id, at: [0.5] });
+
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("flicks");
+  });
+
+  it("refuses more instants than it renders rather than rendering some of them", async () => {
+    const created = parse((await call("project_create")).text);
+
+    const refused = await call("project_getFrame", {
+      project: created.id,
+      at: Array.from({ length: 9 }, () => 0),
+    });
+
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("8");
   });
 
   it("reports an unknown tool by name", async () => {

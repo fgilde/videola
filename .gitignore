@@ -48,3 +48,6 @@ Thumbs.db
 
 # Prozessdokumentation der Agenten: Arbeitsmaterial, keine Quelle.
 .superpowers/
+
+# Renderer-Bundle des Servers
+apps/server/renderer/bundle.js

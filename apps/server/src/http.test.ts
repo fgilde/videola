@@ -5,11 +5,16 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 
 import { cmd } from "@videola/core";
+import { tinyMp4 } from "@videola/engine/src/decode/fixture-mp4";
 import { COMMAND_LABELS } from "@videola/core/src/generated/commandLabels";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Api } from "./api";
 import { createRequestListener, type HttpOptions } from "./http";
+
+// A real, probeable file: the import describes what it reads, and bytes no demuxer can read
+// are refused before they reach the library.
+const MP4 = Buffer.from(await tinyMp4().arrayBuffer());
 
 let root = "";
 let server: Server;
@@ -184,7 +189,7 @@ describe("media and archives over HTTP", () => {
 
     const imported = await json(
       `/api/projects/${id}/media?name=clip.mp4&mime=${encodeURIComponent("video/mp4")}`,
-      { method: "POST", body: "pretend this is an mp4" },
+      { method: "POST", body: MP4 },
     );
 
     expect(imported.status).toBe(201);
@@ -193,7 +198,7 @@ describe("media and archives over HTTP", () => {
   });
 
   it("imports a file from the storage root", async () => {
-    await writeFile(join(root, "clip.mp4"), "pretend this is an mp4");
+    await writeFile(join(root, "clip.mp4"), MP4);
     const id = await newProject();
 
     const imported = await json(`/api/projects/${id}/media?path=clip.mp4`, { method: "POST" });
@@ -285,14 +290,30 @@ describe("the body cap", () => {
   });
 
   it("accepts a body at the limit", async () => {
-    await start({ maxBodyBytes: 64 });
+    await start({ maxBodyBytes: MP4.length });
     const id = await newProject();
 
     const response = await json(
       `/api/projects/${id}/media?name=a.mp4&mime=${encodeURIComponent("video/mp4")}`,
-      { method: "POST", body: "x".repeat(64) },
+      { method: "POST", body: MP4 },
     );
 
     expect(response.status).toBe(201);
+  });
+});
+
+describe("a still over HTTP", () => {
+  beforeEach(() => start());
+
+  it("insists on an instant and refuses one that is not a whole number", async () => {
+    const id = await newProject();
+
+    expect((await json(`/api/projects/${id}/frame`)).status).toBe(400);
+    expect((await json(`/api/projects/${id}/frame?at=half`)).status).toBe(400);
+    expect((await json(`/api/projects/${id}/frame?at=0&width=1.5`)).status).toBe(400);
+  });
+
+  it("is unknown for an unknown project before it renders anything", async () => {
+    expect((await json("/api/projects/prj_nope/frame?at=0")).status).toBe(404);
   });
 });

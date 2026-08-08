@@ -115,11 +115,16 @@ export async function runExport(
   return new Uint8Array(buffer);
 }
 
-interface VideoPass {
-  compositor: Compositor;
-  video: CanvasSource;
+// What it takes to answer "what pictures are on screen at this instant": the decoders and the
+// painter. A still needs exactly this and nothing else the encoder carries.
+export interface PictureSources {
   sources: SourcePool;
   generated: GeneratorFrames;
+}
+
+interface VideoPass extends PictureSources {
+  compositor: Compositor;
+  video: CanvasSource;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -129,7 +134,7 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   const origin = request.frames[0]!.at;
   let index = 0;
   for (const frame of request.frames) {
-    const pictures = await gather(pass, hashes, request.project, frame);
+    const pictures = await gatherPictures(pass, hashes, request.project, frame);
     // Nothing is awaited between the last frame arriving and the upload, and `CanvasSource.add`
     // captures the canvas before it returns -- so the pictures are alive for the render and the
     // render is on the canvas before anything else can touch it.
@@ -149,8 +154,8 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
 // Both halves of the picture, through the same draw list the preview uses: decoded media and painted
 // generators. Two lists would be two answers to "what is on screen", and a title that appears in the
 // preview and not in the file is the kind of divergence nobody finds until the file is delivered.
-async function gather(
-  pass: VideoPass,
+export async function gatherPictures(
+  pass: PictureSources,
   hashes: ReadonlyMap<string, string>,
   project: Project,
   frame: ExportFrame,
@@ -216,7 +221,7 @@ export function* audioChunks(audio: ExportAudio, chunkFrames: number): Generator
 // five hundred decoders and their frame budgets at once. Closing a source once its clip is behind
 // the export's position is the way out; it needs the run to know that a clip is finished rather
 // than merely absent from this one frame, or an interleaved cut reopens decoders all day.
-class SourcePool {
+export class SourcePool {
   #create: () => FrameSource;
   #open = new Map<string, FrameSource | undefined>();
 

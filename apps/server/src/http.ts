@@ -110,6 +110,21 @@ async function route(
   if (action === "validate" && method === "GET") {
     return { status: 200, body: { findings: api.validate(id) } };
   }
+  if (action === "frame" && method === "GET") {
+    // One picture, as a picture: an agent or a browser that follows this URL gets something it can
+    // look at, not base64 in a JSON envelope. The MCP tool is the one that renders several at once.
+    const [png] = await api.frames(id, [flicksParam(url, "at")], numberParam(url, "width"));
+    return { status: 200, body: undefined, bytes: png, contentType: "image/png" };
+  }
+  if (action === "peaks" && method === "GET") {
+    const peaks = await api.audioPeaks(
+      id,
+      flicksParam(url, "from"),
+      flicksParam(url, "to"),
+      numberParam(url, "buckets"),
+    );
+    return { status: 200, body: peaks };
+  }
   if (action === "media" && method === "POST") {
     return { status: 201, body: { mediaId: await importMedia(api, id, request, url, maxBodyBytes) } };
   }
@@ -128,6 +143,25 @@ async function route(
     }
   }
   return notFound();
+}
+
+function flicksParam(url: URL, name: string): number {
+  const raw = url.searchParams.get(name);
+  if (raw === null) throw new ApiError(400, "badRequest", `${name} is required`);
+  return integer(raw, name);
+}
+
+function numberParam(url: URL, name: string): number | undefined {
+  const raw = url.searchParams.get(name);
+  return raw === null ? undefined : integer(raw, name);
+}
+
+function integer(raw: string, name: string): number {
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) {
+    throw new ApiError(400, "badRequest", `${name} must be a whole number, not ${raw}`);
+  }
+  return value;
 }
 
 async function createProject(api: Api, payload: unknown): Promise<unknown> {

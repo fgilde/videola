@@ -1,11 +1,14 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 
 import { mediaKind } from "@videola/core";
+import { probe } from "@videola/engine/src/decode/demuxer";
+import { describeMedia } from "@videola/media";
 import type { Command, DispatchResult, LoadWarning, Project } from "@videola/core";
 import type { DocumentBackend } from "@videola/core";
 
+import { measurePeaks, RenderError, renderStills, type AudioPeaks, type RenderCode } from "./frames";
 import { describeProject, validateProject, type Finding } from "./inspect";
 import { PathOutsideRoot, Storage, writeAtomic } from "./paths";
 import { openBackend } from "./wasm";
@@ -162,10 +165,22 @@ export class Api {
     return this.importBytes(id, basename(given), mime ?? mimeFor(given), bytes);
   }
 
-  importBytes(id: string, name: string, mime: string, bytes: Uint8Array): string {
+  // Two steps, in this order, because the core's `media.import` lets the first import of an id win:
+  // the described entry has to be in the library before `importMedia` adds its own, which knows
+  // only the name and the size. Without the description a clip of this medium has no dimensions and
+  // no channel count, and the timeline then draws nothing and plays nothing — silently.
+  async importBytes(id: string, name: string, mime: string, bytes: Uint8Array): Promise<string> {
     const session = this.#session(id);
+    const file = { name, type: mime, size: bytes.length };
     try {
-      const { id: mediaId } = session.backend.importMedia(name, mime, mediaKind(mime), bytes);
+      const kind = mediaKind(mime);
+      const hash = createHash("sha256").update(bytes).digest("hex");
+      // Not a copy: the demuxer wants a Blob, and nothing that reaches here is backed by a
+      // SharedArrayBuffer, which is the only case the wider type stands for.
+      const source = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime });
+      const asset = describeMedia(file, kind, await probe(source), hash);
+      session.backend.dispatch({ command: { type: "media.import", asset } });
+      const { id: mediaId } = session.backend.importMedia(name, mime, kind, bytes);
       session.revision += 1;
       return mediaId;
     } catch (error) {
@@ -205,6 +220,41 @@ export class Api {
 
   validate(id: string): readonly Finding[] {
     return validateProject(this.state(id));
+  }
+
+  // The one tool that lets an agent see its work rather than assert it. Nothing here decides what
+  // is on screen: the archive carries the project the core normalised, and the renderer walks the
+  // same draw list the editor draws. What the server owns is how big the answer may get.
+  async frames(id: string, times: readonly number[], width?: number): Promise<Uint8Array[]> {
+    const settings = this.state(id).settings;
+    // Both before the archive is built: a rejected argument must not cost a caller the whole
+    // project written out to bytes first.
+    const size = fit(settings.width, settings.height, width);
+    const at = instants(times);
+    return this.#rendered(() => renderStills({ archive: this.archive(id), times: at, ...size }));
+  }
+
+  // What a still is for the picture, this is for the sound: the mixed, levelled result of the whole
+  // timeline over a range, reduced to two extremes per bucket. An agent cannot listen, but it can
+  // see that a voice-over sits where it was put and that nothing clips.
+  async audioPeaks(id: string, from: number, to: number, buckets?: number): Promise<AudioPeaks> {
+    this.#session(id);
+    const range = span(from, to);
+    const count = bucketCount(buckets);
+    return this.#rendered(() =>
+      measurePeaks({ archive: this.archive(id), ...range, buckets: count }),
+    );
+  }
+
+  async #rendered<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      if (error instanceof RenderError) {
+        throw new ApiError(RENDER_STATUS[error.code], error.code, error.message);
+      }
+      throw error;
+    }
   }
 
   #step(id: string, run: (backend: DocumentBackend) => DispatchResult): ApplyResult {
@@ -284,6 +334,70 @@ export class Api {
       throw new ApiError(404, "noSuchFile", messageOf(error));
     }
   }
+}
+
+const RENDER_STATUS: Record<RenderCode, number> = {
+  rendererUnavailable: 503,
+  renderFailed: 500,
+  renderTimeout: 504,
+};
+
+// Small enough that a picture costs an agent a fraction of what a frame of the project would, big
+// enough to see a cut, a title and a colour grade in. The project's own aspect ratio decides the
+// height, so a still is never a letterboxed lie about the shape of the timeline.
+export const DEFAULT_FRAME_WIDTH = 640;
+const MIN_FRAME_WIDTH = 16;
+const MAX_FRAME_WIDTH = 1920;
+const MAX_FRAMES_PER_CALL = 8;
+
+function fit(
+  projectWidth: number,
+  projectHeight: number,
+  width?: number,
+): { width: number; height: number } {
+  if (width !== undefined && !Number.isSafeInteger(width)) {
+    throw new ApiError(400, "badWidth", "width must be a whole number of pixels");
+  }
+  const chosen = Math.min(MAX_FRAME_WIDTH, Math.max(MIN_FRAME_WIDTH, width ?? DEFAULT_FRAME_WIDTH));
+  return { width: chosen, height: Math.max(1, Math.round((chosen * projectHeight) / projectWidth)) };
+}
+
+function instants(times: readonly number[]): number[] {
+  if (times.length === 0) throw new ApiError(400, "noTimes", "give at least one time in flicks");
+  if (times.length > MAX_FRAMES_PER_CALL) {
+    throw new ApiError(400, "tooManyFrames", `at most ${MAX_FRAMES_PER_CALL} times per call`);
+  }
+  return times.map((at) => {
+    if (!Number.isSafeInteger(at) || at < 0) {
+      throw new ApiError(400, "badTime", `not a time in flicks: ${at}`);
+    }
+    return at;
+  });
+}
+
+// Enough buckets to see where a phrase sits, few enough that an answer stays readable. The range
+// is capped because the sound is rendered offline in full before a single peak is computed: ten
+// minutes is already a wait, an hour would be a hang.
+export const DEFAULT_PEAK_BUCKETS = 64;
+const MAX_PEAK_BUCKETS = 512;
+const MAX_PEAK_SPAN = 10 * 60 * 705_600_000;
+
+function bucketCount(buckets?: number): number {
+  if (buckets !== undefined && !Number.isSafeInteger(buckets)) {
+    throw new ApiError(400, "badBuckets", "buckets must be a whole number");
+  }
+  return Math.min(MAX_PEAK_BUCKETS, Math.max(1, buckets ?? DEFAULT_PEAK_BUCKETS));
+}
+
+function span(from: number, to: number): { from: number; to: number } {
+  if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0) {
+    throw new ApiError(400, "badTime", "from and to are whole numbers of flicks");
+  }
+  if (to <= from) throw new ApiError(400, "badRange", "to must lie after from");
+  if (to - from > MAX_PEAK_SPAN) {
+    throw new ApiError(400, "rangeTooLong", `at most ${MAX_PEAK_SPAN} flicks of sound per call`);
+  }
+  return { from, to };
 }
 
 function hasChange(result: DispatchResult): boolean {

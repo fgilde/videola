@@ -35,11 +35,37 @@ heap. The consequences for the interface:
 
 * **Import** takes a path inside the storage root, or a raw HTTP body. It never takes base64 — a
   video encoded into a JSON field costs a third more bytes and has to pass through a string before
-  the core sees it.
+  the core sees it. The file is probed on the way in, through the same demuxer the browser uses, so
+  the library entry carries the duration, the dimensions, the frame rate and the channel count. A
+  file no demuxer can read is refused rather than filed as an entry no clip could ever draw.
 * **Export** means writing a `.videola` archive: `PUT /api/projects/:id/file` to a path in the
   storage root, or `GET` the same route for the bytes. There is no video encoder on the server.
 * Media ids are content hashes, so importing the same file twice is idempotent and costs the budget
   once.
+
+## Seeing the result
+
+`project_getFrame` renders the project at an instant and hands back a PNG. It is the tool that makes
+agent-driven editing something other than blind flying: everything else in this interface is
+bookkeeping, and this is the one answer that says what the work looks like.
+
+There is no compositor outside the browser — `videola-render` and `videola-compositor` do not exist,
+and writing a second one would mean two renderers to keep in step. So the server drives the real one:
+it starts a **headless Chrome**, serves it a page over a loopback port behind an unguessable path,
+hands it the project as a `.videola` archive, and the page runs the same WebGL2 compositor, the same
+decoders and the same draw list the editor's preview does. `project_getAudioPeaks` rides the same
+page through the same offline audio graph the export renders with.
+
+By construction, then, a still cannot show anything the editor would not. The price, stated plainly:
+
+* **Chrome, or Chromium, has to be on the machine.** Without one, the tool fails with
+  `rendererUnavailable` and says so. It never answers with a blank picture.
+* **A browser start per call**, plus a fresh profile, so the first picture costs a second or two.
+  Ask for several instants in one call rather than several calls.
+* **`pnpm --filter videola-server build` must have run**, because the page is a bundle
+  (`apps/server/renderer/bundle.js`). A missing bundle is the same honest failure.
+* The Docker image does not carry a browser. Point `CHROME_PATH` at one, or accept that the two
+  tools fail there while everything else works.
 
 ## What is not here
 
@@ -47,9 +73,7 @@ Named explicitly, because an interface that advertises what it cannot do is wors
 
 | Missing | Why |
 |---|---|
-| `get_frame` | Needs a compositor. The browser's is WebGL2 in `@videola/engine`; the Rust one does not exist. An agent working through this server cannot see its result. |
-| `render` / export to video | Same reason plus an encoder. `.videola` archives are the only output. |
-| `get_audio_peaks` | Needs a decoder outside the browser. |
+| `render` / export to video | Needs an encoder as well as a compositor. `.videola` archives are the only output. |
 | `list_templates`, `template.instantiate` | The template format is M5. |
 | WebSocket `/api/events`, MCP over SSE or streamable HTTP | Nothing pushes yet: the command response already carries the patch, and there is no render progress to stream. MCP is stdio only. |
 
@@ -74,6 +98,8 @@ Configuration is environment only:
 | `VIDEOLA_MAX_BODY_BYTES` | `536870912` | Counted as chunks arrive, not taken from `Content-Length`. |
 | `VIDEOLA_LOCALE` | `en` | Written into the manifest of saved archives. |
 | `VIDEOLA_WASM` | resolved from `@videola/core` | Path to `videola_core_bg.wasm`, if it is not where the package resolver finds it. |
+| `CHROME_PATH` | the usual install locations | The browser `project_getFrame` renders in. When set it is an instruction, not a candidate: a path that points at nothing is an error rather than a fallback. |
+| `VIDEOLA_RENDERER` | `apps/server/renderer/bundle.js` | The page bundle, if it is not beside the server. |
 
 For an MCP client, that is a stdio server entry:
 
@@ -130,6 +156,8 @@ core's own message.
 | `POST /api/projects/:id/undo`, `…/redo` | |
 | `GET /api/projects/:id/describe` | The text summary. |
 | `GET /api/projects/:id/validate` | Consistency findings. |
+| `GET /api/projects/:id/frame?at=…&width=…` | The project at that instant, as `image/png`. `at` is in flicks; `width` defaults to 640 and is clamped to 16…1920, and the project's aspect ratio decides the height. |
+| `GET /api/projects/:id/peaks?from=…&to=…&buckets=…` | `{ "min": [...], "max": [...] }`, two extremes per bucket from −1 to 1. |
 | `POST /api/projects/:id/media?path=…` | Imports from the storage root. `&mime=` overrides the type guessed from the extension. |
 | `POST /api/projects/:id/media?name=…&mime=…` | Imports the raw request body. |
 | `GET /api/projects/:id/file` | The `.videola` archive as `application/zip`. |
@@ -142,7 +170,7 @@ dot replaced by an underscore (`clip.split` becomes `clip_split`). Each takes th
 plus `project`, and optionally `ifRevision`; the `type` discriminant is not an input, because the tool
 name already fixes it. Adding a command to the Rust enum adds a tool without anyone editing the server.
 
-Thirteen more tools cover what the catalogue does not:
+Fifteen more tools cover what the catalogue does not:
 
 | Tool | Purpose |
 |---|---|
@@ -152,6 +180,8 @@ Thirteen more tools cover what the catalogue does not:
 | `project_get` | The full model as JSON. Large. |
 | `project_describe` | A compact text summary: tracks, clips with their times, effects, library, markers. |
 | `project_validate` | Overlapping clips, clips referencing media the library does not declare, empty durations, fades longer than their clip. |
+| `project_getFrame` | Render up to eight instants and return them as PNG images. The only tool that shows rather than tells. |
+| `project_getAudioPeaks` | The shape of the sound over a range: two extremes per bucket, mixed and levelled as the export would render it. |
 | `project_save` | Write a `.videola` archive into the storage root. |
 | `project_close` | Drop it. |
 | `media_importFile` | Read a media file into the library; returns its content-hash id. |
@@ -161,32 +191,46 @@ Thirteen more tools cover what the catalogue does not:
 A rejected command comes back as tool output with `isError`, carrying the core's reason — not as a
 protocol error, which would tell the agent the tool is broken and hide why.
 
-`project_describe` matters more than its size suggests. Without a frame renderer it is the only way
-an agent can check what it actually built, so read it after a change rather than assuming the change
-landed as intended.
+`project_describe` and `project_getFrame` are the pair worth using after every change: the first says
+what is on the timeline, the second says what it looks like. Reading one of them beats assuming the
+change landed as intended; a wrong clip on the right track passes the first and fails the second.
 
 ## Example flows
 
 Times are in **flicks**: 705 600 000 flicks are one second. A frame at 30 fps is 23 520 000.
 
-### Cut a clip and save the result
+### Cut a clip, then look at what you cut
 
 ```
 project_create                          → { id: "prj_…" }
 media_importFile   project, "raw/interview.mp4"
                                         → { mediaId: "med_<sha256>" }
 track_add          project, kind "video", name "V1"
-project_describe   project              → read the track id off the summary
+project_describe   project              → the track id, and the medium's length
 clip_add           project, track, source { kind: "media", media: mediaId },
                    start 0, duration 705600000
-project_describe   project              → read the clip id
+project_describe   project              → the clip id
 clip_split         project, clip, at 352800000
 clip_remove        project, <the later half>
+
+project_getFrame   project, at [0, 264600000, 352800000], width 480
+                                        → three PNGs: the opening frame, one just before
+                                          the cut, and the first instant after it
+project_getAudioPeaks project, from 0, to 352800000, buckets 32
+                                        → the shape of the sound over what is left
 project_save       project, "out/interview-cut.videola"
 ```
 
-`clip_add` needs a duration; there is no "whole medium" shorthand, because the server cannot probe a
-file's length. Take it from the source's metadata on your side, or trim afterwards.
+The third instant is the one worth asking for: it is the first moment past the cut. If the removal
+worked, that picture is the project background — and if it still shows the interview, the wrong half
+was removed. No amount of `project_describe` shows that as directly.
+
+`project_getFrame` takes an array, so ask for every instant you care about in one call: each call is a
+browser start.
+
+`clip_add` needs a duration; there is no "whole medium" shorthand. The library entry knows the
+length — `project_describe` prints it, `project_get` has it as `duration` in flicks — so read it from
+there rather than guessing.
 
 ### Fade a clip in with a keyframed effect
 

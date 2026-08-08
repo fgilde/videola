@@ -145,6 +145,24 @@ function options(over) {
   };
 }
 
+const PNG_MAGIC = [137, 80, 78, 71, 13, 10, 26, 10];
+
+async function isPng(blob) {
+  const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  return PNG_MAGIC.every((byte, index) => head[index] === byte);
+}
+
+// Through a decoder that knows nothing about how the picture was made, the way anything reading
+// a still would: bytes in, pixel out.
+async function readStill(blob, x, y) {
+  const bitmap = await createImageBitmap(blob);
+  const { context } = canvasOf(bitmap.width, bitmap.height);
+  context.drawImage(bitmap, 0, 0);
+  const size = [bitmap.width, bitmap.height];
+  bitmap.close();
+  return { size, pixel: Array.from(context.getImageData(x, y, 1, 1).data) };
+}
+
 // Reads the file back the way anything else would: through this package's own demuxer, and
 // through a decoder that knows nothing about how the file was made.
 async function readBack(bytes) {
@@ -202,6 +220,7 @@ async function main() {
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
       transforms: doc.transformsAt,
+      transforms: doc.transformsAt,
       options: options(),
       createWorker: worker,
       onProgress: (done, total) => seen.push([done, total]),
@@ -252,6 +271,61 @@ async function main() {
     check("the sound is in there where the browser can encode it", hasAudio, chosenHasAudio);
   });
 
+  // A still is the whole of what an agent sees of its own work, so what is checked is the colour
+  // at the instant asked for: four instants, three different pictures, one of them past a cut.
+  // Anything that renders one instant and hands it out four times fails on the second.
+  await test("a still is the picture of the instant it was asked for", async () => {
+    const FRAME = SECOND / 30;
+    const times = [0, 10 * FRAME, HALF, HALF + 5 * FRAME];
+    const stills = await R.renderStills({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
+      times,
+      width: WIDTH,
+      height: HEIGHT,
+    });
+    check("one picture per instant", stills.length, times.length);
+    check("and every one of them a PNG", await Promise.all(stills.map(isPng)), times.map(() => true));
+
+    const read = [];
+    for (const still of stills) read.push(await readStill(still, WIDTH / 2, HEIGHT / 2));
+    check(
+      "at the size that was asked for",
+      read.map((still) => still.size),
+      times.map(() => [WIDTH, HEIGHT]),
+    );
+    check(
+      "each showing what its clip reads at that instant",
+      read.map((still) => still.pixel.slice(0, 3)),
+      [colourAt(0), colourAt(10), colourAt(0), colourAt(5)],
+      12,
+    );
+    check(
+      "opaque where a clip covers the frame",
+      read.map((still) => still.pixel[3]),
+      times.map(() => 255),
+    );
+  });
+
+  await test("no instants asked for is refused rather than answered with nothing", async () => {
+    let message = "resolved";
+    try {
+      await R.renderStills({
+        project: doc.state,
+        sourceTimes: doc.sourceTimesAt,
+        effectParams: doc.effectParamsAt,
+        times: [],
+        width: WIDTH,
+        height: HEIGHT,
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    check("and says so with a catalogue key", message, "error.stillNoTimes");
+  });
+
   // The draw list maps into clip space from the project's own size, so a different output size is
   // meant to cost nothing but pixels. Meant to is not the same as does.
   await test("exporting at a size the project is not", async () => {
@@ -259,6 +333,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       transforms: doc.transformsAt,
       options: options({ width: WIDTH / 2, height: HEIGHT / 2 }),
       createWorker: worker,
@@ -304,6 +379,7 @@ async function main() {
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
       transforms: doc.transformsAt,
+      transforms: doc.transformsAt,
       options: options(),
       createWorker: worker,
     });
@@ -319,6 +395,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       transforms: doc.transformsAt,
       options: options(),
       createWorker: worker,
@@ -338,6 +415,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       transforms: doc.transformsAt,
       options: options({ range: { from: 0, to: 0 } }),
       createWorker: worker,

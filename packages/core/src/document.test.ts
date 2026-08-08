@@ -55,6 +55,7 @@ function fakeBackend(): DocumentBackend {
       id: "med_abc",
       result: { patch: [], label: "cmd.media.import", canUndo: true, canRedo: false },
     })),
+    mediaBytes: () => undefined,
     warnings: () => [],
   };
 }

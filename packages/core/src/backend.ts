@@ -63,5 +63,9 @@ export interface DocumentBackend {
   // so unlike `save` there is nothing for the caller to gather first.
   saveAsTemplate(options: SaveOptions, id: string): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
+  // What the core itself holds for a medium: the entry a `.videola` brought with it, or the bytes
+  // `importMedia` was handed. `undefined` where the library names a medium whose bytes only ever
+  // lived in the caller's store, which is the ordinary case in the browser -- OPFS has them there.
+  mediaBytes(id: string): Uint8Array<ArrayBuffer> | undefined;
   warnings(): LoadWarning[];
 }
