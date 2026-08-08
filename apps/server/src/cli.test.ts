@@ -82,6 +82,20 @@ describe("apply", () => {
     expect(out.join("")).toContain(expected);
   });
 
+  // The name is what the editor shows for the medium, and the archive travels: the caller's whole
+  // directory tree has no business being in a file they hand to someone else.
+  it("names the medium after the file, not after the path it came from", async () => {
+    const media = await file("tone.wav", "bytes");
+    const archive = join(dir, "named.videola");
+
+    await cli("apply", "--media", media, "--out", archive);
+    out = [];
+    await cli("describe", archive);
+
+    expect(out.join("")).toContain("tone.wav [");
+    expect(out.join("")).not.toContain(dir);
+  });
+
   it("refuses a file type it cannot name", async () => {
     const media = await file("notes.xyz", "whatever");
 

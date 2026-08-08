@@ -148,8 +148,8 @@ async function readCommands(path: string): Promise<readonly Command[]> {
   return commands as readonly Command[];
 }
 
-function fail(write: (line: string) => void, message: string): number {
-  write(`videola: ${message}\n`);
+function fail(warn: (line: string) => void, message: string): number {
+  warn(`videola: ${message}\n`);
   return 1;
 }
 
