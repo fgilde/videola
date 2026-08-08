@@ -1,8 +1,8 @@
 # Commands and undo
 
 Every edit is a serialisable command. There is no code path that mutates the project directly, which
-is what makes undo, and later a REST API and an MCP server, fall out of one mechanism instead of
-three.
+is what makes undo, the HTTP API and the MCP server fall out of one mechanism instead of three — see
+[The API and the MCP server](/guide/api-and-mcp) for the two that face outward.
 
 The bus lives in `crates/videola-core/src/command`, the history in
 `crates/videola-core/src/history.rs`, and the two are joined by `Document` in
