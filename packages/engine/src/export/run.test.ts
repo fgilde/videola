@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { EXPORT_FORMATS } from "./format";
 import { EXPORT_CANCELLED, exportFrames, frameTimes, startExport } from "./run";
 
-import type { Project, Time } from "@videola/core";
+import type { Project, Time, Transform } from "@videola/core";
 import type { ExportRequest } from "./encode";
 import type { ExportInput, ExportMessage } from "./run";
 
@@ -83,6 +83,22 @@ describe("exportFrames", () => {
     expect(asked).toEqual(frames.map((frame) => frame.at));
     expect(frames.map((frame) => frame.sources.get("clp_0"))).toEqual(
       frames.map((frame) => frame.at * 2),
+    );
+  });
+
+  // The export's half of "keyframes reach the picture". A frame carrying no geometry is drawn from
+  // the static transform, and the file then differs from the preview it was checked against.
+  it("carries the geometry the core resolved for each output frame", () => {
+    const placed = (at: Time): Transform =>
+      ({ x: at, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5, opacity: 1,
+         crop: { left: 0, top: 0, right: 0, bottom: 0 } });
+    const frames = exportFrames(
+      input({ transforms: (at) => new Map([["clp_0", placed(at)]]) }),
+    );
+
+    expect(frames.length).toBeGreaterThan(1);
+    expect(frames.map((frame) => frame.transforms.get("clp_0")?.x)).toEqual(
+      frames.map((frame) => frame.at),
     );
   });
 });

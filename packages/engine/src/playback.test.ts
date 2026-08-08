@@ -6,7 +6,16 @@ import { cmd, createWasmBackend, FLICKS_PER_SECOND, VideolaDocument } from "@vid
 import { OfflineAudioContext } from "node-web-audio-api";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Clip, MediaAsset, Project, SourceTimes, Time, Track } from "@videola/core";
+import type {
+  Clip,
+  MediaAsset,
+  Project,
+  SourceTimes,
+  Time,
+  Track,
+  Transform,
+  Transforms,
+} from "@videola/core";
 
 import { initSync } from "../../core/src/wasm/videola_core.js";
 import { AudioGraph } from "./audio/graph";
@@ -221,7 +230,7 @@ interface Rig {
   sourceTimes: SourceTimes;
 }
 
-function rig(times: SourceTimes = () => new Map()): Rig {
+function rig(times: SourceTimes = () => new Map(), transforms: Transforms = () => new Map()): Rig {
   const transport = new FakeTransport();
   const sources = new FakeSources();
   const ctx = new OfflineAudioContext(2, SAMPLE_RATE, SAMPLE_RATE);
@@ -233,7 +242,7 @@ function rig(times: SourceTimes = () => new Map()): Rig {
     graph,
     sourceTimes,
     effectParams: () => new Map(),
-    transforms: () => new Map(),
+    transforms,
     createFrameSource: sources.create,
   });
   const recording = recordingGl(LOSE_CONTEXT);
@@ -255,6 +264,13 @@ const uploads = (recording: Recording): unknown[] =>
   recording.named("texImage2D").map((call) => call.args[5]);
 
 const renders = (recording: Recording): number => recording.named("clear").length;
+
+// The horizontal translation of every quad matrix the compositor handed the driver. Column-major,
+// so the offset sits at index 6 of the value array.
+const shifts = (recording: Recording): number[] =>
+  recording
+    .named("uniformMatrix3fv")
+    .map((call) => (call.args[2] as number[])[6] ?? Number.NaN);
 
 let animationFrames = new Map<number, FrameRequestCallback>();
 let nextHandle = 1;
@@ -410,6 +426,38 @@ describe("Playback", () => {
 
     expect(sources.opened).toEqual([HASH, OTHER_HASH]);
     expect(uploads(recording)).toHaveLength(1);
+  });
+
+  // The preview's half of "keyframes reach the picture": the core resolves a transform per moment,
+  // and the quad the driver is handed has to move with it. Playback asking for the snapshot and
+  // then dropping it looks identical from every other assertion in this file.
+  it("places the picture by the transform the core resolved for that moment", async () => {
+    const placed = (at: Time): Transform => ({
+      x: at / SECOND === 0 ? 0 : 480,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      rotation: 0,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      opacity: 1,
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+    });
+    const { playback, recording } = rig(
+      times((at) => [["clp_1", at]]),
+      (at) => new Map([["clp_1", placed(at)]]),
+    );
+    await playback.load(project([clip("clp_1")]));
+
+    playback.seek(0);
+    await settle();
+    playback.seek(SECOND);
+    await settle();
+
+    // Not compared against zero: the quad's own anchor already sits in the matrix. What the
+    // snapshot has to change is the difference between the two moments.
+    const [still, moved] = shifts(recording);
+    expect(moved).toBeGreaterThan(still ?? Number.NaN);
   });
 
   it("drops the ticks a decode overtook and paints the newest position", async () => {

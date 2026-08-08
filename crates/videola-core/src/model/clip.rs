@@ -369,6 +369,18 @@ mod tests {
         assert_eq!(clip.transform_at(Time::from_seconds(1.0)), clip.transform);
     }
 
+    // `normalize` sorts keyframe tracks but does not drop empty ones, and `keyframe.remove` is the
+    // only thing that ever would -- so `{"keyframes": {"x": []}}` is a project that loads. The
+    // field then has to keep its static value rather than fall to whatever an empty track suggests.
+    #[test]
+    fn an_empty_track_leaves_the_field_at_its_static_value() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.x = 12.0;
+        clip.keyframes.insert("x".into(), Vec::new());
+
+        assert_eq!(clip.transform_at(Time::from_seconds(1.0)).x, 12.0);
+    }
+
     // A hand-authored project can put any `ParamValue` on any track. A colour is not a transform
     // field, and taking its first channel would be worse than leaving the field alone.
     #[test]
