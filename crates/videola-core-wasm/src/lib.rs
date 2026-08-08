@@ -44,6 +44,17 @@ impl WasmDocument {
         })
     }
 
+    /// A project state on its own, without the media a `.videola` carries. That is what makes an
+    /// autosave affordable: the assets already sit in the host's storage under their content hash,
+    /// so a snapshot is the timeline and nothing else.
+    #[wasm_bindgen(js_name = fromProject)]
+    pub fn from_project(project: JsValue) -> std::result::Result<WasmDocument, JsError> {
+        let project: videola_core::model::Project = serde_wasm_bindgen::from_value(project)?;
+        Ok(WasmDocument {
+            host: DocumentHost::from_project(project).map_err(to_js)?,
+        })
+    }
+
     /// The shipped catalogue, whole: manifest and project together, because the gallery draws its
     /// preview from the timeline the template will actually build. There is nothing to keep back —
     /// none of them carries media.

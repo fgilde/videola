@@ -332,11 +332,6 @@ pub(super) fn group(target: &mut Project, clips: &[ClipId]) -> Result<()> {
 // nesting depth cap applies -- folding a stack of compounds one level too deep must leave the
 // timeline as it was rather than half emptied.
 pub(super) fn nest(target: &mut Project, clips: &[ClipId]) -> Result<()> {
-    if clips.is_empty() {
-        return Err(CoreError::InvalidArgument(
-            "nesting needs at least one clip".into(),
-        ));
-    }
     let mut located: Vec<(usize, usize)> = Vec::new();
     for id in clips {
         let found = target
@@ -353,8 +348,17 @@ pub(super) fn nest(target: &mut Project, clips: &[ClipId]) -> Result<()> {
     located.sort_unstable();
 
     let at = |&(track, index): &(usize, usize)| &target.timeline.tracks[track].clips[index];
-    let span_start = located.iter().map(|found| at(found).start).min().expect("checked non-empty");
-    let span_end = located.iter().map(|found| at(found).end()).max().expect("checked non-empty");
+    let Some(&host) = located.first() else {
+        return Err(CoreError::InvalidArgument(
+            "nesting needs at least one clip".into(),
+        ));
+    };
+    let mut span_start = at(&host).start;
+    let mut span_end = at(&host).end();
+    for found in &located {
+        span_start = span_start.min(at(found).start);
+        span_end = span_end.max(at(found).end());
+    }
     let duration = checked_sub(span_end, span_start)?;
 
     let mut timeline = crate::model::Timeline::default();
@@ -387,8 +391,7 @@ pub(super) fn nest(target: &mut Project, clips: &[ClipId]) -> Result<()> {
     for &(track, index) in located.iter().rev() {
         target.timeline.tracks[track].clips.remove(index);
     }
-    let host = located[0].0;
-    let track = &mut target.timeline.tracks[host];
+    let track = &mut target.timeline.tracks[host.0];
     track.clips.push(compound);
     sort_clips(track);
     Ok(())
