@@ -24,6 +24,6 @@ export const temperature: EffectManifest = {
   inputs: 1,
   // Signed, and zero is the untouched picture: one slider that runs from cold through neutral to
   // warm is what people reach for, rather than two that fight each other.
-  params: [{ key: "amount", name: { de: "Waerme", en: "Warmth" }, default: 0, min: -1, max: 1 }],
+  params: [{ key: "amount", name: { de: "Wärme", en: "Warmth" }, default: 0, min: -1, max: 1 }],
   fragmentSource: FRAGMENT_SOURCE,
 };

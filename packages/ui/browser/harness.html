@@ -432,7 +432,7 @@ const panelRoot = T.createRoot(panel);
 
 const BRIGHTNESS = {
   id: "brightness", name: { de: "Helligkeit", en: "Brightness" }, inputs: 1,
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
 };
 
 function clipWithEffect() {
@@ -516,7 +516,7 @@ test("inspector labels are wired to their inputs", function () {
   check("every slider carries a label element the browser has bound to it",
     sliders.filter(function (input) { return input.labels.length === 1; }).length, sliders.length);
   check("and the effect parameter is named from the manifest, not from its key",
-    inPanel(".v-inspector__effect input[type=range]").labels[0].textContent, "Staerke");
+    inPanel(".v-inspector__effect input[type=range]").labels[0].textContent, "Stärke");
 });
 
 document.getElementById("out").textContent = JSON.stringify(results);

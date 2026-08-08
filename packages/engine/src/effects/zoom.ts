@@ -40,7 +40,7 @@ export const zoom: EffectManifest = {
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
     // How small the incoming clip starts. Above 1 it starts oversized and shrinks into place, which
     // is the other half of the gesture and costs nothing to allow.
-    { key: "from", name: { de: "Startgroesse", en: "Start scale" }, default: 0.4, min: 0.05, max: 4 },
+    { key: "from", name: { de: "Startgröße", en: "Start scale" }, default: 0.4, min: 0.05, max: 4 },
   ],
   fragmentSource: FRAGMENT_SOURCE,
 };

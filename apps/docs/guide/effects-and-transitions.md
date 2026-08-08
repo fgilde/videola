@@ -14,7 +14,7 @@ export const contrast: EffectManifest = {
   name: { de: "Kontrast", en: "Contrast" },
   category: "color",
   inputs: 1,
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
   fragmentSource: /* GLSL */,
 };
 ```

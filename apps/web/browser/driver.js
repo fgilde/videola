@@ -284,7 +284,7 @@ async function announce() {
     addEffect("brightness");
     const row = await until("the brightness row", () => amountSlider());
     check("the parameter is named from the manifest, not from its key",
-      row.labels[0].textContent, "Staerke");
+      row.labels[0].textContent, "Stärke");
 
     // The static parameter first. If a plain gain does not reach the picture there is no point in
     // asking what a keyframed one does, and the two failures look identical from the outside.
@@ -294,10 +294,10 @@ async function announce() {
     checkNear("and back at one the picture is the one that was there",
       (await repainted()) / base0, 1, 0.02);
 
-    button("Keyframe für Staerke am Playhead").click();
+    button("Keyframe für Stärke am Playhead").click();
     await sleep(200);
     check("the switch reports the keyframe it just set",
-      button("Keyframe für Staerke am Playhead").getAttribute("aria-pressed"), "true");
+      button("Keyframe für Stärke am Playhead").getAttribute("aria-pressed"), "true");
 
     dragSlider(amountSlider(), [0.8, 0.6, 0.4, 0.2, 0.1, 0]);
     await repainted();
@@ -311,7 +311,7 @@ async function announce() {
     dragSlider(amountSlider(), [0.2, 0.4, 0.6, 0.8, 1]);
     await repainted();
     check("the second keyframe is set where the playhead stands",
-      button("Keyframe für Staerke am Playhead").getAttribute("aria-pressed"), "true");
+      button("Keyframe für Stärke am Playhead").getAttribute("aria-pressed"), "true");
 
     const dark = await pictureAfter(0);
     const half = await pictureAfter(15);
@@ -671,11 +671,15 @@ async function announce() {
     const slider = await until("the parameter row",
       () => q('.v-inspector__effect input[type="range"]'));
     check("a phone can put an effect on a clip and see its parameter",
-      slider.labels[0].textContent, "Staerke");
+      slider.labels[0].textContent, "Stärke");
     check("and the keyframe switch is there too",
-      button("Keyframe für Staerke am Playhead") !== null, true);
+      button("Keyframe für Stärke am Playhead") !== null, true);
     check("the panel fits the window", inspector.getBoundingClientRect().right <= innerWidth, true);
     check("putting an effect on a clip raised nothing", banner(), "");
+    // The picture is meant to show what the four checks above claim, and the effect is the last
+    // thing in a panel that scrolls -- unscrolled it would be a photograph of the transform.
+    slider.scrollIntoView({ block: "center" });
+    await sleep(200);
     await photograph("phone-inspector");
 
     button("Rückgängig").click();

@@ -55,7 +55,7 @@ export const maskRect: EffectManifest = {
     { key: "centerY", name: { de: "Mitte Y", en: "Centre Y" }, default: 0.5, min: -1, max: 2 },
     // The full extent, not the half: "half the frame wide" is what 0.5 should mean on a slider.
     { key: "width", name: { de: "Breite", en: "Width" }, default: 0.5, min: 0, max: 2 },
-    { key: "height", name: { de: "Hoehe", en: "Height" }, default: 0.5, min: 0, max: 2 },
+    { key: "height", name: { de: "Höhe", en: "Height" }, default: 0.5, min: 0, max: 2 },
     // Straddles the edge, half inside and half out, so growing it does not move the boundary.
     { key: "feather", name: { de: "Weiche Kante", en: "Feather" }, default: 0, min: 0, max: 0.5 },
     // A fade between the mask and its opposite rather than a switch. The ends are the two settings

@@ -17,6 +17,14 @@
   color: var(--v-text-muted);
 }
 
+/* Why the two rows under it are greyed out. It spans the group because it is about the group. */
+.v-inspector__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+}
+
 /* The gap here is what separates one parameter from the next, and it has to beat the gap inside a
    row -- a label sitting 35 px above its own slider and 45 px below the one before it belongs to
    neither. Everything a row needs of its own space is set to zero below.

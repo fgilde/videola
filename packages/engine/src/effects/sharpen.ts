@@ -27,9 +27,9 @@ void main() {
 
 export const sharpen: EffectManifest = {
   id: "sharpen",
-  name: { de: "Schaerfen", en: "Sharpen" },
+  name: { de: "Schärfen", en: "Sharpen" },
   category: "detail",
   inputs: 1,
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
   fragmentSource: FRAGMENT_SOURCE,
 };

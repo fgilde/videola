@@ -220,5 +220,6 @@
   "update.available": "Videola {version} ist verfügbar. Jetzt installieren?",
   "update.installed": "Das Update ist installiert. Starte Videola neu, um es zu benutzen.",
   "mixer.volumeShort": "Lautstärke",
-  "mixer.panShort": "Panorama"
+  "mixer.panShort": "Panorama",
+  "inspector.motionPath": "Position X und Y folgen einem Bewegungspfad."
 }

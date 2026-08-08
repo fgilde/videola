@@ -30,6 +30,6 @@ export const contrast: EffectManifest = {
   inputs: 1,
   // A slope about mid grey. 0 flattens the picture to that grey, 1 leaves it alone, and 4 is past
   // the point where an 8-bit source has any midtones left to separate.
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
   fragmentSource: FRAGMENT_SOURCE,
 };

@@ -123,6 +123,13 @@ function transformFields(settings: ProjectSettings): readonly TransformField[] {
   ];
 }
 
+/**
+ * The keyframe track that carries a motion path, spelled as `clip::POSITION_TRACK` spells it. Where
+ * one exists the core resolves x and y from the path and ignores what the transform holds, so the
+ * two sliders below it are settings that no picture obeys.
+ */
+const POSITION_TRACK = "position";
+
 // Named with a trailing underscore because `Transform` is the model type this section edits.
 function Transform_({
   clip,
@@ -135,11 +142,13 @@ function Transform_({
 }): ReactElement {
   const { t } = useI18n();
   const source = sourceSize(clip, project.library);
+  const path = (clip.keyframes[POSITION_TRACK] ?? []).length > 0;
   const set = (patch: Partial<Transform>, coalesceKey?: string): void =>
     send(cmd.clipSetTransform(clip.id, { ...clip.transform, ...patch }), coalesceKey);
 
   return (
     <Group title={t("inspector.transform")}>
+      {path && <p className="v-inspector__note">{t("inspector.motionPath")}</p>}
       {transformFields(project.settings).map((field) => (
         <ParamRow
           key={field.key}
@@ -147,6 +156,9 @@ function Transform_({
           value={clip.transform[field.key]}
           min={field.min}
           max={field.max}
+          // M1 authors no path, but a project can carry one, and a slider that moves a number the
+          // renderer never reads is worse than one that says it is not in charge.
+          disabled={path && (field.key === "x" || field.key === "y")}
           onChange={(value, coalesceKey) => set({ [field.key]: value }, coalesceKey)}
         />
       ))}

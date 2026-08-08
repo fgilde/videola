@@ -44,6 +44,6 @@ export const blur: EffectManifest = {
   // Spacing between taps, in pixels of the frame. At 0 every tap lands on the same texel and the
   // weights sum to one, so the picture comes back untouched -- the slider has a real off position
   // rather than a nearly-off one.
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 2, min: 0, max: 16 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 2, min: 0, max: 16 }],
   fragmentSource: FRAGMENT_SOURCE,
 };

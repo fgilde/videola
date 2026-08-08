@@ -22,12 +22,12 @@ const BRIGHTNESS: EffectDescriptor = {
   id: "brightness",
   name: { de: "Helligkeit", en: "Brightness" },
   inputs: 1,
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
 };
 
 const CROSSFADE: EffectDescriptor = {
   id: "crossfade",
-  name: { de: "Ueberblendung", en: "Cross dissolve" },
+  name: { de: "Überblendung", en: "Cross dissolve" },
   inputs: 2,
   params: [
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
@@ -198,6 +198,26 @@ describe("the inspector", () => {
     expect(slider("Höhe (Faktor)").value).toBe("0.5");
     expect(slider("Drehung (Grad)").value).toBe("90");
     expect(slider("Deckkraft").value).toBe("0.25");
+  });
+
+  // The core resolves x and y from a `position` track where one exists and ignores what the
+  // transform holds. Two sliders that go on writing it would be settings no picture obeys.
+  it("hands the position rows over to a motion path that has one", () => {
+    show({ clip: clipWithMedia({ keyframes: { position: [key(0, 0)] } }) });
+
+    expect(slider("Position X (px)").disabled).toBe(true);
+    expect(slider("Position Y (px)").disabled).toBe(true);
+    // And only those two: the path says nothing about scale, turn or opacity.
+    expect(slider("Breite (Faktor)").disabled).toBe(false);
+    expect(slider("Deckkraft").disabled).toBe(false);
+    expect(screen.getByText("Position X und Y folgen einem Bewegungspfad.")).toBeTruthy();
+  });
+
+  it("leaves them alone on a clip with no path", () => {
+    show({ clip: clipWithMedia() });
+
+    expect(slider("Position X (px)").disabled).toBe(false);
+    expect(screen.queryByText("Position X und Y folgen einem Bewegungspfad.")).toBeNull();
   });
 
   it("sends the whole transform with one field replaced", () => {
@@ -414,7 +434,7 @@ describe("the inspector", () => {
     // Brightness is the only offer this rig has, so the whole picker goes with it. The row below
     // is what says the effect landed rather than the control simply having been forgotten.
     expect(offered()).toEqual([]);
-    expect(screen.getByLabelText("Staerke")).toBeTruthy();
+    expect(screen.getByLabelText("Stärke")).toBeTruthy();
   });
 
   it("shows the value the core interpolates and not the static one", () => {
@@ -424,7 +444,7 @@ describe("the inspector", () => {
       amountAt: (at) => at / (2 * SECOND),
     });
 
-    expect(slider("Staerke").value).toBe("0.25");
+    expect(slider("Stärke").value).toBe("0.25");
   });
 
   it("sets a keyframe at the playhead with the value the row is showing", () => {
@@ -434,7 +454,7 @@ describe("the inspector", () => {
       amountAt: () => 2,
     });
 
-    press("Keyframe für Staerke am Playhead");
+    press("Keyframe für Stärke am Playhead");
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.add",
@@ -453,10 +473,10 @@ describe("the inspector", () => {
       playhead: SECOND,
       amountAt: () => 2,
     });
-    const toggle = screen.getByRole("button", { name: "Keyframe für Staerke am Playhead" });
+    const toggle = screen.getByRole("button", { name: "Keyframe für Stärke am Playhead" });
 
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
-    press("Keyframe für Staerke am Playhead");
+    press("Keyframe für Stärke am Playhead");
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.remove",
@@ -474,7 +494,7 @@ describe("the inspector", () => {
       amountAt: () => 0,
     });
 
-    slide(slider("Staerke"), 3);
+    slide(slider("Stärke"), 3);
 
     expect(rig.sent[0]?.command).toEqual({
       type: "keyframe.add",
@@ -491,7 +511,7 @@ describe("the inspector", () => {
   it("writes the static parameter while nothing is keyframed", () => {
     const rig = show({ clip: clipWithMedia(withBrightness()), amountAt: () => 1 });
 
-    slide(slider("Staerke"), 3);
+    slide(slider("Stärke"), 3);
 
     expect(rig.sent[0]?.command).toEqual({
       type: "effect.setParam",
@@ -510,7 +530,7 @@ describe("the inspector", () => {
     });
 
     act(() =>
-      void fireEvent.change(screen.getByLabelText("Verlauf ab dem Keyframe von Staerke"), {
+      void fireEvent.change(screen.getByLabelText("Verlauf ab dem Keyframe von Stärke"), {
         target: { value: "hold" },
       }),
     );
@@ -534,7 +554,7 @@ describe("the inspector", () => {
       amountAt: () => 1,
     });
 
-    const picker = screen.getByLabelText("Verlauf ab dem Keyframe von Staerke") as HTMLSelectElement;
+    const picker = screen.getByLabelText("Verlauf ab dem Keyframe von Stärke") as HTMLSelectElement;
     expect(picker.value).toBe("bezier");
     expect([...picker.options].map((option) => option.value)).toEqual([
       "bezier",
@@ -551,7 +571,7 @@ describe("the inspector", () => {
       amountAt: () => 1,
     });
 
-    expect(screen.queryByLabelText("Verlauf ab dem Keyframe von Staerke")).toBeNull();
+    expect(screen.queryByLabelText("Verlauf ab dem Keyframe von Stärke")).toBeNull();
   });
 
   it("walks to the neighbouring keyframes and stops at the ends", () => {
@@ -565,8 +585,8 @@ describe("the inspector", () => {
       amountAt: () => 1,
     });
 
-    press("Zum vorherigen Keyframe von Staerke");
-    press("Zum nächsten Keyframe von Staerke");
+    press("Zum vorherigen Keyframe von Stärke");
+    press("Zum nächsten Keyframe von Stärke");
 
     expect(rig.seeks).toEqual([SECOND / 2, 2 * SECOND]);
   });
@@ -578,8 +598,8 @@ describe("the inspector", () => {
       amountAt: () => 0,
     });
 
-    const back = screen.getByRole("button", { name: "Zum vorherigen Keyframe von Staerke" });
-    const forward = screen.getByRole("button", { name: "Zum nächsten Keyframe von Staerke" });
+    const back = screen.getByRole("button", { name: "Zum vorherigen Keyframe von Stärke" });
+    const forward = screen.getByRole("button", { name: "Zum nächsten Keyframe von Stärke" });
     expect((back as HTMLButtonElement).disabled).toBe(true);
     expect((forward as HTMLButtonElement).disabled).toBe(true);
   });
@@ -593,10 +613,10 @@ describe("the inspector", () => {
       amountAt: () => 1,
     });
 
-    expect((slider("Staerke") as HTMLInputElement).disabled).toBe(true);
+    expect((slider("Stärke") as HTMLInputElement).disabled).toBe(true);
     expect(
       (
-        screen.getByRole("button", { name: "Keyframe für Staerke am Playhead" }) as HTMLButtonElement
+        screen.getByRole("button", { name: "Keyframe für Stärke am Playhead" }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
   });
@@ -611,7 +631,7 @@ describe("the inspector", () => {
     });
 
     expect(rig.asked).toEqual([SECOND]);
-    expect(slider("Staerke").value).toBe("3");
+    expect(slider("Stärke").value).toBe("3");
   });
 
   // The range element sanitises its own value, so the readout beside it is the only place an
@@ -619,8 +639,8 @@ describe("the inspector", () => {
   it("pulls a value from outside the declared range back onto the row", () => {
     show({ clip: clipWithMedia(withBrightness()), amountAt: () => 99 });
 
-    expect(slider("Staerke").value).toBe("4");
-    expect(readout("Staerke")).toBe("4");
+    expect(slider("Stärke").value).toBe("4");
+    expect(readout("Stärke")).toBe("4");
   });
 
   // A NaN travels through `Math.min(Math.max(...))` unchanged and lands on the row as "NaN",
@@ -631,7 +651,7 @@ describe("the inspector", () => {
       rawAmountAt: () => ({ kind: "float", value: Number.NaN }),
     });
 
-    expect(readout("Staerke")).toBe("1");
+    expect(readout("Stärke")).toBe("1");
   });
 
   it("falls back to the manifest default for a value that is not a number at all", () => {
@@ -640,7 +660,7 @@ describe("the inspector", () => {
       rawAmountAt: () => ({ kind: "choice", value: "bright" }),
     });
 
-    expect(readout("Staerke")).toBe("1");
+    expect(readout("Stärke")).toBe("1");
   });
 
   // React 19 catches an exception thrown from an event handler itself, so a broken handler looks

@@ -45,7 +45,7 @@ export const maskEllipse: EffectManifest = {
     // The full extent of the bounding box, so a width of 0.5 covers half the frame -- the same
     // reading as the rectangle's, which is what lets the two be swapped without retyping the shape.
     { key: "width", name: { de: "Breite", en: "Width" }, default: 0.5, min: 0, max: 2 },
-    { key: "height", name: { de: "Hoehe", en: "Height" }, default: 0.5, min: 0, max: 2 },
+    { key: "height", name: { de: "Höhe", en: "Height" }, default: 0.5, min: 0, max: 2 },
     { key: "feather", name: { de: "Weiche Kante", en: "Feather" }, default: 0, min: 0, max: 0.5 },
     { key: "invert", name: { de: "Invertieren", en: "Invert" }, default: 0, min: 0, max: 1 },
   ],

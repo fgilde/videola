@@ -26,11 +26,11 @@ void main() {
 
 export const saturation: EffectManifest = {
   id: "saturation",
-  name: { de: "Saettigung", en: "Saturation" },
+  name: { de: "Sättigung", en: "Saturation" },
   category: "color",
   inputs: 1,
   // Zero is black and white, which is why this library has no separate monochrome effect: it would
   // be the same shader with the slider nailed down.
-  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 2 }],
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 2 }],
   fragmentSource: FRAGMENT_SOURCE,
 };

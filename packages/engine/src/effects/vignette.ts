@@ -32,11 +32,11 @@ export const vignette: EffectManifest = {
   category: "color",
   inputs: 1,
   params: [
-    { key: "amount", name: { de: "Staerke", en: "Amount" }, default: 0.5, min: 0, max: 1 },
+    { key: "amount", name: { de: "Stärke", en: "Amount" }, default: 0.5, min: 0, max: 1 },
     // Where the darkening begins, as a distance from the centre in half-frames. The ceiling stops
     // just short of the corner: at exactly `CORNER` the two edges of the smoothstep would coincide
     // and the driver is free to do anything it likes with the division that follows.
-    { key: "size", name: { de: "Groesse", en: "Size" }, default: 0.6, min: 0, max: 1.4 },
+    { key: "size", name: { de: "Größe", en: "Size" }, default: 0.6, min: 0, max: 1.4 },
   ],
   fragmentSource: FRAGMENT_SOURCE,
 };

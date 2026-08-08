@@ -19,7 +19,7 @@ void main() {
 
 export const crossfade: EffectManifest = {
   id: "crossfade",
-  name: { de: "Ueberblendung", en: "Cross dissolve" },
+  name: { de: "Überblendung", en: "Cross dissolve" },
   category: "transition",
   inputs: 2,
   // Not authored by hand: the draw list works `progress` out of the transition's window and the
