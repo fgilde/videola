@@ -46,14 +46,11 @@ export function ParamRow({
 }: ParamRowProps): ReactElement {
   const { formatNumber } = useI18n();
   const id = useId();
-  // One drag is one undo step. The key is minted when the slider is grabbed and dropped when it
-  // is let go -- the same pointerdown/pointerup pattern the timeline uses for a clip drag. A key
-  // press ends it too, because a pointer released outside the window never reports back and the
-  // arrow keys would otherwise fold into whatever drag came before them.
+  // One drag is one undo step: every change under one grab carries one key, and the next grab
+  // mints another. There is deliberately no release on pointerup -- between two grabs the only
+  // thing that can change this value is the keyboard, and a pointer let go outside the window
+  // never reports back anyway, so ending the run is the keystroke's job and not the release's.
   const coalesceKey = useRef<string | undefined>(undefined);
-  const release = (): void => {
-    coalesceKey.current = undefined;
-  };
 
   return (
     <div className="v-param">
@@ -75,9 +72,9 @@ export function ParamRow({
         onPointerDown={() => {
           coalesceKey.current = `inspector-${(gesture += 1)}`;
         }}
-        onPointerUp={release}
-        onPointerCancel={release}
-        onKeyDown={release}
+        onKeyDown={() => {
+          coalesceKey.current = undefined;
+        }}
         onChange={(event) => onChange(Number(event.target.value), coalesceKey.current)}
       />
       <output className="v-param__value" htmlFor={id}>

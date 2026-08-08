@@ -485,6 +485,25 @@ describe("the inspector", () => {
     });
   });
 
+  // A .videola written elsewhere may carry a bezier keyframe. Dropping it from the list would
+  // make the picker show "Linear" for a keyframe that is not linear.
+  it("names an interpolation it cannot author rather than misreporting it", () => {
+    show({
+      clip: clipWithMedia(withBrightness({ amount: [key(SECOND, 1, "bezier")] })),
+      playhead: SECOND,
+      amountAt: () => 1,
+    });
+
+    const picker = screen.getByLabelText("Verlauf ab dem Keyframe von Staerke") as HTMLSelectElement;
+    expect(picker.value).toBe("bezier");
+    expect([...picker.options].map((option) => option.value)).toEqual([
+      "bezier",
+      "linear",
+      "hold",
+      "ease",
+    ]);
+  });
+
   it("offers no interpolation where no keyframe sits", () => {
     show({
       clip: clipWithMedia(withBrightness({ amount: [key(SECOND, 1)] })),
@@ -497,7 +516,11 @@ describe("the inspector", () => {
 
   it("walks to the neighbouring keyframes and stops at the ends", () => {
     const rig = show({
-      clip: clipWithMedia(withBrightness({ amount: [key(0, 0), key(SECOND, 1), key(2 * SECOND, 2)] })),
+      clip: clipWithMedia(
+        // Two keyframes on the earlier side: with only one, "the first before" and "the last
+        // before" are the same entry and the walk cannot be told from a walk to the beginning.
+        withBrightness({ amount: [key(0, 0), key(SECOND / 2, 0.5), key(SECOND, 1), key(2 * SECOND, 2)] }),
+      ),
       playhead: SECOND,
       amountAt: () => 1,
     });
@@ -505,7 +528,7 @@ describe("the inspector", () => {
     press("Zum vorherigen Keyframe von Staerke");
     press("Zum nächsten Keyframe von Staerke");
 
-    expect(rig.seeks).toEqual([0, 2 * SECOND]);
+    expect(rig.seeks).toEqual([SECOND / 2, 2 * SECOND]);
   });
 
   it("greys the walk out where there is no keyframe on that side", () => {
