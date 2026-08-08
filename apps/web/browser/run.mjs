@@ -169,6 +169,19 @@ function reported(budgetMs, what) {
 // a browser-automation dependency costs, and the two things it buys cannot be had from the
 // command line: a viewport smaller than a window may be, and a screenshot taken at a moment the
 // harness chooses rather than when the page finished loading.
+// The socket is opened the moment the page target appears, and on a loaded runner Chrome answers
+// /json a little before it accepts a connection. One refusal is not an absent browser.
+async function connectWithRetries(url, attempts = 10) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await connect(url);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
+
 async function connect(url) {
   const socket = new WebSocket(url);
   const pending = new Map();
@@ -222,7 +235,7 @@ async function driveTouch(metrics, query, budgetMs, what) {
   ]);
   try {
     const page = await pageTarget(Date.now() + 30_000);
-    const devtools = await connect(page.webSocketDebuggerUrl);
+    const devtools = await connectWithRetries(page.webSocketDebuggerUrl);
     await devtools.send("Emulation.setDeviceMetricsOverride", metrics);
     // Without this the editor still reports a fine pointer, and the timeline would hand a finger
     // the four-pixel trim zone it keeps for a mouse.
