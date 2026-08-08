@@ -85,3 +85,61 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  # WebGL2, WebCodecs, OPFS und echtes Layout gibt es in jsdom nicht. Vier Harnessen fahren
+  # denselben Code in echtem Chrome; sie brauchen kein Playwright, nur eine ausfuehrbare Datei.
+  # Alle vier laufen in einem Job, weil sie zusammen unter einer Minute brauchen -- ein zweiter
+  # Job kostete mehr an Checkout, Installation und Bau, als die Pruefungen selbst kosten.
+  browser:
+    runs-on: ubuntu-latest
+    needs: wasm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+      - name: WASM-Artefakt vorhanden
+        run: test -f packages/core/src/wasm/videola_core.js || (echo "wasm-Artefakt fehlt in packages/core/src/wasm" && exit 1)
+      - run: pnpm install --frozen-lockfile
+      - name: Chrome bereitstellen
+        run: |
+          if ! command -v google-chrome >/dev/null; then
+            echo "::error::kein google-chrome im Runner-Image -- Chrome installieren oder CHROME_PATH setzen"
+            exit 1
+          fi
+          # Chromes Sandbox haengt an unprivilegierten User-Namespaces, die Ubuntu ab 24.04 per
+          # AppArmor sperren kann. Der Wrapper haengt --no-sandbox an, statt die Entscheidung in
+          # allen vier Runnern zu wiederholen -- CHROME_PATH ist der Schalter, den sie schon haben.
+          # exec, damit der Wrapper die PID behaelt: die Runner beenden Chrome ueber genau die.
+          printf '#!/bin/sh\nexec "%s" --no-sandbox "$@"\n' "$(command -v google-chrome)" > "$RUNNER_TEMP/chrome"
+          chmod +x "$RUNNER_TEMP/chrome"
+          echo "CHROME_PATH=$RUNNER_TEMP/chrome" >> "$GITHUB_ENV"
+          google-chrome --version
+      # Die Export-Harness prueft die geschriebene Datei mit einem Leser, der keine Zeile mit
+      # diesem Projekt teilt. Ohne ffmpeg faellt genau dieser Beweis weg.
+      - name: ffmpeg fuer die Export-Pruefung
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffprobe -version | head -1
+      # Die Anwendungs-Harness faehrt die gebaute Anwendung, nicht die Quellen.
+      - run: pnpm --filter videola-web build
+      - run: pnpm --filter @videola/engine test:gpu
+      - run: pnpm --filter @videola/engine test:export
+      - run: pnpm --filter @videola/ui test:browser
+      - run: pnpm --filter videola-web test:browser
+      # Bild und Telefon-Layout sind das Ergebnis, das sich nicht als Zahl lesen laesst.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: browser-screenshots
+          path: apps/web/browser/*.png
+          if-no-files-found: ignore
