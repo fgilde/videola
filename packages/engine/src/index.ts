@@ -1,4 +1,5 @@
-export { AudioGraph, hasAudibleClips } from "./audio/graph";
+export { AudioGraph, hasAudibleClips, measureLoudness } from "./audio/graph";
+export { integratedLufs, LOUDNESS_BLOCK_SECONDS, peakDbfs } from "./audio/loudness";
 export type { AudioBufferSource } from "./audio/graph";
 export { Clock } from "./clock";
 export type { ClockSource } from "./clock";
@@ -26,7 +27,7 @@ export type {
   ExportRange,
   ExportResult,
 } from "./export/run";
-export { clipHashes, Playback } from "./playback";
+export { clipHashes, Playback, WAVEFORM_BUCKETS } from "./playback";
 export type { AudioTransport, FrameSource, PlaybackOptions } from "./playback";
 export { createContext } from "./render/context";
 export type { GlContext } from "./render/context";

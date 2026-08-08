@@ -153,6 +153,9 @@ importers:
       '@videola/core':
         specifier: workspace:*
         version: link:../core
+      '@videola/media':
+        specifier: workspace:*
+        version: link:../media
       react:
         specifier: ^19.2.8
         version: 19.2.8

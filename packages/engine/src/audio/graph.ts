@@ -1,7 +1,10 @@
 import { timeToSeconds } from "@videola/core";
-import { mediaHash } from "@videola/media";
+import { mediaHash, peaks } from "@videola/media";
 
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
+import type { Peaks } from "@videola/media";
+
+import { integratedLufs } from "./loudness";
 
 export interface AudioBufferSource {
   bufferFor(hash: string, from: Time, to: Time): Promise<AudioBuffer>;
@@ -78,6 +81,21 @@ export class AudioGraph {
     this.#live = [];
   }
 
+  // The strips the timeline draws come from the samples the graph decoded for playback, so what is
+  // seen and what is heard cannot drift apart -- a reversed clip included, whose held buffer is
+  // already the reversed copy. A clip the graph does not schedule gets no entry, which is what lets
+  // the timeline tell "no sound" from "not read yet".
+  waveforms(buckets: number): Map<string, Peaks> {
+    return new Map(
+      this.#voices.map((voice) => {
+        const planes = Array.from({ length: voice.buffer.numberOfChannels }, (_, channel) =>
+          voice.buffer.getChannelData(channel),
+        );
+        return [voice.clip.id, peaks(planes, buckets)];
+      }),
+    );
+  }
+
   setMasterVolume(volume: number): void {
     this.#master.gain.setTargetAtTime(volume, this.#ctx.currentTime, MASTER_GLIDE_SECONDS);
   }
@@ -90,17 +108,38 @@ export class AudioGraph {
   // per pointer movement. Splitting a clip reuses neither half, which is right -- their ranges
   // differ. The map is the same session-long hold the note above already describes.
   async #load(hash: string, clip: Clip): Promise<AudioBuffer | undefined> {
-    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}`;
+    const reverse = clip.speed.reverse;
+    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}|${reverse}`;
     const cached = this.#buffers.get(key);
     if (cached !== undefined) return cached;
     try {
-      const buffer = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+      const decoded = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+      const buffer = reverse ? this.#reversed(decoded) : decoded;
       this.#buffers.set(key, buffer);
       return buffer;
     } catch (error) {
       console.error(error);
       return undefined;
     }
+  }
+
+  // An AudioBufferSourceNode has no negative playback rate, so a reversed clip plays a reversed
+  // copy of its own range. The offset arithmetic in `#schedule` needs no branch for it: a timeline
+  // position `p` into the clip consumes `p * rate` seconds of source counted back from the out
+  // point, and that is the same `p * rate` counted forward from the start of the reversed copy.
+  #reversed(buffer: AudioBuffer): AudioBuffer {
+    const out = this.#ctx.createBuffer(
+      buffer.numberOfChannels,
+      buffer.length,
+      buffer.sampleRate,
+    );
+    const plane = new Float32Array(buffer.length);
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      buffer.copyFromChannel(plane, channel);
+      plane.reverse();
+      out.copyToChannel(plane, channel);
+    }
+    return out;
   }
 
   // Mute and solo land here rather than on the clip gains, so a track that is silenced mid-fade
@@ -139,6 +178,29 @@ export class AudioGraph {
     this.#live.push(node, gain);
     this.#playing.push(node);
   }
+}
+
+// Programme loudness of a whole project, to R128, from a real render of the real graph -- clip gains,
+// fades, track buses, mute and solo and the master all included, because they are all things that
+// change the number. Measuring the decoded buffers instead would report the loudness of the material
+// rather than of the programme.
+//
+// The context is the caller's: the browser has `OfflineAudioContext` and so does the test runner, and
+// a factory parameter for one line of construction would be an interface with one implementation.
+// Its length is what decides how much of the timeline is measured.
+export async function measureLoudness(
+  ctx: OfflineAudioContext,
+  project: Project,
+  source: AudioBufferSource,
+): Promise<number> {
+  const graph = new AudioGraph(ctx as unknown as BaseAudioContext, source);
+  await graph.prepare(project);
+  graph.startAt(ctx.currentTime, 0);
+  const rendered = await ctx.startRendering();
+  const planes = Array.from({ length: rendered.numberOfChannels }, (_, channel) =>
+    rendered.getChannelData(channel),
+  );
+  return integratedLufs(planes, rendered.sampleRate);
 }
 
 interface Point {
@@ -204,11 +266,8 @@ function valueAt(points: readonly Point[], when: number): number {
   return points[points.length - 1]!.value;
 }
 
-// ponytail: a reversed clip stays silent -- an AudioBufferSourceNode has no negative playback
-// rate, so there is nothing to schedule. The way out is reversing the sample data once in
-// `prepare` and inverting the offset, which costs one buffer copy per reversed clip.
 function audibleHash(clip: Clip, library: ReadonlyMap<string, MediaAsset>): string | undefined {
-  if (clip.source.kind !== "media" || clip.speed.reverse) return undefined;
+  if (clip.source.kind !== "media") return undefined;
   const asset = library.get(clip.source.media);
   // The track's kind says nothing about sound: a video track carries clips whose medium has an
   // audio stream, and an audio track can hold a video file someone dropped on it. The library

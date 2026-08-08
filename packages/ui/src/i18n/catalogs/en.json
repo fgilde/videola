@@ -193,5 +193,16 @@
   "error.templateBakeFailed": "No project could be made from this template.",
   "error.templateOpenFailed": "This file is not a usable template.",
   "error.templateSaveFailed": "This project could not be saved as a template.",
-  "error.templateShortMedia": "This file is too short for the placeholder."
+  "error.templateShortMedia": "This file is too short for the placeholder.",
+  "mixer.label": "Mixer",
+  "mixer.volume": "Volume {name}",
+  "mixer.pan": "Pan {name}",
+  "mixer.mute": "Mute {name}",
+  "mixer.solo": "Solo {name}",
+  "mixer.measure": "Measure loudness",
+  "mixer.measuring": "Measuring…",
+  "mixer.lufs": "{value} LUFS",
+  "mixer.silent": "Silent",
+  "mixer.unmeasured": "Not measured",
+  "panel.mixer": "Mixer"
 }

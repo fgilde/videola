@@ -20,6 +20,8 @@ import {
   type TrackId,
 } from "@videola/core";
 
+import type { Peaks } from "@videola/media";
+
 import { useI18n } from "../i18n/useI18n";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -66,6 +68,11 @@ export interface TimelineProps {
   project: Project;
   playhead: Time;
   /**
+   * Peaks per clip id, from whoever decoded the audio. Absent means no strip at all rather than an
+   * empty one: a flat line promises a signal that has not been read yet.
+   */
+  waveforms?: ReadonlyMap<string, Peaks>;
+  /**
    * Must throw when the core refuses a command, and must not report it itself. Hitting a clip's
    * limit is ordinary during a drag and the timeline swallows it; a caller that catches first
    * produces one error banner per pointer movement.
@@ -78,6 +85,7 @@ export interface TimelineProps {
 export function Timeline({
   project,
   playhead,
+  waveforms,
   dispatch,
   onSeek,
   onSelectionChange,
@@ -306,6 +314,7 @@ export function Timeline({
                   flicksPerPixel={flicksPerPixel}
                   range={range}
                   mediaNames={mediaNames}
+                  waveforms={waveforms}
                   selected={selected}
                   trimZonePx={gestures.trimZonePx}
                   onSelect={select}

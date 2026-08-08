@@ -1,6 +1,7 @@
-import type { ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 
 import type { Clip as ClipModel, MediaAsset } from "@videola/core";
+import type { Peaks } from "@videola/media";
 
 import { useI18n } from "../i18n/useI18n";
 import {
@@ -10,11 +11,13 @@ import {
   trimZoneWidth,
   type ClipBox,
 } from "./geometry";
+import { WAVEFORM_HEIGHT, waveformPath } from "./waveform";
 
 export interface ClipProps {
   box: ClipBox;
   flicksPerPixel: number;
   mediaNames: ReadonlyMap<string, string>;
+  peaks?: Peaks;
   selected: boolean;
   trimZonePx: number;
   onSelect: (clip: string) => void;
@@ -24,6 +27,7 @@ export function Clip({
   box,
   flicksPerPixel,
   mediaNames,
+  peaks,
   selected,
   trimZonePx,
   onSelect,
@@ -31,6 +35,12 @@ export function Clip({
   const { t } = useI18n();
   const width = timeToX(box.end - box.start, flicksPerPixel);
   const zone = trimZoneWidth(width, trimZonePx);
+  // Stretched to the clip by the viewBox, so zooming and resizing cost no rebuild. A run stands for
+  // several clips and has no single signal to show.
+  const wave = useMemo(
+    () => (peaks === undefined || box.count > 1 ? "" : waveformPath(peaks)),
+    [peaks, box.count],
+  );
   // A run stands for several clips, so there is no single edge to trim; and below a handful of
   // pixels neither a handle nor a name is reachable or readable. Not drawing what cannot be used
   // is what keeps the node count bounded when the whole project is on screen at once.
@@ -56,6 +66,17 @@ export function Clip({
         if (event.detail === 0) onSelect(box.clip.id);
       }}
     >
+      {wave !== "" && (
+        <svg
+          className="v-clip__wave"
+          data-testid="clip-waveform"
+          viewBox={`0 0 ${peaks?.max.length ?? 0} ${WAVEFORM_HEIGHT}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path d={wave} />
+        </svg>
+      )}
       {width >= MIN_CLIP_LABEL_PX && box.count === 1 && (
         <span className="v-clip__label">{clipLabel(box.clip, mediaNames, t)}</span>
       )}

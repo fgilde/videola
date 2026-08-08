@@ -22,16 +22,22 @@ const pressed = (): Record<string, string | null> =>
   );
 
 describe("PanelTabs", () => {
-  it("offers both panels and says which one is showing", () => {
+  it("offers every panel and says which one is showing", () => {
     show("timeline");
 
-    expect(pressed()).toEqual({ Medien: "false", Zeitleiste: "true" });
+    expect(pressed()).toEqual({ Medien: "false", Zeitleiste: "true", Mischpult: "false" });
   });
 
   it("marks the library once that is the one showing", () => {
     show("library");
 
-    expect(pressed()).toEqual({ Medien: "true", Zeitleiste: "false" });
+    expect(pressed()).toEqual({ Medien: "true", Zeitleiste: "false", Mischpult: "false" });
+  });
+
+  it("marks the mixer once that is the one showing", () => {
+    show("mixer");
+
+    expect(pressed()).toEqual({ Medien: "false", Zeitleiste: "false", Mischpult: "true" });
   });
 
   it("reports the panel that was asked for", () => {

@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
 
-import { AudioGraph } from "./graph";
+import { AudioGraph, hasAudibleClips, measureLoudness } from "./graph";
+import { integratedLufs } from "./loudness";
 import type { AudioBufferSource } from "./graph";
 
 const SAMPLE_RATE = 48_000;
@@ -518,5 +519,216 @@ describe("AudioGraph, repeated prepares", () => {
     graph.startAt(ctx.currentTime, 0);
 
     expect(at(await drain(ctx), 0.1)).toBeCloseTo(1, 2);
+  });
+});
+
+// A reversed clip used to be dropped from the graph entirely, so the picture ran backwards over
+// silence. The signal is a ramp, which makes the direction of travel readable in a single sample.
+const ramp = (ctx: BaseAudioContext): AudioBufferSource => signal(ctx, (progress) => progress);
+
+describe("AudioGraph, reversed clips", () => {
+  it("plays a reversed clip backwards through its range", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      ramp(ctx),
+      project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]),
+    );
+
+    expect(at(out, 0.25)).toBeCloseTo(0.75, 2);
+    expect(at(out, 0.75)).toBeCloseTo(0.25, 2);
+  });
+
+  // The two axes the review found crossing nowhere: direction and entry offset.
+  it("enters a reversed clip in the middle at the position the timeline says", async () => {
+    const ctx = context(0.5);
+    const out = await render(ctx, ramp(ctx), project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]), {
+      projectTime: SECOND / 2,
+      contextTime: 0,
+    });
+
+    expect(at(out, 0)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.25)).toBeCloseTo(0.25, 2);
+  });
+
+  it("counts a reversed clip's source from its out point at a rate other than one", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      ramp(ctx),
+      project([track("A1", [clip({ speed: { rate: 2, reverse: true, preservePitch: true } })])]),
+    );
+
+    expect(at(out, 0.25)).toBeCloseTo(0.75, 2);
+    expect(at(out, 0.75)).toBeCloseTo(0.25, 2);
+  });
+
+  it("fades a reversed clip in over the head it actually plays", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({
+            speed: { rate: 1, reverse: true, preservePitch: true },
+            fades: { inDuration: SECOND / 2, outDuration: 0 },
+          }),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.25)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.75)).toBeCloseTo(1, 2);
+  });
+
+  // Export shares this predicate with the graph, so a reversed clip that the graph now schedules
+  // must not be one the export leaves out of its audio track.
+  it("counts a reversed clip as audible", () => {
+    expect(
+      hasAudibleClips(
+        project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]),
+      ),
+    ).toBe(true);
+  });
+});
+
+// The graph already holds the decoded samples for every clip it schedules, so the timeline's strip
+// costs no second decode and no second cache. Anything else would decode the same range twice.
+describe("AudioGraph, waveform peaks", () => {
+  it("reads peaks from the buffer it already decoded", async () => {
+    const ctx = context(0.3);
+    const graph = new AudioGraph(ctx, signal(ctx, (progress) => progress));
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    const found = graph.waveforms(4).get("clp_1");
+
+    expect(found?.max[0]).toBeCloseTo(0.25, 2);
+    expect(found?.max[3]).toBeCloseTo(1, 2);
+  });
+
+  it("shows a reversed clip the way it plays", async () => {
+    const ctx = context(0.3);
+    const graph = new AudioGraph(ctx, signal(ctx, (progress) => progress));
+    await graph.prepare(
+      project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]),
+    );
+
+    const found = graph.waveforms(4).get("clp_1");
+
+    expect(found?.max[0]).toBeCloseTo(1, 2);
+    expect(found?.max[3]).toBeCloseTo(0.25, 2);
+  });
+
+  it("has nothing to show for a clip it never scheduled", async () => {
+    const ctx = context(0.3);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    expect(graph.waveforms(4).get("clp_missing")).toBeUndefined();
+  });
+
+  it("does not decode a second time to draw a strip", async () => {
+    const ctx = context(0.3);
+    const source = dc(ctx);
+    const decode = vi.spyOn(source, "bufferFor");
+    const graph = new AudioGraph(ctx, source);
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    graph.waveforms(8);
+    graph.waveforms(16);
+
+    expect(decode).toHaveBeenCalledOnce();
+  });
+});
+
+// R128 loudness of the programme, not of the material: the number has to move when a fader does, or
+// it is measuring the wrong thing. Read from a real offline render of the real graph.
+describe("measureLoudness", () => {
+  // A full-scale 1 kHz sine through a graph at unity reads the same as the same sine handed straight
+  // to the meter, which is the only way to know the graph is not quietly changing the level.
+  const tone = (ctx: BaseAudioContext): AudioBufferSource =>
+    signal(ctx, (progress) => Math.sin(2 * Math.PI * 1000 * progress));
+
+  it("measures a project at unity gain as the material's own loudness", async () => {
+    const ctx = context(1);
+    const measured = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(ctx),
+    );
+
+    const material = new Float32Array(SAMPLE_RATE);
+    for (let i = 0; i < material.length; i += 1) {
+      material[i] = Math.sin(2 * Math.PI * 1000 * (i / material.length));
+    }
+    // The same samples handed straight to the meter. A graph that changes the level anywhere along
+    // clip gain, bus, panner or master shows up here as a difference.
+    expect(measured).toBeCloseTo(integratedLufs([material, material], SAMPLE_RATE), 1);
+    // And full scale at 1 kHz is 0 LUFS, which ties this to the compliance cases next door.
+    expect(measured).toBeCloseTo(0, 1);
+  });
+
+  it("follows the track fader", async () => {
+    const ctx = context(1);
+    const quiet = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()], { volume: 0.5 })]),
+      tone(ctx),
+    );
+    const loudCtx = context(1);
+    const loud = await measureLoudness(
+      loudCtx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(loudCtx),
+    );
+
+    expect(loud - quiet).toBeCloseTo(6.02, 1);
+  });
+
+  it("follows the master fader", async () => {
+    const ctx = context(1);
+    const measured = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])], 0.5),
+      tone(ctx),
+    );
+    const fullCtx = context(1);
+    const full = await measureLoudness(
+      fullCtx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(fullCtx),
+    );
+
+    expect(full - measured).toBeCloseTo(6.02, 1);
+  });
+
+  it("has no reading for a muted project", async () => {
+    const ctx = context(1);
+    const measured = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()], { muted: true })]),
+      tone(ctx),
+    );
+
+    expect(measured).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  // The fades are automation on the clip gain, so they are in the render and therefore in the number.
+  it("counts a fade as the quieter programme it makes", async () => {
+    const ctx = context(1);
+    const faded = await measureLoudness(
+      ctx as unknown as OfflineAudioContext,
+      project([track("A1", [clip({ fades: { inDuration: SECOND / 2, outDuration: 0 } })])]),
+      tone(ctx),
+    );
+    const flatCtx = context(1);
+    const flat = await measureLoudness(
+      flatCtx as unknown as OfflineAudioContext,
+      project([track("A1", [clip()])]),
+      tone(flatCtx),
+    );
+
+    expect(faded).toBeLessThan(flat);
   });
 });

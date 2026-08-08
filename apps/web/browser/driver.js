@@ -297,6 +297,21 @@
         await until("a decoded frame", () => (litPixels() > 1000 ? litPixels() : 0)), 1000);
     }
 
+    // The whole audio chain, end to end and for real: bytes out of OPFS, a decode, peaks off the
+    // buffers the graph already holds, and an SVG path. Nothing below this line is reachable from a
+    // unit test -- jsdom has no OPFS, no decoder and no audio context.
+    const strip = await until("a waveform strip", () => q('[data-testid="clip-waveform"]'));
+    const path = strip.querySelector("path").getAttribute("d");
+    checkAtLeast("the strip is drawn from real peaks, not a placeholder",
+      path.split("L").length, 600);
+    check("and it is stretched to the clip rather than measured in pixels",
+      strip.getAttribute("preserveAspectRatio"), "none");
+    // The y of every corner, which is what carries the signal -- reading the x instead would be
+    // true of any path at all and prove nothing. Silence sits on the hairline at 0.99, so a peak
+    // reaching well above it is the difference between a decoded signal and an empty strip.
+    const peak = Math.min(...[...path.matchAll(/ (-?\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])));
+    checkAtMost("the strip carries a signal and not a flat line", peak, 0.9);
+
     check("the transport starts at zero", position(), "00:00:00.00");
     button("Ein Bild vor").click();
     await sleep(100);
@@ -356,6 +371,23 @@
     const paused = position();
     await sleep(500);
     check("and the playhead stands still once paused", position(), paused);
+
+    // R128 against a real OfflineAudioContext, over a real decode. Wall clock only: a measurement
+    // renders the whole timeline, and under a virtual-time budget the decoder never gets a turn.
+    check("the mixer starts with nothing measured",
+      q('[data-testid="mixer-loudness"]').textContent, "Nicht gemessen");
+    labelled("Lautheit messen").click();
+    const reading = await until("a loudness reading",
+      () => (q('[data-testid="mixer-loudness"]').textContent.endsWith("LUFS")
+        ? q('[data-testid="mixer-loudness"]').textContent : null));
+    // Measured, not assumed: the fixture reads -21.8 LUFS. Its peaks only reach about -15 dBFS, so
+    // this is dense material with little crest -- loudness and peak are different questions and the
+    // fixture is a good reminder of it. The band is wide enough not to be a golden number and narrow
+    // enough that silence, a missing offset or an unweighted mean all fall outside it.
+    const lufs = Number(reading.replace(" LUFS", ""));
+    checkAtMost("the programme measures in the band the fixture belongs in", lufs, -15);
+    checkAtLeast("and not lower than the material can be", lufs, -30);
+    check("measuring raised nothing", banner(), "");
   }
 
   // Everything a phone has to be able to do: bring material in, arrange it with a finger, and
@@ -369,9 +401,10 @@
     const tabs = () => [...document.querySelectorAll(".v-panels__tab")];
 
     check("a 390 px viewport is a phone", q('[data-testid="app-shell"]').dataset.layout, "phone");
-    check("both panels are one tap away", tabs().map((tab) => tab.textContent), [
+    check("every panel is one tap away", tabs().map((tab) => tab.textContent), [
       "Medien",
       "Zeitleiste",
+      "Mischpult",
     ]);
     checkAtLeast(
       "and a tab is tall enough for a thumb",
