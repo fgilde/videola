@@ -3,6 +3,7 @@ import { useEffect, type ReactElement } from "react";
 import { timeToSeconds, type Rate, type Time } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
+import { IconButton } from "../primitives/Icon";
 import "./Preview.css";
 
 export interface TransportProps {
@@ -29,45 +30,21 @@ export function Transport({
 
   return (
     <div className="v-transport" role="toolbar" aria-label={t("transport.label")}>
-      <Button label={t("transport.toStart")} glyph="⏮" onClick={() => onSeek(0)} />
-      <Button label={t("transport.stepBack")} glyph="◀|" onClick={() => onStep(-1)} />
-      <Button
+      <IconButton icon="skipStart" label={t("transport.toStart")} onClick={() => onSeek(0)} />
+      <IconButton icon="stepBack" label={t("transport.stepBack")} onClick={() => onStep(-1)} />
+      <IconButton
+        icon={playing ? "pause" : "play"}
         label={t(playing ? "transport.pause" : "transport.play")}
-        glyph={playing ? "⏸" : "▶"}
         primary
         onClick={onPlayPause}
       />
-      <Button label={t("transport.stepForward")} glyph="|▶" onClick={() => onStep(1)} />
-      <Button label={t("transport.toEnd")} glyph="⏭" onClick={() => onSeek(duration)} />
+      <IconButton icon="stepForward" label={t("transport.stepForward")} onClick={() => onStep(1)} />
+      <IconButton icon="skipEnd" label={t("transport.toEnd")} onClick={() => onSeek(duration)} />
       <span className="v-transport__time" aria-label={t("transport.position")}>
         {formatTimecode(timeToSeconds(time), fps)}
         <span className="v-transport__duration"> / {formatTimecode(timeToSeconds(duration), fps)}</span>
       </span>
     </div>
-  );
-}
-
-function Button({
-  label,
-  glyph,
-  primary,
-  onClick,
-}: {
-  label: string;
-  glyph: string;
-  primary?: boolean;
-  onClick: () => void;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      className={`v-transport__button${primary === true ? " v-transport__button--primary" : ""}`}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-    >
-      <span aria-hidden="true">{glyph}</span>
-    </button>
   );
 }
 

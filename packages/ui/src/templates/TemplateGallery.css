@@ -26,13 +26,13 @@
 
 .v-templates__title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--v-text-lg);
 }
 
 .v-templates__step {
   margin: 0;
   color: var(--v-text-muted);
-  font-size: 0.9rem;
+  font-size: var(--v-text-sm);
 }
 
 .v-templates__note {
@@ -41,7 +41,7 @@
   background: var(--v-surface);
   border-radius: var(--v-radius-md);
   color: var(--v-danger);
-  font-size: 0.9rem;
+  font-size: var(--v-text-sm);
 }
 
 .v-templates__grid {
@@ -94,14 +94,14 @@
 
 .v-template__name {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--v-text-md);
 }
 
 .v-template__blurb {
   flex: 1;
   margin: 0;
   color: var(--v-text-muted);
-  font-size: 0.85rem;
+  font-size: var(--v-text-sm);
 }
 
 .v-template__facts {
@@ -110,7 +110,7 @@
   gap: var(--v-space-2);
   margin: 0;
   color: var(--v-text-muted);
-  font-size: 0.8rem;
+  font-size: var(--v-text-sm);
 }
 
 .v-template__tag,
@@ -122,7 +122,7 @@
 
 .v-templates__tag {
   margin-left: var(--v-space-2);
-  font-size: 0.75rem;
+  font-size: var(--v-text-xs);
 }
 
 .v-templates__row,
@@ -157,15 +157,14 @@
 .v-templates__chosen {
   margin: 0;
   color: var(--v-text-muted);
-  font-size: 0.85rem;
+  font-size: var(--v-text-sm);
 }
 
 .v-templates__chosen {
   color: var(--v-text);
 }
 
-.v-templates input[type="text"],
-.v-templates select {
+.v-templates input[type="text"] {
   min-height: var(--v-touch-target);
   padding: 0 var(--v-space-2);
   background: var(--v-surface);
@@ -173,6 +172,13 @@
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-md);
   font: inherit;
+  font-size: var(--v-text-sm);
+}
+
+/* Everything but the room the caret needs: that is the one thing a select cannot inherit from the
+   text field beside it, and a shorthand here would paint the caret over the chosen option. */
+.v-templates select {
+  min-height: var(--v-touch-target);
 }
 
 .v-templates input[type="color"] {

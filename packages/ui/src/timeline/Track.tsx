@@ -37,6 +37,9 @@ export function Track({
       className="v-track"
       data-track-id={track.id}
       data-track-index={index}
+      // What a clip is made of decides what it looks like, and the row is where the kind is
+      // known -- the clip itself only knows its own box.
+      data-kind={track.kind}
       data-drop-target={dropTarget || undefined}
       style={{ height: `${trackHeight(track)}px` }}
     >

@@ -7,11 +7,11 @@ body {
   background: var(--v-bg);
   color: var(--v-text);
   font-family: var(--v-font-ui);
-}
-
-:focus-visible {
-  outline: 2px solid var(--v-focus);
-  outline-offset: 2px;
+  font-size: var(--v-text-md);
+  line-height: var(--v-leading);
+  /* Reading text is what the scale is for; the interface reads better without the extra hinting
+     the browser applies to large blocks of prose. */
+  -webkit-font-smoothing: antialiased;
 }
 
 @media (prefers-reduced-motion: reduce) {

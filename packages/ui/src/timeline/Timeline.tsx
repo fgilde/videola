@@ -25,6 +25,7 @@ import {
 import type { Peaks } from "@videola/media";
 
 import { useI18n } from "../i18n/useI18n";
+import { IconButton } from "../primitives/Icon";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { Ruler } from "./Ruler";
@@ -255,29 +256,26 @@ export function Timeline({
       data-testid="timeline"
       onKeyDown={onKeyDown}
     >
+      {/* Symbols, not words. Six German labels at 44 px each are a whole row of the screen on a
+          tablet, and every one of them is a tool a person reaches for by shape. */}
       <div className="v-timeline__toolbar">
-        <button
-          type="button"
-          className="v-button"
+        <IconButton
+          icon="zoomOut"
+          label={t("timeline.zoomOut")}
           onClick={() => zoom(ZOOM_FACTOR, viewport.width / 2)}
-        >
-          {t("timeline.zoomOut")}
-        </button>
-        <button
-          type="button"
-          className="v-button"
+        />
+        <IconButton
+          icon="zoomIn"
+          label={t("timeline.zoomIn")}
           onClick={() => zoom(1 / ZOOM_FACTOR, viewport.width / 2)}
-        >
-          {t("timeline.zoomIn")}
-        </button>
-        <button
-          type="button"
-          className="v-button"
-          aria-pressed={snapEnabled}
+        />
+        <IconButton
+          icon="magnet"
+          label={t("timeline.snap")}
+          pressed={snapEnabled}
           onClick={() => setSnapEnabled((on) => !on)}
-        >
-          {t("timeline.snap")}
-        </button>
+        />
+        <span className="v-timeline__toolbarRule" aria-hidden="true" />
         {/* Two plain selects rather than modifier keys: a finger has no modifiers, and the mode a
             drag is in has to be readable before the drag, not guessed from what it just did. */}
         <select
@@ -302,13 +300,12 @@ export function Timeline({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          className="v-button"
+        <span className="v-timeline__toolbarRule" aria-hidden="true" />
+        <IconButton
+          icon="flag"
+          label={t("timeline.addMarker")}
           onClick={() => dispatch(cmd.markerAdd(playhead, ""))}
-        >
-          {t("timeline.addMarker")}
-        </button>
+        />
       </div>
 
       <div className="v-timeline__body">

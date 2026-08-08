@@ -862,11 +862,7 @@ function ErrorBanner({ error }: { error?: ShellError }): ReactElement | null {
   const { t } = useI18n();
   if (error === undefined) return null;
   return (
-    <p
-      key={error.id}
-      role="alert"
-      style={{ padding: "var(--v-space-2) var(--v-space-6)", color: "var(--v-danger)" }}
-    >
+    <p key={error.id} role="alert" className="v-banner v-banner--alert">
       {/* The reason is a catalogue key wherever the core or the importer raised it, and a
           browser's own words otherwise; translate() hands an unknown key straight back. */}
       {t(error.key, { reason: t(error.reason) })}
@@ -883,10 +879,7 @@ function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement 
   // a passive status update - role="status" is announced politely and easy to miss, which
   // contradicted the danger colour right next to it.
   return (
-    <p
-      role="alert"
-      style={{ padding: "var(--v-space-2) var(--v-space-6)", color: "var(--v-danger)" }}
-    >
+    <p role="alert" className="v-banner v-banner--alert">
       {t("warning.missingMedia", { count: missingMedia })}
     </p>
   );
@@ -906,14 +899,16 @@ function RestoreBanner({
   const { t } = useI18n();
   const when = new Date(session.savedAt);
   return (
-    <p role="status" style={{ padding: "var(--v-space-2) var(--v-space-6)" }}>
-      {t("session.found", {
-        when: Number.isNaN(when.getTime()) ? session.savedAt : when.toLocaleString(),
-      })}{" "}
-      <button type="button" onClick={onRestore}>
+    <p role="status" className="v-banner v-banner--offer">
+      <span>
+        {t("session.found", {
+          when: Number.isNaN(when.getTime()) ? session.savedAt : when.toLocaleString(),
+        })}
+      </span>
+      <button type="button" className="v-button" onClick={onRestore}>
         {t("session.restore")}
-      </button>{" "}
-      <button type="button" onClick={onDiscard}>
+      </button>
+      <button type="button" className="v-button v-button--quiet" onClick={onDiscard}>
         {t("session.discard")}
       </button>
     </p>

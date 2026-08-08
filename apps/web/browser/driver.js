@@ -322,7 +322,7 @@ async function announce() {
     // entries plus two; the count comes out of the real Rust core rather than out of a mock.
     let steps = 0;
     while (amountSlider() !== null && steps < 20) {
-      labelled("Rückgängig").click();
+      button("Rückgängig").click();
       steps += 1;
       await sleep(150);
     }
@@ -360,6 +360,18 @@ async function announce() {
       Math.round(clip.getBoundingClientRect().width), 200);
     check("a track was created to hold it",
       document.querySelectorAll(".v-timeline__header").length, 1);
+
+    // The picture is the reason anyone opens the application, and on a desktop it had been squeezed
+    // to a stamp between the transport and a mixer strip that grew with every track. Measured on the
+    // canvas and not on its pane: a pane can be tall and hold nothing but letterbox.
+    checkAtLeast("the picture gets the room a desktop has for it",
+      Math.round(q(".v-preview__canvas").getBoundingClientRect().height), 230);
+    // The absolute floor above is true of a 744 px viewport and says nothing about a taller one.
+    // This is the rule the layout is actually built on, at any height: the picture is the largest
+    // zone on the screen. It was the smallest.
+    checkAtLeast("and it is the largest zone, not the smallest",
+      Math.round(q(".v-preview").getBoundingClientRect().height -
+        q(".v-timeline").getBoundingClientRect().height), 1);
 
     if (virtual) {
       checkAtLeast("the preview shows a decoded frame",
@@ -560,7 +572,7 @@ async function announce() {
     checkNear("a finger drags the clip along the timeline", alongTheTimeline() - startedAt, 120, 6);
     check("dragging raised nothing", banner(), "");
 
-    labelled("Rückgängig").click();
+    button("Rückgängig").click();
     await sleep(200);
     check("and the whole drag is one step back", alongTheTimeline(), startedAt);
 
@@ -602,7 +614,7 @@ async function announce() {
 
     await photograph("phone-library");
 
-    labelled("Auf die Zeitleiste").click();
+    button("Auf die Zeitleiste").click();
     await until("the timeline again", () => q('[data-testid="timeline"]'));
     check(
       "placing a medium shows where it landed",
@@ -634,7 +646,7 @@ async function announce() {
     check("putting an effect on a clip raised nothing", banner(), "");
     await photograph("phone-inspector");
 
-    labelled("Rückgängig").click();
+    button("Rückgängig").click();
     await sleep(200);
     labelled("Zeitleiste").click();
     await until("the timeline again", () => q('[data-testid="timeline"]'));
@@ -1008,10 +1020,10 @@ async function announce() {
     checkNear("and it starts where the finger let go",
       landed.getBoundingClientRect().left, dropX, 6);
 
-    labelled("Rückgängig").click();
+    button("Rückgängig").click();
     await sleep(200);
     check("the whole drag is one step back", all("[data-clip-id]").length, 2);
-    labelled("Wiederholen").click();
+    button("Wiederholen").click();
     await until("the clip again", () => all("[data-clip-id]").length === 3);
 
     // Both stills, both out of their own file, and visibly not the same picture -- which is what
