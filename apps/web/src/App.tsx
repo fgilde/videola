@@ -89,8 +89,8 @@ export function App(): ReactElement {
     });
   }, [doc]);
 
-  // One transport per document: sourceTimesAt is bound to the document it came from, and opening
-  // another project has to leave the old audio context behind rather than steer two.
+  // One transport per document: the batch queries are bound to the document they came from, and
+  // opening another project has to leave the old audio context behind rather than steer two.
   useEffect(() => {
     if (doc === undefined) return;
     const audio = new AudioContext();
@@ -98,6 +98,7 @@ export function App(): ReactElement {
       audio,
       graph: new AudioGraph(audio, new AudioSource()),
       sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
     });
     setPlayback(next);
     return () => {
