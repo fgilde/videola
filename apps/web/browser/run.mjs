@@ -96,7 +96,10 @@ const server = createServer((req, res) => {
     void capture(name).then(() => send(res, Buffer.from("ok"), "text/plain"));
     return;
   }
+  // Two containers of the same two seconds: a browser without proprietary codecs reads the WebM.
   if (url === "/fixture.mp4") return send(res, readFileSync(join(here, "fixture.mp4")), TYPES[".mp4"]);
+  if (url === "/fixture.webm")
+    return send(res, readFileSync(join(here, "fixture.webm")), "video/webm");
   if (url === "/second.mp4") return send(res, readFileSync(join(here, "second.mp4")), TYPES[".mp4"]);
   if (url === "/driver.js") return send(res, readFileSync(join(here, "driver.js")), TYPES[".js"]);
   const path = join(dist, url === "/" ? "index.html" : decodeURIComponent(url));

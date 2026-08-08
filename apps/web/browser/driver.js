@@ -6,6 +6,30 @@
 // the browser: German on this machine, English on a CI runner. Pinning it is what makes the
 // two runs the same run.
 localStorage.setItem("videola.locale", "de");
+// The theme toggle is labelled with the theme it switches *to*, so its text follows
+// prefers-color-scheme: "Hell" on a dark runner, "Dunkel" on a light one. Pinned for the same
+// reason as the language.
+localStorage.setItem("videola.theme", "dark");
+
+// Chrome ships without proprietary codecs on some builds -- the CI runner decodes no H.264 at all
+// -- so the fixture follows what this browser can actually read. Both files hold the same two
+// seconds of colour bars; only the container differs.
+// Resolved once inside the run: this file is a classic script, so there is no top-level await.
+let FIXTURE = { name: "fixture.mp4", type: "video/mp4" };
+
+async function pickFixture() {
+  try {
+    const support = await VideoDecoder.isConfigSupported({
+      codec: "avc1.42001E",
+      codedWidth: 640,
+      codedHeight: 360,
+    });
+    if (support.supported === true) return;
+  } catch {
+    // No decoder at all answers the question the same way a refusal does.
+  }
+  FIXTURE = { name: "fixture.webm", type: "video/webm" };
+}
 
 (function () {
   const results = [];
@@ -290,9 +314,9 @@ localStorage.setItem("videola.locale", "de");
     check("nothing is wrong before anything happened", banner(), "");
     check("WebGL2 is up behind the preview", q(".v-preview__canvas").getContext("webgl2") !== null, true);
 
-    const bytes = await (await fetch("/fixture.mp4")).blob();
+    const bytes = await (await fetch("/" + FIXTURE.name)).blob();
     const transfer = new DataTransfer();
-    transfer.items.add(new File([bytes], "fixture.mp4", { type: "video/mp4" }));
+    transfer.items.add(new File([bytes], FIXTURE.name, { type: FIXTURE.type }));
     const zone = q(".v-dropzone");
 
     drag("dragenter", zone, transfer);
@@ -525,7 +549,7 @@ localStorage.setItem("videola.locale", "de");
     const entry = q("[data-media-id]").textContent;
     check(
       "the library says what it holds",
-      ["fixture.mp4", "00:00:02.00", "640 × 360"].every((part) => entry.includes(part)),
+      [FIXTURE.name, "00:00:02.00", "640 × 360"].every((part) => entry.includes(part)),
       true,
     );
 
@@ -617,7 +641,7 @@ localStorage.setItem("videola.locale", "de");
   // FileList built by a DataTransfer. That is exactly why the wizard uses a native input and not a
   // scripted picker.
   async function chooseFile(input, name) {
-    const bytes = await (await fetch("/fixture.mp4")).blob();
+    const bytes = await (await fetch("/" + FIXTURE.name)).blob();
     const transfer = new DataTransfer();
     transfer.items.add(new File([bytes], name, { type: "video/mp4" }));
     input.files = transfer.files;
@@ -748,13 +772,13 @@ localStorage.setItem("videola.locale", "de");
     const advance = () => labelled("Weiter").closest("button");
     check("and refuses to go on while the placeholders are empty", advance().disabled, true);
 
-    await chooseFile(fileInput("shot1"), "fixture.mp4");
+    await chooseFile(fileInput("shot1"), FIXTURE.name);
     await until("the first choice to register", () => q('[data-chosen="shot1"]'));
-    await chooseFile(fileInput("shot2"), "fixture.mp4");
+    await chooseFile(fileInput("shot2"), FIXTURE.name);
     await until("the second choice to register", () => q('[data-chosen="shot2"]'));
     check("two out of three is still not enough", advance().disabled, true);
 
-    await chooseFile(fileInput("shot3"), "fixture.mp4");
+    await chooseFile(fileInput("shot3"), FIXTURE.name);
     await until("the third choice to register", () => q('[data-chosen="shot3"]'));
     check("the third one opens the way on", advance().disabled, false);
     check("choosing material raised nothing", banner(), "");
@@ -1004,9 +1028,9 @@ localStorage.setItem("videola.locale", "de");
   const fileInput = (slot) => q(`[data-slot-id="${slot}"] input[type="file"]`);
 
   async function dropFixture() {
-    const bytes = await (await fetch("/fixture.mp4")).blob();
+    const bytes = await (await fetch("/" + FIXTURE.name)).blob();
     const transfer = new DataTransfer();
-    transfer.items.add(new File([bytes], "fixture.mp4", { type: "video/mp4" }));
+    transfer.items.add(new File([bytes], FIXTURE.name, { type: FIXTURE.type }));
     drag("drop", q(".v-dropzone"), transfer);
     return until("a clip on the timeline", () => q("[data-clip-id]"));
   }
@@ -1021,7 +1045,10 @@ localStorage.setItem("videola.locale", "de");
     return until("the second library entry", () => all("[data-media-id]").length === 2);
   }
 
-  (templates ? runTemplates() : phone ? runPhone() : tablet ? runTablet() : run())
+  pickFixture()
+    .then(() =>
+      templates ? runTemplates() : phone ? runPhone() : tablet ? runTablet() : run(),
+    )
     .catch((error) => {
       results.push({ name: "the run itself", ok: false, got: String(error), want: "no throw" });
     })
