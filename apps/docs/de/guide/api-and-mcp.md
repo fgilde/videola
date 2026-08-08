@@ -60,11 +60,23 @@ node apps/server/dist/mcp.mjs     # MCP über stdio
 
 Eingestellt wird ausschließlich über die Umgebung: `VIDEOLA_HOST` (Vorgabe `127.0.0.1`),
 `VIDEOLA_PORT` (`7331`), `VIDEOLA_TOKEN`, `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` (`8`),
-`VIDEOLA_MAX_BODY_BYTES` (512 MiB), `VIDEOLA_LOCALE`, `VIDEOLA_WASM`.
+`VIDEOLA_MAX_BODY_BYTES` (512 MiB), `VIDEOLA_LOCALE`, `VIDEOLA_WASM`, `VIDEOLA_WEB_ROOT`.
 
 Eine Adresse außerhalb von Loopback **ohne** Token wird nicht gebunden, sondern mit einer Begründung
 abgelehnt. Ist ein Token gesetzt, braucht jede Anfrage `Authorization: Bearer …`; verglichen wird in
 konstanter Zeit.
+
+`VIDEOLA_WEB_ROOT` zeigt auf ein Verzeichnis mit der gebauten Web-App, die dann neben der
+Schnittstelle mit ausgeliefert wird — so macht es das Docker-Image. Ohne die Variable antwortet jeder
+Pfad außerhalb von `/api` mit 404. Ausgeliefert wird sie **ohne** Token: der Editor hält seine
+Projekte im Browser des Besuchers, und die Speicherwurzel bleibt hinter `/api`.
+
+Der MCP-Server liest nur `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` und `VIDEOLA_LOCALE`. Er hört
+auf nichts, also darf ihn eine Bindeadresse für den HTTP-Server nicht am Start hindern — genau das
+täte sonst ein Container, der `VIDEOLA_HOST` für seine Schnittstelle setzt.
+
+Dieselben Bündel bringen eine CLI mit (`dist/cli.mjs`), die eine Command-Folge aus einer Datei auf ein
+Projekt anwendet und es speichert; siehe [Bauen und Ausliefern](./building-and-releasing.md).
 
 ## Die Vertrauensgrenze
 

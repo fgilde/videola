@@ -55,7 +55,7 @@ geprüft werden können, bevor sie jemand sieht.
 
 | Job | Ergebnis |
 |---|---|
-| `gate` | drei Ausgaben, ob die Signatur-Secrets für macOS, Android und iOS vorhanden sind |
+| `gate` | vier Ausgaben, ob die Signatur-Secrets für macOS, Android, iOS und den Updater vorhanden sind |
 | `docker` | `ghcr.io/fgilde/videola:<tag>` und `:latest` |
 | `wasm` | das Artefakt, das die drei App-Jobs verbrauchen |
 | `desktop` | Matrix über Ubuntu, Windows und macOS: `.deb` und AppImage, NSIS-Installer, `.dmg` |
@@ -88,9 +88,48 @@ zwanzig Minuten Kompilieren beim Import scheitern.
 | macOS DMG | `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (app-spezifisch), `APPLE_TEAM_ID` | das DMG wird gebaut, bleibt aber unsigniert, und Gatekeeper blockiert es beim Nutzer |
 | Android APK und AAB | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | der Job wird übersprungen; ein unsigniertes APK lässt sich nicht installieren |
 | iOS IPA | `IOS_CERTIFICATE` (base64 Distribution-`.p12`), `IOS_MOBILE_PROVISION` (base64), dazu `APPLE_CERTIFICATE_PASSWORD` und `APPLE_TEAM_ID` | der Job wird übersprungen; ohne Zertifikat und Profil gibt es kein verteilbares IPA |
+| Auto-Update auf dem Desktop | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_UPDATER_PUBKEY`, dazu `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` bei geschütztem Schlüssel | die Installer entstehen wie sonst und tragen gar keinen Updater |
 
 Der iOS-Keychain-Import verwendet `APPLE_CERTIFICATE_PASSWORD` als Passwort für `IOS_CERTIFICATE`,
 `ios` kann also offen stehen, während dieses Passwort noch leer ist.
+
+### Auto-Update
+
+`tauri signer generate -w ~/.tauri/videola.key` schreibt einen privaten Schlüssel und gibt seine
+öffentliche Hälfte aus. Der private gehört in das Secret `TAURI_SIGNING_PRIVATE_KEY`, der öffentliche
+in `TAURI_UPDATER_PUBKEY`; mehr ist nicht einzurichten. Der Endpunkt ist
+`https://github.com/<owner>/<repo>/releases/latest/download/latest.json`, den setzt der Workflow aus
+`github.repository` ein, und `uploadUpdaterJson` lässt `tauri-action` dieses Manifest neben die
+Installer legen.
+
+Weder Endpunkt noch öffentlicher Schlüssel stehen in `tauri.conf.json`. Der Workflow fügt
+`plugins.updater` und `bundle.createUpdaterArtifacts` mit `jq` in die Konfiguration ein, und nur wenn
+`gate` sagt, dass beide Hälften des Schlüssels da sind. Zwei Gründe, und beide entscheiden zwischen
+einem funktionierenden und einem kaputten Release:
+
+- Ein eingecheckter Platzhalter-`pubkey` wäre ein Versprechen ohne Deckung: eine Anwendung, die ein
+  Update anbietet, das sie nie prüfen kann.
+- `createUpdaterArtifacts: true` **ohne** Signaturschlüssel überspringt das Signieren nicht still,
+  sondern bricht das Bundling ab. In der Datei stehen gelassen würde es jedes Release zerlegen, das
+  jemand ohne Schlüssel baut.
+
+Ohne die Secrets wird das Plugin gar nicht erst registriert: das Deserialisieren eines fehlenden
+`plugins.updater` ist ein harter Fehler, der die Anwendung ihr Fenster nicht öffnen ließe. `main.rs`
+sieht darum in der Konfiguration nach, bevor es registriert. Ist der Block da, aber kein Update
+erreichbar, behandelt die Anwendung das wie ein Gerät ohne Netz — es sieht niemand einen Fehler.
+
+Das Plugin hängt an den drei Desktop-Zieltripeln statt an der Kiste, und seine Berechtigung liegt in
+einer eigenen Capability, beschränkt auf `["linux", "macOS", "windows"]`. `tauri-plugin-updater` hat
+keinen Android- und keinen iOS-Build; eine bedingungslose Abhängigkeit oder die Berechtigung in der
+Standard-Capability würde die beiden Mobil-Jobs anhalten statt den Desktop-Job — ein Fehler weit weg
+von seiner Ursache.
+
+`serde_json` muss die Kiste selbst mitbringen: `generate_context!` bäckt jeden `plugins`-Block als
+serde_json-Wert ein. Ohne den Block wird die Abhängigkeit nicht gebraucht, mit ihm bricht der Build
+ohne sie ab — also genau in dem Release, das lokal niemand baut.
+
+Eine installierte Anwendung, die eine neuere Version findet, fragt einmal beim Start und installiert
+sie, wenn der Nutzer zustimmt. Es gibt kein stilles Update und kein Nachfragen im Hintergrund.
 
 Zwei Dinge muss der Workflow selbst ergänzen, weil die Tauri-Templates sie nicht mitbringen: die
 Android-Signatur (`tauri android init` erzeugt keine `signingConfig`, der Workflow hängt einen
@@ -99,6 +138,77 @@ iOS-Export-Methode (`--export-method app-store-connect`, weil das zum Distributi
 
 Verpackt wird der Anwendungsrahmen, und die Release-Notes sagen das auch. Ohne mobile
 Signaturschlüssel sind vier Artefakte das erwartete Ergebnis, nicht sechs.
+
+## Das Docker-Image
+
+Drei Stufen: `rust:1-bookworm` baut den WASM-Kern, `node:22-bookworm-slim` installiert den Workspace
+und baut Web-App und Server-Bündel, `node:22-alpine` behält das Ergebnis. Die letzte Stufe trägt kein
+`node_modules` — esbuild bündelt `serve.mjs`, `mcp.mjs` und `cli.mjs` zu reinem ESM ohne offene
+Auflösung, ausgeliefert werden also drei JavaScript-Dateien, eine `.wasm` und die gebaute Web-App.
+
+| | |
+|---|---|
+| Läuft als | `node`, uid 1000, nie als root |
+| Port | 7331, ein Prozess |
+| Speicher | `/data`, als Volume deklariert und `node` gehörend |
+| Health-Check | `node -e "fetch('…/api/health')"` mit dem Token aus der Umgebung |
+| Größe | rund 170 MB, davon ist Node das meiste |
+
+### Ein Prozess statt nginx und Node
+
+Das Image davor lieferte statische Dateien mit nginx aus und sonst nichts. Mit der Schnittstelle
+dazu blieben zwei Wege: ein zweiter Prozess unter einer Aufsicht, oder der eine Prozess, der ohnehin
+HTTP spricht, liefert die Dateien mit. Er liefert sie mit: `VIDEOLA_WEB_ROOT` zeigt auf die gebaute
+App, unbekannte Pfade beantwortet `index.html`, weil der Editor eine Single-Page-Anwendung ist, und
+`.wasm` bekommt `application/wasm` — den einen Typ, den ein Browser nicht raten will und ohne den der
+Editor nie startet. Der angefragte Pfad läuft durch dieselbe Einschlussprüfung wie die
+Speicherwurzel, `..` und ein Symlink aus der Web-Wurzel heraus werden also beide abgelehnt.
+
+Statische Dateien gehen **ohne** Token raus. Der Editor hält seine Projekte im Browser des Besuchers
+und liest nichts vom Server; alles unter `/api`, und dort liegt die Speicherwurzel, bleibt hinter dem
+Bearer-Token.
+
+### Warum der Container ohne Token nicht startet
+
+Ein veröffentlichter Port erreicht nur einen Prozess, der an `0.0.0.0` gebunden ist, und
+`configFromEnv` lehnt diese Adresse ohne `VIDEOLA_TOKEN` ab. Das Image setzt darum
+`VIDEOLA_HOST=0.0.0.0` und kein Token, und ein `docker run` ohne eines hält sofort mit der Begründung
+an. Das ist die beabsichtigte Antwort und kein Versehen: ein Container, der eine erreichbare Adresse
+bindet und hofft, verschenkt seine Speicherwurzel an jede Maschine, die ihn sieht.
+
+Der MCP-Server hört auf nichts und liest darum gar keine Bindeadresse — `apiConfigFromEnv` gibt ihm
+nur Speicherwurzel, Projektgrenze und Sprache. Sonst hätte das `VIDEOLA_HOST` des Images einen
+stdio-Server an einem Socket gehindert, den er nie öffnet.
+
+`serve.mjs` schließt seinen Listener bei `SIGTERM`. Als PID 1 bekommt ein Prozess für dieses Signal
+keine Vorgabe, ohne den Handler würde `docker stop` also seine zehn Sekunden abwarten und dann töten.
+
+## Die Kommandozeile
+
+`dist/cli.mjs` — verlinkt `videola` — ist eine dritte Haut über derselben `Api`-Klasse, die HTTP-Routen
+und MCP-Werkzeuge benutzen. Sie kann damit nichts, was die beiden nicht können, und überspringt keine
+Prüfung, die die beiden machen.
+
+```sh
+videola apply [--in <Datei>] [--media <Datei>]... [--commands <Datei>] --out <Datei>
+videola describe <Datei>
+videola validate <Datei>
+videola schema [<Command>]
+```
+
+Die Commands-Datei enthält ein Command-Objekt oder ein Array davon, und das Array landet als ein
+einziger History-Eintrag: ein Command, den der Kern ablehnt, nimmt den ganzen Stapel mit und
+schreibt nichts. Medien-Ids sind `med_` gefolgt vom SHA-256 der Dateibytes — genau das erlaubt einer
+Commands-Datei, ein Medium zu nennen, das derselbe Lauf erst einbindet, ohne vorher etwas
+nachzuschlagen.
+
+Pfade nimmt sie wie gegeben, ohne die Einschlussprüfung der Speicherwurzel. Diese Prüfung zäunt eine
+Schnittstelle ein, die Fremde erreichen; vor einem Terminal steht kein Fremder, und eine CLI, die
+`../footage/intro.mp4` ablehnt, wäre falsch statt sicher. An den Schnittstellen, die Fremde wirklich
+erreichen, ändert sich nichts.
+
+Einen `export`-Unterbefehl gibt es nicht. Video zu kodieren braucht die Encoder des Browsers, die ein
+Kommandozeilenprozess nicht hat; ein `.videola`-Archiv ist das Einzige, was dabei herauskommt.
 
 ## Die Doku-Seite
 
