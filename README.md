@@ -2,12 +2,20 @@
 
 # Videola
 
-Videola is a browser-based video editor. It is early: the project core and the application shell
-exist, the editing surface does not. There is no timeline UI, no preview, no effects rendering and
-no export.
+Videola is a browser-based video editor. It is early, but it edits: drop a video in, cut it on the
+timeline, press play and watch it. There is no effect, keyframe, inspector or export yet.
+
+![The editor with a decoded frame in the preview](apps/docs/public/editor-preview.png)
 
 ## What works today
 
+- Import by drag-and-drop or file picker. Media are hashed with SHA-256 and stored in OPFS under
+  that hash before anything is dispatched, so the same file imported twice is stored once.
+- A timeline you can work on: move and trim clips across tracks, scrub, split and delete, snap to
+  clip edges and the playhead, zoom. One Pointer Events path serves mouse, pen and touch, and hit
+  areas grow to 44 px when the pointer is not a mouse. A whole drag is one undo step.
+- Playback through WebCodecs decoding and a WebGL2 compositor, with the audio clock in the lead and
+  a transport for play/pause, frame stepping and jumping to either end.
 - A Rust core (`videola-core`) with the project data model, a command bus of 20 commands, and
   undo/redo built from JSON-Patch diffs. Time is stored as integer flicks, not float seconds.
 - The `.videola` project format: a ZIP holding a manifest, `project.json`, and media files named by
@@ -20,6 +28,9 @@ no export.
   `.videola` file and reads it back.
 - CI runs fmt, clippy, the Rust tests, a check that the generated TypeScript types are current, the
   wasm build, and the web typecheck, tests and build.
+- Three browser harnesses that need no Playwright, only an installed Chrome: `test:gpu` renders real
+  pixels against ANGLE, `test:browser` in `@videola/ui` measures real layout, and the one in
+  `apps/web` drives the built application with a real video file.
 
 ## Build
 
@@ -71,9 +82,11 @@ result or as `skipped`.
 | Android APK and AAB | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the job is skipped; an unsigned APK cannot be installed or shipped to Play |
 | iOS IPA | `IOS_CERTIFICATE` (base64 distribution `.p12`) and `IOS_MOBILE_PROVISION` (base64), plus `APPLE_CERTIFICATE_PASSWORD` and `APPLE_TEAM_ID` | the job is skipped; no distributable IPA exists without a certificate and a provisioning profile |
 
-An installer built today packages the shell described above — no timeline, no playback, no effects,
-no export — so it installs a working app frame and nothing to edit with. FFmpeg is not bundled yet
+An installer built today packages the editor described above: import, timeline editing and playback
+work, effects and export do not, so nothing can leave the application yet. FFmpeg is not bundled
 either, and the Docker image only serves static files.
+
+The published `v0.1.0` release predates all of this and installs the app frame alone.
 
 ## Layout
 

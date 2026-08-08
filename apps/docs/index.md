@@ -3,9 +3,8 @@ layout: home
 hero:
   text: A video editor built on a Rust core
   tagline: >
-    The project model, the command bus and the application shell exist, and so does a usable
-    timeline with one pointer path for mouse and touch. Playback, effects and export have not
-    reached the surface yet.
+    Drop a video in, cut it on the timeline, press play and watch it. Effects, keyframes and
+    export are not in the surface yet.
   image:
     src: /videola-logo.webp
     alt: Videola
@@ -20,6 +19,20 @@ hero:
       text: Source
       link: https://github.com/fgilde/videola
 features:
+  - title: Import, cut, play
+    details: >
+      Drag a video onto the window or pick it from the button. It lands in OPFS under the hash of
+      its own bytes, becomes a clip, and plays back through WebCodecs and a WebGL2 compositor with
+      the audio clock in the lead.
+    link: /guide/editing
+    linkText: Editing
+  - title: One pointer path for mouse and touch
+    details: >
+      Dragging, trimming, scrubbing, pinch-zoom and long-press all run through Pointer Events, so
+      the phone is not a second implementation. Hit areas grow to 44 px when the pointer is not a
+      mouse.
+    link: /guide/editing#the-timeline
+    linkText: Gestures
   - title: One model, written once
     details: >
       The project model, the command bus and the .videola reader and writer live in
