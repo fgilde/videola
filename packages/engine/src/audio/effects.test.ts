@@ -370,28 +370,53 @@ describe("a limiter on the master bus", () => {
   });
 });
 
+describe("the order of an effect chain", () => {
+  // A chain is a sequence, not a set. A limiter after a boost catches what the boost made; the same
+  // two the other way round boost what the limiter already held down, and the peak that leaves is
+  // not the same. Wiring the chain in the order it is stored is the whole of honouring that.
+  it("runs the effects in the order the project stores them", async () => {
+    const chained = async (effects: Effect[]): Promise<Float32Array> => {
+      const ctx = context(1);
+      return render(ctx, fullScale(ctx), project([track("trk_1", [clip()], { effects })]));
+    };
+    const boost = (): Effect => effect("eq", { frequency: 400, gain: 24, q: 1 });
+    const hold = (): Effect => effect("limiter", { threshold: -18 });
+
+    const [boostFirst, limitFirst] = await Promise.all([
+      chained([boost(), hold()]),
+      chained([hold(), boost()]),
+    ]);
+    const window: [number, number] = [sample(0.3), sample(0.95)];
+
+    expect(peak(limitFirst, ...window)).toBeGreaterThan(peak(boostFirst, ...window) * 1.5);
+  });
+});
+
 describe("an effect chain that cannot be built in full", () => {
   // One unknown type must not take the track's sound with it, for the same reason one missing
-  // medium does not take the timeline's.
-  it("skips a type this build does not carry and keeps the rest of the chain", async () => {
-    const ctx = context(0.5);
-    const out = await render(
-      ctx,
-      twoTones(ctx),
-      project([
-        track("trk_1", [clip()], {
-          effects: [effect("brightness", { amount: 2 }), effect("eq", { frequency: HIGH_HZ, gain: -24, q: 1 })],
-        }),
-      ]),
-    );
+  // medium does not take the timeline's. Both positions, because the chain is walked from its far
+  // end: an unknown one last in the list is the first thing that walk meets, and giving up there
+  // would silently drop everything ahead of it.
+  it("skips a type this build does not carry, wherever it sits in the chain", async () => {
+    const alien = (): Effect => effect("brightness", { amount: 2 });
+    const notch = (): Effect => effect("eq", { frequency: HIGH_HZ, gain: -24, q: 1 });
+    const chained = async (effects: Effect[]): Promise<Float32Array> => {
+      const ctx = context(0.5);
+      return render(ctx, twoTones(ctx), project([track("trk_1", [clip()], { effects })]));
+    };
     const flatCtx = context(0.5);
     const flat = await render(flatCtx, twoTones(flatCtx), project([track("trk_1", [clip()])]));
     const window: [number, number] = [sample(0.2), sample(0.45)];
 
-    expect(toneStrength(out, LOW_HZ, ...window)).toBeGreaterThan(0);
-    expect(toneStrength(out, HIGH_HZ, ...window)).toBeLessThan(
-      toneStrength(flat, HIGH_HZ, ...window) / 10,
-    );
+    for (const chain of [[alien(), notch()], [notch(), alien()]]) {
+      const out = await chained(chain);
+      expect(toneStrength(out, LOW_HZ, ...window)).toBeGreaterThan(
+        toneStrength(flat, LOW_HZ, ...window) * 0.8,
+      );
+      expect(toneStrength(out, HIGH_HZ, ...window)).toBeLessThan(
+        toneStrength(flat, HIGH_HZ, ...window) / 10,
+      );
+    }
   });
 });
 
@@ -559,5 +584,28 @@ describe("a keyframed effect parameter", () => {
     expect(toneStrength(out, LOW_HZ, ...middle)).toBeLessThan(
       toneStrength(out, HIGH_HZ, ...middle),
     );
+  });
+
+  // A hold has to step, not glide. The sampling inside a segment is what would turn it into a glide:
+  // read every eighth and the last reading before the corner already sits an eighth of the way up
+  // the ramp the platform draws to the next one. The sample a single flick short of each corner is
+  // what keeps the old value standing until the moment the new one takes over.
+  it("steps at a corner the core holds up to rather than sliding into it", async () => {
+    const stepped = effect("eq", { frequency: LOW_HZ, gain: -24, q: 1 });
+    stepped.keyframes = { frequency: [keyframe(0, LOW_HZ), keyframe(SECOND, HIGH_HZ)] };
+
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      twoTones(ctx),
+      project([track("trk_1", [clip()], { effects: [stepped] })]),
+      // What `Interp::Hold` resolves to: the left corner's value everywhere up to the right one.
+      resolver({ [stepped.id]: (at) => (at < SECOND ? LOW_HZ : HIGH_HZ) }),
+    );
+
+    // The last tenth of the segment, where a glide would already have carried the notch most of the
+    // way to the high tone. Held, the low one is still the one in it.
+    const late: [number, number] = [sample(0.88), sample(0.98)];
+    expect(toneStrength(out, LOW_HZ, ...late)).toBeLessThan(toneStrength(out, HIGH_HZ, ...late));
   });
 });

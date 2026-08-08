@@ -222,6 +222,11 @@ function masterOf(project: Project, effects: Effect[]): Project {
   return { ...project, master: { volume: project.master.volume, effects } } as Project;
 }
 
+// The number printed beside a slider, which is what a reader reads. The slider's own `value` is the
+// platform's opinion of what fits between its min and max, and asking it proves nothing about ours.
+const readoutFor = (label: string): string =>
+  screen.getByLabelText(label).parentElement!.querySelector(".v-param__value")!.textContent!;
+
 const snapshot = (entries: Record<string, Record<string, number>>): EffectParamSnapshot =>
   new Map(
     Object.entries(entries).map(([id, params]) => [
@@ -376,6 +381,9 @@ describe("Mixer effect chains", () => {
     expect(screen.getByLabelText<HTMLInputElement>("Frequenz").value).toBe("400");
   });
 
+  // Read off the readout and not off the slider. A range input clamps its own `value` to its own
+  // `max`, so asking the input what it holds asks the platform, not this code -- and the number
+  // beside it, which is the one anybody reads, would go on saying 99 while the filter ran at 24.
   it("shows a stored value past the declared range clamped to it", () => {
     show(
       <Mixer
@@ -386,7 +394,26 @@ describe("Mixer effect chains", () => {
       />,
     );
 
-    expect(screen.getByLabelText<HTMLInputElement>("Anhebung").value).toBe("24");
+    expect(readoutFor("Anhebung")).toBe("24");
+  });
+
+  // Nothing clamps this one for us: a `ParamValue` of another kind reaches a range input as NaN,
+  // which empties the slider and prints nothing at all where a number belongs.
+  it("falls back to the default for a stored value that is not a number", () => {
+    const odd = new Map([
+      ["eff_eq", new Map([["frequency", { kind: "bool", value: true }]])],
+    ]) as unknown as EffectParamSnapshot;
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("eq")])])}
+        effects={OFFERED}
+        effectParamsAt={() => odd}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(readoutFor("Frequenz")).toBe("1.000");
+    expect(screen.getByLabelText<HTMLInputElement>("Frequenz").value).toBe("1000");
   });
 
   it("gives no row to an effect type this build cannot make a sound with", () => {
