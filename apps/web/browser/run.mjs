@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "dist");
 const shot = join(here, "preview.png");
+const templateShot = join(here, "templates.png");
 const phoneShot = join(here, "phone.png");
 const phoneLibraryShot = join(here, "phone-library.png");
 // Outside the repository: Chrome keeps the directory locked for a moment after it exits, and a
@@ -229,8 +230,17 @@ try {
     [...desktop, "--virtual-time-budget=300000", `--screenshot=${shot}`],
     300_000,
   );
+  // The template run needs both halves the other two runs split between them: real decoding time
+  // (so the fetch-driven clock) and a drawing buffer nobody has taken away (so virtual time). It is
+  // its own launch because it starts from an untouched editor -- a gallery that replaces the
+  // document has nothing to prove against a project the run before it already built.
+  const baked = await drive(
+    `http://localhost:${PORT}/?templates=1&virtual=1`,
+    [...desktop, "--virtual-time-budget=300000", `--screenshot=${templateShot}`],
+    300_000,
+  );
   const pocket = await drivePhone(180_000);
-  const results = [...live, ...drawn, ...pocket];
+  const results = [...live, ...drawn, ...baked, ...pocket];
   for (const result of results.filter((entry) => !entry.ok)) {
     console.error(
       `FAIL ${result.name}\n  got  ${JSON.stringify(result.got)}\n  want ${JSON.stringify(result.want)}`,
@@ -238,7 +248,9 @@ try {
   }
   const failed = results.filter((entry) => !entry.ok).length;
   console.log(`${results.length - failed}/${results.length} application checks passed`);
-  for (const path of [shot, phoneShot, phoneLibraryShot]) console.log(`screenshot: ${path}`);
+  for (const path of [shot, templateShot, phoneShot, phoneLibraryShot]) {
+    console.log(`screenshot: ${path}`);
+  }
   process.exitCode = failed === 0 ? 0 : 1;
 } finally {
   server.close();
