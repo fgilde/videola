@@ -113,6 +113,58 @@ describe("source times through the real WASM backend", () => {
     expect(doc.effectParamsAt(2 * SECOND).size).toBe(0);
   });
 
+  // Until `keyframe.add` existed, only static values had ever crossed this boundary -- the
+  // interpolation was proven in Rust and the value-to-pixel chain on the GPU, with the join
+  // between them untested. This is that join: two keys, and a value that moves in between.
+  it("interpolates a keyframed parameter on the way across", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
+    const clip = clipOn(doc, 0);
+    doc.dispatch(cmd.effectAdd(clip.id, "brightness"));
+    doc.dispatch(cmd.effectSetParam(clip.id, "brightness", "amount", { kind: "float", value: 9 }));
+    doc.dispatch(cmd.keyframeAdd(clip.id, "brightness", "amount", 0, { kind: "float", value: 0 }));
+    doc.dispatch(
+      cmd.keyframeAdd(clip.id, "brightness", "amount", 2 * SECOND, { kind: "float", value: 1 }),
+    );
+    const effect = clipOn(doc, 0).effects[0]!;
+    const amountAt = (at: number): unknown => doc.effectParamsAt(at).get(effect.id)?.get("amount");
+
+    expect(amountAt(0)).toEqual({ kind: "float", value: 0 });
+    expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0.5 });
+    expect(amountAt(3 * SECOND)).toEqual({ kind: "float", value: 1 });
+
+    doc.dispatch(cmd.keyframeSetInterp(clip.id, "brightness", "amount", 0, "hold"));
+    expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0 });
+
+    // Off the clock again the static value takes over -- and it was there the whole time.
+    doc.dispatch(cmd.keyframeRemove(clip.id, "brightness", "amount", 0));
+    doc.dispatch(cmd.keyframeRemove(clip.id, "brightness", "amount", 2 * SECOND));
+    expect(amountAt(SECOND)).toEqual({ kind: "float", value: 9 });
+  });
+
+  // The Inspector's own drag: two hundred dispatches under one key, one step back.
+  it("collapses a drag over a keyframed parameter into one undo step", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
+    const clip = clipOn(doc, 0);
+    doc.dispatch(cmd.effectAdd(clip.id, "brightness"));
+    const before = doc.state.timeline.tracks[0]!.clips[0]!.effects[0]!.keyframes;
+
+    for (let step = 0; step < 200; step += 1) {
+      doc.dispatch(
+        cmd.keyframeAdd(clip.id, "brightness", "amount", SECOND, {
+          kind: "float",
+          value: step / 200,
+        }),
+        "kf:amount",
+      );
+    }
+    expect(doc.canUndo).toBe(true);
+    doc.undo();
+
+    expect(doc.state.timeline.tracks[0]!.clips[0]!.effects[0]!.keyframes).toEqual(before);
+  });
+
   it("carries whole flicks across the boundary, not seconds", async () => {
     const doc = await timeline();
     doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, SECOND));

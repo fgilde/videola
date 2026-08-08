@@ -1,12 +1,15 @@
 import type {
   ClipSource,
   Command,
+  Interp,
   MediaAsset,
   ParamValue,
   ProjectSettings,
   Rate,
   Time,
   TrackKind,
+  Transform,
+  Transition,
   TrimEdge,
 } from "./generated";
 
@@ -85,6 +88,21 @@ export const cmd = {
     preservePitch,
   }),
   clipSetVolume: (clip: string, volume: number) => ({ type: "clip.setVolume", clip, volume }),
+  // The whole struct, like `clip.setSpeed` and `project.setSettings`: read the clip's current
+  // transform, spread the one field that changed. A partial command would need a null per field
+  // and could still never express "put the crop back the way it was".
+  clipSetTransform: (clip: string, transform: Transform) => ({
+    type: "clip.setTransform",
+    clip,
+    transform,
+  }),
+  // `null` clears it. Only the incoming edge exists as a command because only `transitionIn` is
+  // read when the picture is drawn.
+  clipSetTransition: (clip: string, transition: Transition | null) => ({
+    type: "clip.setTransition",
+    clip,
+    transition,
+  }),
 
   effectAdd: (clip: string, effectType: string) => ({
     type: "effect.add",
@@ -98,6 +116,40 @@ export const cmd = {
     key,
     value,
   }),
+
+  // Sending this again at the same `time` replaces the keyframe there, so a slider drag over a
+  // keyframed parameter is the same shape as a clip drag: one dispatch per pointer move, all of
+  // them under one coalesce key, one entry on the undo stack.
+  keyframeAdd: (
+    clip: string,
+    effectType: string,
+    key: string,
+    time: Time,
+    value: ParamValue,
+    interp: Interp = "linear",
+  ) => ({ type: "keyframe.add", clip, effectType, key, time, value, interp }),
+  keyframeRemove: (clip: string, effectType: string, key: string, time: Time) => ({
+    type: "keyframe.remove",
+    clip,
+    effectType,
+    key,
+    time,
+  }),
+  keyframeMove: (clip: string, effectType: string, key: string, from: Time, to: Time) => ({
+    type: "keyframe.move",
+    clip,
+    effectType,
+    key,
+    from,
+    to,
+  }),
+  keyframeSetInterp: (
+    clip: string,
+    effectType: string,
+    key: string,
+    time: Time,
+    interp: Interp,
+  ) => ({ type: "keyframe.setInterp", clip, effectType, key, time, interp }),
 
   // Since M1 the bytes live in OPFS rather than in WASM memory, so the caller is the only side
   // that ever sees them and has to supply the id it hashed them to. The core still checks the

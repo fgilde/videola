@@ -24,6 +24,30 @@ describe("command factories", () => {
     expect(Number.isInteger(command.at)).toBe(true);
   });
 
+  it("clears a transition with an explicit null rather than omitting the field", () => {
+    expect(cmd.clipSetTransition("clp_1", null)).toEqual({
+      type: "clip.setTransition",
+      clip: "clp_1",
+      transition: null,
+    });
+  });
+
+  it("keyframes linearly unless told otherwise", () => {
+    const command = cmd.keyframeAdd("clp_1", "brightness", "amount", 0, {
+      kind: "float",
+      value: 0.5,
+    });
+    expect(command).toEqual({
+      type: "keyframe.add",
+      clip: "clp_1",
+      effectType: "brightness",
+      key: "amount",
+      time: 0,
+      value: { kind: "float", value: 0.5 },
+      interp: "linear",
+    });
+  });
+
   it("has a factory for every Command variant", () => {
     const expectedTypes = new Set(COMMAND_LABELS.map((label) => label.replace(/^cmd\./, "")));
 
