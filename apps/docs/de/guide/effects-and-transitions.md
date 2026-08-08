@@ -110,10 +110,11 @@ Ein Übergang ist ein Effekt mit zwei Eingängen, kein zweites Subsystem. `u_sec
 der Frame schon trägt, wenn der eingehende Clip an der Reihe ist, `u_source` ist dieser Clip nach
 seinen eigenen Effekten, und `progress` läuft über das Fenster des Übergangs von nichts nach allem.
 
-So legt man in diesem Meilenstein einen an: die beiden Clips **zeitlich überlappen** lassen und dem
-eingehenden Clip ein `transitionIn` vom Typ `crossfade` mit Ausrichtung `in` geben. Dann haben beide
-Clips über die Länge der Überlappung ein Bild, und die Mitte der Überblendung ist die Hälfte von
-jedem — eine messbare Farbe, und sie wird gemessen.
+So legt man einen an: die beiden Clips **zeitlich überlappen** lassen und im Inspector unter
+Übergang die Überblendung wählen. Sie landet an der eingehenden Kante mit Ausrichtung `in`, der
+einzigen, die M1 ausspielen kann. Dann haben beide Clips über die Länge der Überlappung ein Bild,
+und die Mitte der Überblendung ist die Hälfte von jedem — eine messbare Farbe, und sie wird
+gemessen.
 
 Die Deckkraft des eingehenden Clips steckt im selben Fortschritt. Ein halb deckender Clip auf halber
 Strecke seines Übergangs ist zu einem Viertel herüber, nicht zur Hälfte und danach noch einmal
@@ -122,10 +123,14 @@ Weg zusammengesetzt.
 
 ## Was noch fehlt, beim Namen genannt
 
-- **Kein Command legt einen Übergang an, und keines einen Keyframe.** Das Modell trägt beides und
-  der Renderer liest beides, aber der Command-Katalog hat `effect.add` und `effect.setParam` und
-  sonst nichts. Bis `keyframe.add` und ein Übergangs-Command existieren, können beide nur aus einer
-  anderswo geschriebenen `.videola`-Datei kommen.
+- **Ein über den Inspector gesetzter Übergang ist nie in einem Test gezeichnet worden.** Eine
+  Überblendung braucht zwei überlappende Clips, und die Anwendungs-Harness legt eine Datei ab. Dass
+  das Feld unverändert ankommt, ist gemessen, und dass der Renderer es mischt, ist gemessen — nur
+  nie in einem Durchgang.
+- **Keyframes gibt es auf Effektparametern und sonst nirgends.** `Clip::keyframes` steht im Modell,
+  aber `Effect::param_at` ist die einzige Auswertung im Repo und die Zeichenliste liest
+  `clip.transform` statisch — ein Keyframe auf einer Clip-Eigenschaft wären Daten, die kein Bild
+  sieht.
 - **Ein zentrierter oder nachlaufender Übergang ist zur Hälfte unsichtbar.** Sein Fenster reicht vor
   den Anfang des Clips zurück, wo der Clip gar nicht gezeichnet wird. Ihn auszuspielen braucht
   Handles — Material über den Schnitt hinaus — und die legt in diesem Meilenstein nichts an.

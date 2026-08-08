@@ -17,10 +17,36 @@ Request, `release.yml` bei einem `v*`-Tag und `pages.yml` für diese Doku-Seite.
 | `types` | erzeugt die ts-rs-Typen neu und schlägt an, wenn die eingecheckten Dateien nicht mehr passen |
 | `wasm` | `wasm-pack build crates/videola-core-wasm --target web`, lädt das Ergebnis als Artefakt hoch |
 | `web` | braucht `wasm`; lädt das Artefakt, dann `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build` |
+| `browser` | braucht `wasm`; fährt die vier Browser-Harnessen in echtem Chrome |
 
 Der `types`-Job staged sein Ergebnis mit `git add -A`, bevor er vergleicht: `git diff` ignoriert
 unversionierte Dateien, ein neu erzeugter Typ würde sonst unbemerkt durchrutschen. Clippy läuft mit
 verbotenem `unsafe_code` und mit `unwrap_used` und `expect_used` auf `deny`.
+
+## Was der Browser-Job prüft
+
+WebGL2, WebCodecs, OPFS und Layout gibt es in jsdom nicht. Vier Harnessen fahren denselben Code in
+echtem Chrome — ohne Playwright, ohne jede Browser-Automatisierung: Chrome rendert die Seite und
+meldet das Ergebnis zurück, über `--dump-dom` oder per POST an den Server, der ihn gestartet hat.
+
+| Aufruf | Was er prüft |
+|---|---|
+| `pnpm --filter @videola/engine test:gpu` | 89 Pixelprüfungen gegen ANGLE/SwiftShader: Shader, premultipliziertes Alpha in allen neun Blendmodi, Transformationsmatrix, Kontextverlust, geschlossener `VideoFrame` |
+| `pnpm --filter @videola/engine test:export` | 27 Prüfungen: ein echter Export, danach lesen `ffprobe` und `ffmpeg` die Datei zurück — Codec, Auflösung, Bildrate, Bildzahl, Länge, und ein Goertzel-Filter bestätigt den Ton in der Datei |
+| `pnpm --filter @videola/ui test:browser` | 29 Prüfungen gegen echtes Layout: 44 px als Geometrie, Trefferflächen, Virtualisierungsbudget über Zoomstufen, Scrollbreite |
+| `pnpm --filter videola-web test:browser` | 56 Prüfungen an der **gebauten** Anwendung: eine abgelegte Datei bis ins dekodierte Bild, Wiedergabe, Telefon-Viewport über das Devtools-Protokoll |
+
+Alle vier in **einem** Job: zusammen brauchen sie deutlich unter einer Minute, ein zweiter Job
+kostete mehr an Checkout, Installation und Bau als die Prüfungen selbst. Nichts davon läuft nur
+nachts — jede dieser Harnessen hat einen Fehler gefunden, den kein Unit-Test sehen konnte, und auf
+einen nächtlichen Lauf wartet niemand.
+
+Zwei Dinge muss der Job selbst herrichten, beide wegen des Runners und nicht wegen der Tests:
+**Chrome** wird geprüft statt angenommen (fehlt es, bricht der Job mit klarer Meldung ab) und über
+einen Wrapper mit `--no-sandbox` als `CHROME_PATH` gesetzt, weil Ubuntu ab 24.04 unprivilegierte
+User-Namespaces sperren kann; **ffmpeg** und **ffprobe** installiert der Job nach, falls das Image
+sie nicht mitbringt — sie sind der unabhängige Leser des Exports. Die drei Screenshots der
+Anwendungs-Harness lädt der Job als Artefakt `browser-screenshots` hoch.
 
 ## Release
 

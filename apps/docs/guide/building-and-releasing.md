@@ -5,7 +5,7 @@ Three workflows live in `.github/workflows`: `ci.yml` on every push to `main` an
 
 ## CI
 
-Four jobs, three of them independent.
+Five jobs, three of them independent.
 
 | Job | Runner | What it does |
 |---|---|---|
@@ -13,6 +13,7 @@ Four jobs, three of them independent.
 | `types` | `ubuntu-latest` | regenerates the ts-rs output and fails if the committed files no longer match |
 | `wasm` | `ubuntu-latest` | `wasm-pack build crates/videola-core-wasm --target web`, uploads the result as the `wasm` artifact |
 | `web` | `ubuntu-latest` | needs `wasm`; downloads the artifact, then `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build` |
+| `browser` | `ubuntu-latest` | needs `wasm`; runs the four browser harnesses in real Chrome |
 
 The `types` job stages its output with `git add -A` before comparing, because `git diff` ignores
 untracked files and a newly generated type would otherwise slip through unnoticed.
@@ -23,6 +24,42 @@ build fails with that message instead of a confusing module-resolution error sev
 
 Clippy runs with `unwrap_used` and `expect_used` denied and `unsafe_code` forbidden, configured at the
 Cargo workspace level.
+
+## What the browser job proves
+
+WebGL2, WebCodecs, OPFS and layout do not exist in jsdom, so the unit tests stop at the last line a
+fake can honestly stand in for. Four harnesses run the same code in real Chrome. None of them uses
+Playwright or any other browser-automation dependency: Chrome renders the page and reports back,
+either through `--dump-dom` or by posting its results to the small server that started it.
+
+| Command | What it checks |
+|---|---|
+| `pnpm --filter @videola/engine test:gpu` | 89 pixel checks against ANGLE/SwiftShader: both shaders compile, premultiplied alpha in all nine blend modes, the transform matrix with rotation and an off-centre anchor, context loss and recovery, a closed `VideoFrame` |
+| `pnpm --filter @videola/engine test:export` | 27 checks: a real export, then `ffprobe` and `ffmpeg` read the file back — codec, resolution, frame rate, frame count, duration, and a Goertzel filter confirming the tone in the file is the tone that went in |
+| `pnpm --filter @videola/ui test:browser` | 29 checks against real layout: 44-px targets as geometry, hit areas, the virtualisation budget across zoom levels, the scroll width a browser actually honours |
+| `pnpm --filter videola-web test:browser` | 56 checks driving the **built** application: a file dropped on it, decoded into the preview, played back, and the phone viewport through the devtools protocol |
+
+They are one job, not four. Together they take well under a minute; a second job would spend more on
+checkout, install and build than the checks themselves cost. Nothing here is deferred to a nightly
+run — every one of these harnesses has caught a defect no unit test could see, and a check that only
+runs at night is a check nobody waits for.
+
+Two things the job has to arrange, both because of the runner rather than the tests:
+
+- **Chrome.** The job fails with a clear message if the image has no `google-chrome`; it does not
+  guess an install path it cannot verify. It then writes a one-line wrapper that appends
+  `--no-sandbox` and points `CHROME_PATH` at it. Chrome's sandbox needs unprivileged user
+  namespaces, which Ubuntu 24.04 can lock down through AppArmor, and a throwaway CI VM running our
+  own fixtures gains nothing from it. `CHROME_PATH` is the switch all four runners already have —
+  and it is authoritative: a path that points at nothing fails loudly instead of falling back to
+  some other Chrome without the wrapper's flags.
+- **ffmpeg.** `test:export` needs `ffmpeg` and `ffprobe` on the path; the job installs them if the
+  image does not carry them. They are the independent reader — without them the export harness would
+  only be checking our own muxer against our own demuxer.
+
+The three screenshots the application harness takes (`preview.png`, `phone.png`,
+`phone-library.png`) are uploaded as the `browser-screenshots` artifact with `if: always()`, because
+a layout result is not something a number can carry.
 
 ## Release
 

@@ -83,5 +83,6 @@ the workspace and builds the web app, and the final stage copies `apps/web/dist`
 `docker/nginx.conf` serves `.wasm` with the correct MIME type, marks the content-hashed JavaScript
 and CSS as immutable, keeps `index.html` uncached, and falls back to `index.html` for unknown paths.
 
-The image serves static files only. An API, an MCP endpoint and a render worker would need
-`videola-server`, which is not part of the workspace.
+The image serves static files only. The HTTP API and the MCP server are a separate process,
+`apps/server` — see [The API and the MCP server](/guide/api-and-mcp). A render worker needs FFmpeg
+and a compositor, neither of which exists yet.
