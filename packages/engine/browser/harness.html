@@ -154,12 +154,13 @@ async function isPng(blob) {
 
 // Through a decoder that knows nothing about how the picture was made, the way anything reading
 // a still would: bytes in, pixel out.
-async function pixelOf(blob, x, y) {
+async function readStill(blob, x, y) {
   const bitmap = await createImageBitmap(blob);
   const { context } = canvasOf(bitmap.width, bitmap.height);
   context.drawImage(bitmap, 0, 0);
+  const size = [bitmap.width, bitmap.height];
   bitmap.close();
-  return Array.from(context.getImageData(x, y, 1, 1).data);
+  return { size, pixel: Array.from(context.getImageData(x, y, 1, 1).data) };
 }
 
 // Reads the file back the way anything else would: through this package's own demuxer, and
@@ -285,15 +286,24 @@ async function main() {
     check("one picture per instant", stills.length, times.length);
     check("and every one of them a PNG", await Promise.all(stills.map(isPng)), times.map(() => true));
 
-    const pixels = [];
-    for (const still of stills) pixels.push(await pixelOf(still, WIDTH / 2, HEIGHT / 2));
+    const read = [];
+    for (const still of stills) read.push(await readStill(still, WIDTH / 2, HEIGHT / 2));
+    check(
+      "at the size that was asked for",
+      read.map((still) => still.size),
+      times.map(() => [WIDTH, HEIGHT]),
+    );
     check(
       "each showing what its clip reads at that instant",
-      pixels.map((pixel) => pixel.slice(0, 3)),
+      read.map((still) => still.pixel.slice(0, 3)),
       [colourAt(0), colourAt(10), colourAt(0), colourAt(5)],
       12,
     );
-    check("opaque where a clip covers the frame", pixels.map((pixel) => pixel[3]), times.map(() => 255));
+    check(
+      "opaque where a clip covers the frame",
+      read.map((still) => still.pixel[3]),
+      times.map(() => 255),
+    );
   });
 
   await test("no instants asked for is refused rather than answered with nothing", async () => {

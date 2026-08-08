@@ -23,11 +23,12 @@ export interface StillRequest {
 // editor would show, and the only way to guarantee that is to walk the same path.
 export async function renderStills(request: StillRequest): Promise<Blob[]> {
   if (request.times.length === 0) throw new Error("error.stillNoTimes");
+  // No `readable`: an OffscreenCanvas with no placeholder is never composited, so nothing clears
+  // its drawing buffer between the render and `convertToBlob`. Asking for preserveDrawingBuffer
+  // here costs a copy per picture and changed nothing when it was taken away -- measured, not
+  // assumed.
   const canvas = new OffscreenCanvas(request.width, request.height);
-  // Readable, or `convertToBlob` hands back a cleared buffer: the browser is free to drop the
-  // drawing buffer once it has composited it, and there is an await between the render and the
-  // encode of every picture here.
-  const context = createContext(canvas, { readable: true });
+  const context = createContext(canvas);
   const compositor = new Compositor(context);
   const pass = {
     sources: new SourcePool(request.createFrameSource ?? ((): FrameSource => new VideoSource())),
