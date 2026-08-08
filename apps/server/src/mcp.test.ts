@@ -335,8 +335,28 @@ describe("the project tools", () => {
   it("lists the effects this build can render, with their parameters and without their shaders", async () => {
     const listed = parse((await call("effects_list")).text);
 
-    expect(listed.map((effect: { id: string }) => effect.id)).toEqual(["brightness", "crossfade"]);
-    expect(listed[0].params.map((param: { key: string }) => param.key)).toEqual(["amount"]);
+    // Named rather than counted: the point of this tool is that adding an effect to the registry makes
+    // it an agent's capability with nobody editing the server, so a count goes stale on every effect
+    // while a name that vanished is a capability an agent was promised and lost.
+    const ids = listed.map((effect: { id: string }) => effect.id);
+    expect(ids).toContain("brightness");
+    expect(ids).toContain("chromaKey");
+    expect(ids).toContain("wipe");
+    expect(new Set(ids).size).toBe(ids.length);
+
+    const byId = (id: string): { inputs: number; params: { key: string }[] } =>
+      listed.find((effect: { id: string }) => effect.id === id);
+    expect(byId("brightness").params.map((param) => param.key)).toEqual(["amount"]);
+    expect(byId("chromaKey").params.map((param) => param.key)).toEqual([
+      "hue",
+      "tolerance",
+      "softness",
+    ]);
+    // A transition takes the picture underneath as its second input, and an agent has to be able to
+    // tell the two kinds apart before handing one to `effect.add`.
+    expect(byId("wipe").inputs).toBe(2);
+    expect(byId("brightness").inputs).toBe(1);
+
     expect(JSON.stringify(listed)).not.toContain("gl_FragColor");
     expect(JSON.stringify(listed)).not.toContain("precision highp");
   });
