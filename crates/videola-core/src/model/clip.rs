@@ -6,8 +6,8 @@ use serde_json::{Map, Value};
 use ts_rs::TS;
 
 use super::effect::{Effect, Transition};
-use super::keyframe::Keyframe;
-use super::{ClipId, GroupId, MediaId, Time};
+use super::keyframe::{evaluate, Keyframe};
+use super::{ClipId, GroupId, MediaId, ParamValue, Time};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -117,6 +117,26 @@ impl Clip {
             (self.duration.as_flicks() as f64 * self.speed.rate as f64).round() as i64,
         )
     }
+
+    // What the picture is drawn with; `transform` alone is only the value at rest. A keyframed
+    // field wins over the static one, the same rule `Effect::param_at` applies to a parameter, and
+    // for the same reason: the inspector and the renderer must not interpolate separately.
+    //
+    // A track under a name no `Transform` carries is skipped, not refused -- a project written by a
+    // later version has to keep drawing. The command layer is where such a name is turned away, so
+    // nothing an editor writes here can end up invisible.
+    pub fn transform_at(&self, at: Time) -> Transform {
+        let mut resolved = self.transform.clone();
+        for (key, track) in &self.keyframes {
+            let Some(field) = resolved.field_mut(key) else {
+                continue;
+            };
+            if let Some(ParamValue::Float(value)) = evaluate(track, at) {
+                *field = value;
+            }
+        }
+        resolved
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
@@ -193,6 +213,29 @@ pub struct Transform {
     pub crop: Crop,
 }
 
+impl Transform {
+    // The single roster of what a keyframe track may address, under the names the field carries in
+    // JSON. Both readers go through it -- `transform_at` to resolve and the command layer to refuse
+    // -- so there is no list to drift out of step with the struct.
+    pub fn field_mut(&mut self, key: &str) -> Option<&mut f32> {
+        Some(match key {
+            "x" => &mut self.x,
+            "y" => &mut self.y,
+            "scaleX" => &mut self.scale_x,
+            "scaleY" => &mut self.scale_y,
+            "rotation" => &mut self.rotation,
+            "anchorX" => &mut self.anchor_x,
+            "anchorY" => &mut self.anchor_y,
+            "opacity" => &mut self.opacity,
+            "cropLeft" => &mut self.crop.left,
+            "cropTop" => &mut self.crop.top,
+            "cropRight" => &mut self.crop.right,
+            "cropBottom" => &mut self.crop.bottom,
+            _ => return None,
+        })
+    }
+}
+
 impl Default for Transform {
     fn default() -> Self {
         Self {
@@ -242,7 +285,107 @@ pub struct Fades {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::MediaId;
+    use crate::model::{Interp, MediaId};
+
+    fn ramp(clip: &mut Clip, key: &str, from: f32, to: f32, seconds: f64) {
+        clip.keyframes.insert(
+            key.to_string(),
+            vec![
+                Keyframe {
+                    time: Time::ZERO,
+                    value: ParamValue::Float(from),
+                    interp: Interp::Linear,
+                    handle_in: None,
+                    handle_out: None,
+                },
+                Keyframe {
+                    time: Time::from_seconds(seconds),
+                    value: ParamValue::Float(to),
+                    interp: Interp::Linear,
+                    handle_in: None,
+                    handle_out: None,
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn a_keyframed_transform_field_moves_and_the_rest_stays_put() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.x = 500.0;
+        clip.transform.y = 42.0;
+        ramp(&mut clip, "x", 0.0, 100.0, 2.0);
+
+        assert_eq!(clip.transform_at(Time::from_seconds(1.0)).x, 50.0);
+        assert_eq!(clip.transform_at(Time::from_seconds(1.0)).y, 42.0);
+    }
+
+    // Every field a keyframe may address has to be the one it names. A single wrong arm in
+    // `field_mut` would animate a neighbour instead, which the compositor draws without complaint.
+    #[test]
+    fn every_keyframable_field_is_the_field_it_is_named_after() {
+        let named: [(&str, fn(&Transform) -> f32); 12] = [
+            ("x", |t| t.x),
+            ("y", |t| t.y),
+            ("scaleX", |t| t.scale_x),
+            ("scaleY", |t| t.scale_y),
+            ("rotation", |t| t.rotation),
+            ("anchorX", |t| t.anchor_x),
+            ("anchorY", |t| t.anchor_y),
+            ("opacity", |t| t.opacity),
+            ("cropLeft", |t| t.crop.left),
+            ("cropTop", |t| t.crop.top),
+            ("cropRight", |t| t.crop.right),
+            ("cropBottom", |t| t.crop.bottom),
+        ];
+        for (key, read) in named {
+            let mut clip = media_clip(0.0, 4.0);
+            ramp(&mut clip, key, 0.0, 8.0, 2.0);
+            let resolved = clip.transform_at(Time::from_seconds(1.0));
+            assert_eq!(read(&resolved), 4.0, "{key} did not move");
+            let untouched = named
+                .iter()
+                .filter(|(other, _)| *other != key)
+                .filter(|(_, other)| other(&resolved) != other(&Transform::default()))
+                .count();
+            assert_eq!(untouched, 0, "{key} moved a field it does not name");
+        }
+    }
+
+    #[test]
+    fn a_transform_without_keyframes_is_the_static_one() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.rotation = 33.0;
+        assert_eq!(clip.transform_at(Time::from_seconds(2.0)), clip.transform);
+    }
+
+    // Forward compatibility, and the reason the command layer has to refuse unknown names itself:
+    // nothing here complains, the field simply never moves.
+    #[test]
+    fn a_track_naming_no_transform_field_is_ignored() {
+        let mut clip = media_clip(0.0, 4.0);
+        ramp(&mut clip, "wobble", 0.0, 100.0, 2.0);
+        assert_eq!(clip.transform_at(Time::from_seconds(1.0)), clip.transform);
+    }
+
+    // A hand-authored project can put any `ParamValue` on any track. A colour is not a transform
+    // field, and taking its first channel would be worse than leaving the field alone.
+    #[test]
+    fn a_track_of_the_wrong_value_kind_leaves_the_field_alone() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.opacity = 0.25;
+        clip.keyframes.insert(
+            "opacity".into(),
+            vec![Keyframe {
+                time: Time::ZERO,
+                value: ParamValue::Bool(true),
+                interp: Interp::Linear,
+                handle_in: None,
+                handle_out: None,
+            }],
+        );
+        assert_eq!(clip.transform_at(Time::ZERO).opacity, 0.25);
+    }
 
     fn media_clip(start_s: f64, dur_s: f64) -> Clip {
         Clip::new_media(
