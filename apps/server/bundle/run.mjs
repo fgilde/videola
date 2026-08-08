@@ -4,7 +4,7 @@
 //
 // Run after `pnpm --filter videola-server build`.
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -361,11 +361,26 @@ async function paintedOverHttp(port) {
   return id;
 }
 
+// The image serves the editor out of this same process, so the bundle has to prove it can: a
+// wrong type on the .wasm leaves every file reachable and the editor still never starts.
+async function stageWebRoot() {
+  const web = join(root, "web");
+  await mkdir(join(web, "assets"), { recursive: true });
+  await writeFile(join(web, "index.html"), "<title>Videola</title>");
+  await writeFile(join(web, "assets", "core-abc.wasm"), Buffer.from([0, 97, 115, 109]));
+  return web;
+}
+
 async function checkServeBundle() {
   process.stdout.write("dist/serve.mjs over HTTP\n");
   const port = 7411;
   const child = spawn(process.execPath, [join(dist, "serve.mjs")], {
-    env: { ...process.env, VIDEOLA_PORT: String(port), VIDEOLA_STORAGE_ROOT: root },
+    env: {
+      ...process.env,
+      VIDEOLA_PORT: String(port),
+      VIDEOLA_STORAGE_ROOT: root,
+      VIDEOLA_WEB_ROOT: await stageWebRoot(),
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   try {
@@ -387,6 +402,11 @@ async function checkServeBundle() {
       check(`serves ${name}`, served.get(name)?.schema?.properties !== undefined);
     }
     check("serves every command the core exports", schema.commands.length >= served.size);
+
+    const page = await fetch(`http://127.0.0.1:${port}/editor/deep/route`);
+    check("answers an application route with the document", (await page.text()).includes("Videola"));
+    const wasm = await fetch(`http://127.0.0.1:${port}/assets/core-abc.wasm`);
+    check("serves .wasm as application/wasm", wasm.headers.get("content-type") === "application/wasm");
 
     const created = await fetch(`http://127.0.0.1:${port}/api/projects`, { method: "POST" }).then(
       (r) => r.json(),
@@ -413,10 +433,41 @@ async function checkServeBundle() {
   }
 }
 
+async function checkCliBundle() {
+  process.stdout.write("dist/cli.mjs from a shell\n");
+  const commands = join(root, "cmds.json");
+  const archive = join(root, "cli.videola");
+  await writeFile(commands, JSON.stringify([{ type: "track.add", kind: "video", name: "V1" }]));
+
+  const applied = await runCli(["apply", "--commands", commands, "--out", archive]);
+  check("applies a commands file", applied.code === 0 && applied.stdout.includes("wrote"));
+
+  const described = await runCli(["describe", archive]);
+  check("reads back what it wrote", described.stdout.includes('video "V1"'));
+
+  const refused = await runCli(["schema", "clip.teleport"]);
+  // A message on stdout would end up inside whatever the caller is piping the schema into.
+  check("keeps refusals off stdout", refused.code === 1 && refused.stdout === "");
+}
+
+function runCli(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [join(dist, "cli.mjs"), ...args], {
+      env: { ...process.env, VIDEOLA_STORAGE_ROOT: root },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.on("error", reject);
+    child.on("exit", (code) => resolve({ code, stdout }));
+  });
+}
+
 try {
   await checkMcpBundle();
   await checkShortAnswer();
   await checkServeBundle();
+  await checkCliBundle();
 } finally {
   await rm(root, { recursive: true, force: true });
 }

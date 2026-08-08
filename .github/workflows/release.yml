@@ -26,6 +26,7 @@ jobs:
       macos: ${{ steps.probe.outputs.macos }}
       android: ${{ steps.probe.outputs.android }}
       ios: ${{ steps.probe.outputs.ios }}
+      updater: ${{ steps.probe.outputs.updater }}
     steps:
       - id: probe
         env:
@@ -34,6 +35,8 @@ jobs:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
           IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
           IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ]; then
             echo "macos=yes" >> "$GITHUB_OUTPUT"
@@ -49,6 +52,13 @@ jobs:
             echo "ios=yes" >> "$GITHUB_OUTPUT"
           else
             echo "ios=no" >> "$GITHUB_OUTPUT"
+          fi
+          # Beide Haelften oder keine: ohne privaten Schluessel entsteht keine
+          # Signatur, und ohne oeffentlichen kann kein Installierter sie pruefen.
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+            echo "updater=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "updater=no" >> "$GITHUB_OUTPUT"
           fi
 
   docker:
@@ -153,15 +163,36 @@ jobs:
             [ -n "${!name}" ] || continue
             printf '%s<<APPLE_VALUE\n%s\nAPPLE_VALUE\n' "$name" "${!name}" >> "$GITHUB_ENV"
           done
+      # Die Updater-Konfiguration steht nicht in tauri.conf.json, sondern entsteht
+      # hier -- und nur mit Schluessel. Ein eingecheckter Platzhalter-pubkey waere
+      # ein Versprechen ohne Deckung, und createUpdaterArtifacts ohne privaten
+      # Schluessel bricht das Bundling ab, statt einfach nichts zu signieren.
+      - name: Updater konfigurieren
+        if: needs.gate.outputs.updater == 'yes'
+        shell: bash
+        env:
+          PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          ENDPOINT: https://github.com/${{ github.repository }}/releases/latest/download/latest.json
+        run: |
+          jq --arg key "$PUBKEY" --arg endpoint "$ENDPOINT" \
+            '.bundle.createUpdaterArtifacts = true
+             | .plugins.updater = { endpoints: [$endpoint], pubkey: $key }' \
+            apps/desktop/src-tauri/tauri.conf.json > "$RUNNER_TEMP/tauri.conf.json"
+          mv "$RUNNER_TEMP/tauri.conf.json" apps/desktop/src-tauri/tauri.conf.json
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: Videola ${{ github.ref_name }}
           releaseDraft: true
           prerelease: false
+          # Heisst `uploadUpdaterJson`, nicht `includeUpdaterJson` -- gegen die
+          # action.yml am Tag v1 geprueft, nicht aus dem Gedaechtnis.
+          uploadUpdaterJson: ${{ needs.gate.outputs.updater == 'yes' }}
           # Das Draft-Release wird von genau einem Job angelegt und danach nicht
           # mehr aktualisiert (tauri-action laesst Drafts absichtlich in Ruhe),
           # also muss der Text hier stehen statt in einem spaeteren Job.

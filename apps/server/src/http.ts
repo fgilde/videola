@@ -1,15 +1,19 @@
 import { timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
+import { extname } from "node:path";
 
 import type { Command } from "@videola/core";
 
 import { Api, ApiError } from "./api";
 import { COMMAND_CATALOG } from "./generated/commandCatalog";
+import { Storage } from "./paths";
 
 export interface HttpOptions {
   readonly api: Api;
   readonly token?: string | undefined;
   readonly maxBodyBytes?: number;
+  readonly webRoot?: string | undefined;
 }
 
 // 512 MiB matches the per-entry cap the `.videola` reader applies to a media entry, so an upload
@@ -21,11 +25,13 @@ interface Reply {
   body: unknown;
   bytes?: Uint8Array;
   contentType?: string;
+  cacheControl?: string;
 }
 
 export function createRequestListener(options: HttpOptions): RequestListener {
   const { api } = options;
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+  const web = options.webRoot === undefined ? undefined : new Storage(options.webRoot);
 
   return (request, response) => {
     void handle(request, response).catch((error: unknown) => {
@@ -34,6 +40,13 @@ export function createRequestListener(options: HttpOptions): RequestListener {
   };
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    // The editor is a client-side application: it holds its projects in the visitor's own browser
+    // and reads nothing from this process. Serving it without the token is therefore not a hole in
+    // the token — the storage root stays behind /api, which is guarded below.
+    if (web !== undefined && !(request.url ?? "/").startsWith("/api")) {
+      send(response, await staticReply(web, request));
+      return;
+    }
     if (!authorised(request, options.token)) {
       send(response, {
         status: 401,
@@ -47,6 +60,72 @@ export function createRequestListener(options: HttpOptions): RequestListener {
       send(response, errorReply(error));
     }
   }
+}
+
+const STATIC_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  // The one type a browser refuses to guess: without it `WebAssembly.instantiateStreaming` throws
+  // and the editor never starts.
+  ".wasm": "application/wasm",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+};
+
+// The editor is a single-page application: an unknown path is a route inside it, not a missing
+// file, so index.html answers anything the directory does not hold — the same thing the nginx
+// config this replaced did with `try_files`.
+//
+// ponytail: whole files are read into memory per request. The largest asset is the 1.7 MB core;
+// streaming becomes worth it if the image ever ships media.
+async function staticReply(web: Storage, request: IncomingMessage): Promise<Reply> {
+  const method = request.method ?? "GET";
+  if (method !== "GET" && method !== "HEAD") return notFound();
+
+  const pathname = decodeURIComponent(new URL(request.url ?? "/", "http://localhost").pathname);
+  const wanted = pathname.endsWith("/") ? `${pathname.replace(/^\/+/, "")}index.html` : pathname.slice(1);
+  const bytes = await readStatic(web, wanted);
+  if (bytes !== null) {
+    return {
+      status: 200,
+      body: undefined,
+      bytes,
+      contentType: STATIC_TYPES[extname(wanted).toLowerCase()] ?? "application/octet-stream",
+      // Vite gives everything under /assets a content-hashed name, so those are immutable; the
+      // document that names them must never be.
+      cacheControl: wanted.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    };
+  }
+
+  const fallback = await readStatic(web, "index.html");
+  if (fallback === null) return notFound();
+  return {
+    status: 200,
+    body: undefined,
+    bytes: fallback,
+    contentType: STATIC_TYPES[".html"],
+    cacheControl: "no-cache",
+  };
+}
+
+// `Storage.forReading` is the same containment check the storage root gets: a `..` segment or a
+// symlink pointing out of the web root is refused rather than served.
+async function readStatic(web: Storage, relative: string): Promise<Uint8Array | null> {
+  return web
+    .forReading(relative)
+    .then((path) => readFile(path))
+    .catch(() => null);
 }
 
 // Constant-time so a wrong token cannot be recovered one byte at a time from response timings.
@@ -277,6 +356,7 @@ function send(response: ServerResponse, reply: Reply): void {
     response.writeHead(reply.status, {
       "content-type": reply.contentType ?? "application/octet-stream",
       "content-length": String(reply.bytes.byteLength),
+      ...(reply.cacheControl === undefined ? {} : { "cache-control": reply.cacheControl }),
     });
     response.end(Buffer.from(reply.bytes));
     return;

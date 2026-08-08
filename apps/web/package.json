@@ -12,6 +12,7 @@
     "test": "echo \"no app-level tests yet\""
   },
   "dependencies": {
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@videola/core": "workspace:*",
     "@videola/engine": "workspace:*",
     "@videola/media": "workspace:*",

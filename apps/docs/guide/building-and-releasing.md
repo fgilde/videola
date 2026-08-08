@@ -82,7 +82,7 @@ The release is created as a **draft**, so the assets can be checked before anyon
 
 | Target | How |
 |---|---|
-| Web | Vite build, served as static files; the Docker image is the packaged form |
+| Web | Vite build, served as static files; the Docker image is the packaged form (see below) |
 | Windows | Tauri 2, NSIS installer |
 | Linux | Tauri 2, `.deb` and AppImage |
 | macOS | Tauri 2, `.dmg` |
@@ -122,11 +122,43 @@ twenty minutes of compilation and then fail while importing an empty certificate
 | macOS DMG | `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `APPLE_TEAM_ID` | the DMG is still built, but unsigned, and Gatekeeper blocks it on the user's machine |
 | Android APK and AAB | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the job is skipped; an unsigned APK cannot be installed or shipped to Play |
 | iOS IPA | `IOS_CERTIFICATE` (base64 distribution `.p12`), `IOS_MOBILE_PROVISION` (base64), plus `APPLE_CERTIFICATE_PASSWORD` and `APPLE_TEAM_ID` | the job is skipped; no distributable IPA exists without a certificate and a provisioning profile |
+| Desktop auto-update | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_UPDATER_PUBKEY`, and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key is protected | the installers are built as usual and carry no updater at all |
 
 `gate` decides `macos` from `APPLE_CERTIFICATE` and `APPLE_CERTIFICATE_PASSWORD`, `android` from
-`ANDROID_KEYSTORE`, and `ios` from `IOS_CERTIFICATE` and `IOS_MOBILE_PROVISION`. Note that the iOS
-keychain import reuses `APPLE_CERTIFICATE_PASSWORD` as the password for `IOS_CERTIFICATE`, so `ios`
-can gate open while that password is still empty.
+`ANDROID_KEYSTORE`, `ios` from `IOS_CERTIFICATE` and `IOS_MOBILE_PROVISION`, and `updater` from both
+halves of the update key. Note that the iOS keychain import reuses `APPLE_CERTIFICATE_PASSWORD` as
+the password for `IOS_CERTIFICATE`, so `ios` can gate open while that password is still empty.
+
+### Auto-update
+
+`tauri signer generate -w ~/.tauri/videola.key` writes a private key and prints its public half. The
+private key goes into the `TAURI_SIGNING_PRIVATE_KEY` secret and the public one into
+`TAURI_UPDATER_PUBKEY`; nothing else has to be set up. The endpoint is
+`https://github.com/<owner>/<repo>/releases/latest/download/latest.json`, which the workflow fills in
+from `github.repository`, and `uploadUpdaterJson` has `tauri-action` publish that manifest beside the
+installers.
+
+Neither the endpoint nor the public key sits in `tauri.conf.json`. The workflow merges
+`plugins.updater` and `bundle.createUpdaterArtifacts` into the configuration with `jq`, and only when
+`gate` says both halves of the key exist. Two reasons, both the difference between a working release
+and a broken one:
+
+- A placeholder `pubkey` committed to the repository would be a promise with nothing behind it: an
+  app offering an update it can never verify.
+- `createUpdaterArtifacts: true` **without** a signing key does not quietly skip signing — the
+  bundler stops. Left in the file it would break every release built by anyone without a key.
+
+Without the secrets the plugin is still compiled in, finds no configuration, and its check fails —
+which the app treats exactly as it treats being offline, so nobody sees an error.
+
+The plugin is a dependency of the three desktop target triples rather than of the crate, and its
+permission lives in a separate capability restricted to `["linux", "macOS", "windows"]`.
+`tauri-plugin-updater` has no Android or iOS build, so an unconditional dependency, or the permission
+in the default capability, would stop the two mobile jobs instead of the desktop one — a failure a
+long way from its cause.
+
+An installed app that finds a newer version asks once, on start, and installs it if the user says so.
+There is no silent update and no background poll.
 
 Two things the workflow has to add itself because the Tauri templates do not:
 
@@ -139,6 +171,76 @@ Two things the workflow has to add itself because the Tauri templates do not:
 
 The installers package the same shell the web app is, and the release notes say so. The expected
 result of a release without mobile signing keys is four assets, not six.
+
+## The Docker image
+
+Three stages. A `rust:1-bookworm` stage builds the WASM core, a `node:22-bookworm-slim` stage
+installs the workspace and builds both the web app and the server bundles, and a `node:22-alpine`
+stage keeps the result. That last stage carries no `node_modules`: esbuild bundles `serve.mjs`,
+`mcp.mjs` and `cli.mjs` down to plain ESM with nothing left to resolve, so what ships is three
+JavaScript files, one `.wasm`, and the built web app.
+
+| | |
+|---|---|
+| Runs as | `node`, uid 1000, never root |
+| Port | 7331, one process |
+| Storage | `/data`, declared as a volume and owned by `node` |
+| Health check | `node -e "fetch('…/api/health')"`, using the token from the environment |
+| Size | around 170 MB, of which Node itself is most |
+
+### One process, not nginx and Node
+
+The image before this one served static files with nginx and nothing else. Adding the API meant
+either a second process under a supervisor, or letting the one process that already speaks HTTP
+serve the files too. It serves them: `VIDEOLA_WEB_ROOT` points the server at the built app, unknown
+paths answer with `index.html` because the editor is a single-page application, and `.wasm` gets
+`application/wasm` — the type a browser refuses to guess and without which the editor never starts.
+The path a request names is resolved through the same containment check the storage root gets, so
+`..` and a symlink out of the web root are both refused.
+
+Static files are served **without** the token. The editor holds its projects in the visitor's own
+browser and reads nothing from the server; everything under `/api`, which is where the storage root
+is, stays behind the bearer token.
+
+### Why the container refuses to start without a token
+
+A published port only reaches a process bound to `0.0.0.0`, and `configFromEnv` refuses that address
+unless `VIDEOLA_TOKEN` is set. The image therefore sets `VIDEOLA_HOST=0.0.0.0` and no token, and a
+`docker run` without one stops immediately with the reason. That is the intended answer rather than
+an oversight: a container that binds a reachable address and hopes hands its storage root to every
+machine that can see it.
+
+The MCP server listens on nothing, so it reads no bind address at all — `apiConfigFromEnv` gives it
+only the storage root, the project limit and the locale. Otherwise the image's `VIDEOLA_HOST` would
+have stopped a stdio server from starting for a socket it never opens.
+
+`serve.mjs` closes its listener on `SIGTERM`. As PID 1 a process gets no default disposition for that
+signal, so without the handler `docker stop` would wait out its ten seconds and then kill it.
+
+## The command line
+
+`dist/cli.mjs` — `videola` when the package is linked — is a third skin over the same `Api` class the
+HTTP routes and the MCP tools use, so it can do nothing they cannot and skips no check they perform.
+
+```sh
+videola apply [--in <file>] [--media <file>]... [--commands <file>] --out <file>
+videola describe <file>
+videola validate <file>
+videola schema [<command>]
+```
+
+The commands file holds one command object or an array of them, and the array lands as a single
+history entry: a command the core refuses rolls the whole batch back and writes nothing. Media ids
+are `med_` followed by the SHA-256 of the file's bytes, which is what lets a commands file name a
+medium the same run imports without looking anything up first.
+
+Paths are used as given, without the storage root's containment check. That check exists to fence in
+an interface strangers reach; there is no stranger on the other side of a terminal, and a CLI that
+refused `../footage/intro.mp4` would be wrong rather than safe. The interfaces that do face strangers
+are unchanged.
+
+There is no `export` subcommand. Encoding video needs the browser's own encoders, which a command
+line process does not have, so a `.videola` archive is the only thing it writes.
 
 ## The documentation site
 

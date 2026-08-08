@@ -84,6 +84,7 @@ pnpm wasm                        # the core must be built first
 pnpm --filter videola-server build
 node apps/server/dist/serve.mjs  # HTTP
 node apps/server/dist/mcp.mjs    # MCP over stdio
+node apps/server/dist/cli.mjs    # batch editing, see the build guide
 ```
 
 Configuration is environment only:
@@ -100,6 +101,11 @@ Configuration is environment only:
 | `VIDEOLA_WASM` | resolved from `@videola/core` | Path to `videola_core_bg.wasm`, if it is not where the package resolver finds it. |
 | `CHROME_PATH` | the usual install locations | The browser `project_getFrame` renders in. When set it is an instruction, not a candidate: a path that points at nothing is an error rather than a fallback. |
 | `VIDEOLA_RENDERER` | `apps/server/renderer/bundle.js` | The page bundle, if it is not beside the server. |
+| `VIDEOLA_WEB_ROOT` | unset | A directory of built web-app files to serve beside the API; this is how the Docker image serves the editor. Unset, every path outside `/api` answers 404. Served **without** the token, because the editor keeps its projects in the visitor's own browser and the storage root stays behind `/api`. |
+
+The MCP server reads only `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` and `VIDEOLA_LOCALE`. It
+listens on nothing, so a bind address meant for the HTTP server cannot stop it from starting — which
+is what a container that sets `VIDEOLA_HOST` for its API would otherwise do.
 
 For an MCP client, that is a stdio server entry:
 

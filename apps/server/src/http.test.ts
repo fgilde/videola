@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -272,6 +272,82 @@ describe("the token guard", () => {
 
     expect(good.status).toBe(200);
     expect(bad.status).toBe(401);
+  });
+});
+
+describe("serving the web app", () => {
+  let web = "";
+
+  beforeEach(async () => {
+    web = await mkdtemp(join(tmpdir(), "videola-web-"));
+    await mkdir(join(web, "assets"), { recursive: true });
+    await writeFile(join(web, "index.html"), "<title>Videola</title>");
+    await writeFile(join(web, "assets", "index-abc123.js"), "export const a = 1;");
+    await writeFile(join(web, "assets", "videola_core_bg-abc123.wasm"), Buffer.from([0, 97, 115, 109]));
+  });
+
+  it("answers the root with index.html", async () => {
+    await start({ webRoot: web });
+
+    const response = await fetch(`${base}/`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(await response.text()).toContain("Videola");
+  });
+
+  // The trap this project has already fallen into once: a wrong type here and the browser refuses
+  // to instantiate the module, so the editor never starts while every file is served correctly.
+  it("names the wasm and the script by their real types", async () => {
+    await start({ webRoot: web });
+
+    const wasm = await fetch(`${base}/assets/videola_core_bg-abc123.wasm`);
+    const script = await fetch(`${base}/assets/index-abc123.js`);
+
+    expect(wasm.headers.get("content-type")).toBe("application/wasm");
+    expect(script.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+  });
+
+  it("caches hashed assets forever and the document never", async () => {
+    await start({ webRoot: web });
+
+    expect((await fetch(`${base}/assets/index-abc123.js`)).headers.get("cache-control")).toContain(
+      "immutable",
+    );
+    expect((await fetch(`${base}/`)).headers.get("cache-control")).toBe("no-cache");
+  });
+
+  it("answers a deep application route with the document", async () => {
+    await start({ webRoot: web });
+
+    const response = await fetch(`${base}/project/abc/timeline`);
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Videola");
+  });
+
+  it("refuses a path that climbs out of the web root", async () => {
+    await writeFile(join(root, "secret.txt"), "not yours");
+    await start({ webRoot: web });
+
+    const response = await fetch(`${base}/${encodeURIComponent("../")}secret.txt`);
+
+    expect(await response.text()).not.toContain("not yours");
+  });
+
+  // The app holds its projects in the visitor's own browser, so it gives nothing away; the storage
+  // root behind /api does, and stays guarded.
+  it("serves the app without the token but not the api", async () => {
+    await start({ webRoot: web, token: "s3cret" });
+
+    expect((await fetch(`${base}/`)).status).toBe(200);
+    expect((await fetch(`${base}/api/health`)).status).toBe(401);
+  });
+
+  it("keeps answering 404 on the api when no web root is configured", async () => {
+    await start();
+
+    expect((await fetch(`${base}/`)).status).toBe(404);
   });
 });
 

@@ -215,5 +215,7 @@
   "mixer.lufs": "{value} LUFS",
   "mixer.silent": "Stille",
   "mixer.unmeasured": "Nicht gemessen",
-  "panel.mixer": "Mischpult"
+  "panel.mixer": "Mischpult",
+  "update.available": "Videola {version} ist verfügbar. Jetzt installieren?",
+  "update.installed": "Das Update ist installiert. Starte Videola neu, um es zu benutzen."
 }
