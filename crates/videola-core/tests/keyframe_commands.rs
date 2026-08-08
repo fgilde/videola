@@ -198,6 +198,27 @@ fn moving_a_keyframe_retimes_it_and_keeps_the_track_sorted() {
     assert_eq!(amount_at(doc.project(), 2.0), Some(ParamValue::Float(0.5)));
 }
 
+// A drag that ends where it began must not raise: the gesture cannot know in advance that it
+// went nowhere, and a handler that throws looks in jsdom exactly like one that worked.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn moving_a_keyframe_onto_itself_is_accepted() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 1.0, 0.5, Interp::Linear)))
+        .unwrap();
+
+    doc.dispatch(Dispatch::new(Command::KeyframeMove {
+        clip,
+        effect_type: "brightness".into(),
+        key: "amount".into(),
+        from: Time::from_seconds(1.0),
+        to: Time::from_seconds(1.0),
+    }))
+    .unwrap();
+
+    assert_eq!(keyframe_times(doc.project()), vec![1.0]);
+}
+
 #[test]
 #[allow(clippy::unwrap_used)]
 fn moving_a_keyframe_onto_another_is_rejected() {

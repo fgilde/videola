@@ -133,6 +133,12 @@ describe("source times through the real WASM backend", () => {
     expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0.5 });
     expect(amountAt(3 * SECOND)).toEqual({ kind: "float", value: 1 });
 
+    // Stretching the ramp: the later key moves out to 4 s, so one second in is a quarter of the
+    // way. A `from`/`to` the wrong way round would refuse instead of quietly doing something else.
+    doc.dispatch(cmd.keyframeMove(clip.id, "brightness", "amount", 2 * SECOND, 4 * SECOND));
+    expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0.25 });
+    doc.dispatch(cmd.keyframeMove(clip.id, "brightness", "amount", 4 * SECOND, 2 * SECOND));
+
     doc.dispatch(cmd.keyframeSetInterp(clip.id, "brightness", "amount", 0, "hold"));
     expect(amountAt(SECOND)).toEqual({ kind: "float", value: 0 });
 
@@ -140,6 +146,44 @@ describe("source times through the real WASM backend", () => {
     doc.dispatch(cmd.keyframeRemove(clip.id, "brightness", "amount", 0));
     doc.dispatch(cmd.keyframeRemove(clip.id, "brightness", "amount", 2 * SECOND));
     expect(amountAt(SECOND)).toEqual({ kind: "float", value: 9 });
+  });
+
+  // "Fit the clip to the frame" in the only form the core knows: a scale factor that reaches the
+  // compositor unchanged. Every field goes across, because the command carries the whole struct.
+  it("carries a whole transform across the boundary", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const clip = clipOn(doc, 0);
+    const fitted = {
+      ...clip.transform,
+      scaleX: 3,
+      scaleY: 3,
+      crop: { ...clip.transform.crop, left: 0.25 },
+    };
+
+    doc.dispatch(cmd.clipSetTransform(clip.id, fitted));
+
+    expect(clipOn(doc, 0).transform).toEqual(fitted);
+  });
+
+  it("carries a transition across the boundary and takes it off again", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const clip = clipOn(doc, 0);
+    const crossfade = {
+      transitionType: "crossfade",
+      duration: SECOND / 2,
+      alignment: "in" as const,
+      params: {},
+    };
+
+    doc.dispatch(cmd.clipSetTransition(clip.id, crossfade));
+    expect(clipOn(doc, 0).transitionIn).toEqual(crossfade);
+
+    // Cleared means *absent*, not null: `transitionIn` is skipped when it is none, so the
+    // Inspector has to test for undefined rather than compare against null.
+    doc.dispatch(cmd.clipSetTransition(clip.id, null));
+    expect(clipOn(doc, 0).transitionIn).toBeUndefined();
   });
 
   // The Inspector's own drag: two hundred dispatches under one key, one step back.

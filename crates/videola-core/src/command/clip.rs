@@ -267,8 +267,7 @@ pub(super) fn remove_keyframe(
     time: Time,
 ) -> Result<()> {
     let effect = find_effect_mut(target, clip, effect_type)?;
-    let track = keyframe_track_mut(effect, key)?;
-    let index = position_at(track, time)?;
+    let (track, index) = keyframe_at(effect, key, time)?;
     track.remove(index);
     // An empty track would still read as "keyframed" in the JSON while `param_at` has already
     // fallen back to the static value — the last removal takes the parameter back off the clock.
@@ -288,8 +287,7 @@ pub(super) fn move_keyframe(
 ) -> Result<()> {
     bounded(to)?;
     let effect = find_effect_mut(target, clip, effect_type)?;
-    let track = keyframe_track_mut(effect, key)?;
-    let index = position_at(track, from)?;
+    let (track, index) = keyframe_at(effect, key, from)?;
     if from != to && track.iter().any(|keyframe| keyframe.time == to) {
         return Err(CoreError::InvalidArgument(
             "a keyframe already sits at that time".into(),
@@ -309,8 +307,7 @@ pub(super) fn set_keyframe_interp(
     interp: Interp,
 ) -> Result<()> {
     let effect = find_effect_mut(target, clip, effect_type)?;
-    let track = keyframe_track_mut(effect, key)?;
-    let index = position_at(track, time)?;
+    let (track, index) = keyframe_at(effect, key, time)?;
     track[index].interp = interp;
     Ok(())
 }
@@ -328,18 +325,21 @@ fn find_effect_mut<'p>(
         .ok_or_else(|| CoreError::InvalidArgument(format!("effect not on clip: {effect_type}")))
 }
 
-fn keyframe_track_mut<'e>(effect: &'e mut Effect, key: &str) -> Result<&'e mut Vec<Keyframe>> {
-    effect
-        .keyframes
-        .get_mut(key)
-        .ok_or_else(|| CoreError::InvalidArgument(format!("parameter is not keyframed: {key}")))
-}
-
-fn position_at(track: &[Keyframe], time: Time) -> Result<usize> {
-    track
+// One refusal, not two: "this parameter has no track" and "this track has nothing at that time"
+// are the same answer to the caller, and splitting them left the first guard unable to produce an
+// outcome the second did not already produce.
+fn keyframe_at<'e>(
+    effect: &'e mut Effect,
+    key: &str,
+    time: Time,
+) -> Result<(&'e mut Vec<Keyframe>, usize)> {
+    let missing = || CoreError::InvalidArgument(format!("no keyframe on {key} at that time"));
+    let track = effect.keyframes.get_mut(key).ok_or_else(missing)?;
+    let index = track
         .iter()
         .position(|keyframe| keyframe.time == time)
-        .ok_or_else(|| CoreError::InvalidArgument("no keyframe at that time".into()))
+        .ok_or_else(missing)?;
+    Ok((track, index))
 }
 
 fn sort_clips(track: &mut crate::model::Track) {
