@@ -245,10 +245,6 @@ export function Timeline({
   );
 }
 
-// Far enough that a tap on a library entry is not a drag, and the same threshold the timeline's
-// own gestures use -- one number for "the pointer has travelled", not two that could drift.
-const GRAB_THRESHOLD_PX = 3;
-
 interface MediaDropConfig {
   grab: MediaGrab | undefined;
   project: Project;
@@ -273,17 +269,19 @@ function useMediaDrop(config: MediaDropConfig): MediaDrop | undefined {
       setDrop(undefined);
       return;
     }
-    const resolve = (x: number, y: number): MediaDrop | undefined => {
-      const travelled = Math.abs(x - grab.x) >= GRAB_THRESHOLD_PX || Math.abs(y - grab.y) >= GRAB_THRESHOLD_PX;
-      if (!travelled) return undefined;
-      return dropAt(latest.current, grab.media, x, y);
-    };
+    // No travel threshold. A press that has not moved is still on the library entry it started
+    // on, and dropAt already refuses anything that is not over the tracks -- so a threshold would
+    // be a second, weaker version of a condition that is enforced anyway. A counter-check proved
+    // it: removing it changed no outcome.
+    const resolve = (x: number, y: number): MediaDrop | undefined =>
+      dropAt(latest.current, grab, x, y);
     const onMove = (event: PointerEvent) => setDrop(resolve(event.clientX, event.clientY));
     const onUp = (event: PointerEvent) => {
+      // Resolved before either callback runs, so the order the two go out in cannot matter -- a
+      // counter-check on swapping them changed no outcome, and an earlier comment here claimed
+      // it did.
       const landed = resolve(event.clientX, event.clientY);
       setDrop(undefined);
-      // The command goes out before the grab is cleared, so a caller that clears its own state in
-      // onGrabEnd cannot pull the medium out from under the drop.
       if (landed !== undefined) latest.current.onDropMedia?.(landed);
       latest.current.onGrabEnd?.();
     };

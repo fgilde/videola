@@ -191,9 +191,6 @@
   font-size: 0.8rem;
   text-align: right;
   white-space: nowrap;
-  /* The timecode keeps its own width and the buttons give way, which they can: they carry a
-     min-width of 44 px and stop there. Shrinking the text instead cut off its last two digits. */
-  flex-shrink: 0;
 }
 
 .v-shell[data-layout="phone"] .v-transport__duration,

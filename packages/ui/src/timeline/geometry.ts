@@ -10,12 +10,11 @@ import {
   type TrackId,
 } from "@videola/core";
 
-/** A pointer that went down on a library entry and has not been let go of yet. */
-export interface MediaGrab {
-  media: MediaId;
-  x: number;
-  y: number;
-}
+/**
+ * A medium the library has under a pointer that has not been let go of yet. The id is all of it:
+ * where the pointer started does not matter, because a drop is judged by where it ends.
+ */
+export type MediaGrab = MediaId;
 
 /** Where a grabbed medium would land if the pointer were released now. */
 export interface MediaDrop {

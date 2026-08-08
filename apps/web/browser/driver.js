@@ -866,6 +866,26 @@
     check("nothing moved onto it by itself",
       [...all(".v-track")].map((row) => row.querySelectorAll("[data-clip-id]").length), [0, 2]);
 
+    // A plain tap on an entry must place nothing. Found by a counter-check: taking the drag
+    // threshold out left every check green, and without it a tap on a library entry drops a clip
+    // wherever the finger happened to be.
+    const before = all("[data-clip-id]").length;
+    const tapped = all("[data-media-id]")[0].getBoundingClientRect();
+    finger("pointerdown", all("[data-media-id]")[0], tapped.left + 30, tapped.top + 20);
+    await sleep(100);
+    finger("pointerup", all("[data-media-id]")[0], tapped.left + 30, tapped.top + 20);
+    await sleep(200);
+    check("a tap on a library entry places nothing", all("[data-clip-id]").length, before);
+    check("and reports nothing", banner(), "");
+
+    // Scrolled, so the drop has to account for the offset. Found by a counter-check as well: with
+    // the timeline at zero, reading the scroll offset and ignoring it give the same answer, and
+    // dropping onto a scrolled timeline is the ordinary case rather than the exotic one.
+    const surface = q(".v-timeline__scroll");
+    surface.scrollLeft = 120;
+    await sleep(100);
+    checkAtLeast("the timeline really is scrolled for the drag", surface.scrollLeft, 120);
+
     // The drag itself, with a finger. The library entry announces the grab, the timeline judges
     // it, and one command comes out of it -- which is why the undo below is a single step.
     const entry = all("[data-media-id]")[1];

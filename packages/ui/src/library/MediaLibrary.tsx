@@ -140,13 +140,13 @@ function Entry({
   const { t, formatTimecode } = useI18n();
   const grabbable = draggable && !missing && onGrab !== undefined;
 
-  // Only where the pointer went down is reported. Whether that becomes a drag at all is the
-  // timeline's decision, because the threshold, the target track and the time are all its
-  // geometry -- and one gesture judged in one place cannot disagree with itself.
+  // Only which medium is under the pointer is reported. Whether that becomes a drop, on which
+  // track and at which instant, is the timeline's decision -- all three are its geometry, and one
+  // gesture judged in one place cannot disagree with itself.
   const onPointerDown = (event: PointerEvent<HTMLElement>): void => {
     if (!grabbable || event.button !== 0) return;
     if (event.target instanceof Element && event.target.closest("button, label") !== null) return;
-    onGrab?.({ media: asset.id, x: event.clientX, y: event.clientY });
+    onGrab?.(asset.id);
   };
 
   return (
