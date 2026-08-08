@@ -46,13 +46,10 @@ struct Entry {
 // model would put the same few thousand lines in front of an agent twenty-six times over, for a
 // command whose entire payload is one id.
 fn entry(variant: &Value, defs: &Map<String, Value>) -> Entry {
-    let properties = variant["properties"]
-        .as_object()
-        .expect("a variant with fields");
-    let command = properties["type"]["const"]
-        .as_str()
-        .expect("a tagged variant")
-        .to_string();
+    let Some(command) = variant["properties"]["type"]["const"].as_str() else {
+        panic!("every Command variant is internally tagged, this one is not: {variant}")
+    };
+    let command = command.to_string();
 
     let mut schema = variant.clone();
     let reachable = reachable_defs(variant, defs);
@@ -110,7 +107,8 @@ fn typescript(entries: &[Entry]) -> String {
                 "  {{\n    command: {},\n    description: {},\n    schema: {},\n  }},",
                 json!(entry.command),
                 json!(entry.description),
-                serde_json::to_string(&entry.schema).expect("schema to string")
+                // Infallible where `serde_json::to_string` is not: the schema is already a `Value`.
+                entry.schema
             )
         })
         .collect::<Vec<_>>()
