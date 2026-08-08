@@ -19,14 +19,21 @@
 
 /* The gap here is what separates one parameter from the next, and it has to beat the gap inside a
    row -- a label sitting 35 px above its own slider and 45 px below the one before it belongs to
-   neither. Everything a row needs of its own space is set to zero below. */
+   neither. Everything a row needs of its own space is set to zero below.
+
+   Columns rather than one long list, because a row is only ever as wide as a control and the panel
+   is as wide as the shell gives it. On a desktop that is 300 px and this is one column; on a tablet
+   the panel is 590 and the second column is what turns two and a half visible parameters into
+   five, out of the same height. */
 .v-inspector__group {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  align-items: start;
   gap: var(--v-space-4);
 }
 
 .v-inspector__title {
+  grid-column: 1 / -1;
   margin: 0;
   font-size: var(--v-text-xs);
   font-weight: var(--v-weight-strong);
@@ -158,8 +165,13 @@
 }
 
 /* A finger has no thumb to aim at. The shell already decides this for .v-button from the layout
-   mode; any-pointer catches the case the viewport cannot see -- a touchscreen at desktop width. */
-@media (any-pointer: coarse) {
+   mode; this catches the case the viewport cannot see -- a slate held in the hand at desk width.
+
+   `pointer` and not `any-pointer`, because the contract is about the pointer in use and
+   `any-pointer: coarse` is true of every laptop with a touchscreen in it. On one of those it took
+   the editor's 44 px rules for a mouse as well and cost the picture 100 px of height -- measured
+   on the harness machine, which is exactly such a laptop. */
+@media (pointer: coarse) {
   .v-param__key,
   .v-param__interp,
   .v-param__select,

@@ -57,7 +57,9 @@
   margin: 0 var(--v-space-1);
 }
 
-@media (any-pointer: coarse) {
+/* What is being pointed with, not what is plugged in -- the same correction the controls and the
+   inspector carry, and for the same reason: a laptop with a touchscreen is not a slate. */
+@media (pointer: coarse) {
   .v-transport .v-button--icon {
     min-width: var(--v-touch-target);
     min-height: var(--v-touch-target);

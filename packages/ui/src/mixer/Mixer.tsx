@@ -199,7 +199,7 @@ function MasterStrip({
       <div className="v-mixer__loudness">
         <button
           type="button"
-          className="v-button v-button--quiet"
+          className="v-button"
           disabled={measuring === true || onMeasure === undefined}
           onClick={() => onMeasure?.()}
         >

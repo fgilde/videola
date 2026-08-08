@@ -125,6 +125,14 @@ async function announce() {
   const all = (selector) => Array.from(document.querySelectorAll(selector));
   const button = (label) => document.querySelector('button[aria-label="' + label + '"]');
   const labelled = (text) => all("button").find((node) => node.textContent.trim() === text);
+  // The effects on offer are one picker per chain now, not one button per effect: nine of them
+  // stacked down a 300 px column was what left the properties panel scrolling past its own
+  // sliders and a mixer strip taller than the band it lives in.
+  // Scoped to the properties panel unless a strip is named, because the mixer carries one of these
+  // per chain and on a desktop they are all on screen at once.
+  const effectPicker = (within) =>
+    (within || q(".v-inspector") || document).querySelector('select[aria-label="Effekt hinzufügen"]');
+  const addEffect = (id, within) => setValue(effectPicker(within), id);
   // The project actions moved behind the topbar's overflow disclosure. A <summary> carries no
   // button role, so it cannot be looked up as one -- and a person has to open it before reaching
   // anything inside, which is exactly what this does.
@@ -270,10 +278,10 @@ async function announce() {
 
     pointer("pointerdown", q("[data-clip-id]"));
     pointer("pointerup", q("[data-clip-id]"));
-    const add = await until("the inspector", () => labelled("Helligkeit hinzufügen"));
+    await until("the inspector", () => effectPicker());
     check("selecting a clip opens its properties", q(".v-inspector") !== null, true);
 
-    add.click();
+    addEffect("brightness");
     const row = await until("the brightness row", () => amountSlider());
     check("the parameter is named from the manifest, not from its key",
       row.labels[0].textContent, "Staerke");
@@ -372,6 +380,28 @@ async function announce() {
     checkAtLeast("and it is the largest zone, not the smallest",
       Math.round(q(".v-preview").getBoundingClientRect().height -
         q(".v-timeline").getBoundingClientRect().height), 1);
+    checkAtLeast("the mixer costs less of the window than the picture does",
+      Math.round(q(".v-preview").getBoundingClientRect().height -
+        q('[data-testid="mixer"]').getBoundingClientRect().height), 1);
+
+    // A share of the window is not a size a strip has. 20vh was 180 px against a strip of 342, so
+    // the volume fader was the only part of a mixer anybody ever saw -- pan, mute, solo and the
+    // whole insert chain were below the cut. Read off the scroll container, which is where being
+    // cut off actually shows: a box shorter than what it holds.
+    checkAtMost("the mixer shows whole strips and not the tops of them",
+      q(".v-mixer__strips").scrollHeight - q(".v-mixer__strips").clientHeight, 0);
+    // And the same claim from the other side, on the control that sits last in a strip -- the one
+    // a scrollHeight that happened to agree would still leave off the screen.
+    check("the last control in a strip is inside the mixer",
+      q(".v-mixer__strip .v-mixer__chain").getBoundingClientRect().bottom <=
+        Math.round(q('[data-testid="mixer"]').getBoundingClientRect().bottom), true);
+
+    // The timeline row was a fixed 30% of the editor whatever it held, because grid maximizes a
+    // minmax track before it feeds the flexible one. Under a single 72 px track that is 140 px of
+    // empty rows held open at the picture's expense.
+    checkAtMost("no empty rows are held open under the last track",
+      Math.round(q(".v-timeline__body").getBoundingClientRect().bottom -
+        all(".v-track").at(-1).getBoundingClientRect().bottom), 40);
 
     if (virtual) {
       checkAtLeast("the preview shows a decoded frame",
@@ -632,10 +662,12 @@ async function announce() {
     check("choosing properties puts the timeline away", q('[data-testid="timeline"]'), null);
     check("the picture is still above it", box(".v-preview").bottom <= box(".v-panels").top, true);
 
-    const add = await until("the brightness button", () => labelled("Helligkeit hinzufügen"));
+    const add = await until("the effect picker", () => effectPicker());
     checkAtLeast("adding an effect is a thumb-sized target",
       add.getBoundingClientRect().height, 44);
-    add.click();
+    check("and it offers the effects this build can draw",
+      [...add.options].map((option) => option.value).includes("brightness"), true);
+    addEffect("brightness");
     const slider = await until("the parameter row",
       () => q('.v-inspector__effect input[type="range"]'));
     check("a phone can put an effect on a clip and see its parameter",
@@ -1043,11 +1075,19 @@ async function announce() {
     // unlike the phone there is nothing to switch to.
     finger("pointerdown", q("[data-clip-id]"), 0, 0);
     finger("pointerup", q("[data-clip-id]"), 0, 0);
-    const add = await until("the brightness button", () => labelled("Helligkeit hinzufügen"));
+    const add = await until("the effect picker", () => effectPicker());
     checkAtLeast("with a thumb-sized target to add an effect",
       add.getBoundingClientRect().height, 44);
     check("the properties panel is beside the picture, not behind a tab",
       box('[data-testid="inspector"]').right <= innerWidth, true);
+
+    // The tablet is where the mixer was cut worst: three strips under a 22vh properties panel and
+    // a 26% timeline left it 66 px of the 342 a strip needs.
+    checkAtMost("a tablet shows whole mixer strips too",
+      q(".v-mixer__strips").scrollHeight - q(".v-mixer__strips").clientHeight, 0);
+    checkAtLeast("and every fader in them is a touch target",
+      Math.round(Math.min(...all(".v-mixer .v-param__slider")
+        .map((node) => node.getBoundingClientRect().height))), 44);
 
     button("Abspielen").click();
     await until("the transport to report playing", () => button("Anhalten") !== null, 8000);

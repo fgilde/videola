@@ -101,8 +101,10 @@
 }
 
 /* A finger, wherever it is: the shell sizes by layout mode, and this catches the case a viewport
-   cannot see -- a touchscreen at desk width. --v-touch-target is the contract either way. */
-@media (any-pointer: coarse) {
+   cannot see -- a slate held in the hand at desk width. --v-touch-target is the contract either
+   way. `pointer` asks what is being pointed with; `any-pointer` asks what is plugged in, and on a
+   laptop with a touchscreen that is a different answer and the wrong one. */
+@media (pointer: coarse) {
   .v-button {
     min-height: var(--v-touch-target);
   }
@@ -213,7 +215,7 @@ select:hover {
   border-color: var(--v-border-strong);
 }
 
-@media (any-pointer: coarse) {
+@media (pointer: coarse) {
   select {
     min-height: var(--v-touch-target);
   }

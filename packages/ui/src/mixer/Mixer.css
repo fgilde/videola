@@ -85,9 +85,11 @@
   gap: var(--v-space-1);
 }
 
-/* Two letters at symbol rank. They were a bordered box each, filled with the accent when pressed,
-   which made the loudest thing in a mixer strip the state of a mute nobody had set. */
+/* Two letters at symbol rank, but with a resting outline the other symbols do without: mute and
+   solo are switches that report a state, and a switch nobody can see when it is off looks like a
+   caption. Filled with the accent when pressed, it was the loudest thing in the strip. */
 .v-mixer__flag {
+  border-color: var(--v-border);
   font-weight: var(--v-weight-strong);
 }
 
