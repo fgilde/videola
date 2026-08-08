@@ -155,6 +155,19 @@ function ffmpegChecks(path, expected) {
   return checks;
 }
 
+function stop(browser) {
+  if (browser?.pid === undefined) return;
+  try {
+    if (process.platform === "win32") {
+      execFileSync("taskkill", ["/PID", String(browser.pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      browser.kill();
+    }
+  } catch {
+    // Already gone, which is the outcome this wanted.
+  }
+}
+
 const { server, state, reported, port } = await serve();
 let browser;
 try {
@@ -207,7 +220,11 @@ try {
   console.log(`${results.length - failed.length}/${results.length} export checks passed`);
   process.exitCode = failed.length === 0 ? 0 : 1;
 } finally {
-  browser?.kill();
+  // A headless Chrome without --dump-dom stays up until it is told otherwise, and on Windows it
+  // has children that outlive their parent's handle. Its open sockets keep `close()` waiting
+  // forever, so both ends have to be cut: the whole process tree, then the connections.
+  stop(browser);
+  server.closeAllConnections();
   server.close();
   for (const artefact of artefacts) rmSync(artefact, { force: true });
 }
