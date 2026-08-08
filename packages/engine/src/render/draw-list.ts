@@ -153,13 +153,25 @@ function drawItem(
 
 // An effect type nobody implements is skipped rather than refused: a project written by a later
 // version must still play, minus what this one cannot draw.
+//
+// A separable effect becomes two entries with the same uniforms and a different `pass`. Expanding it
+// here rather than in the compositor keeps the executor's rule intact -- one entry, one draw -- and
+// puts the count where a test can read it off a value.
 function effectPasses(clip: Clip, params: EffectParamSnapshot): EffectPass[] {
   const passes: EffectPass[] = [];
   for (const authored of clip.effects) {
     if (!authored.enabled) continue;
     const manifest = effect(authored.effectType);
     if (manifest === undefined || manifest.inputs !== 1) continue;
-    passes.push({ effect: manifest.id, values: uniforms(manifest, params.get(authored.id)) });
+    const resolved = params.get(authored.id);
+    const values = uniforms(manifest, (key) => resolved?.get(key));
+    if (manifest.passes === undefined) {
+      passes.push({ effect: manifest.id, values });
+      continue;
+    }
+    for (let sweep = 0; sweep < manifest.passes; sweep += 1) {
+      passes.push({ effect: manifest.id, values: { ...values, pass: sweep } });
+    }
   }
   return passes;
 }
@@ -167,6 +179,10 @@ function effectPasses(clip: Clip, params: EffectParamSnapshot): EffectPass[] {
 // The incoming clip's transition, as far into it as `at` has come. Once the window is behind the
 // moment the clip is composited the ordinary way again -- a mix at full progress would paint the
 // whole frame, including where the clip itself is transparent.
+//
+// The transition's own parameters come from the model and go through the same clamp as an effect's:
+// an angle a project file left out is the manifest's default rather than the zero an unset uniform
+// would be, and the two are not the same for a wipe.
 function mixPass(clip: Clip, at: Time, opacity: number): EffectPass | undefined {
   const transition = clip.transitionIn;
   if (transition == null || transition.duration <= 0) return undefined;
@@ -174,7 +190,9 @@ function mixPass(clip: Clip, at: Time, opacity: number): EffectPass | undefined 
   if (manifest?.inputs !== 2) return undefined;
   const progress = (at - windowStart(clip.start, transition)) / transition.duration;
   if (progress >= 1) return undefined;
-  return { effect: manifest.id, values: { progress: Math.max(progress, 0) * opacity } };
+  const values = uniforms(manifest, (key) => transition.params[key]);
+  values.progress = Math.max(progress, 0) * opacity;
+  return { effect: manifest.id, values };
 }
 
 // ponytail: a centred or trailing transition reaches back before the clip starts, where the clip
@@ -194,13 +212,16 @@ function windowStart(start: Time, transition: Transition): Time {
 
 // Unpacking the `ParamValue` is the only thing TypeScript does to a parameter -- the value itself,
 // keyframed or not, was decided in the core. What is usable as a uniform is `clampParam`'s call.
+//
+// Takes a lookup rather than a map because the two callers hold their values differently: an
+// effect's arrive resolved from the core, a transition's straight off the model.
 function uniforms(
   manifest: EffectManifest,
-  resolved: ReadonlyMap<string, ParamValue> | undefined,
+  lookup: (key: string) => ParamValue | undefined,
 ): Record<string, number> {
   const values: Record<string, number> = {};
   for (const param of manifest.params) {
-    values[param.key] = clampParam(param, resolved?.get(param.key)?.value);
+    values[param.key] = clampParam(param, lookup(param.key)?.value);
   }
   return values;
 }

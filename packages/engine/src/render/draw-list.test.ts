@@ -447,7 +447,7 @@ describe("a transition in the draw list", () => {
   });
 
   it("ignores a transition type it does not know and one with no duration", () => {
-    expect(only([clip({ transitionIn: transition({ transitionType: "wipe" }) })], 0).mix)
+    expect(only([clip({ transitionIn: transition({ transitionType: "no-such-wipe" }) })], 0).mix)
       .toBeUndefined();
     expect(only([clip({ transitionIn: transition({ duration: 0 }) })], 0).mix).toBeUndefined();
   });
@@ -467,5 +467,52 @@ describe("a transition in the draw list", () => {
 
     expect(item.effects).toEqual([{ effect: "brightness", values: { amount: 2 } }]);
     expect(item.mix?.effect).toBe("crossfade");
+  });
+
+  // A parameter the project never wrote reaches the shader as the manifest's default. Leaving it out
+  // would set no uniform at all, and an unset uniform is zero -- which for a wipe's angle is a real
+  // direction rather than an obvious mistake, so nothing downstream would ever report it.
+  it("fills a transition parameter the project left out with the manifest's default", () => {
+    const clips = [clip({ transitionIn: transition({ transitionType: "wipe" }) })];
+
+    expect(only(clips, SECOND / 4).mix?.values).toEqual({
+      progress: 0.5,
+      angle: 0,
+      softness: 0.05,
+    });
+  });
+
+  it("clamps a transition parameter the project put outside its range", () => {
+    const clips = [
+      clip({
+        transitionIn: transition({
+          transitionType: "wipe",
+          params: { angle: { kind: "float", value: 900 } },
+        }),
+      }),
+    ];
+
+    expect(only(clips, SECOND / 4).mix?.values.angle).toBe(360);
+  });
+});
+
+describe("a separable effect in the draw list", () => {
+  // One authored effect, two draws, and the order of the sweeps is what makes it separable rather
+  // than the same blur applied twice along one axis.
+  it("becomes two passes that differ only in which sweep they are", () => {
+    const clips = [clip({ effects: [effect({ effectType: "blur" })] })];
+
+    expect(only(clips, 0, params([["eff_1", [["amount", 3]]]])).effects).toEqual([
+      { effect: "blur", values: { amount: 3, pass: 0 } },
+      { effect: "blur", values: { amount: 3, pass: 1 } },
+    ]);
+  });
+
+  it("leaves a single-pass effect as one pass, with no sweep to speak of", () => {
+    const clips = [clip({ effects: [effect({ effectType: "contrast" })] })];
+
+    expect(only(clips, 0, params([["eff_1", [["amount", 2]]]])).effects).toEqual([
+      { effect: "contrast", values: { amount: 2 } },
+    ]);
   });
 });

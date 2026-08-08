@@ -67,6 +67,14 @@ function floats(entries) {
     new Map(values.map(([key, value]) => [key, { kind: "float", value }]))]));
 }
 
+// A transition's own parameters live on the model rather than in the resolved batch, so they travel
+// as ParamValue the way a project file carries them.
+function params(values) {
+  const out = {};
+  for (const [key, value] of Object.entries(values || {})) out[key] = { kind: "float", value };
+  return out;
+}
+
 const results = [];
 
 function check(name, got, want, tolerance) {
@@ -377,6 +385,295 @@ test("the effect chain leaves no driver error behind", () => {
   a.close();
   b.close();
   check("glGetError after a chain and a mix", context.gl.getError(), 0);
+});
+
+// One clip carrying one effect, rendered once. `values` is what the core resolved for this moment;
+// what every check below measures is the pixel that value produces.
+function through(type, values, pixel, over) {
+  const spec = over || {};
+  const size = spec.size || 4;
+  const effects = [{ id: "eff_1", effectType: type, enabled: true, params: {}, keyframes: {} }];
+  const { canvas, compositor, scene } = rig(size, size, spec.background || "#000000",
+    [{ effects, t: spec.t || {}, blend: spec.blend }], size, size);
+  const f = frame(size, size, typeof pixel === "function" ? pixel : () => pixel);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]), floats([["eff_1", Object.entries(values)]]));
+  f.close();
+  return { canvas, at: reader(compositor.readPixels(), size, size) };
+}
+
+test("contrast pivots about mid grey", () => {
+  check("a slope of two on a light grey", through("contrast", { amount: 2 }, [160, 160, 160, 255])
+    .at(2, 2), [192, 192, 192, 255]);
+  check("a slope of one is the picture it was given",
+    through("contrast", { amount: 1 }, [160, 160, 160, 255]).at(2, 2), [160, 160, 160, 255]);
+  check("a slope of zero is the pivot itself",
+    through("contrast", { amount: 0 }, [160, 160, 160, 255]).at(2, 2), [128, 128, 128, 255]);
+});
+
+// The one shader here that has to undo the premultiplication, and the only way to see whether it
+// did. Working on the premultiplied value gives 33 instead of 97 -- a difference no assertion about
+// the shader's text could tell apart.
+test("contrast reads the colour, not the colour times its alpha", () => {
+  check("a half-transparent grey pushed about its own mid point",
+    through("contrast", { amount: 2 }, [160, 160, 160, 128]).at(2, 2), [97, 97, 97, 255]);
+});
+
+test("saturation mixes towards luma", () => {
+  const dull = [200, 100, 100, 255];
+  check("zero is black and white", through("saturation", { amount: 0 }, dull).at(2, 2),
+    [121, 121, 121, 255]);
+  check("one is the picture it was given", through("saturation", { amount: 1 }, dull).at(2, 2), dull);
+  check("one and a half pushes past it", through("saturation", { amount: 1.5 }, dull).at(2, 2),
+    [239, 89, 89, 255]);
+});
+
+// Mixing towards grey is linear in the channel values, so premultiplied is already the right space.
+// The proof is that a half-transparent red desaturates to the same grey an opaque one would, times
+// its alpha -- 27, not 54.
+test("saturation leaves a half-transparent clip half transparent", () => {
+  check("a half-transparent red gone monochrome",
+    through("saturation", { amount: 0 }, [255, 0, 0, 128]).at(2, 2), [27, 27, 27, 255]);
+});
+
+test("a desaturated clip still honours its blend mode", () => {
+  check("grey added onto a red background",
+    through("saturation", { amount: 0 }, [200, 100, 100, 255],
+      { blend: "add", background: "#ff0000" }).at(2, 2), [255, 121, 121, 255]);
+});
+
+test("colour temperature trades red against blue", () => {
+  const grey = [128, 128, 128, 255];
+  check("warm", through("temperature", { amount: 0.5 }, grey).at(2, 2), [192, 128, 64, 255]);
+  check("cold", through("temperature", { amount: -0.5 }, grey).at(2, 2), [64, 128, 192, 255]);
+  check("neutral is the picture it was given",
+    through("temperature", { amount: 0 }, grey).at(2, 2), grey);
+  // Red would land at 1.57 without the clamp, which is not a premultiplied colour at all.
+  check("a channel pushed past its own alpha stops there",
+    through("temperature", { amount: 1 }, [200, 200, 200, 255]).at(2, 2), [255, 200, 0, 255]);
+});
+
+test("a vignette darkens the corners and not the middle", () => {
+  const white = [255, 255, 255, 255];
+  const strong = through("vignette", { amount: 1, size: 0.6 }, white, { size: 16 });
+  check("the middle is untouched", strong.at(8, 8), white);
+  check("the corner is nearly gone", strong.at(0, 0), [8, 8, 8, 255], 2);
+  check("and at strength zero the corner is untouched too",
+    through("vignette", { amount: 0, size: 0.6 }, white, { size: 16 }).at(0, 0), white);
+});
+
+// A single bright column, blurred. The horizontal sweep spreads it and the vertical one cannot,
+// because a full-height column is already uniform down the frame -- so these numbers are the
+// horizontal sweep on its own, weight by weight.
+const COLUMN = (x) => (x === 8 ? [255, 255, 255, 255] : [0, 0, 0, 255]);
+const ROW = (x, y) => (y === 8 ? [255, 255, 255, 255] : [0, 0, 0, 255]);
+
+test("a blur spreads a line along both axes", () => {
+  const across = through("blur", { amount: 1, pass: 0 }, COLUMN, { size: 16 });
+  check("the middle keeps the centre weight", across.at(8, 8), [58, 58, 58, 255]);
+  check("one pixel out", across.at(9, 8), [50, 50, 50, 255]);
+  check("two pixels out", across.at(10, 8), [31, 31, 31, 255]);
+  check("four pixels out", across.at(12, 8), [4, 4, 4, 255]);
+  check("and five is past the kernel", across.at(13, 8), [0, 0, 0, 255]);
+});
+
+// The same kernel turned ninety degrees. Without `u_pass` both sweeps run along one axis, and a
+// full-width row blurred horizontally comes back exactly as it went in -- which is why this check
+// and the one above are two checks rather than one.
+test("the second sweep of a blur runs down the frame", () => {
+  const down = through("blur", { amount: 1 }, ROW, { size: 16 });
+  check("the middle keeps the centre weight", down.at(8, 8), [58, 58, 58, 255]);
+  check("one pixel down", down.at(8, 9), [50, 50, 50, 255]);
+  check("two pixels down", down.at(8, 10), [31, 31, 31, 255]);
+  check("and five is past the kernel", down.at(8, 13), [0, 0, 0, 255]);
+});
+
+test("a blur of nothing is the picture it was given", () => {
+  const none = through("blur", { amount: 0 }, COLUMN, { size: 16 });
+  check("the line is still a line", none.at(8, 8), [255, 255, 255, 255]);
+  check("and its neighbour is still black", none.at(9, 8), [0, 0, 0, 255]);
+});
+
+// Two frames through one compositor, which is where a chain that feeds its own output back shows up.
+// Every other check here builds a fresh compositor and renders once, and a second-frame fault is
+// invisible to all of them.
+test("a blur does not pile up over two frames", () => {
+  const effects = [{ id: "eff_1", effectType: "blur", enabled: true, params: {}, keyframes: {} }];
+  const { compositor, scene } = rig(16, 16, "#000000", [{ effects }], 16, 16);
+  const shot = (amount) => {
+    const f = frame(16, 16, COLUMN);
+    draw(compositor, scene, 0, new Map([["clp_0", f]]), floats([["eff_1", [["amount", amount]]]]));
+    f.close();
+    return reader(compositor.readPixels(), 16, 16)(9, 8);
+  };
+  const first = shot(1);
+  check("the same blur twice is the same picture twice", shot(1), first);
+  check("and a blur turned off comes back sharp", shot(0), [0, 0, 0, 255]);
+});
+
+// A soft edge between two greys. Away from it nothing may move, or the effect is a gain with extra
+// steps; at it the two sides pull apart.
+const EDGE = (x) => (x < 8 ? [102, 102, 102, 255] : [153, 153, 153, 255]);
+
+test("sharpening pulls an edge apart and leaves flat areas alone", () => {
+  const sharp = through("sharpen", { amount: 2 }, EDGE, { size: 16 });
+  check("the flat side is untouched", sharp.at(4, 8), [102, 102, 102, 255]);
+  check("the dark side of the edge goes darker", sharp.at(7, 8), [77, 77, 77, 255]);
+  check("the light side goes lighter", sharp.at(8, 8), [178, 178, 178, 255]);
+  const off = through("sharpen", { amount: 0 }, EDGE, { size: 16 });
+  check("and at zero the edge is where it was", [off.at(7, 8)[0], off.at(8, 8)[0]], [102, 153]);
+});
+
+test("a chroma key cuts the keyed hue out and leaves the rest", () => {
+  const keyed = { hue: 120, tolerance: 25, softness: 15 };
+  check("green over red is red", through("chromaKey", keyed, [0, 255, 0, 255],
+    { background: "#ff0000" }).at(2, 2), [255, 0, 0, 255]);
+  check("blue is a hundred and twenty degrees away and stays",
+    through("chromaKey", keyed, [0, 0, 255, 255], { background: "#ff0000" }).at(2, 2),
+    [0, 0, 255, 255]);
+});
+
+// A grey has no hue to speak of, and the arithmetic hands back zero for it. Without the floor on
+// saturation a key set to red therefore erases every grey in the picture.
+test("a chroma key spares a grey whose nominal hue matches", () => {
+  check("mid grey survives a key set to red",
+    through("chromaKey", { hue: 0, tolerance: 25, softness: 15 }, [128, 128, 128, 255],
+      { background: "#ff0000" }).at(2, 2), [128, 128, 128, 255]);
+});
+
+test("a chroma key falls off rather than cutting", () => {
+  // Ten degrees into a fifteen degree falloff: the pixel keeps three quarters of itself, alpha and
+  // colour together.
+  check("a hue just outside the tolerance is partly kept",
+    through("chromaKey", { hue: 155, tolerance: 25, softness: 15 }, [0, 255, 0, 255]).at(2, 2),
+    [0, 189, 0, 255]);
+});
+
+// Effect and keyframe, crossed on one compositor: two moments of the same clip with the value the
+// core resolved for each. The interpolation is the core's and is proven there; that a changing value
+// changes the picture is only provable here.
+test("a contrast that changes over time changes the picture", () => {
+  const effects = [{ id: "eff_1", effectType: "contrast", enabled: true, params: {}, keyframes: {} }];
+  const { compositor, scene } = rig(4, 4, "#000000", [{ effects }], 4, 4);
+  const shot = (amount) => {
+    const f = frame(4, 4, () => [160, 160, 160, 255]);
+    draw(compositor, scene, 0, new Map([["clp_0", f]]), floats([["eff_1", [["amount", amount]]]]));
+    f.close();
+    return reader(compositor.readPixels(), 4, 4)(2, 2);
+  };
+  check("flat at the first keyframe", shot(0), [128, 128, 128, 255]);
+  check("and separated at the second", shot(2), [192, 192, 192, 255]);
+});
+
+// Two clips overlapping in time, the incoming one carrying the transition. Both pictures are split
+// down the middle, which is what tells a transition that *moves* them from one that only reveals.
+function crossing(type, at, over) {
+  const spec = over || {};
+  const size = spec.size || 16;
+  const upper = {
+    id: "clp_b",
+    t: spec.t || {},
+    effects: spec.effects,
+    transitionIn: { transitionType: type, duration: 1000, alignment: "in",
+      params: params(spec.params) },
+  };
+  const { canvas, compositor, scene } = rig(size, size, spec.background || "#000000",
+    [{ id: "clp_a" }, upper], size, size);
+  const lower = frame(size, size, spec.lower || (() => [255, 0, 0, 255]));
+  const incoming = frame(size, size, spec.upper || (() => [0, 0, 255, 255]));
+  draw(compositor, scene, at, new Map([["clp_a", lower], ["clp_b", incoming]]),
+    floats([["eff_1", [["amount", 2]]]]));
+  lower.close();
+  incoming.close();
+  return { canvas, at: reader(compositor.readPixels(), size, size) };
+}
+
+const RED = [255, 0, 0, 255];
+const YELLOW = [255, 255, 0, 255];
+const GREEN = [0, 255, 0, 255];
+const BLUE = [0, 0, 255, 255];
+const SPLIT = { lower: (x) => (x < 8 ? RED : YELLOW), upper: (x) => (x < 8 ? GREEN : BLUE) };
+
+test("a wipe uncovers the incoming clip without moving it", () => {
+  const half = crossing("wipe", 500, Object.assign({ params: { softness: 0 } }, SPLIT));
+  check("the uncovered side shows the incoming clip where it belongs", half.at(4, 8), GREEN);
+  check("the covered side still shows the outgoing one where it belongs", half.at(12, 8), YELLOW);
+});
+
+test("a wipe at ninety degrees comes down the frame", () => {
+  const down = crossing("wipe", 500,
+    Object.assign({ params: { angle: 90, softness: 0 } }, SPLIT));
+  check("the top is the incoming clip", down.at(4, 4), GREEN);
+  check("the bottom is still the outgoing one", down.at(4, 12), RED);
+});
+
+// The two axes crossed: a half-opaque clip halfway through is a quarter wiped, so the edge stands at
+// a quarter of the frame rather than at half of it with everything faded.
+test("a wipe on a clip that is not fully opaque", () => {
+  const soft = crossing("wipe", 500,
+    Object.assign({ t: { opacity: 0.5 }, params: { softness: 0 } }, SPLIT));
+  // At full progress the edge would stand at half the frame, so x=6 is what tells the two apart.
+  check("before the quarter mark the incoming clip is already there", soft.at(2, 8), GREEN);
+  check("and after it the outgoing one still is", soft.at(6, 8), RED);
+  check("with the outgoing clip still unmoved", soft.at(12, 8), YELLOW);
+});
+
+// Same moment, same pictures, same direction as the wipe -- and every pixel is a different one,
+// because here both pictures travel.
+test("a slide pushes both pictures along", () => {
+  const half = crossing("slide", 500, SPLIT);
+  check("the incoming clip leads with its far edge", half.at(4, 8), BLUE);
+  check("and the outgoing one has been shoved off the far side", half.at(12, 8), RED);
+});
+
+test("a zoom grows the incoming clip out of the middle", () => {
+  const early = crossing("zoom", 100);
+  check("outside the shrunken picture the outgoing clip is untouched", early.at(3, 8), RED);
+  check("inside it the two are together", early.at(8, 8), [230, 0, 26, 255]);
+  const half = crossing("zoom", 500);
+  check("halfway through, half of each", half.at(8, 8), [128, 0, 128, 255]);
+});
+
+// Where a mix would have cost the frame its alpha: outside the shrunken picture there is no incoming
+// colour, and weighting both sides would have halved the opacity of what was already there.
+test("a zoom leaves the frame opaque where the incoming clip is absent", () => {
+  const early = crossing("zoom", 100);
+  check("the corner is still fully opaque", early.at(0, 0)[3], 255);
+  check("and no page comes through it", overPage(early.canvas, "#00ff00", 0, 0), early.at(0, 0));
+});
+
+test("a dip goes out through a colour and back", () => {
+  check("a quarter in, the outgoing clip is halfway down", crossing("dip", 250).at(2, 2),
+    [128, 0, 0, 255]);
+  check("the middle is the dip colour and nothing else", crossing("dip", 500).at(2, 2),
+    [0, 0, 0, 255]);
+  check("three quarters in, the incoming clip is halfway up", crossing("dip", 750).at(2, 2),
+    [0, 0, 128, 255]);
+  check("and the level chooses the colour",
+    crossing("dip", 500, { params: { level: 1 } }).at(2, 2), [255, 255, 255, 255]);
+});
+
+// Effect and transition crossed on a transition that is not the cross dissolve: the incoming clip's
+// own chain runs before the wipe uncovers it, so what appears is the contrasted grey, not the grey.
+test("a clip runs its own effects before a wipe uncovers it", () => {
+  const grey = () => [160, 160, 160, 255];
+  const plain = crossing("wipe", 500, { upper: grey, params: { softness: 0 } });
+  check("uncovered as it arrives", plain.at(4, 8), [160, 160, 160, 255]);
+  const contrasted = crossing("wipe", 500, {
+    upper: grey,
+    params: { softness: 0 },
+    effects: [{ id: "eff_1", effectType: "contrast", enabled: true, params: {}, keyframes: {} }],
+  });
+  check("pushed first, then uncovered", contrasted.at(4, 8), [192, 192, 192, 255]);
+});
+
+// Every transition writes the whole frame, so a hole in the alpha channel there is a hole in the
+// picture. Checked for all of them rather than for the one that was written first.
+test("no transition lets the page through", () => {
+  for (const type of ["crossfade", "wipe", "slide", "zoom", "dip"]) {
+    const shot = crossing(type, 500);
+    check(type + " stays opaque", shot.at(8, 8)[3], 255);
+    check(type + " lets no page through", overPage(shot.canvas, "#ff00ff", 8, 8), shot.at(8, 8));
+  }
 });
 
 test("a canvas resized behind our back", () => {
