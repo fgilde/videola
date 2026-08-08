@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { cmd, FLICKS_PER_SECOND, on } from "./commands";
+import { cmd, FLICKS_PER_SECOND, MAX_COMPOUND_DEPTH, on, readableSourceTimeAt } from "./commands";
 import { VideolaDocument } from "./document";
-import type { Clip } from "./generated";
-import { createWasmBackend } from "./wasm-backend";
+import type { Clip, Project } from "./generated";
+import { createProjectBackend, createWasmBackend } from "./wasm-backend";
 import { initSync } from "./wasm/videola_core.js";
 
 // Needs the real build in packages/core/src/wasm (gitignored - run `pnpm wasm` first). Every
@@ -323,5 +323,113 @@ describe("effects beyond a clip, across the boundary", () => {
 
     doc.dispatch(cmd.projectSetMasterVolume(99));
     expect(doc.state.master.volume).toBe(4);
+  });
+});
+
+// Two implementations of one mapping: `Clip::source_time_at` in Rust, `sourceTimeAt` in
+// commands.ts. The draw list needs the TypeScript one because the instant inside a nested timeline
+// decides which clips are on screen, which is the question the batch query is being asked -- so the
+// two cannot be replaced by each other and have to be pinned against each other instead. A
+// disagreement of a single flick puts a clip in the draw list that no frame will ever arrive for.
+describe("the source-time mapping on both sides of the boundary", () => {
+  const shapes: [string, number, boolean][] = [
+    ["plain", 1, false],
+    ["double speed", 2, false],
+    ["half speed", 0.5, false],
+    ["reversed", 1, true],
+    ["reversed at 2.5x", 2.5, true],
+    ["an awkward rate", 1.0 / 3.0, false],
+  ];
+
+  for (const [name, rate, reverse] of shapes) {
+    it(`agrees flick for flick on ${name}`, async () => {
+      const doc = await timeline();
+      doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, SECOND, 3 * SECOND));
+      doc.dispatch(cmd.clipSetSpeed(clipOn(doc, 0).id, rate, reverse));
+      const clip = clipOn(doc, 0);
+
+      // The edges by name as well as by sweep: the clamp on a reversed head differs from the raw
+      // mapping at exactly one flick, and a stride that never lands on `clip.start` walks past it.
+      const edges = [
+        clip.start - 1,
+        clip.start,
+        clip.start + 1,
+        clip.start + clip.duration - 1,
+        clip.start + clip.duration,
+      ];
+      const sweep = Array.from({ length: 15 }, (_, step) => step * 333_667);
+      for (const at of [...edges, ...sweep]) {
+        expect(readableSourceTimeAt(clip, at)).toBe(doc.sourceTimesAt(at).get(clip.id));
+      }
+    });
+  }
+});
+
+describe("nesting through the real WASM backend", () => {
+  it("leaves every source time where it was", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 3 * SECOND, 2 * SECOND));
+    const before: ReadonlyMap<string, number>[] = [];
+    for (let at = 0; at < 6 * SECOND; at += SECOND / 8) before.push(doc.sourceTimesAt(at));
+
+    doc.dispatch(cmd.clipNest(doc.state.timeline.tracks[0]!.clips.map((entry) => entry.id)));
+
+    let index = 0;
+    for (let at = 0; at < 6 * SECOND; at += SECOND / 8) {
+      expect(doc.sourceTimesAt(at)).toEqual(before[index]!);
+      index += 1;
+    }
+  });
+
+  // The cap the walk uses is the loader's, so what the core accepts is what the renderer can
+  // reach. Nesting one level past it is refused rather than stored and then silently not drawn.
+  it("refuses to nest past the depth the loader accepts", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    for (let level = 0; level < MAX_COMPOUND_DEPTH; level += 1) {
+      doc.dispatch(cmd.clipNest([clipOn(doc, 0).id]));
+    }
+
+    expect(() => doc.dispatch(cmd.clipNest([clipOn(doc, 0).id]))).toThrow();
+  });
+});
+
+// The other half of the autosave: a project state with no media around it, taken back over as an
+// ordinary document. It goes through `Project::normalize` like a `.videola` does, which is what
+// makes a snapshot that survived a crash mid-write a refusal rather than a corrupt editor.
+describe("a project state through the real WASM backend", () => {
+  it("comes back as a document that can be edited and undone like any other", async () => {
+    const built = await timeline();
+    built.dispatch(cmd.clipAdd(trackId(built, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+
+    const restored = new VideolaDocument(await createProjectBackend(built.state));
+
+    expect(restored.state).toEqual(built.state);
+    // A fresh history, not the old one: the snapshot is a state, and there is nothing behind it
+    // to step back into.
+    expect(restored.canUndo).toBe(false);
+    restored.dispatch(cmd.trackAdd("audio", "A1"));
+    expect(restored.canUndo).toBe(true);
+  });
+
+  it("refuses a project the loader would refuse", async () => {
+    const built = await timeline();
+    built.dispatch(cmd.clipAdd(trackId(built, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    const broken = JSON.parse(JSON.stringify(built.state)) as Project;
+    broken.timeline.tracks[0]!.clips[0]!.start = Number.MAX_SAFE_INTEGER;
+
+    await expect(createProjectBackend(broken)).rejects.toThrow();
+  });
+
+  it("keeps a nested timeline across the snapshot", async () => {
+    const built = await timeline();
+    built.dispatch(cmd.clipAdd(trackId(built, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    built.dispatch(cmd.clipNest([clipOn(built, 0).id]));
+
+    const restored = new VideolaDocument(await createProjectBackend(built.state));
+
+    expect(restored.state.timeline.tracks[0]!.clips[0]!.source.kind).toBe("compound");
+    expect(restored.sourceTimesAt(SECOND / 2)).toEqual(built.sourceTimesAt(SECOND / 2));
   });
 });

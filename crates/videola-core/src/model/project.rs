@@ -17,7 +17,7 @@ use crate::{CoreError, Result};
 // `ClipSource::Compound` nests a whole `Timeline`, which can itself contain compound clips.
 // `Box<Timeline>` cannot form a cycle in safe Rust (there is no way to reach back to an
 // ancestor), so a depth cap is the only guard nesting needs — do not add a visited-set later.
-pub(crate) const MAX_COMPOUND_DEPTH: usize = 8;
+pub const MAX_COMPOUND_DEPTH: usize = 8;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -133,6 +133,9 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
             "a group id must not be empty".into(),
         ));
     }
+    if clip.transition_in.is_some() || clip.transition_out.is_some() {
+        transition_source_allowed(&clip.source)?;
+    }
     normalize_transition(&clip.transition_in)?;
     normalize_transition(&clip.transition_out)?;
     normalize_keyframes(&mut clip.keyframes)?;
@@ -192,6 +195,19 @@ pub(crate) fn transform_finite(transform: &Transform) -> Result<()> {
         finite(value)?;
     }
     Ok(())
+}
+
+// A transition mixes its clip with the picture the frame already holds. A compound clip reaches the
+// compositor as the several clips inside it, so the mix would run once per nested clip and count
+// what is underneath again every time. Refused at the gate rather than dropped by the renderer:
+// a dissolve that silently does nothing is worse than one that never gets authored.
+pub(crate) fn transition_source_allowed(source: &ClipSource) -> Result<()> {
+    match source {
+        ClipSource::Compound { .. } => Err(CoreError::InvalidArgument(
+            "a compound clip cannot carry a transition".into(),
+        )),
+        ClipSource::Media { .. } | ClipSource::Generator { .. } => Ok(()),
+    }
 }
 
 fn normalize_transition(transition: &Option<Transition>) -> Result<()> {

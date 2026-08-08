@@ -109,6 +109,7 @@ liegt. Was der Zeiger dort ändert, ist die Länge, nicht die Position.
 | <kbd>Umschalt</kbd>+<kbd>Entf</kbd> | entfernt sie und schließt die Lücke: jeder spätere Clip der Spur rückt auf |
 | <kbd>Strg</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> | kopieren, ausschneiden, am Playhead einfügen |
 | <kbd>Strg</kbd>+<kbd>G</kbd> / <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>G</kbd> | gruppieren, Gruppierung aufheben |
+| <kbd>N</kbd> | fasst die Auswahl zu einem Compound-Clip zusammen |
 | <kbd>M</kbd> | setzt einen Marker am Playhead |
 
 Alles steht auch im Kontextmenü des Clips, und ein Eintrag, der nichts bewirken kann — Einfügen
@@ -129,12 +130,53 @@ Gruppierte Clips werden zusammen ausgewählt und zusammen gezogen, und eine Grup
 außer **Gruppierung aufheben**. Eine eingefügte Kopie tritt keiner Gruppe bei: sie trägt Material
 und Aussehen des Originals, nicht seine Mitgliedschaft.
 
+### Verschachteln
+
+**Verschachteln** oder <kbd>N</kbd> faltet die ausgewählten Clips zu einem einzigen *Compound*-Clip.
+Der Compound überdeckt die Spanne, die sie eingenommen haben, und landet auf der untersten Spur, auf
+der einer von ihnen lag; drinnen behalten sie ihre Lage zueinander und je eine verschachtelte Spur
+pro Spur, von der sie kamen — Spur eins ist dort unten im Stapel, genau wie hier draußen.
+
+Das Zusammenfassen ändert nichts am Bild und nichts am Ton. Zwei Clips verschachteln und das Ergebnis
+abspielen gibt genau die Frames und die Samples zurück, die die beiden vorher gaben; die Pixel- und
+Tonprüfungen vergleichen gegen die Ausgabe *vor* dem Zusammenfassen.
+
+Von da an ist der Compound ein gewöhnlicher Clip: verschieben, trimmen, Geschwindigkeit geben, einen
+Effekt darauflegen. Ihn zu trimmen schneidet, was drinnen liegt — sein In-Punkt und seine Dauer
+entscheiden, wie viel der verschachtelten Zeitachse er verbraucht — und eine Geschwindigkeit auf ihm
+retimt alles darin, rückwärts eingeschlossen. Acht Ebenen tief darf verschachtelt werden; eine neunte
+wird abgelehnt, statt gespeichert und dann still nicht gezeichnet zu werden.
+
+Vier Dinge kann ein Compound noch nicht, weil alle vier die verschachtelte Zeitachse zuerst auf eine
+eigene Fläche gezeichnet brauchen: seine Deckkraft wirkt auf jeden Clip darin statt auf das fertige
+Bild (sichtbar nur dort, wo zwei sich überlappen), seine Effekte laufen einmal pro verschachteltem
+Clip statt einmal über die Gruppe, sein Blendmodus erreicht nur Clips ohne eigenen, und ein Zuschnitt
+auf ihm wird ignoriert. Ein Übergang auf einem Compound wird rundheraus abgelehnt — er würde das Bild
+darunter einmal pro verschachteltem Clip mitmischen, und eine Blende, die still das Falsche tut, ist
+schlimmer als eine, die sich nicht anlegen lässt.
+
+Ein **Auflösen** gibt es nicht: <kbd>Strg</kbd>+<kbd>Z</kbd> nimmt das Zusammenfassen zurück, und ein
+aus einer Datei wieder geöffneter Compound bleibt einer.
+
 ### Marker
 
 **Marker setzen** in der Werkzeugleiste oder <kbd>M</kbd> setzt einen am Playhead. Ein Klick auf
 einen Marker springt mit dem Playhead dorthin; sein eigenes Kontextmenü löscht ihn. Marker sind
 Fangkandidaten, und dafür sind sie vor allem da — `marker.rename` gibt es als Kommando für die API
 und den MCP-Server, ein Textfeld dafür hat die Oberfläche noch nicht.
+
+### Zur magnetischen Timeline
+
+Videola hat keinen magnetischen Modus, und das ist eine Entscheidung und keine Lücke. Die nützliche
+Hälfte davon — die Lücke schließen, die eine Bearbeitung hinterlässt — liegt bereits als
+**Ripple-Delete** und **Ripple-Trim** vor, pro Bearbeitung und pro Spur, wo man sieht, was sich
+bewegt hat. Die andere Hälfte ist eine andere Überlappungsregel für das ganze Modell: in einer
+magnetischen Timeline können Clips sich nicht überlappen, also schiebt jede Bewegung ihre Nachbarn,
+und ein Übergang braucht einen Platz, den das Modell reserviert, statt einer Überlappung, die der
+Autor baut. Videolas Modell erlaubt Überlappung mit Absicht — daraus bestehen ein Übergang, ein Bild
+im Bild und eine Blende —, und das zu ändern hieße zu ändern, was jedes bestehende Projekt bedeutet.
+Wenn es je kommt, dann als Modus, den man einschaltet, und nicht als Regel, die unter einem
+aufgetaucht ist.
 
 ### Zoom
 
@@ -274,6 +316,25 @@ mit der Tastatur bedienbar und wäre sonst der einzige Weg auf die Zeitleiste.
 referenzierten Medium, benannt nach dem Hash seiner eigenen Bytes. **Öffnen** liest sie zurück. Die
 Medien kommen aus OPFS, ein gespeichertes Projekt trägt sein Material also mit sich, statt auf Pfade
 auf deinem Rechner zu zeigen.
+
+### Die gesicherte Sitzung
+
+Alle dreißig Sekunden schreibt der Editor den Projektzustand von sich aus in den Browserspeicher.
+Keine `.videola`: ein Schnappschuss jede halbe Minute, der jedes Medium einsammelt, hasht und zippt,
+wären Gigabytes an Kopiererei, um sich zu merken, wo ein Clip sitzt. Die Medien liegen ohnehin unter
+ihrem Inhaltshash in OPFS, und von dort lesen Renderer, Dekoder und Export sie — ein Schnappschuss,
+der sie benennt, ist einer, der sich wiederherstellen lässt.
+
+Wer den Editor nach einem Absturz öffnet, bekommt ein Band mit dem Zeitpunkt des Schnappschusses.
+Angeboten, nicht genommen: über einen absichtlich geöffneten Tab wiederherzustellen ist dieselbe
+Überraschung wie der Verlust der Arbeit, von der anderen Seite gesehen. **Verwerfen** räumt ihn weg.
+
+Ein leeres Projekt wird nie geschrieben, ein frischer Tab kann den Stand, den er gerade anbietet,
+also nicht überschreiben. Ein Schnappschuss, der beim Absturz halb geschrieben war, gilt als keiner,
+und einer, dessen Projekt der Lader ablehnen würde, wird auch auf dem Rückweg abgelehnt — eine
+Sicherung, um die niemand gebeten hat, darf nicht der Grund sein, dass der Editor nicht startet. Ein
+Schnappschuss, dessen Medien inzwischen aus OPFS verschwunden sind, kommt mit demselben Band über
+fehlende Medien zurück wie eine geöffnete Datei.
 
 ## Was geprüft ist und was nicht
 

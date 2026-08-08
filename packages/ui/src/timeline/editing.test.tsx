@@ -332,6 +332,54 @@ describe("groups", () => {
   });
 });
 
+describe("nesting from the timeline", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  // React 19 swallows what an event handler throws, so a refused command would leave the test
+  // green and the screen unchanged. The window listener is the only place it still surfaces.
+  function watchForThrows(): () => string[] {
+    const seen: string[] = [];
+    const onError = (event: ErrorEvent): void => void seen.push(event.message);
+    window.addEventListener("error", onError);
+    return () => {
+      window.removeEventListener("error", onError);
+      return seen;
+    };
+  }
+
+  it("folds the selected clips into one compound clip", async () => {
+    const doc = await documentWithClips(3);
+    render(<Harness doc={doc} />);
+    down(clipAt(0), 100);
+    down(clipAt(1), 300, { ctrlKey: true });
+
+    press("n");
+
+    const top = doc.state.timeline.tracks[0]?.clips ?? [];
+    expect(top).toHaveLength(2);
+    expect(top[0]?.source.kind).toBe("compound");
+    expect(top[0]?.duration).toBe(4 * SECOND);
+    // The timeline draws one clip per top-level clip, so the two that were folded are gone from
+    // the strip as well -- a compound that left its parts on screen would be two answers to
+    // where those clips are.
+    expect(clipElements()).toHaveLength(2);
+  });
+
+  // The key is unmodified, and an unmodified key reaches the timeline whether or not anything is
+  // selected. An empty list is what the core refuses.
+  it("does nothing and raises nothing with an empty selection", async () => {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+    const stop = watchForThrows();
+
+    press("n");
+
+    expect(stop()).toEqual([]);
+    expect(clips(doc.state).every((clip) => clip.source.kind !== "compound")).toBe(true);
+  });
+});
+
 describe("edge modes", () => {
   beforeEach(() => stubViewport());
   afterEach(restoreViewport);

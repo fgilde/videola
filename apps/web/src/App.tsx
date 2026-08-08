@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from "rea
 import {
   builtinTemplates,
   cmd,
+  createProjectBackend,
   createTemplateBackend,
   createWasmBackend,
   FLICKS_PER_SECOND,
@@ -35,8 +36,18 @@ import {
   type ExportHandle,
   type ExportRange,
 } from "@videola/engine";
-import { importFile, mediaForProject, mediaHash, missingMedia, relinkMedia } from "@videola/media";
-import type { Peaks } from "@videola/media";
+import {
+  clearSession,
+  importFile,
+  mediaForProject,
+  mediaHash,
+  missingMedia,
+  readSession,
+  relinkMedia,
+  worthSaving,
+  writeSession,
+} from "@videola/media";
+import type { Peaks, Session } from "@videola/media";
 import {
   AppShell,
   DropZone,
@@ -74,6 +85,10 @@ interface ShellError {
 
 const MEDIA_ACCEPT = "video/*,audio/*";
 
+// Often enough that a crash costs a minute of work at most, rarely enough that it never competes
+// with a drag for the main thread. It is only the project state -- the media are in OPFS already.
+const AUTOSAVE_MS = 30_000;
+
 // Stamped into every .videola this build writes.
 const APP_VERSION = "0.2.0";
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
@@ -109,7 +124,12 @@ export function App(): ReactElement {
   const [templateError, setTemplateError] = useState<string>();
   const [baking, setBaking] = useState(false);
   const [epoch, setEpoch] = useState(0);
+  const [recovered, setRecovered] = useState<Session>();
   const runningExport = useRef<ExportHandle>(undefined);
+  // The autosave timer reads the project from here rather than being rebuilt around it: keyed on
+  // `project` the interval would restart on every keystroke and a continuous edit would never
+  // reach the thirty seconds.
+  const latest = useRef<Project>(undefined);
   const nextErrorId = useRef(0);
   // The same pure function of the same window the shell reads, so the two cannot disagree. Passing
   // it down would mean turning AppShell's children into a render prop for one boolean.
@@ -139,6 +159,11 @@ export function App(): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
+    // The snapshot is only offered, never taken: restoring over a tab someone opened on purpose
+    // is the same surprise as losing the work, from the other side.
+    void readSession().then((session) => {
+      if (!cancelled) setRecovered(session);
+    });
     createWasmBackend()
       .then((backend) => {
         if (cancelled) return;
@@ -152,6 +177,41 @@ export function App(): ReactElement {
       cancelled = true;
     };
   }, [adopt, reportError]);
+
+  useEffect(() => {
+    latest.current = project;
+  }, [project]);
+
+  // An empty project is never written: it is what a fresh tab holds, and writing it is exactly how
+  // the snapshot this tab is still offering to restore would be destroyed. A failed write is a
+  // console line and nothing more -- an autosave nobody asked for must not raise a banner over the
+  // work it was meant to protect.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const current = latest.current;
+      if (current === undefined || !worthSaving(current)) return;
+      void writeSession(current).catch((err: unknown) => console.error(err));
+    }, AUTOSAVE_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  const restore = useCallback(
+    async (session: Session) => {
+      try {
+        adopt(new VideolaDocument(await createProjectBackend(session.project)));
+        setRecovered(undefined);
+      } catch (err) {
+        reportError("error.openFailed", err);
+        setRecovered(undefined);
+      }
+    },
+    [adopt, reportError],
+  );
+
+  const discard = useCallback(() => {
+    setRecovered(undefined);
+    void clearSession().catch((err: unknown) => console.error(err));
+  }, []);
 
   useEffect(() => {
     if (doc === undefined) return;
@@ -608,6 +668,13 @@ export function App(): ReactElement {
           <div className="v-banners">
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
+            {recovered !== undefined && (
+              <RestoreBanner
+                session={recovered}
+                onRestore={() => void restore(recovered)}
+                onDiscard={discard}
+              />
+            )}
           </div>
           {project === undefined || doc === undefined ? (
             <p style={{ padding: "var(--v-space-6)" }}>…</p>
@@ -806,6 +873,34 @@ function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement 
       style={{ padding: "var(--v-space-2) var(--v-space-6)", color: "var(--v-danger)" }}
     >
       {t("warning.missingMedia", { count: missingMedia })}
+    </p>
+  );
+}
+
+// An offer, not a verdict: `role="status"` rather than the `role="alert"` the two banners above
+// use, because nothing has gone wrong on this screen -- something is available.
+function RestoreBanner({
+  session,
+  onRestore,
+  onDiscard,
+}: {
+  session: Session;
+  onRestore: () => void;
+  onDiscard: () => void;
+}): ReactElement {
+  const { t } = useI18n();
+  const when = new Date(session.savedAt);
+  return (
+    <p role="status" style={{ padding: "var(--v-space-2) var(--v-space-6)" }}>
+      {t("session.found", {
+        when: Number.isNaN(when.getTime()) ? session.savedAt : when.toLocaleString(),
+      })}{" "}
+      <button type="button" onClick={onRestore}>
+        {t("session.restore")}
+      </button>{" "}
+      <button type="button" onClick={onDiscard}>
+        {t("session.discard")}
+      </button>
     </p>
   );
 }

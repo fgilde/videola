@@ -1,3 +1,5 @@
+import { MAX_COMPOUND_DEPTH, readableSourceTimeAt } from "@videola/core";
+
 import { clampParam, effect } from "../effects/registry";
 import { paintsGenerator } from "../generate/generator";
 import { generatorMotion } from "../generate/motion";
@@ -10,6 +12,7 @@ import type {
   ParamValue,
   Project,
   Time,
+  Timeline,
   Track,
   Transform,
   TransformSnapshot,
@@ -71,15 +74,123 @@ export function drawList(
   transforms: TransformSnapshot,
 ): DrawList {
   const frame = { width: project.settings.width, height: project.settings.height };
+  const scene: Scene = { library: project.library, frame, params, transforms };
   const items: DrawItem[] = [];
-  for (const track of project.timeline.tracks) {
+  collect(project.timeline, at, scene, NO_ENCLOSURE, 0, items);
+  return { background: parseColor(project.settings.background), items };
+}
+
+// Everything a walk over one timeline needs that does not change with depth. A compound clip is
+// composited against the project's own frame, which is the only size it has -- so the frame is one
+// of them.
+interface Scene {
+  library: readonly MediaAsset[];
+  frame: Size;
+  params: EffectParamSnapshot;
+  // Keyframes already resolved by the core. It travels with the scene rather than being looked up
+  // per clip, because a nested timeline is walked at its own instant and would otherwise need a
+  // second batch query for every level it descends.
+  transforms: TransformSnapshot;
+}
+
+// What the compound clips above a clip contribute to how it is drawn: where the group is placed,
+// how far it has been faded, what it is blended with and which effects run over it.
+interface Enclosure {
+  matrix?: readonly number[];
+  opacity: number;
+  effects: readonly EffectPass[];
+  blend: BlendMode;
+}
+
+const NO_ENCLOSURE: Enclosure = { opacity: 1, effects: [], blend: "normal" };
+
+// A compound clip is flattened into the clips inside it rather than composited to a surface of its
+// own: the group's placement is a matrix and composes exactly, and so does the instant it shows of
+// its own timeline. A compound whose transform, opacity and speed are untouched therefore produces
+// byte for byte the draw list its clips produced before they were folded -- which is the whole
+// claim `clip.nest` makes, and what the pixel harness checks on a driver.
+//
+// ponytail: the group is not isolated. Opacity multiplies into each nested clip (visible where two
+// of them overlap), the group's effects run per clip rather than once over the composed picture,
+// its blend mode only reaches clips that do not carry one of their own, and a crop on a compound
+// is ignored -- a rectangle in group space cannot be expressed as a cut in each clip's own. All
+// four want the sub-list rendered into a RenderTarget and drawn as one quad, which is the same
+// machinery `#chained` already runs for the effect chain, one level deeper. A transition on a
+// compound is the one case that would be actively wrong rather than merely different, and the core
+// refuses it (see `transition_source_allowed`).
+function collect(
+  timeline: Timeline,
+  at: Time,
+  scene: Scene,
+  enclosure: Enclosure,
+  depth: number,
+  into: DrawItem[],
+): void {
+  if (depth > MAX_COMPOUND_DEPTH) return;
+  for (const track of timeline.tracks) {
     if (!paints(track)) continue;
     for (const clip of track.clips) {
-      const item = drawItem(clip, at, project.library, frame, params, transforms);
-      if (item !== undefined) items.push(item);
+      if (clip.source.kind === "compound") {
+        const inner = enclose(clip, at, scene, enclosure);
+        if (inner === undefined) continue;
+        collect(clip.source.timeline, inner.at, scene, inner.enclosure, depth + 1, into);
+        continue;
+      }
+      const item = drawItem(clip, at, scene, enclosure);
+      if (item !== undefined) into.push(item);
     }
   }
-  return { background: parseColor(project.settings.background), items };
+}
+
+// The compound's own contribution, and the instant its timeline is showing. Project time towards
+// the nested timeline, the same direction and the same clamp the core's batch query uses -- the
+// two must agree on which clips are visible or a clip lands in the draw list with no frame behind
+// it.
+function enclose(
+  clip: Clip,
+  at: Time,
+  scene: Scene,
+  enclosure: Enclosure,
+): { at: Time; enclosure: Enclosure } | undefined {
+  const inner = readableSourceTimeAt(clip, at);
+  if (inner === undefined) return undefined;
+  const transform = clip.transform;
+  const opacity = transform.opacity * enclosure.opacity;
+  if (opacity <= 0) return undefined;
+  const own = quadMatrix(transform, FULL, scene.frame, scene.frame);
+  return {
+    at: inner,
+    enclosure: {
+      matrix: concat(enclosure.matrix, own),
+      opacity,
+      effects: [...effectPasses(clip, scene.params), ...enclosure.effects],
+      blend: clip.blend === "normal" ? enclosure.blend : clip.blend,
+    },
+  };
+}
+
+const FULL: readonly [number, number, number, number] = [0, 0, 1, 1];
+
+// Clipspace back to the unit quad: a nested clip's matrix ends in the *inner* frame's clipspace,
+// and the compound's own matrix starts from a unit quad covering that frame. `y` flips because
+// `quadMatrix` runs the unit quad top-down and clipspace bottom-up.
+const CLIP_TO_UNIT: readonly number[] = [0.5, 0, 0, 0, -0.5, 0, 0.5, 0.5, 1];
+
+function concat(parent: readonly number[] | undefined, own: readonly number[]): readonly number[] {
+  return parent === undefined ? own : multiply(multiply(parent, CLIP_TO_UNIT), own);
+}
+
+// Column-major throughout, the way uniformMatrix3fv wants it.
+function multiply(a: readonly number[], b: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let column = 0; column < 3; column += 1) {
+    for (let row = 0; row < 3; row += 1) {
+      let sum = 0;
+      for (let k = 0; k < 3; k += 1) sum += a[k * 3 + row]! * b[column * 3 + k]!;
+      out[column * 3 + row] = sum + 0;
+    }
+  }
+  return out;
 }
 
 const ONE = 1;
@@ -133,35 +244,35 @@ function paints(track: Track): boolean {
 function drawItem(
   clip: Clip,
   at: Time,
-  library: readonly MediaAsset[],
-  frame: Size,
-  params: EffectParamSnapshot,
-  transforms: TransformSnapshot,
+  scene: Scene,
+  enclosure: Enclosure,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
-  // The core resolved the keyframes; `clip.transform` is the value at rest and is only reached for
-  // when the caller supplied no snapshot at all, which no renderer does.
-  const placed = transforms.get(clip.id) ?? clip.transform;
-  // A title's in, out and loop animation is a transform, so it arrives here rather than in the
+  // The core resolved the keyframes; `clip.transform` is the value at rest, reached only when the
+  // caller supplied no snapshot at all, which no renderer does.
+  //
+  // A title's in, out and loop animation is a transform too, so it arrives here rather than in the
   // pixels -- which is also why a fade-in at its very first moment drops the clip from the list and
   // spares the decoder a frame nobody sees.
-  const transform = generatorMotion(clip, at, frame, placed);
-  if (transform.opacity <= 0) return undefined;
-  const source = sourceSize(clip, library, frame);
+  const placed = scene.transforms.get(clip.id) ?? clip.transform;
+  const transform = generatorMotion(clip, at, scene.frame, placed);
+  const opacity = transform.opacity * enclosure.opacity;
+  if (opacity <= 0) return undefined;
+  const source = sourceSize(clip, scene.library, scene.frame);
   if (source === undefined) return undefined;
   const uv = croppedRect(transform);
   if (uv[2] <= 0 || uv[3] <= 0) return undefined;
-  const mix = mixPass(clip, at, transform.opacity);
+  const mix = mixPass(clip, at, opacity);
   // A transition that has not started contributes nothing, and dropping it here also spares the
   // decoder a frame nobody will see -- playback asks for exactly the clips in this list.
   if (mix !== undefined && mix.values.progress === 0) return undefined;
   return {
     clip: clip.id,
-    matrix: quadMatrix(transform, uv, source, frame),
+    matrix: concat(enclosure.matrix, quadMatrix(transform, uv, source, scene.frame)),
     uv,
-    opacity: transform.opacity,
-    blend: clip.blend,
-    effects: effectPasses(clip, params),
+    opacity,
+    blend: clip.blend === "normal" ? enclosure.blend : clip.blend,
+    effects: [...effectPasses(clip, scene.params), ...enclosure.effects],
     ...(mix === undefined ? {} : { mix }),
   };
 }
@@ -245,9 +356,9 @@ function uniforms(
 // all authored against the output rather than against a source of their own, which is why every
 // measurement in a text style is a fraction. A transform still moves and scales it from there.
 //
-// ponytail: a compound clip has no size either and is still dropped -- it needs its own pass over a
-// nested timeline. Generators the renderer cannot paint are dropped too, so nothing appears as an
-// empty rectangle promising a picture that is not coming.
+// Compound clips never reach this: `collect` walks into them instead. Generators the renderer
+// cannot paint are dropped, so nothing appears as an empty rectangle promising a picture that is
+// not coming.
 function sourceSize(clip: Clip, library: readonly MediaAsset[], frame: Size): Size | undefined {
   if (clip.source.kind === "generator") {
     return paintsGenerator(clip.source.generator) ? frame : undefined;
@@ -293,15 +404,19 @@ function quadMatrix(
   const sin = Math.sin(radians);
   const toClipX = 2 / frame.width;
   const toClipY = -2 / frame.height;
+  // `+ 0` and nothing else: an unrotated matrix produces a negative zero wherever a zero meets the
+  // downward y axis, and a matrix that went through a compound clip's own placement produces a
+  // positive one for the same picture. The GPU cannot tell them apart and a value comparison can,
+  // so the one draw list has one spelling for zero.
   return [
-    cos * spanX * toClipX,
-    sin * spanX * toClipY,
+    cos * spanX * toClipX + 0,
+    sin * spanX * toClipY + 0,
     0,
-    -sin * spanY * toClipX,
-    cos * spanY * toClipY,
+    -sin * spanY * toClipX + 0,
+    cos * spanY * toClipY + 0,
     0,
-    (transform.x + cos * offsetX - sin * offsetY) * toClipX,
-    (transform.y + sin * offsetX + cos * offsetY) * toClipY,
+    (transform.x + cos * offsetX - sin * offsetY) * toClipX + 0,
+    (transform.y + sin * offsetX + cos * offsetY) * toClipY + 0,
     1,
   ];
 }

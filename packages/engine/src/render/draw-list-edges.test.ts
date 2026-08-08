@@ -78,9 +78,11 @@ describe("drawList edges", () => {
     expect(ids([track("t", [clip({ start: -SECOND, duration: 2 * SECOND })])], 0)).toEqual(["clp_1"]);
   });
 
-  it("drops a compound clip instead of recursing into it", () => {
-    const nested = clip({ source: { kind: "compound", clips: [] } as never });
-    expect(ids([track("t", [nested])], 0)).toEqual([]);
+  // The compound is walked into, never drawn: it has no medium of its own, so an empty one has
+  // nothing to contribute and must not leave an item behind that no frame will ever arrive for.
+  it("draws nothing for a compound clip whose timeline is empty", () => {
+    const empty = clip({ source: { kind: "compound", timeline: { tracks: [] } } as never });
+    expect(ids([track("t", [empty])], 0)).toEqual([]);
   });
 
   it("paints nothing on an adjustment track", () => {

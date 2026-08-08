@@ -133,6 +133,10 @@ pub enum Command {
     /// Dissolve the group this clip belongs to, for every clip in it.
     #[serde(rename = "clip.ungroup")]
     ClipUngroup { clip: ClipId },
+    /// Fold clips into one compound clip covering the span they occupied. The compound lands on
+    /// the lowest track any of them was on and holds their own timeline inside it.
+    #[serde(rename = "clip.nest")]
+    ClipNest { clips: Vec<ClipId> },
     /// Set playback rate and direction. `rate` is a factor in (0, 100]; 1 is unchanged.
     #[serde(rename = "clip.setSpeed")]
     ClipSetSpeed {
@@ -307,6 +311,7 @@ impl Command {
             Self::ClipPaste { track, clip, start } => clip::paste(target, track, clip, *start),
             Self::ClipGroup { clips } => clip::group(target, clips),
             Self::ClipUngroup { clip } => clip::ungroup(target, clip),
+            Self::ClipNest { clips } => clip::nest(target, clips),
             Self::ClipSetSpeed {
                 clip,
                 rate,
@@ -399,6 +404,7 @@ impl Command {
             Self::ClipPaste { .. } => LABEL_CLIP_PASTE,
             Self::ClipGroup { .. } => LABEL_CLIP_GROUP,
             Self::ClipUngroup { .. } => LABEL_CLIP_UNGROUP,
+            Self::ClipNest { .. } => LABEL_CLIP_NEST,
             Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
             Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
@@ -441,6 +447,7 @@ pub const LABEL_CLIP_SLIDE: &str = "cmd.clip.slide";
 pub const LABEL_CLIP_PASTE: &str = "cmd.clip.paste";
 pub const LABEL_CLIP_GROUP: &str = "cmd.clip.group";
 pub const LABEL_CLIP_UNGROUP: &str = "cmd.clip.ungroup";
+pub const LABEL_CLIP_NEST: &str = "cmd.clip.nest";
 pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
 pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
@@ -457,7 +464,7 @@ pub const LABEL_MARKER_RENAME: &str = "cmd.marker.rename";
 pub const LABEL_MEDIA_IMPORT: &str = "cmd.media.import";
 pub const LABEL_MEDIA_REMOVE: &str = "cmd.media.remove";
 
-pub const ALL_COMMAND_LABELS: [&str; 38] = [
+pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_PROJECT_SET_SETTINGS,
     LABEL_PROJECT_SET_TITLE,
     LABEL_PROJECT_SET_MASTER_VOLUME,
@@ -481,6 +488,7 @@ pub const ALL_COMMAND_LABELS: [&str; 38] = [
     LABEL_CLIP_PASTE,
     LABEL_CLIP_GROUP,
     LABEL_CLIP_UNGROUP,
+    LABEL_CLIP_NEST,
     LABEL_CLIP_SET_SPEED,
     LABEL_CLIP_SET_VOLUME,
     LABEL_CLIP_SET_TRANSFORM,

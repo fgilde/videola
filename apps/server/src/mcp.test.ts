@@ -242,6 +242,7 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   "clip.paste": (f) => ({ track: f.track, clip: f.clipJson, start: secondsToTime(8) }),
   "clip.group": (f) => ({ clips: [f.clip, f.neighbour] }),
   "clip.ungroup": (f) => ({ clip: f.clip }),
+  "clip.nest": (f) => ({ clips: [f.clip, f.neighbour] }),
   "marker.add": () => ({ time: secondsToTime(3), label: "chapter two" }),
   "marker.remove": (f) => ({ marker: f.marker }),
   "marker.rename": (f) => ({ marker: f.marker, label: "renamed" }),

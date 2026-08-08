@@ -258,6 +258,70 @@ test("geometry", () => {
   check("bottom right is yellow", q(12, 12), [255, 255, 0, 255]);
 });
 
+// Nesting on a driver. The clips a compound holds keep their own ids, so the same frames serve
+// both scenes -- what changes is only where the clips are written down.
+function nestedProject(w, h, background, clips, sourceWidth, sourceHeight, over) {
+  const flat = project(w, h, background, clips, sourceWidth, sourceHeight);
+  const group = {
+    id: "clp_group", source: { kind: "compound", timeline: flat.timeline },
+    start: 0, duration: 1000, inPoint: 0,
+    speed: { rate: 1, reverse: false, preservePitch: true },
+    blend: "normal", effects: [], volume: 1, pan: 0,
+    fades: { inDuration: 0, outDuration: 0 }, keyframes: {},
+    transform: transform((over && over.t) || {}),
+  };
+  return {
+    settings: flat.settings,
+    library: flat.library,
+    timeline: { tracks: [{ id: "trk_outer", kind: "video", hidden: false, clips: [group] }] },
+  };
+}
+
+// The whole drawing buffer, so a difference of one pixel anywhere counts -- which is what a
+// matrix composed in the wrong order produces at an edge.
+function buffer(w, h, scene, clips, pixel) {
+  const canvas = canvasOf(w, h);
+  const context = R.createContext(canvas);
+  const compositor = new R.Compositor(context);
+  const frames = new Map();
+  for (const id of clips) frames.set(id, frame(w, h, pixel));
+  draw(compositor, scene, 0, frames);
+  for (const f of frames.values()) f.close();
+  return Array.from(compositor.readPixels());
+}
+
+// The one claim `clip.nest` makes, and the only proof that counts for it: fold two clips into a
+// compound and no pixel moves. Checking that "the compound drew something" would pass with the
+// picture mirrored.
+test("nesting changes no pixel", () => {
+  const corners = (x, y) => (y < 8 ? (x < 8 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+    : (x < 8 ? [0, 0, 255, 255] : [255, 255, 0, 255]));
+  const clips = [
+    { id: "clp_a", t: { scaleX: 0.75, scaleY: 0.75, rotation: 20, x: -2, y: 3 } },
+    { id: "clp_b", blend: "screen", t: { opacity: 0.6, scaleX: 0.5, scaleY: 0.5, x: 4, anchorX: 0.25 } },
+  ];
+  const ids = ["clp_a", "clp_b"];
+  const flat = buffer(16, 16, project(16, 16, "#101820", clips, 16, 16), ids, corners);
+  const folded = buffer(16, 16, nestedProject(16, 16, "#101820", clips, 16, 16), ids, corners);
+  check("two clips folded into a compound draw the same frame", folded, flat, 0);
+});
+
+// And the counterweight: the comparison above would also pass if a compound drew nothing at all
+// and the flat scene had been broken in the same way. A compound that is *not* left alone has to
+// move what is inside it.
+test("a compound clip carries its own placement", () => {
+  const white = () => [255, 255, 255, 255];
+  const half = nestedProject(16, 16, "#000000", [{ id: "clp_a" }], 16, 16,
+    { t: { scaleX: 0.5, scaleY: 0.5 } });
+  const at = reader(new Uint8Array(buffer(16, 16, half, ["clp_a"], white)), 16, 16);
+  check("the picture is scaled into the middle", at(8, 8), [255, 255, 255, 255]);
+  check("and the corner it left is background", at(1, 1), [0, 0, 0, 255]);
+
+  const dim = nestedProject(16, 16, "#000000", [{ id: "clp_a" }], 16, 16, { t: { opacity: 0.5 } });
+  const dimAt = reader(new Uint8Array(buffer(16, 16, dim, ["clp_a"], white)), 16, 16);
+  check("a compound at half opacity halves what is inside it", dimAt(8, 8), [128, 128, 128, 255]);
+});
+
 const BRIGHTNESS = [{ id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} }];
 const CROSSFADE = { transitionType: "crossfade", duration: 1000, alignment: "in", params: {} };
 

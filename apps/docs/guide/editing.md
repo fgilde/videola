@@ -105,6 +105,7 @@ ripple. What the pointer changes there is the length, not the position.
 | <kbd>Shift</kbd>+<kbd>Delete</kbd> | removes it and closes the gap: every later clip on the track moves up |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> | copy, cut, paste at the playhead |
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> | group, ungroup |
+| <kbd>N</kbd> | folds the selection into one compound clip |
 | <kbd>M</kbd> | sets a marker at the playhead |
 
 All of them sit in the clip's context menu as well, and an entry that cannot do anything — paste
@@ -123,12 +124,50 @@ Grouped clips are selected together and dragged together, and a group survives e
 **Ungroup**. A pasted copy joins no group: it carries the original's material and look, not its
 membership.
 
+### Nesting
+
+**Nest**, or <kbd>N</kbd>, folds the selected clips into a single *compound* clip. The compound
+covers the span they occupied and lands on the lowest track any of them was on; inside it, the clips
+keep their positions relative to each other and one nested track per track they came from — track
+one is the bottom of the stack in there as much as out here.
+
+Folding changes nothing about the picture or the sound. Nesting two clips and playing the result
+gives back exactly the frames and the samples the two gave before, which is what the pixel and audio
+checks assert against the render taken *before* the fold.
+
+From there the compound is an ordinary clip: move it, trim it, give it a speed, put an effect on it.
+Trimming it cuts what is inside — its in point and duration decide how much of the nested timeline
+it consumes — and a speed on it retimes everything in it, backwards included. Nesting may go eight
+levels deep; a ninth is refused rather than stored and then quietly not drawn.
+
+Four things a compound does not yet do, because all four need the nested timeline rendered to a
+surface of its own first: its opacity applies to each clip inside rather than to the composed
+picture (visible only where two of them overlap), its effects run once per nested clip rather than
+once over the group, its blend mode reaches only clips that carry none of their own, and a crop on it
+is ignored. A transition on a compound clip is refused outright — it would mix the picture underneath
+back in once per nested clip, and a dissolve that quietly does the wrong thing is worse than one that
+cannot be authored.
+
+There is no **un-nest**: <kbd>Ctrl</kbd>+<kbd>Z</kbd> takes a fold back, and a compound reopened
+from a saved file stays one.
+
 ### Markers
 
 **Set marker** in the toolbar, or <kbd>M</kbd>, puts one at the playhead. Clicking a marker moves
 the playhead there; its own context menu deletes it. Markers are snap candidates, which is what they
 are mostly for — `marker.rename` exists as a command for the API and the MCP server, but the
 surface offers no text field for it yet.
+
+### On magnetic timelines
+
+Videola has no magnetic mode, and this is a decision rather than a gap. The useful half of one —
+closing the gap an edit leaves — is already here as **ripple delete** and **ripple trim**, per edit
+and per track, where you can see what moved. The other half is a different overlap rule for the whole
+model: in a magnetic timeline clips cannot overlap, so every move pushes its neighbours and a
+transition needs a slot the model reserves rather than an overlap the author builds. Videola's model
+allows overlap on purpose — that is what a transition, a picture-in-picture and a crossfade are made
+of — and changing that would change what every existing project means. If it ever arrives it will be
+a mode you turn on, not a rule that appeared underneath you.
 
 ### Zoom
 
@@ -264,6 +303,24 @@ other way onto the timeline.
 **Save** writes a `.videola` file: a ZIP holding a manifest, `project.json` and every referenced
 medium, each named after the hash of its own bytes. **Open** reads it back. The media come from
 OPFS, so a saved project carries its footage with it rather than pointing at paths on your machine.
+
+### The autosaved session
+
+Every thirty seconds the editor writes the project state into browser storage on its own. Not a
+`.videola`: a snapshot every half minute that gathered, hashed and zipped every medium would be
+gigabytes of copying to remember where a clip sits. The media are in OPFS under their content hash
+already, which is where the renderer, the decoder and the export read them from, so a snapshot that
+names them is a snapshot that can be restored.
+
+Open the editor after a crash and a banner offers the snapshot with the time it was taken. It is
+only offered, never taken: restoring over a tab somebody opened on purpose is the same surprise as
+losing the work, seen from the other side. **Discard** removes it.
+
+An empty project is never written, so a fresh tab cannot overwrite the state it is still offering to
+restore. A snapshot half-written when the machine went down reads as no snapshot at all, and one
+whose project the loader would refuse is refused on the way back in as well — an autosave nobody
+asked for must not be the reason the editor will not start. A snapshot whose media have since left
+OPFS restores with the same "missing medium" banner an opened file would give.
 
 ## What is verified, and what is not
 

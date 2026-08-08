@@ -28,6 +28,8 @@ export type {
   ExportRange,
   ExportResult,
 } from "./export/run";
+export { audibleClips, leafClips } from "./nesting";
+export type { Voice } from "./nesting";
 export { clipHashes, Playback, WAVEFORM_BUCKETS } from "./playback";
 export type { AudioTransport, FrameSource, PlaybackOptions } from "./playback";
 export { createContext } from "./render/context";

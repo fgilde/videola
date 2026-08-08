@@ -236,6 +236,11 @@ export function Timeline({
           // second clip of it would then be a clip the core rightly says is in no group.
           for (const clip of groupLeaders(project, selected)) dispatch(cmd.clipUngroup(clip));
           return;
+        case "nest":
+          // The core refuses an empty list, and a refusal out of a key nobody aimed anywhere is
+          // an error banner for a keystroke that meant nothing.
+          if (selected.size === 0) return;
+          return dispatch(cmd.clipNest([...selected]));
         case "marker":
           return dispatch(cmd.markerAdd(playhead, ""));
       }
@@ -481,6 +486,11 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
       disabled: groupMates(project, clip.id).length < 2,
       onSelect: close(() => dispatch(cmd.clipUngroup(clip.id))),
     },
+    {
+      label: t("timeline.nest"),
+      disabled: selected.size < 1,
+      onSelect: close(() => dispatch(cmd.clipNest([...selected]))),
+    },
   ];
   return (
     <ContextMenu x={menu.x} y={menu.y} label={t("timeline.clipMenu")} items={items} onClose={onClose} />
@@ -508,6 +518,7 @@ type Shortcut =
   | "paste"
   | "group"
   | "ungroup"
+  | "nest"
   | "marker";
 
 // A pure function of the event, so the keys a timeline answers to can be read in one place.
@@ -520,6 +531,9 @@ function shortcut(event: KeyboardEvent<HTMLElement>): Shortcut | undefined {
   if (command && event.key.toLowerCase() === "x") return "cut";
   if (command && event.key.toLowerCase() === "v") return "paste";
   if (command && event.key.toLowerCase() === "g") return event.shiftKey ? "ungroup" : "group";
+  // Unmodified, like the marker key: every ctrl/cmd combination near this one is taken by the
+  // browser itself, and a shortcut the browser eats is a shortcut that does not exist.
+  if (!command && event.key.toLowerCase() === "n") return "nest";
   if (!command && event.key.toLowerCase() === "m") return "marker";
   return undefined;
 }

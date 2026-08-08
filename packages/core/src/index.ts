@@ -4,6 +4,7 @@ export * from "./document";
 export * from "./generated";
 export {
   builtinTemplates,
+  createProjectBackend,
   createTemplateBackend,
   createWasmBackend,
   readTemplateFile,

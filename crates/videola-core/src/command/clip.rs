@@ -325,6 +325,92 @@ pub(super) fn group(target: &mut Project, clips: &[ClipId]) -> Result<()> {
     Ok(())
 }
 
+// Folds clips into a single compound clip. The compound covers the span they occupied and lands on
+// the lowest track any of them was on; the nested timeline keeps one track per project track that
+// contributed, in project order, so `tracks[0]` is the bottom of the stack inside a compound
+// exactly as it is outside one.
+//
+// Nothing is moved until the whole result has been through `normalize_new_clip`, which is where the
+// nesting depth cap applies -- folding a stack of compounds one level too deep must leave the
+// timeline as it was rather than half emptied.
+pub(super) fn nest(target: &mut Project, clips: &[ClipId]) -> Result<()> {
+    let mut located: Vec<(usize, usize)> = Vec::new();
+    for id in clips {
+        let found = target
+            .timeline
+            .tracks
+            .iter()
+            .enumerate()
+            .find_map(|(track, candidate)| candidate.clip_index(id).map(|index| (track, index)))
+            .ok_or_else(|| CoreError::ClipNotFound(id.clone()))?;
+        if !located.contains(&found) {
+            located.push(found);
+        }
+    }
+    located.sort_unstable();
+
+    let at = |&(track, index): &(usize, usize)| &target.timeline.tracks[track].clips[index];
+    let Some(&host) = located.first() else {
+        return Err(CoreError::InvalidArgument(
+            "nesting needs at least one clip".into(),
+        ));
+    };
+    let mut span_start = at(&host).start;
+    let mut span_end = at(&host).end();
+    for found in &located {
+        span_start = span_start.min(at(found).start);
+        span_end = span_end.max(at(found).end());
+    }
+    let duration = checked_sub(span_end, span_start)?;
+
+    let mut timeline = crate::model::Timeline::default();
+    for (track_index, group) in by_track(&located) {
+        let source = &target.timeline.tracks[track_index];
+        let mut nested = source.clone();
+        nested.id = TrackId::new();
+        nested.clips = group
+            .iter()
+            .map(|&index| {
+                let mut clip = source.clips[index].clone();
+                clip.start = clip.start - span_start;
+                // The nested clips are no longer separately selectable, so a group they were in
+                // would only be reachable from the clips left outside -- and `clip.ungroup` walks
+                // the top level, which would dissolve half a group and leave the other half tied.
+                clip.group_id = None;
+                clip
+            })
+            .collect();
+        timeline.tracks.push(nested);
+    }
+
+    let mut compound = Clip::new_media(MediaId::from(String::new()), span_start, duration);
+    compound.source = ClipSource::Compound {
+        timeline: Box::new(timeline),
+    };
+    crate::model::project::normalize_new_clip(&mut compound)?;
+
+    // Highest index first, so the indices collected above still address the clips they named.
+    for &(track, index) in located.iter().rev() {
+        target.timeline.tracks[track].clips.remove(index);
+    }
+    let track = &mut target.timeline.tracks[host.0];
+    track.clips.push(compound);
+    sort_clips(track);
+    Ok(())
+}
+
+// `located` is sorted, so one track's clips are always consecutive.
+fn by_track(located: &[(usize, usize)]) -> Vec<(usize, Vec<usize>)> {
+    let mut grouped: Vec<(usize, Vec<usize>)> = Vec::new();
+    for &(track, index) in located {
+        match grouped.last_mut() {
+            Some((last, indices)) if *last == track => indices.push(index),
+            _ => grouped.push((track, vec![index])),
+        }
+    }
+    grouped
+}
+
 pub(super) fn ungroup(target: &mut Project, clip: &ClipId) -> Result<()> {
     let (track, index) = find_clip_mut(target, clip)?;
     let group = track.clips[index]
@@ -443,6 +529,9 @@ pub(super) fn set_transition(
         crate::model::project::transition_bounded(transition)?;
     }
     let (track, index) = find_clip_mut(target, clip)?;
+    if transition.is_some() {
+        crate::model::project::transition_source_allowed(&track.clips[index].source)?;
+    }
     track.clips[index].transition_in = transition.cloned();
     Ok(())
 }

@@ -9,8 +9,8 @@ use videola_core::format::{
     reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
 };
 use videola_core::model::{
-    ClipId, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project, ProjectSettings,
-    Time, Transform,
+    Clip, ClipId, ClipSource, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project,
+    ProjectSettings, Time, Transform, MAX_COMPOUND_DEPTH,
 };
 use videola_core::template::{SlotAnswer, Template};
 use videola_core::{CoreError, DispatchResult, Document, Result};
@@ -54,6 +54,19 @@ impl DocumentHost {
         })
     }
 
+    // What an autosaved snapshot comes back through. No media travels with it: every asset is
+    // already in the host's own storage under its content hash, which is where the renderer reads
+    // it from anyway -- gathering the bytes back into the core would be copying a video to
+    // remember where a clip sits.
+    pub fn from_project(project: Project) -> Result<Self> {
+        Ok(Self {
+            document: Document::from_project(project)?,
+            media: MemoryMediaStore::default(),
+            media_bytes_total: 0,
+            warnings: Vec::new(),
+        })
+    }
+
     // The baked project walks in through `Document::from_project`, the same door a `.videola`
     // uses, so nothing downstream can tell a template's output from a file that was opened. No
     // media is held: the answers name material the host already put in its own storage, exactly
@@ -81,14 +94,14 @@ impl DocumentHost {
 
     // A batch, because playback asks at display rate: one crossing of the boundary per frame
     // instead of one per clip per frame. Clips the moment does not touch are simply absent.
+    //
+    // Compound clips are walked through rather than answered for: they have no medium of their own,
+    // and what the renderer needs is where each clip *inside* them reads from. The map stays flat
+    // because a clip id is unique across the whole project, nesting included.
     pub fn source_times_at(&self, at: Time) -> BTreeMap<ClipId, Time> {
-        self.project()
-            .timeline
-            .tracks
-            .iter()
-            .flat_map(|track| &track.clips)
-            .filter_map(|clip| Some((clip.id.clone(), clip.readable_source_time_at(at)?)))
-            .collect()
+        let mut found = BTreeMap::new();
+        source_times_into(&self.project().timeline, at, 0, &mut found);
+        found
     }
 
     // A batch for the same reason: the preview resolves every parameter of every effect it is
@@ -101,18 +114,21 @@ impl DocumentHost {
     // they are always in. That is what lets an equaliser sweep its cutoff from a keyframe track
     // without anything below this line learning a second way to resolve a parameter.
     pub fn effect_params_at(&self, at: Time) -> BTreeMap<EffectId, BTreeMap<String, ParamValue>> {
-        let tracks = &self.project().timeline.tracks;
-        let on_clips = tracks
+        let mut found = BTreeMap::new();
+        effect_params_into(&self.project().timeline, at, 0, &mut found);
+        // Track and master effects sit outside the recursion: they belong to the timeline that
+        // holds them, not to any clip, and a nested timeline's tracks are not the project's.
+        let outer = self
+            .project()
+            .timeline
+            .tracks
             .iter()
-            .flat_map(|track| &track.clips)
-            .filter(|clip| clip.contains(at))
-            .flat_map(|clip| &clip.effects);
-        let on_tracks = tracks.iter().flat_map(|track| &track.effects);
-        on_clips
-            .chain(on_tracks)
-            .chain(&self.project().master.effects)
-            .map(|effect| (effect.id.clone(), resolved_params(effect, at)))
-            .collect()
+            .flat_map(|track| &track.effects)
+            .chain(&self.project().master.effects);
+        for effect in outer {
+            found.insert(effect.id.clone(), resolved_params(effect, at));
+        }
+        found
     }
 
     // The third batch, and the one the picture is placed by: a clip's geometry as it stands at
@@ -267,6 +283,65 @@ impl MediaStore for SaveStore<'_> {
     }
 }
 
+// The instant a compound clip is showing of its own timeline. `readable_source_time_at` rather
+// than the raw mapping, for the same reason a decoder gets the clamped value: the head of a
+// reversed clip maps one flick past the end of the range it consumes, and inside a compound that
+// is a moment the nested timeline does not have.
+//
+// The cap is the loader's, so a project that loads is a project that draws -- and a depth this
+// walk would not survive is one `Project::normalize` already refused.
+fn descend(clip: &Clip, at: Time) -> Option<(&videola_core::model::Timeline, Time)> {
+    match &clip.source {
+        ClipSource::Compound { timeline } => Some((timeline, clip.readable_source_time_at(at)?)),
+        ClipSource::Media { .. } | ClipSource::Generator { .. } => None,
+    }
+}
+
+fn source_times_into(
+    timeline: &videola_core::model::Timeline,
+    at: Time,
+    depth: usize,
+    into: &mut BTreeMap<ClipId, Time>,
+) {
+    if depth > MAX_COMPOUND_DEPTH {
+        return;
+    }
+    for clip in timeline.tracks.iter().flat_map(|track| &track.clips) {
+        match descend(clip, at) {
+            Some((nested, inner)) => source_times_into(nested, inner, depth + 1, into),
+            None => {
+                if let Some(source_at) = clip.readable_source_time_at(at) {
+                    into.insert(clip.id.clone(), source_at);
+                }
+            }
+        }
+    }
+}
+
+// A nested effect's keyframes are written on the timeline it lives on, so it is resolved at the
+// instant inside that timeline -- while the compound's own effects are resolved at the outer one.
+fn effect_params_into(
+    timeline: &videola_core::model::Timeline,
+    at: Time,
+    depth: usize,
+    into: &mut BTreeMap<EffectId, BTreeMap<String, ParamValue>>,
+) {
+    if depth > MAX_COMPOUND_DEPTH {
+        return;
+    }
+    for clip in timeline.tracks.iter().flat_map(|track| &track.clips) {
+        if !clip.contains(at) {
+            continue;
+        }
+        for effect in &clip.effects {
+            into.insert(effect.id.clone(), resolved_params(effect, at));
+        }
+        if let Some((nested, inner)) = descend(clip, at) {
+            effect_params_into(nested, inner, depth + 1, into);
+        }
+    }
+}
+
 // Every key the effect can answer for: a keyframed parameter need not have a static entry, and a
 // static one need not be keyframed. `param_at` decides which of the two wins -- that rule stays
 // here, so the renderer and the inspector cannot end up interpolating differently.
@@ -288,7 +363,7 @@ fn parse_kind(kind: &str) -> Result<MediaKind> {
 mod tests {
     use super::*;
 
-    use videola_core::model::{Clip, Interp, Keyframe, Track, TrackKind};
+    use videola_core::model::{Interp, Keyframe, Timeline, Track, TrackKind};
 
     // Constructing near the 2 GiB cap directly instead of actually allocating gigabytes of
     // zeroes keeps this test instant while still exercising the exact boundary.
@@ -419,6 +494,127 @@ mod tests {
 
         assert_eq!(times.keys().collect::<Vec<_>>(), vec![&clips[1]]);
         assert!(host.source_times_at(Time::from_seconds(9.0)).is_empty());
+    }
+
+    // The claim nesting has to hold up: folding clips into a compound changes where they are
+    // written down, never what any instant reads. Answered against the batch the renderer uses,
+    // because that is the layer a nested clip would otherwise fall out of.
+    #[test]
+    fn nesting_leaves_every_source_time_exactly_where_it_was() {
+        let (mut host, clips) = host_with_overlapping_clips();
+        let mut before = Vec::new();
+        let mut at = Time::ZERO;
+        while at < Time::from_seconds(9.0) {
+            before.push(host.source_times_at(at));
+            at = at + Time::from_seconds(1.0 / 30.0);
+        }
+
+        host.dispatch(Dispatch::new(Command::ClipNest {
+            clips: clips.clone(),
+        }))
+        .unwrap();
+
+        let mut at = Time::ZERO;
+        for expected in before {
+            assert_eq!(host.source_times_at(at), expected, "at {}s", at.as_seconds());
+            at = at + Time::from_seconds(1.0 / 30.0);
+        }
+    }
+
+    // The compound itself has no medium, so answering for it would send the decoder after a clip
+    // that has nothing to decode.
+    #[test]
+    fn a_compound_clip_gets_no_source_time_of_its_own() {
+        let (mut host, clips) = host_with_overlapping_clips();
+        host.dispatch(Dispatch::new(Command::ClipNest { clips }))
+            .unwrap();
+        let compound = host.project().timeline.tracks[0].clips[0].id.clone();
+
+        assert!(!host
+            .source_times_at(Time::from_seconds(1.0))
+            .contains_key(&compound));
+    }
+
+    #[test]
+    fn a_nested_effect_is_resolved_at_the_instant_inside_the_compound() {
+        let (mut host, effect) = host_with_effect(vec![ramp(0.0, 0.0), ramp(2.0, 1.0)]);
+        let clip = host.project().timeline.tracks[0].clips[0].id.clone();
+        host.dispatch(Dispatch::new(Command::ClipNest { clips: vec![clip] }))
+            .unwrap();
+        let compound = host.project().timeline.tracks[0].clips[0].id.clone();
+        host.dispatch(Dispatch::new(Command::ClipMove {
+            clip: compound,
+            to_track: host.project().timeline.tracks[0].id.clone(),
+            start: Time::from_seconds(3.0),
+        }))
+        .unwrap();
+
+        let params = host.effect_params_at(Time::from_seconds(4.0));
+
+        assert_eq!(params[&effect]["amount"], ParamValue::Float(0.5));
+    }
+
+    // The head of a reversed clip maps one flick past the end of the range it consumes. For a
+    // decoder that is a read past end of media; inside a compound it is an instant the nested
+    // timeline does not have, so the first frame of a reversed compound comes back empty.
+    #[test]
+    fn a_reversed_compound_reads_its_last_nested_clip_first() {
+        let (mut host, clips) = host_with_overlapping_clips();
+        host.dispatch(Dispatch::new(Command::ClipNest {
+            clips: clips.clone(),
+        }))
+        .unwrap();
+        let compound = host.project().timeline.tracks[0].clips[0].id.clone();
+        host.dispatch(Dispatch::new(Command::ClipSetSpeed {
+            clip: compound,
+            rate: 1.0,
+            reverse: true,
+            preserve_pitch: true,
+        }))
+        .unwrap();
+
+        let head = host.source_times_at(Time::ZERO);
+
+        assert!(
+            head.contains_key(&clips[1]),
+            "the last nested clip has to answer at the head of a reversed compound"
+        );
+        assert!(!head.contains_key(&clips[0]));
+    }
+
+    // A depth the loader refuses is a depth the walk must never be handed, and a walk without the
+    // cap is a stack overflow a project file can trigger.
+    #[test]
+    fn a_nesting_deeper_than_the_cap_is_walked_no_further() {
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(4.0),
+        );
+        for _ in 0..(MAX_COMPOUND_DEPTH + 2) {
+            let mut track = Track::new(TrackKind::Video, "nested".into());
+            track.clips.push(clip);
+            let mut timeline = Timeline::default();
+            timeline.tracks.push(track);
+            clip = Clip::new_media(
+                MediaId::from(String::new()),
+                Time::ZERO,
+                Time::from_seconds(4.0),
+            );
+            clip.source = ClipSource::Compound {
+                timeline: Box::new(timeline),
+            };
+        }
+        let mut timeline = Timeline::default();
+        timeline
+            .tracks
+            .push(Track::new(TrackKind::Video, "V".into()));
+        timeline.tracks[0].clips.push(clip);
+
+        let mut found = BTreeMap::new();
+        source_times_into(&timeline, Time::from_seconds(1.0), 0, &mut found);
+
+        assert!(found.is_empty(), "the walk stops at the cap");
     }
 
     // One clip carrying one effect whose `amount` is both static and keyframed, so the two rules
