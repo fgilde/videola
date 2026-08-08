@@ -4,7 +4,7 @@
 //
 // Run after `pnpm --filter videola-server build`.
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,11 +62,26 @@ async function checkMcpBundle() {
   await client.close();
 }
 
+// The image serves the editor out of this same process, so the bundle has to prove it can: a
+// wrong type on the .wasm leaves every file reachable and the editor still never starts.
+async function stageWebRoot() {
+  const web = join(root, "web");
+  await mkdir(join(web, "assets"), { recursive: true });
+  await writeFile(join(web, "index.html"), "<title>Videola</title>");
+  await writeFile(join(web, "assets", "core-abc.wasm"), Buffer.from([0, 97, 115, 109]));
+  return web;
+}
+
 async function checkServeBundle() {
   process.stdout.write("dist/serve.mjs over HTTP\n");
   const port = 7411;
   const child = spawn(process.execPath, [join(dist, "serve.mjs")], {
-    env: { ...process.env, VIDEOLA_PORT: String(port), VIDEOLA_STORAGE_ROOT: root },
+    env: {
+      ...process.env,
+      VIDEOLA_PORT: String(port),
+      VIDEOLA_STORAGE_ROOT: root,
+      VIDEOLA_WEB_ROOT: await stageWebRoot(),
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   try {
@@ -88,6 +103,11 @@ async function checkServeBundle() {
       check(`serves ${name}`, served.get(name)?.schema?.properties !== undefined);
     }
     check("serves every command the core exports", schema.commands.length >= served.size);
+
+    const page = await fetch(`http://127.0.0.1:${port}/editor/deep/route`);
+    check("answers an application route with the document", (await page.text()).includes("Videola"));
+    const wasm = await fetch(`http://127.0.0.1:${port}/assets/core-abc.wasm`);
+    check("serves .wasm as application/wasm", wasm.headers.get("content-type") === "application/wasm");
 
     const created = await fetch(`http://127.0.0.1:${port}/api/projects`, { method: "POST" }).then(
       (r) => r.json(),
