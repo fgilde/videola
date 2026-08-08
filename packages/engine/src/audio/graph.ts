@@ -14,7 +14,8 @@ import type {
 import type { Peaks } from "@videola/media";
 
 import { audibleClips } from "../nesting";
-import { audioEffect, clampParam } from "./effects";
+import { clampParam } from "../effects/registry";
+import { audioEffect } from "./effects";
 import type { EffectParam } from "./effects";
 import { integratedLufs } from "./loudness";
 

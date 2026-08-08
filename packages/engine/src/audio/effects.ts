@@ -1,5 +1,3 @@
-import { clampParam } from "../effects/registry";
-
 import type { EffectParam } from "../effects/registry";
 
 /**
@@ -127,5 +125,6 @@ export function audioEffectManifests(): readonly AudioEffectManifest[] {
   return MANIFESTS;
 }
 
-export { clampParam };
+// Part of the manifest's own shape, so a consumer that reads `params` has the type without needing
+// to know the audio effects borrow it from the video registry.
 export type { EffectParam };

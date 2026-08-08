@@ -9,7 +9,9 @@ Dekoder-Zeitstempel ab.
 
 ```
 Clip → Puffer-Quelle → Clip-Pegel (Lautstärke, Blenden)
+     → Spur-Inserts (Equalizer, Kompressor, …)
      → Spur-Bus (Pegel für Lautstärke/Stumm/Solo → Stereo-Panorama)
+     → Summen-Inserts (die Mastering-Kette)
      → Summenpegel
      → Ausgang
 ```
@@ -30,6 +32,62 @@ darunter bleibt unangetastet.
 **Stumm schlägt Solo.** Eine Spur, die stumm *und* solo ist, bleibt stumm, und sie auf Solo zu setzen
 stummt trotzdem jede Spur, die nicht solo ist. Die beiden Knöpfe im Mischpult sind aus demselben
 Grund voneinander unabhängig: der eine darf beim Drücken den anderen nicht stillschweigend löschen.
+
+### Effekte auf einem Bus
+
+Eine Spur und das Projekt selbst tragen je eine Effektkette. Angesprochen wird sie mit denselben
+Kommandos `effect.add` und `effect.setParam` wie die Kette eines Clips — nur auf `on.track(id)` oder
+`on.project` gerichtet statt auf `on.clip(id)`.
+
+Drei gibt es, und alle drei sind native Web-Audio-Knoten:
+
+| Effekt | Knoten | Regler |
+| --- | --- | --- |
+| Equalizer | `BiquadFilterNode`, Glockenfilter | Frequenz, Anhebung, Güte |
+| Kompressor | `DynamicsCompressorNode` | Schwelle, Verhältnis, Ansprechzeit, Rückfallzeit |
+| Limiter | `DynamicsCompressorNode`, Verhältnis 20, ohne Kniebereich | Schwelle |
+
+**Inserts liegen vor dem Regler**, so wie ein Pult sie verdrahtet. Der Regler fährt dann auf einem
+Signal, das der Kompressor schon eingeebnet hat: ihn herunterzuziehen ändert, wie laut die Spur ist,
+und nicht, was der Kompressor mit ihr macht. Dieselbe Regel auf der Summe lässt den Summenregler das
+Letzte vor dem Ausgang sein, und dafür ist ein Regler da.
+
+Einen Effekttyp, für den dieser Stand keinen Knoten hat — eine Unschärfe, die jemand auf einem Bus
+abgelegt hat, oder ein Typ aus einer neueren Fassung —, überspringt die Kette, und der Rest klingt
+weiter. Die Kette zu verweigern kostete die ganze Spur ihren Ton wegen eines einzigen Eintrags. Einen
+abgeschalteten Effekt überspringt sie genauso.
+
+Ketten sind Folgen, keine Mengen: ein Limiter nach einer Anhebung fängt ein, was die Anhebung
+erzeugt hat — dieselben zwei andersherum heben an, was der Limiter schon niedergehalten hat.
+
+::: warning Was die Schwelle des Limiters nicht ist
+`DynamicsCompressorNode` bringt eine eigene Nachverstärkung mit. Der Pegel, der herauskommt, liegt
+deshalb über der Schwelle und nicht auf ihr — gemessen kommt bei Verhältnis 20 und ohne Kniebereich
+ein vollausgesteuerter Ton mit Schwelle −12 bei etwa −4 dBFS heraus. Der Regler heißt darum Schwelle
+und nicht Deckel: was er tut, ist echt und einsinnig (weiter herunter heißt leiser und gleichmäßiger),
+aber es ist keine harte Obergrenze, und ihn so zu nennen hieße etwas zu benennen, was der Knoten nicht
+liefert.
+:::
+
+### Automation auf einem Bus
+
+Ein Bus-Parameter nimmt Keyframes genau wie der eines Clips: ein automatisierter Filterschwenk oder
+ein Ducking-Verlauf ist dieselbe Mechanik wie eine animierte Unschärfe. Anders als bei einem Clip
+lässt er sich setzen, wo der Abspielkopf gerade steht — eine Spur und eine Mastering-Kette haben kein
+Clip-Fenster, aus dem man fallen könnte.
+
+Aufgelöst werden die Keyframes **im Kern und sonst nirgends.** Der Graph liest die Zeiten der Ecken,
+um zu entscheiden, *wann* er fragt, fragt dann `Document.effectParamsAt` nach dem Wert an jeder von
+ihnen und übergibt das Ergebnis derselben Planung, die auch die Blenden benutzen. Zwischen zwei Ecken
+fragt er an einigen Zwischenstellen noch einmal: eine Kurve, die der Kern biegt, wird so als Streckenzug
+durch dessen eigene Werte nachgefahren, statt zur Geraden zwischen ihren Enden gestreckt zu werden.
+Einer linearen Strecke schadet das nicht — jede zusätzliche Abtastung landet wieder auf der Geraden,
+die sie ohnehin hatte. Ein gehaltener Keyframe springt statt zu gleiten, weil der Graph zusätzlich
+einen Flick vor jeder Ecke fragt.
+
+Der Satz, der daran zählt: Vorschau, Export, der Renderer auf dem Server und die Lautheitsmessung
+bekommen alle denselben Auflöser und denselben `AudioGraph`. Es gibt nirgends eine zweite
+Interpolation, über die zwei von ihnen uneins werden könnten.
 
 ### Blenden
 
@@ -110,16 +168,23 @@ setzte den Streifen der obersten Spur ans Ende.
 Jeder Streifen trägt einen Pegelregler, ein Panorama von links über die Mitte nach rechts sowie die
 Knöpfe für Stumm und Solo. Ein Zug am Regler ist ein Schritt in der Historie, nicht einer je Pixel.
 
+Darunter liegt die Insert-Kette des Streifens: ein Knopf je Effekt, für den dieser Stand einen Klang
+hat, und sobald einer hinzugefügt ist, eine Zeile je Parameter mit denselben Keyframe-Bedienelementen
+wie im Inspektor. Eine Zeile zeigt den Wert, den der **Kern** für den Abspielkopf aufgelöst hat,
+geklemmt auf den Bereich, den der Effekt angibt — dieselbe Klemme, die der Graph anwendet, bevor die
+Zahl an einem Filter ankommt. Was dasteht, ist also das, was zu hören ist.
+
+Ganz rechts, durch einen Rahmen abgesetzt, steht der **Summenzug**: der Regler des Projekts und die
+Mastering-Kette. Alles links davon läuft dort hinein.
+
 ## Was es noch nicht gibt
 
 Benannt statt angedeutet, denn ein Bedienelement, das nichts tut, ist schlimmer als keines:
 
-- **EQ und Kompressor auf dem Spur-Bus.** `Track.effects` steht im Modell und wird serialisiert, aber
-  `effect.add` und `effect.setParam` sprechen nur Clips an, es gibt also noch keinen Ort, an dem
-  Bandeinstellungen bleiben könnten. Die Tonseite ist dann kurz: `BiquadFilterNode` und
-  `DynamicsCompressorNode` bringt die Plattform mit.
-- **Ein Summenregler.** `project.master.volume` steht im Modell und der Graph beachtet ihn, aber kein
-  Kommando schreibt ihn.
+- **Andere Filterformen als das Glockenfilter.** Der Equalizer kann kein Hoch- oder Tiefpass sein,
+  denn eine Filterform ist eine Auswahl, und die Effektbeschreibungen tragen nur Fließkommazahlen.
+  `ParamValue` kennt bereits eine Auswahl-Art; die Kuhschwanzfilter kommen mit dem Bedienelement, das
+  eine solche bearbeiten kann.
 - **Pegelanzeigen im Betrieb.** Aussteuerung und Pegelreduktion brauchen je Bus eine Analyse pro Bild.
 - **Ducking, Rauschreduktion, Beat-Erkennung, Panorama über Stereo hinaus.**
 - **True Peak (dBTP).** Der Spitzenwert ist ein Abtastwert-Spitzenwert; ein Zwischenwert-Spitzenwert
