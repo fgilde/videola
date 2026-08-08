@@ -71,9 +71,9 @@ reverse patch; redo applies the forward one.
 The alternative is the conventional one: each command implements its own inverse. That is where undo
 bugs come from. An inverse has to be written and maintained for every command, it is only exercised
 when someone presses Ctrl+Z on that exact command, and it silently goes stale the moment the forward
-operation is changed without the inverse being updated. Twenty commands mean twenty inverses to keep
-honest; a diff means none. The undo machinery is written once and is correct for command
-twenty-one before it is written.
+operation is changed without the inverse being updated. Twenty-six commands mean twenty-six inverses
+to keep honest; a diff means none. The undo machinery is written once and is correct for the next
+command before it is written.
 
 The cost is a clone and two serialisations per dispatch. That is acknowledged in the code as a thing
 to revisit if drag-frequency dispatch on large projects ever makes it visible; the fix would be to
