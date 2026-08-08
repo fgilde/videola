@@ -21,6 +21,7 @@ export type { BlendMode } from "./BlendMode";
 export type { Fades } from "./Fades";
 export type { Effect } from "./Effect";
 export type { EffectId } from "./EffectId";
+export type { EffectTarget } from "./EffectTarget";
 export type { Transition } from "./Transition";
 export type { TransitionAlignment } from "./TransitionAlignment";
 export type { Keyframe } from "./Keyframe";

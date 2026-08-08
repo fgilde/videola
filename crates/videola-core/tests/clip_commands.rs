@@ -1,4 +1,4 @@
-use videola_core::command::{Command, Dispatch, TrimEdge};
+use videola_core::command::{Command, Dispatch, EffectTarget, TrimEdge};
 use videola_core::model::{
     Clip, ClipSource, Generator, MediaId, ParamValue, Time, Timeline, Track, TrackKind, Transition,
 };
@@ -468,7 +468,7 @@ fn adding_an_effect_twice_reuses_the_existing_one() {
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     for _ in 0..2 {
         doc.dispatch(Dispatch::new(Command::EffectAdd {
-            clip: clip.clone(),
+            target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "brightness".into(),
         }))
         .unwrap();
@@ -482,7 +482,7 @@ fn setting_an_effect_param_on_a_missing_effect_fails() {
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     assert!(doc
         .dispatch(Dispatch::new(Command::EffectSetParam {
-            clip,
+            target: EffectTarget::Clip { clip },
             effect_type: "brightness".into(),
             key: "amount".into(),
             value: ParamValue::Float(0.5),
@@ -495,18 +495,18 @@ fn setting_an_effect_param_updates_the_matching_effect_only() {
     let (mut doc, _) = doc_with_clip(0.0, 2.0);
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "brightness".into(),
     }))
     .unwrap();
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "contrast".into(),
     }))
     .unwrap();
 
     doc.dispatch(Dispatch::new(Command::EffectSetParam {
-        clip,
+        target: EffectTarget::Clip { clip },
         effect_type: "contrast".into(),
         key: "amount".into(),
         value: ParamValue::Float(0.5),
@@ -541,7 +541,7 @@ fn setting_a_non_finite_effect_param_is_rejected() {
     let (mut doc, _) = doc_with_clip(0.0, 2.0);
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "brightness".into(),
     }))
     .unwrap();
@@ -553,7 +553,7 @@ fn setting_a_non_finite_effect_param_is_rejected() {
     ] {
         assert!(
             doc.dispatch(Dispatch::new(Command::EffectSetParam {
-                clip: clip.clone(),
+                target: EffectTarget::Clip { clip: clip.clone() },
                 effect_type: "brightness".into(),
                 key: "amount".into(),
                 value: value.clone(),
@@ -569,7 +569,7 @@ fn setting_a_legitimate_effect_param_still_works() {
     let (mut doc, _) = doc_with_clip(0.0, 2.0);
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "brightness".into(),
     }))
     .unwrap();
@@ -580,7 +580,7 @@ fn setting_a_legitimate_effect_param_still_works() {
         ParamValue::Vec2([1.0, -1.0]),
     ] {
         doc.dispatch(Dispatch::new(Command::EffectSetParam {
-            clip: clip.clone(),
+            target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "brightness".into(),
             key: "amount".into(),
             value: value.clone(),
@@ -786,6 +786,91 @@ fn a_transition_on_a_clip_that_is_not_there_is_rejected() {
         .dispatch(Dispatch::new(Command::ClipSetTransition {
             clip: videola_core::model::ClipId::from("clp_nope".to_string()),
             transition: Some(Transition::new("crossfade", Time::from_seconds(1.0))),
+        }))
+        .is_err());
+}
+
+// The two chains that have been in the model since M0 with no command able to reach them. An
+// equaliser on a track and a mastering chain on the project are the same three commands a clip
+// effect already uses, pointed somewhere else.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn an_effect_can_be_added_to_a_track_and_to_the_project() {
+    let (mut doc, track) = doc_with_clip(0.0, 2.0);
+    for (target, effect_type) in [
+        (
+            EffectTarget::Track {
+                track: track.clone(),
+            },
+            "eq",
+        ),
+        (EffectTarget::Project, "limiter"),
+    ] {
+        doc.dispatch(Dispatch::new(Command::EffectAdd {
+            target: target.clone(),
+            effect_type: effect_type.into(),
+        }))
+        .unwrap();
+        doc.dispatch(Dispatch::new(Command::EffectSetParam {
+            target,
+            effect_type: effect_type.into(),
+            key: "gain".into(),
+            value: ParamValue::Float(0.5),
+        }))
+        .unwrap();
+    }
+
+    assert_eq!(
+        doc.project().timeline.tracks[0].effects[0].static_param("gain"),
+        Some(&ParamValue::Float(0.5))
+    );
+    assert_eq!(
+        doc.project().master.effects[0].static_param("gain"),
+        Some(&ParamValue::Float(0.5))
+    );
+    // The clip's own chain is a third place, and none of this went anywhere near it.
+    assert!(doc.project().timeline.tracks[0].clips[0].effects.is_empty());
+}
+
+#[test]
+fn an_effect_on_a_track_that_is_not_there_is_refused() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    assert!(doc
+        .dispatch(Dispatch::new(Command::EffectAdd {
+            target: EffectTarget::Track {
+                track: videola_core::model::TrackId::from("trk_nope".to_string()),
+            },
+            effect_type: "eq".into(),
+        }))
+        .is_err());
+}
+
+// The same `finite` rule the load path applies to `master.volume`, and the clamp a fader needs.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn the_master_fader_is_clamped_and_refuses_a_non_finite_gain() {
+    let mut doc = Document::new();
+    doc.dispatch(Dispatch::new(Command::ProjectSetMasterVolume {
+        volume: 0.25,
+    }))
+    .unwrap();
+    assert_eq!(doc.project().master.volume, 0.25);
+
+    doc.dispatch(Dispatch::new(Command::ProjectSetMasterVolume {
+        volume: 900.0,
+    }))
+    .unwrap();
+    assert_eq!(doc.project().master.volume, 4.0);
+
+    doc.dispatch(Dispatch::new(Command::ProjectSetMasterVolume {
+        volume: -3.0,
+    }))
+    .unwrap();
+    assert_eq!(doc.project().master.volume, 0.0);
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ProjectSetMasterVolume {
+            volume: f32::INFINITY,
         }))
         .is_err());
 }

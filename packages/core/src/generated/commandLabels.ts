@@ -1,6 +1,7 @@
 export const COMMAND_LABELS = [
   "cmd.project.setSettings",
   "cmd.project.setTitle",
+  "cmd.project.setMasterVolume",
   "cmd.track.add",
   "cmd.track.remove",
   "cmd.track.reorder",

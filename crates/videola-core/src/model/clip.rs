@@ -324,7 +324,8 @@ mod tests {
     // `field_mut` would animate a neighbour instead, which the compositor draws without complaint.
     #[test]
     fn every_keyframable_field_is_the_field_it_is_named_after() {
-        let named: [(&str, fn(&Transform) -> f32); 12] = [
+        type Named = (&'static str, fn(&Transform) -> f32);
+        let named: [Named; 12] = [
             ("x", |t| t.x),
             ("y", |t| t.y),
             ("scaleX", |t| t.scale_x),

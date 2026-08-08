@@ -1,4 +1,4 @@
-use videola_core::command::{Command, Dispatch, TrimEdge, ALL_COMMAND_LABELS};
+use videola_core::command::{Command, Dispatch, EffectTarget, TrimEdge, ALL_COMMAND_LABELS};
 use videola_core::model::{
     Clip, ClipId, ClipSource, Generator, Interp, MarkerId, MediaAsset, MediaId, MediaKind,
     ParamValue, Project, ProjectSettings, Time, TrackId, TrackKind, Transform, Transition,
@@ -281,13 +281,13 @@ fn undo_coverage_fixture() -> (Document, Fixture) {
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     let neighbour = doc.project().timeline.tracks[0].clips[1].id.clone();
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "brightness".into(),
     }))
     .unwrap();
     doc.dispatch(Dispatch::new(Command::KeyframeAdd {
-        clip: clip.clone(),
-        effect_type: "brightness".into(),
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: Some("brightness".into()),
         key: "amount".into(),
         time: Time::from_seconds(0.5),
         value: ParamValue::Float(0.25),
@@ -346,6 +346,7 @@ fn every_command_undoes_to_the_exact_prior_state() {
         |_| Command::ProjectSetTitle {
             title: "Renamed".into(),
         },
+        |_| Command::ProjectSetMasterVolume { volume: 0.4 },
         |_| Command::ProjectSetSettings {
             settings: ProjectSettings {
                 width: 1280,
@@ -419,11 +420,11 @@ fn every_command_undoes_to_the_exact_prior_state() {
             volume: 0.5,
         },
         |Fixture { clip, .. }| Command::EffectAdd {
-            clip: clip.clone(),
+            target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "contrast".into(),
         },
         |Fixture { clip, .. }| Command::EffectSetParam {
-            clip: clip.clone(),
+            target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "brightness".into(),
             key: "amount".into(),
             value: ParamValue::Float(0.5),
@@ -440,29 +441,29 @@ fn every_command_undoes_to_the_exact_prior_state() {
             transition: Some(Transition::new("crossfade", Time::from_seconds(0.5))),
         },
         |Fixture { clip, .. }| Command::KeyframeAdd {
-            clip: clip.clone(),
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             time: Time::from_seconds(1.0),
             value: ParamValue::Float(0.75),
             interp: Interp::Ease,
         },
         |Fixture { clip, .. }| Command::KeyframeRemove {
-            clip: clip.clone(),
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             time: Time::from_seconds(0.5),
         },
         |Fixture { clip, .. }| Command::KeyframeMove {
-            clip: clip.clone(),
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             from: Time::from_seconds(0.5),
             to: Time::from_seconds(1.5),
         },
         |Fixture { clip, .. }| Command::KeyframeSetInterp {
-            clip: clip.clone(),
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             time: Time::from_seconds(0.5),
             interp: Interp::Hold,

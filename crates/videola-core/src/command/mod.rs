@@ -25,6 +25,10 @@ pub enum Command {
     /// Rename the project.
     #[serde(rename = "project.setTitle")]
     ProjectSetTitle { title: String },
+    /// Set the master gain the whole mix passes through, where 1 is unity and 4 the accepted
+    /// maximum.
+    #[serde(rename = "project.setMasterVolume")]
+    ProjectSetMasterVolume { volume: f32 },
 
     /// Add a track. Without `index` it goes last; index 0 is the bottom of the stack.
     #[serde(rename = "track.add")]
@@ -152,27 +156,37 @@ pub enum Command {
         transition: Option<Transition>,
     },
 
-    /// Append an effect to a clip's chain. Adding the same `effectType` twice is a no-op.
+    /// Append an effect to the chain of a clip, a track or the project. Adding the same
+    /// `effectType` to the same chain twice is a no-op.
     #[serde(rename = "effect.add")]
-    EffectAdd { clip: ClipId, effect_type: String },
-    /// Set one static parameter of an effect already on the clip.
+    EffectAdd {
+        target: EffectTarget,
+        effect_type: String,
+    },
+    /// Set one static parameter of an effect already in that chain.
     #[serde(rename = "effect.setParam")]
     EffectSetParam {
-        clip: ClipId,
+        target: EffectTarget,
         effect_type: String,
         key: String,
         value: ParamValue,
     },
 
-    // Keyframes address an effect parameter by `effectType`, the same way `effect.setParam` does.
+    // Keyframes address the same chain `effect.setParam` does, plus one track that belongs to no
+    // effect at all: leave `effectType` out and the keys address the clip's own transform. That is
+    // what makes a motion path an ordinary keyframe track rather than a second mechanism.
+    //
     // `keyframe.add` is an upsert: sending it repeatedly under one coalesce key is what turns a
     // slider drag over a keyframed parameter into a single undo step.
-    /// Add or replace the keyframe at `time` on an effect parameter. A keyframed parameter
-    /// overrides the static value from `effect.setParam`.
+    /// Add or replace the keyframe at `time`. With `effectType` set this addresses an effect
+    /// parameter, which then overrides the static value from `effect.setParam`; without it, a
+    /// field of the clip's transform (`x`, `y`, `scaleX`, `scaleY`, `rotation`, `anchorX`,
+    /// `anchorY`, `opacity`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`), which then
+    /// overrides the matching field of `clip.setTransform`.
     #[serde(rename = "keyframe.add")]
     KeyframeAdd {
-        clip: ClipId,
-        effect_type: String,
+        target: EffectTarget,
+        effect_type: Option<String>,
         key: String,
         time: Time,
         value: ParamValue,
@@ -181,16 +195,16 @@ pub enum Command {
     /// Remove the keyframe at `time`.
     #[serde(rename = "keyframe.remove")]
     KeyframeRemove {
-        clip: ClipId,
-        effect_type: String,
+        target: EffectTarget,
+        effect_type: Option<String>,
         key: String,
         time: Time,
     },
     /// Move a keyframe from one time to another, keeping its value and interpolation.
     #[serde(rename = "keyframe.move")]
     KeyframeMove {
-        clip: ClipId,
-        effect_type: String,
+        target: EffectTarget,
+        effect_type: Option<String>,
         key: String,
         from: Time,
         to: Time,
@@ -198,8 +212,8 @@ pub enum Command {
     /// Change how a keyframe interpolates towards the next one.
     #[serde(rename = "keyframe.setInterp")]
     KeyframeSetInterp {
-        clip: ClipId,
-        effect_type: String,
+        target: EffectTarget,
+        effect_type: Option<String>,
         key: String,
         time: Time,
         interp: Interp,
@@ -231,11 +245,27 @@ pub enum TrimEdge {
     End,
 }
 
+/// Which effect chain a command addresses. A clip's, a track's, or the project's own mastering
+/// chain — three places in the model, one address, so an equaliser is authored, automated and
+/// undone by exactly the commands a clip effect already uses.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum EffectTarget {
+    Clip { clip: ClipId },
+    Track { track: TrackId },
+    Project,
+}
+
 impl Command {
     pub fn apply(&self, target: &mut Project) -> Result<()> {
         match self {
             Self::ProjectSetSettings { settings } => project::set_settings(target, settings),
             Self::ProjectSetTitle { title } => project::set_title(target, title),
+            Self::ProjectSetMasterVolume { volume } => project::set_master_volume(target, *volume),
             Self::TrackAdd { kind, name, index } => project::add_track(target, *kind, name, *index),
             Self::TrackRemove { track } => project::remove_track(target, track),
             Self::TrackReorder { track, to_index } => {
@@ -290,15 +320,18 @@ impl Command {
             Self::ClipSetTransition { clip, transition } => {
                 clip::set_transition(target, clip, transition.as_ref())
             }
-            Self::EffectAdd { clip, effect_type } => clip::add_effect(target, clip, effect_type),
+            Self::EffectAdd {
+                target: at,
+                effect_type,
+            } => clip::add_effect(target, at, effect_type),
             Self::EffectSetParam {
-                clip,
+                target: at,
                 effect_type,
                 key,
                 value,
-            } => clip::set_effect_param(target, clip, effect_type, key, value.clone()),
+            } => clip::set_effect_param(target, at, effect_type, key, value.clone()),
             Self::KeyframeAdd {
-                clip,
+                target: at,
                 effect_type,
                 key,
                 time,
@@ -306,33 +339,33 @@ impl Command {
                 interp,
             } => clip::add_keyframe(
                 target,
-                clip,
-                effect_type,
+                at,
+                effect_type.as_deref(),
                 key,
                 *time,
                 value.clone(),
                 *interp,
             ),
             Self::KeyframeRemove {
-                clip,
+                target: at,
                 effect_type,
                 key,
                 time,
-            } => clip::remove_keyframe(target, clip, effect_type, key, *time),
+            } => clip::remove_keyframe(target, at, effect_type.as_deref(), key, *time),
             Self::KeyframeMove {
-                clip,
+                target: at,
                 effect_type,
                 key,
                 from,
                 to,
-            } => clip::move_keyframe(target, clip, effect_type, key, *from, *to),
+            } => clip::move_keyframe(target, at, effect_type.as_deref(), key, *from, *to),
             Self::KeyframeSetInterp {
-                clip,
+                target: at,
                 effect_type,
                 key,
                 time,
                 interp,
-            } => clip::set_keyframe_interp(target, clip, effect_type, key, *time, *interp),
+            } => clip::set_keyframe_interp(target, at, effect_type.as_deref(), key, *time, *interp),
             Self::MarkerAdd { time, label } => marker::add(target, *time, label),
             Self::MarkerRemove { marker } => marker::remove(target, marker),
             Self::MarkerRename { marker, label } => marker::rename(target, marker, label),
@@ -345,6 +378,7 @@ impl Command {
         match self {
             Self::ProjectSetSettings { .. } => LABEL_PROJECT_SET_SETTINGS,
             Self::ProjectSetTitle { .. } => LABEL_PROJECT_SET_TITLE,
+            Self::ProjectSetMasterVolume { .. } => LABEL_PROJECT_SET_MASTER_VOLUME,
             Self::TrackAdd { .. } => LABEL_TRACK_ADD,
             Self::TrackRemove { .. } => LABEL_TRACK_REMOVE,
             Self::TrackReorder { .. } => LABEL_TRACK_REORDER,
@@ -386,6 +420,7 @@ impl Command {
 
 pub const LABEL_PROJECT_SET_SETTINGS: &str = "cmd.project.setSettings";
 pub const LABEL_PROJECT_SET_TITLE: &str = "cmd.project.setTitle";
+pub const LABEL_PROJECT_SET_MASTER_VOLUME: &str = "cmd.project.setMasterVolume";
 pub const LABEL_TRACK_ADD: &str = "cmd.track.add";
 pub const LABEL_TRACK_REMOVE: &str = "cmd.track.remove";
 pub const LABEL_TRACK_REORDER: &str = "cmd.track.reorder";
@@ -422,9 +457,10 @@ pub const LABEL_MARKER_RENAME: &str = "cmd.marker.rename";
 pub const LABEL_MEDIA_IMPORT: &str = "cmd.media.import";
 pub const LABEL_MEDIA_REMOVE: &str = "cmd.media.remove";
 
-pub const ALL_COMMAND_LABELS: [&str; 37] = [
+pub const ALL_COMMAND_LABELS: [&str; 38] = [
     LABEL_PROJECT_SET_SETTINGS,
     LABEL_PROJECT_SET_TITLE,
+    LABEL_PROJECT_SET_MASTER_VOLUME,
     LABEL_TRACK_ADD,
     LABEL_TRACK_REMOVE,
     LABEL_TRACK_REORDER,

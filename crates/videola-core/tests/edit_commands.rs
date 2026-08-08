@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use videola_core::command::{Command, Dispatch, TrimEdge};
+use videola_core::command::{Command, Dispatch, EffectTarget, TrimEdge};
 use videola_core::model::{
     Clip, ClipId, ClipSource, MediaId, Project, Time, Timeline, Track, TrackId, TrackKind,
 };
@@ -537,7 +537,9 @@ fn paste_carries_the_look_of_the_clip_it_copied() {
     let (mut doc, track) = doc_with_track();
     let original = add_clip(&mut doc, &track, 0.0, 2.0);
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: original.clone(),
+        target: EffectTarget::Clip {
+            clip: original.clone(),
+        },
         effect_type: "brightness".into(),
     }))
     .unwrap();

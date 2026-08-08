@@ -1,4 +1,6 @@
-use super::{bounded, find_clip_mut, finite, TrimEdge, MAX_VOLUME};
+use std::collections::BTreeMap;
+
+use super::{bounded, find_clip_mut, finite, EffectTarget, TrimEdge, MAX_VOLUME};
 use crate::model::keyframe::sort_track;
 use crate::model::{
     Clip, ClipId, ClipSource, Effect, GroupId, Interp, Keyframe, MediaId, ParamValue, Project,
@@ -445,9 +447,8 @@ pub(super) fn set_transition(
     Ok(())
 }
 
-pub(super) fn add_effect(target: &mut Project, clip: &ClipId, effect_type: &str) -> Result<()> {
-    let (track, index) = find_clip_mut(target, clip)?;
-    let effects = &mut track.clips[index].effects;
+pub(super) fn add_effect(target: &mut Project, at: &EffectTarget, effect_type: &str) -> Result<()> {
+    let effects = chain_mut(target, at)?;
     if effects
         .iter()
         .any(|effect| effect.effect_type == effect_type)
@@ -460,13 +461,13 @@ pub(super) fn add_effect(target: &mut Project, clip: &ClipId, effect_type: &str)
 
 pub(super) fn set_effect_param(
     target: &mut Project,
-    clip: &ClipId,
+    at: &EffectTarget,
     effect_type: &str,
     key: &str,
     value: ParamValue,
 ) -> Result<()> {
     crate::model::project::param_value_finite(&value)?;
-    let effect = find_effect_mut(target, clip, effect_type)?;
+    let effect = find_effect_mut(target, at, effect_type)?;
     effect.params.insert(key.to_string(), value);
     Ok(())
 }
@@ -476,8 +477,8 @@ pub(super) fn set_effect_param(
 // keyframed parameter repeat this command under one coalesce key.
 pub(super) fn add_keyframe(
     target: &mut Project,
-    clip: &ClipId,
-    effect_type: &str,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
     key: &str,
     time: Time,
     value: ParamValue,
@@ -491,8 +492,13 @@ pub(super) fn add_keyframe(
         handle_out: None,
     };
     crate::model::project::keyframe_bounded(&keyframe)?;
-    let effect = find_effect_mut(target, clip, effect_type)?;
-    let track = effect.keyframes.entry(key.to_string()).or_default();
+    // Only where a track is created, because that is the only place a name nobody reads can be
+    // written; the three commands below reach an existing track or refuse on their own.
+    if effect_type.is_none() {
+        transform_field(key)?;
+    }
+    let tracks = keyframes_mut(target, at, effect_type)?;
+    let track = tracks.entry(key.to_string()).or_default();
     match track.iter_mut().find(|existing| existing.time == time) {
         Some(existing) => *existing = keyframe,
         None => {
@@ -505,33 +511,33 @@ pub(super) fn add_keyframe(
 
 pub(super) fn remove_keyframe(
     target: &mut Project,
-    clip: &ClipId,
-    effect_type: &str,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
     key: &str,
     time: Time,
 ) -> Result<()> {
-    let effect = find_effect_mut(target, clip, effect_type)?;
-    let (track, index) = keyframe_at(effect, key, time)?;
+    let tracks = keyframes_mut(target, at, effect_type)?;
+    let (track, index) = keyframe_at(tracks, key, time)?;
     track.remove(index);
     // An empty track would still read as "keyframed" in the JSON while `param_at` has already
     // fallen back to the static value — the last removal takes the parameter back off the clock.
     if track.is_empty() {
-        effect.keyframes.remove(key);
+        tracks.remove(key);
     }
     Ok(())
 }
 
 pub(super) fn move_keyframe(
     target: &mut Project,
-    clip: &ClipId,
-    effect_type: &str,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
     key: &str,
     from: Time,
     to: Time,
 ) -> Result<()> {
     bounded(to)?;
-    let effect = find_effect_mut(target, clip, effect_type)?;
-    let (track, index) = keyframe_at(effect, key, from)?;
+    let tracks = keyframes_mut(target, at, effect_type)?;
+    let (track, index) = keyframe_at(tracks, key, from)?;
     if from != to && track.iter().any(|keyframe| keyframe.time == to) {
         return Err(CoreError::InvalidArgument(
             "a keyframe already sits at that time".into(),
@@ -544,41 +550,96 @@ pub(super) fn move_keyframe(
 
 pub(super) fn set_keyframe_interp(
     target: &mut Project,
-    clip: &ClipId,
-    effect_type: &str,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
     key: &str,
     time: Time,
     interp: Interp,
 ) -> Result<()> {
-    let effect = find_effect_mut(target, clip, effect_type)?;
-    let (track, index) = keyframe_at(effect, key, time)?;
+    let tracks = keyframes_mut(target, at, effect_type)?;
+    let (track, index) = keyframe_at(tracks, key, time)?;
     track[index].interp = interp;
     Ok(())
 }
 
+// The three chains an effect can live in, behind one address. A clip's own is reached the way it
+// always was; a track's and the project's have been in the model since M0 with nothing able to put
+// anything in them.
+pub(super) fn chain_mut<'p>(
+    target: &'p mut Project,
+    at: &EffectTarget,
+) -> Result<&'p mut Vec<Effect>> {
+    match at {
+        EffectTarget::Clip { clip } => {
+            let (track, index) = find_clip_mut(target, clip)?;
+            Ok(&mut track.clips[index].effects)
+        }
+        EffectTarget::Track { track } => Ok(&mut target
+            .track_mut(track)
+            .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?
+            .effects),
+        EffectTarget::Project => Ok(&mut target.master.effects),
+    }
+}
+
 fn find_effect_mut<'p>(
     target: &'p mut Project,
-    clip: &ClipId,
+    at: &EffectTarget,
     effect_type: &str,
 ) -> Result<&'p mut Effect> {
-    let (track, index) = find_clip_mut(target, clip)?;
-    track.clips[index]
-        .effects
+    chain_mut(target, at)?
         .iter_mut()
         .find(|effect| effect.effect_type == effect_type)
-        .ok_or_else(|| CoreError::InvalidArgument(format!("effect not on clip: {effect_type}")))
+        .ok_or_else(|| {
+            CoreError::InvalidArgument(format!("no such effect in that chain: {effect_type}"))
+        })
+}
+
+// The keyframe tracks a command addresses. With an effect type they belong to that effect; without
+// one they belong to the clip itself, which is the transform. Nothing else in the model carries a
+// track of its own, so a target that is not a clip has nothing to answer with.
+fn keyframes_mut<'p>(
+    target: &'p mut Project,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
+) -> Result<&'p mut BTreeMap<String, Vec<Keyframe>>> {
+    match effect_type {
+        Some(effect_type) => Ok(&mut find_effect_mut(target, at, effect_type)?.keyframes),
+        None => match at {
+            EffectTarget::Clip { clip } => {
+                let (track, index) = find_clip_mut(target, clip)?;
+                Ok(&mut track.clips[index].keyframes)
+            }
+            _ => Err(CoreError::InvalidArgument(
+                "only a clip has a transform to keyframe".into(),
+            )),
+        },
+    }
+}
+
+// `Transform::field_mut` is the roster, so a field the picture reads and a field a keyframe may
+// address are the same set by construction. Without this a keyframe under a misspelt name would be
+// written, saved and reloaded without ever reaching a pixel.
+fn transform_field(key: &str) -> Result<()> {
+    if Transform::default().field_mut(key).is_some() {
+        Ok(())
+    } else {
+        Err(CoreError::InvalidArgument(format!(
+            "not a keyframable transform field: {key}"
+        )))
+    }
 }
 
 // One refusal, not two: "this parameter has no track" and "this track has nothing at that time"
 // are the same answer to the caller, and splitting them left the first guard unable to produce an
 // outcome the second did not already produce.
-fn keyframe_at<'e>(
-    effect: &'e mut Effect,
+fn keyframe_at<'t>(
+    tracks: &'t mut BTreeMap<String, Vec<Keyframe>>,
     key: &str,
     time: Time,
-) -> Result<(&'e mut Vec<Keyframe>, usize)> {
+) -> Result<(&'t mut Vec<Keyframe>, usize)> {
     let missing = || CoreError::InvalidArgument(format!("no keyframe on {key} at that time"));
-    let track = effect.keyframes.get_mut(key).ok_or_else(missing)?;
+    let track = tracks.get_mut(key).ok_or_else(missing)?;
     let index = track
         .iter()
         .position(|keyframe| keyframe.time == time)

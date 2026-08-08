@@ -1,4 +1,4 @@
-use videola_core::command::{Command, Dispatch};
+use videola_core::command::{Command, Dispatch, EffectTarget};
 use videola_core::model::{
     ClipId, ClipSource, Interp, MediaId, ParamValue, Project, Time, TrackKind,
 };
@@ -25,7 +25,7 @@ fn doc_with_effect() -> (Document, ClipId) {
     .unwrap();
     let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
     doc.dispatch(Dispatch::new(Command::EffectAdd {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "brightness".into(),
     }))
     .unwrap();
@@ -34,8 +34,8 @@ fn doc_with_effect() -> (Document, ClipId) {
 
 fn add(clip: &ClipId, seconds: f64, value: f32, interp: Interp) -> Command {
     Command::KeyframeAdd {
-        clip: clip.clone(),
-        effect_type: "brightness".into(),
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: Some("brightness".into()),
         key: "amount".into(),
         time: Time::from_seconds(seconds),
         value: ParamValue::Float(value),
@@ -128,7 +128,7 @@ fn a_drag_over_a_keyframed_parameter_is_one_undo_step() {
 fn removing_the_last_keyframe_takes_the_parameter_back_off_the_clock() {
     let (mut doc, clip) = doc_with_effect();
     doc.dispatch(Dispatch::new(Command::EffectSetParam {
-        clip: clip.clone(),
+        target: EffectTarget::Clip { clip: clip.clone() },
         effect_type: "brightness".into(),
         key: "amount".into(),
         value: ParamValue::Float(0.5),
@@ -139,8 +139,8 @@ fn removing_the_last_keyframe_takes_the_parameter_back_off_the_clock() {
     assert_eq!(amount_at(doc.project(), 1.0), Some(ParamValue::Float(0.9)));
 
     doc.dispatch(Dispatch::new(Command::KeyframeRemove {
-        clip,
-        effect_type: "brightness".into(),
+        target: EffectTarget::Clip { clip },
+        effect_type: Some("brightness".into()),
         key: "amount".into(),
         time: Time::from_seconds(1.0),
     }))
@@ -161,16 +161,16 @@ fn removing_a_keyframe_that_is_not_there_is_rejected() {
 
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeRemove {
-            clip: clip.clone(),
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             time: Time::from_seconds(2.0),
         }))
         .is_err());
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeRemove {
-            clip,
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip },
+            effect_type: Some("brightness".into()),
             key: "contrast".into(),
             time: Time::from_seconds(1.0),
         }))
@@ -186,8 +186,8 @@ fn moving_a_keyframe_retimes_it_and_keeps_the_track_sorted() {
     doc.dispatch(Dispatch::new(add(&clip, 1.0, 1.0, Interp::Linear)))
         .unwrap();
     doc.dispatch(Dispatch::new(Command::KeyframeMove {
-        clip,
-        effect_type: "brightness".into(),
+        target: EffectTarget::Clip { clip },
+        effect_type: Some("brightness".into()),
         key: "amount".into(),
         from: Time::from_seconds(0.0),
         to: Time::from_seconds(3.0),
@@ -208,8 +208,8 @@ fn moving_a_keyframe_onto_itself_is_accepted() {
         .unwrap();
 
     doc.dispatch(Dispatch::new(Command::KeyframeMove {
-        clip,
-        effect_type: "brightness".into(),
+        target: EffectTarget::Clip { clip },
+        effect_type: Some("brightness".into()),
         key: "amount".into(),
         from: Time::from_seconds(1.0),
         to: Time::from_seconds(1.0),
@@ -230,8 +230,8 @@ fn moving_a_keyframe_onto_another_is_rejected() {
 
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeMove {
-            clip,
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             from: Time::from_seconds(0.0),
             to: Time::from_seconds(1.0),
@@ -251,8 +251,8 @@ fn switching_a_keyframe_to_hold_changes_what_the_parameter_reads() {
     assert_eq!(amount_at(doc.project(), 1.0), Some(ParamValue::Float(0.5)));
 
     doc.dispatch(Dispatch::new(Command::KeyframeSetInterp {
-        clip: clip.clone(),
-        effect_type: "brightness".into(),
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: Some("brightness".into()),
         key: "amount".into(),
         time: Time::ZERO,
         interp: Interp::Hold,
@@ -262,8 +262,8 @@ fn switching_a_keyframe_to_hold_changes_what_the_parameter_reads() {
 
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeSetInterp {
-            clip,
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             time: Time::from_seconds(1.5),
             interp: Interp::Ease,
@@ -277,8 +277,8 @@ fn keyframing_an_effect_the_clip_does_not_carry_is_rejected() {
     let (mut doc, clip) = doc_with_effect();
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeAdd {
-            clip,
-            effect_type: "blur".into(),
+            target: EffectTarget::Clip { clip },
+            effect_type: Some("blur".into()),
             key: "amount".into(),
             time: Time::ZERO,
             value: ParamValue::Float(0.5),
@@ -296,8 +296,8 @@ fn a_keyframe_time_outside_the_bound_is_rejected_and_would_not_load_either() {
     let absurd = Time::from_flicks(i64::MAX);
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeAdd {
-            clip: clip.clone(),
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             time: absurd,
             value: ParamValue::Float(0.5),
@@ -309,8 +309,8 @@ fn a_keyframe_time_outside_the_bound_is_rejected_and_would_not_load_either() {
         .unwrap();
     assert!(doc
         .dispatch(Dispatch::new(Command::KeyframeMove {
-            clip,
-            effect_type: "brightness".into(),
+            target: EffectTarget::Clip { clip },
+            effect_type: Some("brightness".into()),
             key: "amount".into(),
             from: Time::ZERO,
             to: absurd,
@@ -332,7 +332,7 @@ fn a_non_finite_keyframe_value_is_rejected() {
     let (mut doc, clip) = doc_with_effect();
     let command: Command = serde_json::from_value(serde_json::json!({
         "type": "keyframe.add",
-        "clip": clip.as_str(),
+        "target": { "kind": "clip", "clip": clip.as_str() },
         "effectType": "brightness",
         "key": "amount",
         "time": 0,
@@ -357,4 +357,108 @@ fn a_non_finite_bezier_handle_fails_to_load() {
         ["handleOut"] = serde_json::json!([1e300, 0.0]);
     let project: Project = serde_json::from_value(json).unwrap();
     assert!(Document::from_project(project).is_err());
+}
+
+// The other keyframe track a clip carries: its own transform, addressed by leaving `effectType`
+// out. Until this existed, `Clip::keyframes` was a field nothing in the repository ever evaluated.
+fn transform_key(clip: &ClipId, key: &str, seconds: f64, value: f32) -> Command {
+    Command::KeyframeAdd {
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: None,
+        key: key.into(),
+        time: Time::from_seconds(seconds),
+        value: ParamValue::Float(value),
+        interp: Interp::Linear,
+    }
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_keyframed_transform_is_resolved_at_the_moment_asked_for() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(transform_key(&clip, "x", 0.0, 0.0)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(transform_key(&clip, "x", 2.0, 100.0)))
+        .unwrap();
+
+    let clip_ref = &doc.project().timeline.tracks[0].clips[0];
+    assert_eq!(clip_ref.transform_at(Time::from_seconds(1.0)).x, 50.0);
+    assert_eq!(clip_ref.transform_at(Time::from_seconds(0.5)).x, 25.0);
+}
+
+// The whole reason the command refuses a name it does not know: a keyframe written under one is
+// saved, reloaded and never read, and the editor that wrote it has no way to tell.
+#[test]
+fn keyframing_a_transform_field_that_does_not_exist_is_refused() {
+    let (mut doc, clip) = doc_with_effect();
+    assert!(doc
+        .dispatch(Dispatch::new(transform_key(&clip, "scale", 0.0, 2.0)))
+        .is_err());
+    assert!(doc.project().timeline.tracks[0].clips[0]
+        .keyframes
+        .is_empty());
+}
+
+// The one combination the address can express and the model cannot hold. A track and the project
+// have effect chains but no geometry of their own.
+#[test]
+fn only_a_clip_has_a_transform_to_keyframe() {
+    let (mut doc, _) = doc_with_effect();
+    let track = doc.project().timeline.tracks[0].id.clone();
+    for target in [EffectTarget::Track { track }, EffectTarget::Project] {
+        assert!(doc
+            .dispatch(Dispatch::new(Command::KeyframeAdd {
+                target,
+                effect_type: None,
+                key: "x".into(),
+                time: Time::ZERO,
+                value: ParamValue::Float(1.0),
+                interp: Interp::Linear,
+            }))
+            .is_err());
+    }
+}
+
+// A transform track and an effect track of the same name are two different tracks, and the four
+// keyframe commands have to keep reaching the one they were addressed to.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_transform_track_and_an_effect_track_do_not_share_a_name() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(transform_key(&clip, "opacity", 1.0, 0.25)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(Command::KeyframeAdd {
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: Some("brightness".into()),
+        key: "opacity".into(),
+        time: Time::from_seconds(1.0),
+        value: ParamValue::Float(0.9),
+        interp: Interp::Linear,
+    }))
+    .unwrap();
+
+    doc.dispatch(Dispatch::new(Command::KeyframeRemove {
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: None,
+        key: "opacity".into(),
+        time: Time::from_seconds(1.0),
+    }))
+    .unwrap();
+
+    let clip_ref = &doc.project().timeline.tracks[0].clips[0];
+    assert!(clip_ref.keyframes.is_empty());
+    assert_eq!(clip_ref.effects[0].keyframes["opacity"].len(), 1);
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn undoing_a_transform_keyframe_puts_the_clip_back_the_way_it_was() {
+    let (mut doc, clip) = doc_with_effect();
+    let before = serde_json::to_value(doc.project()).unwrap();
+
+    doc.dispatch(Dispatch::new(transform_key(&clip, "rotation", 1.0, 45.0)))
+        .unwrap();
+    doc.undo().unwrap();
+
+    assert_eq!(serde_json::to_value(doc.project()).unwrap(), before);
 }

@@ -21,6 +21,15 @@ pub(super) fn set_title(target: &mut Project, title: &str) -> Result<()> {
     Ok(())
 }
 
+// Same shape as a track's fader, and the same reason: `finite` is the rule the load path enforces
+// on this field too, and the clamp is what keeps a mastering chain from being handed a gain no
+// `GainNode` would accept.
+pub(super) fn set_master_volume(target: &mut Project, volume: f32) -> Result<()> {
+    let volume = finite(volume)?;
+    target.master.volume = volume.clamp(0.0, MAX_VOLUME);
+    Ok(())
+}
+
 pub(super) fn add_track(
     target: &mut Project,
     kind: TrackKind,

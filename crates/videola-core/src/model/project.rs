@@ -78,6 +78,7 @@ impl Project {
     pub fn normalize(&mut self) -> Result<()> {
         settings_bounded(&self.settings)?;
         normalize_timeline(&mut self.timeline, 0)?;
+        finite(self.master.volume)?;
         normalize_effects(&mut self.master.effects)?;
         normalize_markers(&self.markers)?;
         normalize_library(&self.library)
@@ -624,6 +625,29 @@ mod tests {
             loaded.normalize(),
             Err(CoreError::InvalidArgument(_))
         ));
+    }
+
+    // The one scalar `normalize` walked past: the audio graph writes it straight into a
+    // `GainNode`, which throws on a non-finite value and takes the whole transport down with it.
+    // Found while giving the master fader a command of its own -- the seam the command creates is
+    // exactly this field.
+    #[test]
+    fn a_non_finite_master_volume_fails_to_load() {
+        let p = Project::default();
+        let mut json = serde_json::to_value(&p).unwrap();
+        json["master"]["volume"] = serde_json::json!(1e300);
+        let mut loaded: Project = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn an_ordinary_master_volume_still_loads() {
+        let mut p = Project::default();
+        p.master.volume = 0.8;
+        assert!(p.normalize().is_ok());
     }
 
     #[test]
