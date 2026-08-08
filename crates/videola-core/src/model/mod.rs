@@ -8,7 +8,9 @@ pub mod project;
 pub mod time;
 pub mod timeline;
 
-pub use clip::{BlendMode, Clip, ClipSource, Crop, Fades, Generator, Speed, Transform};
+pub use clip::{
+    BlendMode, Clip, ClipSource, Crop, Fades, Generator, Speed, Transform, POSITION_TRACK,
+};
 pub use effect::{Effect, Transition, TransitionAlignment};
 pub use ids::{ClipId, EffectId, GroupId, MarkerId, ProjectId, TrackId};
 pub use keyframe::{evaluate, Interp, Keyframe};

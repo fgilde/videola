@@ -4,7 +4,7 @@ use super::{bounded, find_clip_mut, finite, EffectTarget, TrimEdge, MAX_VOLUME};
 use crate::model::keyframe::sort_track;
 use crate::model::{
     Clip, ClipId, ClipSource, Effect, GroupId, Interp, Keyframe, MediaId, ParamValue, Project,
-    Time, TrackId, Transform, Transition,
+    Time, TrackId, Transform, Transition, POSITION_TRACK,
 };
 use crate::{CoreError, Result};
 
@@ -709,8 +709,11 @@ fn keyframes_mut<'p>(
 // `Transform::field_mut` is the roster, so a field the picture reads and a field a keyframe may
 // address are the same set by construction. Without this a keyframe under a misspelt name would be
 // written, saved and reloaded without ever reaching a pixel.
+//
+// The motion path is the one track outside that roster, because it names two fields rather than
+// one. `transform_at` reads it under the same constant, so the two ends still cannot drift.
 fn transform_field(key: &str) -> Result<()> {
-    if Transform::default().field_mut(key).is_some() {
+    if key == POSITION_TRACK || Transform::default().field_mut(key).is_some() {
         Ok(())
     } else {
         Err(CoreError::InvalidArgument(format!(

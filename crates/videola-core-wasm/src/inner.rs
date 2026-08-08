@@ -758,6 +758,31 @@ mod tests {
         assert_eq!(host.transforms_at(Time::from_seconds(3.0))[&clip].x, 100.0);
     }
 
+    // The batch is the only route a motion path takes to the renderer, so the curve has to be
+    // resolved by the time it crosses. A path handed over as points would leave the draw list to
+    // interpolate, and the export would then be free to interpolate differently.
+    #[test]
+    fn a_motion_path_crosses_the_boundary_already_resolved() {
+        let (mut host, _) = host_with_effect(Vec::new());
+        let clip = host.project().timeline.tracks[0].clips[0].id.clone();
+        for (seconds, x, y) in [(0.0, 0.0, 0.0), (2.0, 100.0, 0.0), (4.0, 100.0, 100.0)] {
+            host.dispatch(Dispatch::new(Command::KeyframeAdd {
+                target: videola_core::command::EffectTarget::Clip { clip: clip.clone() },
+                effect_type: None,
+                key: "position".into(),
+                time: Time::from_seconds(seconds),
+                value: ParamValue::Vec2([x, y]),
+                interp: videola_core::model::Interp::Linear,
+            }))
+            .unwrap();
+        }
+
+        let on_key = host.transforms_at(Time::from_seconds(2.0))[&clip].clone();
+        assert_eq!((on_key.x, on_key.y), (100.0, 0.0));
+        let bent = host.transforms_at(Time::from_seconds(1.0))[&clip].clone();
+        assert!(bent.y.abs() > 1.0, "the path arrived unbent, y={}", bent.y);
+    }
+
     // The same window `effect_params_at` keeps: outside the clip there is no geometry to report,
     // however far a ramp would carry on.
     #[test]

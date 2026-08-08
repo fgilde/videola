@@ -187,6 +187,11 @@ pub enum Command {
     /// field of the clip's transform (`x`, `y`, `scaleX`, `scaleY`, `rotation`, `anchorX`,
     /// `anchorY`, `opacity`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`), which then
     /// overrides the matching field of `clip.setTransform`.
+    ///
+    /// `position` is the one key that takes a `vec2` rather than a `float`: it is a motion path,
+    /// and the clip runs along a smooth curve through its points instead of along whatever two
+    /// separate `x` and `y` tracks would produce. Three points or more make it a curve; two are
+    /// exactly the straight line between them. A `position` track overrides `x` and `y` both.
     #[serde(rename = "keyframe.add")]
     KeyframeAdd {
         target: EffectTarget,

@@ -386,6 +386,34 @@ fn a_keyframed_transform_is_resolved_at_the_moment_asked_for() {
     assert_eq!(clip_ref.transform_at(Time::from_seconds(0.5)).x, 25.0);
 }
 
+// A motion path is authored with the same command, one point per key. The claim is the round trip
+// an editor actually makes: the command accepts the track, and what comes back out of
+// `transform_at` is the curve rather than the points as they were stored.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_motion_path_is_authored_with_the_ordinary_keyframe_command() {
+    let (mut doc, clip) = doc_with_effect();
+    for (seconds, x, y) in [(0.0, 0.0, 0.0), (2.0, 100.0, 0.0), (4.0, 100.0, 100.0)] {
+        doc.dispatch(Dispatch::new(Command::KeyframeAdd {
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: None,
+            key: "position".into(),
+            time: Time::from_seconds(seconds),
+            value: ParamValue::Vec2([x, y]),
+            interp: Interp::Linear,
+        }))
+        .unwrap();
+    }
+
+    let clip_ref = &doc.project().timeline.tracks[0].clips[0];
+    let on_key = clip_ref.transform_at(Time::from_seconds(2.0));
+    assert_eq!((on_key.x, on_key.y), (100.0, 0.0));
+    // Between the keys the clip is off the leg it would sit on if the three points were merely
+    // joined up -- the curve is what the core resolves, not what the command stored.
+    let bent = clip_ref.transform_at(Time::from_seconds(1.0));
+    assert!(bent.y.abs() > 1.0, "the path did not bend, y={}", bent.y);
+}
+
 // The whole reason the command refuses a name it does not know: a keyframe written under one is
 // saved, reloaded and never read, and the editor that wrote it has no way to tell.
 #[test]

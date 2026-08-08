@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use ts_rs::TS;
 
 use super::effect::{Effect, Transition};
-use super::keyframe::{evaluate, Keyframe};
+use super::keyframe::{evaluate, evaluate_path, Keyframe};
 use super::{ClipId, GroupId, MediaId, ParamValue, Time};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
@@ -135,9 +135,27 @@ impl Clip {
                 *field = value;
             }
         }
+        // A motion path answers the same question `x` and `y` do, so it is resolved last and wins
+        // outright. Letting the two settle it by iteration order would hand the answer to a
+        // BTreeMap's alphabet, and "the clip stands where the path says" is not a fact about
+        // spelling. A project carrying both is one an editor migrated halfway; the path is the one
+        // that was authored as a shape.
+        if let Some([x, y]) = self
+            .keyframes
+            .get(POSITION_TRACK)
+            .and_then(|track| evaluate_path(track, at))
+        {
+            resolved.x = x;
+            resolved.y = y;
+        }
         resolved
     }
 }
+
+// The keyframe track that carries a motion path: `Vec2` keys in the same project pixels
+// `Transform::x` and `y` use. Named here beside the resolution that reads it and the roster that
+// refuses everything else, so the command layer and the renderer cannot disagree on the spelling.
+pub const POSITION_TRACK: &str = "position";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -351,6 +369,86 @@ mod tests {
                 .count();
             assert_eq!(untouched, 0, "{key} moved a field it does not name");
         }
+    }
+
+    fn path(clip: &mut Clip, points: &[(f64, f32, f32)]) {
+        clip.keyframes.insert(
+            POSITION_TRACK.to_string(),
+            points
+                .iter()
+                .map(|(seconds, x, y)| Keyframe {
+                    time: Time::from_seconds(*seconds),
+                    value: ParamValue::Vec2([*x, *y]),
+                    interp: Interp::Linear,
+                    handle_in: None,
+                    handle_out: None,
+                })
+                .collect(),
+        );
+    }
+
+    #[test]
+    fn a_motion_path_places_the_clip_on_both_axes() {
+        let mut clip = media_clip(0.0, 4.0);
+        path(&mut clip, &[(0.0, 0.0, 0.0), (4.0, 100.0, 40.0)]);
+
+        let resolved = clip.transform_at(Time::from_seconds(1.0));
+        assert_eq!((resolved.x, resolved.y), (25.0, 10.0));
+    }
+
+    // Two answers to "where does the clip stand" must not be settled by which key a BTreeMap yields
+    // first. Both tracks would move the clip on their own; only one of them may.
+    #[test]
+    fn a_motion_path_wins_over_separate_x_and_y_tracks() {
+        let mut clip = media_clip(0.0, 4.0);
+        ramp(&mut clip, "x", 0.0, 800.0, 2.0);
+        ramp(&mut clip, "y", 0.0, 800.0, 2.0);
+        path(&mut clip, &[(0.0, 0.0, 0.0), (4.0, 100.0, 40.0)]);
+
+        let resolved = clip.transform_at(Time::from_seconds(1.0));
+        assert_eq!((resolved.x, resolved.y), (25.0, 10.0));
+    }
+
+    #[test]
+    fn a_motion_path_leaves_every_other_field_alone() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.rotation = 33.0;
+        clip.transform.opacity = 0.25;
+        path(&mut clip, &[(0.0, 0.0, 0.0), (4.0, 100.0, 40.0)]);
+
+        let resolved = clip.transform_at(Time::from_seconds(1.0));
+        assert_eq!((resolved.rotation, resolved.opacity), (33.0, 0.25));
+    }
+
+    // The forward-compatible half of the same rule the scalar tracks follow: a path this version
+    // cannot read leaves the clip where the static transform put it rather than at the origin.
+    #[test]
+    fn a_path_track_of_the_wrong_value_kind_leaves_the_placement_alone() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.x = 12.0;
+        clip.transform.y = 34.0;
+        clip.keyframes.insert(
+            POSITION_TRACK.to_string(),
+            vec![Keyframe {
+                time: Time::ZERO,
+                value: ParamValue::Float(7.0),
+                interp: Interp::Linear,
+                handle_in: None,
+                handle_out: None,
+            }],
+        );
+
+        let resolved = clip.transform_at(Time::ZERO);
+        assert_eq!((resolved.x, resolved.y), (12.0, 34.0));
+    }
+
+    #[test]
+    fn an_empty_path_track_leaves_the_placement_alone() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.transform.x = 12.0;
+        clip.keyframes.insert(POSITION_TRACK.to_string(), Vec::new());
+
+        assert_eq!(clip.transform_at(Time::from_seconds(1.0)).x, 12.0);
     }
 
     #[test]

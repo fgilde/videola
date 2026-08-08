@@ -728,6 +728,42 @@ mod tests {
         ));
     }
 
+    // A motion path is `Vec2`, and the second component is the one a check written for scalars
+    // walks past. It reaches `Transform::y` and from there the matrix, where a non-finite value
+    // takes the whole quad out of the picture rather than raising anything.
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn a_motion_paths_non_finite_component_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(2.0),
+        );
+        clip.keyframes.insert(
+            crate::model::POSITION_TRACK.into(),
+            vec![Keyframe {
+                time: Time::ZERO,
+                value: ParamValue::Vec2([1.0, 2.0]),
+                interp: Interp::Linear,
+                handle_in: None,
+                handle_out: None,
+            }],
+        );
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        let mut json = serde_json::to_value(&p).unwrap();
+        json["timeline"]["tracks"][0]["clips"][0]["keyframes"]["position"][0]["value"]["value"][1] =
+            serde_json::json!(1e300);
+        let mut loaded: Project = serde_json::from_value(json).unwrap();
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
     #[test]
     fn an_effects_non_finite_param_fails_to_load() {
         let mut p = Project::default();
