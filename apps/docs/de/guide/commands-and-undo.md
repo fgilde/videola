@@ -2,29 +2,61 @@
 
 ::: info Zusammenfassung
 Das vollständige Kapitel gibt es nur auf Englisch: [Commands and
-undo](/guide/commands-and-undo). Dort stehen alle zwanzig Commands mit ihren Feldern, das Drahtformat
-und der Ablauf im Detail. Diese Seite fasst es zusammen.
+undo](/guide/commands-and-undo). Dort stehen alle sechsundzwanzig Commands mit ihren Feldern, das
+Drahtformat und der Ablauf im Detail. Diese Seite fasst es zusammen.
 :::
 
 Jede Bearbeitung ist ein serialisierbarer Command. Es gibt keinen Pfad, der das Projekt direkt
 verändert — daraus fallen Undo und später eine REST-API und ein MCP-Server aus einem Mechanismus statt
 aus drei.
 
-## Die zwanzig Commands
+## Die sechsundzwanzig Commands
 
 | Gruppe | Commands |
 |---|---|
 | `project.*` | `setSettings`, `setTitle` |
 | `track.*` | `add`, `remove`, `reorder`, `rename`, `setVolume`, `setPan`, `setFlags` |
-| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `setSpeed`, `setVolume` |
+| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `setSpeed`, `setVolume`, `setTransform`, `setTransition` |
 | `effect.*` | `add`, `setParam` |
+| `keyframe.*` | `add`, `remove`, `move`, `setInterp` |
 | `media.*` | `import`, `remove` |
 
 `track.setFlags` nimmt jede Marke als nullbaren Wert, damit ein Command eine beliebige Teilmenge
 ändern kann; `null` heißt „unverändert lassen“. Rückwärtslauf ist `clip.setSpeed` mit
-`reverse: true`, kein eigener Clip-Typ. Die beiden `effect.*`-Commands pflegen nur das Modell;
-gerendert wird nichts. `media.remove` entfernt auch jeden Clip, der das Asset benutzt, und steigt
-dafür in verschachtelte Compound-Timelines ab.
+`reverse: true`, kein eigener Clip-Typ. `media.remove` entfernt auch jeden Clip, der das Asset
+benutzt, und steigt dafür in verschachtelte Compound-Timelines ab.
+
+## Transformation und Übergang
+
+`clip.setTransform` trägt die ganze `Transform` — Position, Skalierung, Drehung, Ankerpunkt,
+Deckkraft und Crop — so wie `clip.setSpeed` alle drei Geschwindigkeitsfelder trägt. Die Oberfläche
+liest die aktuelle Transformation, ersetzt das eine geänderte Feld und schickt sie zurück. Das ist
+auch der einzige Weg, einen Clip auf das Bild einzupassen: die Zeichenliste bildet ein Quellpixel auf
+ein Projektpixel ab, ein 640x360-Clip sitzt in einem 1080p-Projekt also in seiner eigenen Größe
+mittendrin, bis eine Transformation etwas anderes sagt.
+
+`clip.setTransition` schreibt die *eingehende* Kante eines Clips, `null` löscht sie. Für die
+ausgehende Kante gibt es keinen Command, weil sie niemand liest: ein Übergang wird gezeichnet, indem
+der eingehende Clip in das Bild gemischt wird, das der Frame schon trägt — er gehört also dem Clip,
+der ankommt. Eine gelöschte Überblendung ist im Modell *abwesend*, nicht `null`.
+
+## Keyframes
+
+Ein Keyframe adressiert einen Effektparameter über dasselbe Tripel aus `clip`, `effectType` und
+`key`, das auch `effect.setParam` benutzt. Ein Parameter mit Keyframe-Spur wird aus der Spur gelesen,
+einer ohne aus dem statischen Wert. Der statische Wert bleibt darunter erhalten, also nimmt das
+Löschen des letzten Keyframes den Parameter wieder von der Uhr, statt ihn einzufrieren.
+
+`keyframe.add` ist ein *Upsert*: dieselbe Zeit noch einmal ersetzt den dortigen Keyframe, statt einen
+zweiten daneben zu legen. Genau das macht einen Schieberzug im Inspector zur selben Form wie einen
+Clipzug — eine Sendung pro Zeigerbewegung, alle unter einem Coalesce-Key, ein Undo-Schritt.
+
+`interp` ist `linear`, `hold`, `ease` oder `bezier`; Bezier-Anfasser stehen im Modell, aber kein
+Command schreibt sie. `keyframe.move` weigert sich, auf einer schon besetzten Zeit zu landen, nimmt
+aber einen Zug hin, der dort endet, wo er anfing.
+
+Keyframes auf einer *Clip*-Eigenschaft haben im Modell einen Platz und keinen Command, weil sie
+niemand auswertet: nur `Effect::param_at` liest eine Keyframe-Spur.
 
 ## Drahtformat
 
@@ -103,4 +135,6 @@ Damit bleibt für das gesamte Ziehen genau ein Eintrag, dessen Umkehrung die Pos
 wiederherstellt, nicht die von einer Bewegung vorher. Der Key muss nur für die Dauer der Geste stabil
 und gegen fremde Bearbeitungen eindeutig sein; `"drag:clp_1"` ist die natürliche Form. Ohne Key wird
 nie zusammengefasst, und ein abweichender Key beginnt einen neuen Eintrag — ein ausdrückliches
-Abschließen der Geste braucht es also nicht.
+Abschließen der Geste braucht es also nicht. Ein Schieber im Inspector braucht dieselbe Sorgfalt eine
+Ebene tiefer: der Key muss auch das Feld nennen, sonst verschmelzen ein Zug an `x` und danach einer an
+`y` zu einem einzigen Undo-Schritt, der beide zusammen zurücknimmt.

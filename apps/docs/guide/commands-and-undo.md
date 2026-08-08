@@ -8,10 +8,10 @@ The bus lives in `crates/videola-core/src/command`, the history in
 `crates/videola-core/src/history.rs`, and the two are joined by `Document` in
 `crates/videola-core/src/document.rs`.
 
-## The twenty commands
+## The twenty-six commands
 
-`videola-core` defines twenty commands today. The design reserves a much wider set — keyframes,
-masks, transitions, text, markers, audio chains, render and templates — but none of those exist yet.
+`videola-core` defines twenty-six commands today. The design reserves a wider set still — masks,
+text, markers, audio chains, render and templates — but none of those exist yet.
 
 ### `project.*`
 
@@ -46,6 +46,8 @@ masks, transitions, text, markers, audio chains, render and templates — but no
 | `clip.split` | `clip`, `at` |
 | `clip.setSpeed` | `clip`, `rate`, `reverse`, `preservePitch` |
 | `clip.setVolume` | `clip`, `volume` |
+| `clip.setTransform` | `clip`, `transform` |
+| `clip.setTransition` | `clip`, `transition` |
 
 `source` is one of three shapes: `{ kind: "media", media }`, `{ kind: "generator", generator }` for
 text, solid, shape, gradient and countdown clips that need no media file, or
@@ -55,6 +57,21 @@ signed `Time`, so one command covers trimming in either direction from either ed
 Playing a range backwards is `clip.setSpeed` with `reverse: true`, not a separate clip type — split
 the clip and set the flag on the middle piece.
 
+`clip.setTransform` carries the whole `Transform` — position, scale, rotation, anchor, opacity and
+crop — the same way `clip.setSpeed` carries all three speed fields and `project.setSettings` carries
+all of the settings. Read the clip's current transform, spread the one field that changed, send it
+back. A per-field command would need a null for every field it does not touch and still could not
+express "put the crop back the way it was". This is also the only way a clip whose media is smaller
+than the frame gets scaled up: the draw list maps one source pixel onto one project pixel, so a
+640x360 clip in a 1080p project sits in the middle at its own size until a transform says otherwise.
+
+`clip.setTransition` writes the clip's *incoming* edge, and `null` clears it, so one command adds a
+transition, retimes it and removes it again. There is no command for the outgoing edge because
+nothing reads one: a transition is drawn by mixing the incoming clip into the picture the frame
+already holds, so it belongs to the clip that arrives. A `Transition` is `{ transitionType,
+duration, alignment, params }` with `alignment` one of `in`, `out` or `center`. A cleared transition
+is *absent* from the clip rather than `null` — the field is skipped when it is none.
+
 ### `effect.*`
 
 | Command | Fields |
@@ -62,8 +79,40 @@ the clip and set the flag on the middle piece.
 | `effect.add` | `clip`, `effectType` |
 | `effect.setParam` | `clip`, `effectType`, `key`, `value` |
 
-These maintain the model only. Nothing renders an effect yet. `value` is a tagged
-`ParamValue`: `float`, `int`, `bool`, `color`, `vec2` or `choice`.
+`value` is a tagged `ParamValue`: `float`, `int`, `bool`, `color`, `vec2` or `choice`. Both commands
+address the effect by `effectType` rather than by `EffectId`, so two effects of the same type on one
+clip cannot be told apart from the outside — the model allows it, the command catalogue does not
+reach it.
+
+### `keyframe.*`
+
+| Command | Fields |
+|---|---|
+| `keyframe.add` | `clip`, `effectType`, `key`, `time`, `value`, `interp` |
+| `keyframe.remove` | `clip`, `effectType`, `key`, `time` |
+| `keyframe.move` | `clip`, `effectType`, `key`, `from`, `to` |
+| `keyframe.setInterp` | `clip`, `effectType`, `key`, `time`, `interp` |
+
+Keyframes address an effect parameter, the same `clip` plus `effectType` plus `key` triple that
+`effect.setParam` uses. A parameter with a keyframe track is read from the track; a parameter
+without one is read from the static value `effect.setParam` wrote. The static value survives
+underneath, so removing the last keyframe takes the parameter back off the clock rather than
+freezing it — and `keyframe.remove` drops the empty track from the model so that nothing later
+mistakes "keyframed with no keys" for "keyframed".
+
+`keyframe.add` is an *upsert*: sending it again at a `time` that already carries a key replaces that
+key rather than adding a second one there. That is what makes a slider drag over a keyframed
+parameter the same shape as a clip drag — one dispatch per pointer move, all of them under one
+coalesce key, one entry on the undo stack (see below).
+
+`interp` is `linear`, `hold`, `ease` or `bezier`. Bezier handles exist in the model but no command
+writes them; a bezier key without handles uses the ease-in-out defaults. `keyframe.move` refuses to
+land on a time another key already occupies rather than silently replacing it, but moving a key to
+where it already is is accepted — a drag cannot know in advance that it went nowhere.
+
+Keyframes on a *clip* property — opacity, volume, a transform field — have a place in the model and
+no command, because nothing evaluates them: only `Effect::param_at` reads a keyframe track, so
+writing one on a clip would be a promise with nothing behind it.
 
 ### `media.*`
 
@@ -158,8 +207,11 @@ of the diffing.
 
 A hand-written inverse is code that only runs when a user presses Ctrl+Z after that specific command.
 It is therefore the least-exercised code in the editor, and it goes stale the instant the forward
-operation changes without it. Twenty commands mean twenty inverses to keep honest, and the count only
-grows: the roadmap adds keyframes, masks, transitions, nesting and an audio chain.
+operation changes without it. Twenty-six commands mean twenty-six inverses to keep honest, and the
+count only grows: the roadmap adds masks, nesting and an audio chain. The six commands this
+milestone added cost nothing on the undo side — a test asserts that every variant in the catalogue
+dispatches and undoes back to the exact prior state, and the new ones passed it the day they were
+written.
 
 A diff has none of those properties. The undo machinery is written once, exercised by every command,
 and already correct for command twenty-one before that command is written. The Rust test suite leans
@@ -194,6 +246,8 @@ position the clip had when the drag began — not the position it had one pointe
 
 The key is chosen by the caller and only has to be stable for the duration of the gesture and unique
 against unrelated edits. `"drag:clp_1"` is the natural shape: including the clip id keeps two
-consecutive drags of different clips from merging into one step. A dispatch with no key never
+consecutive drags of different clips from merging into one step. An inspector slider needs the same
+care one level deeper — the key has to name the field as well, or dragging `x` and then `y` merges
+into a single undo step that puts both back at once. A dispatch with no key never
 coalesces, and a dispatch whose key does not match the top of the stack starts a new entry, so ending
 a gesture requires no explicit "commit" call — the next unrelated edit ends it.
