@@ -102,10 +102,10 @@ async function announce() {
     results.push({ name, ok, got, want: want + " +/- " + tolerance });
   }
 
-  // 100 ms rather than a tighter poll: under virtual time every wait is a held fetch that stops
-  // the clock, and polling twice as often halves the stretches in which a decoder gets to run.
-  // At 50 ms the first decode of a freshly opened medium never finished inside twenty seconds.
-  const POLL_MS = 100;
+  // Under virtual time every wait is a held fetch that stops the clock, so a tighter poll leaves
+  // the decoder shorter stretches to run in, not more of them. At 50 ms a freshly opened medium
+  // never finished on this machine; at 100 it still did not on a two-core CI runner.
+  const POLL_MS = 250;
 
   async function until(what, fn, budget) {
     for (let round = 0; round * POLL_MS < (budget || 20000); round += 1) {
