@@ -227,15 +227,18 @@ test("geometry", () => {
 // both scenes -- what changes is only where the clips are written down.
 function nestedProject(w, h, background, clips, sourceWidth, sourceHeight, over) {
   const flat = project(w, h, background, clips, sourceWidth, sourceHeight);
+  const group = {
+    id: "clp_group", source: { kind: "compound", timeline: flat.timeline },
+    start: 0, duration: 1000, inPoint: 0,
+    speed: { rate: 1, reverse: false, preservePitch: true },
+    blend: "normal", effects: [], volume: 1, pan: 0,
+    fades: { inDuration: 0, outDuration: 0 }, keyframes: {},
+    transform: transform((over && over.t) || {}),
+  };
   return {
     settings: flat.settings,
     library: flat.library,
-    timeline: { tracks: [{ id: "trk_outer", kind: "video", hidden: false, clips: [{
-      id: "clp_group", source: { kind: "compound", timeline: flat.timeline } },
-    ].map((c) => Object.assign(c, { start: 0, duration: 1000, inPoint: 0,
-      speed: { rate: 1, reverse: false, preservePitch: true }, blend: "normal", effects: [],
-      volume: 1, pan: 0, fades: { inDuration: 0, outDuration: 0 }, keyframes: {},
-      transform: transform((over && over.t) || {}) })) }] },
+    timeline: { tracks: [{ id: "trk_outer", kind: "video", hidden: false, clips: [group] }] },
   };
 }
 

@@ -252,7 +252,7 @@ test("context menu", function () {
   check("every entry the clip menu promises is there", items.map(function (item) { return item.textContent; }),
     ["Am Playhead teilen", "Clip löschen", "Löschen und Lücke schließen",
      "Kopieren", "Ausschneiden", "Am Playhead einfügen", "Gruppieren",
-     "Gruppierung aufheben"]);
+     "Gruppierung aufheben", "Verschachteln"]);
   const short = items.filter(function (item) {
     return Math.round(item.getBoundingClientRect().height) < 44;
   });

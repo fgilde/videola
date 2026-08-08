@@ -32,13 +32,15 @@ export async function writeSession(project: Project): Promise<void> {
 // never be the reason the editor refuses to start. The core still judges the project itself --
 // `fromProject` runs the same `normalize` a `.videola` goes through.
 export async function readSession(): Promise<Session | undefined> {
-  const handle = await sessionFile(false);
-  const text = await handle?.getFile().then((file) => file.text());
-  if (text === undefined || text === "") return undefined;
   try {
+    const handle = await sessionFile(false);
+    const text = await handle?.getFile().then((file) => file.text());
+    if (text === undefined || text === "") return undefined;
     const parsed: unknown = JSON.parse(text);
     return isSession(parsed) ? parsed : undefined;
   } catch {
+    // Storage that is not there at all -- a private window, a browser without OPFS -- is the same
+    // answer as a file that is not there: no snapshot.
     return undefined;
   }
 }

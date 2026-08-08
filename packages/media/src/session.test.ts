@@ -126,3 +126,20 @@ describe("the autosaved session", () => {
     );
   });
 });
+
+// A private window has no OPFS at all, and the editor has to start in one. The read must answer
+// like an absent file rather than reject into an unhandled rejection at boot.
+describe("without storage at all", () => {
+  it("answers as if there were no snapshot", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+        storage: {
+          getDirectory: () => Promise.reject(new Error("no OPFS here")),
+        },
+      },
+    });
+
+    await expect(readSession()).resolves.toBeUndefined();
+  });
+});
