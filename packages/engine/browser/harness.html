@@ -145,6 +145,23 @@ function options(over) {
   };
 }
 
+const PNG_MAGIC = [137, 80, 78, 71, 13, 10, 26, 10];
+
+async function isPng(blob) {
+  const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  return PNG_MAGIC.every((byte, index) => head[index] === byte);
+}
+
+// Through a decoder that knows nothing about how the picture was made, the way anything reading
+// a still would: bytes in, pixel out.
+async function pixelOf(blob, x, y) {
+  const bitmap = await createImageBitmap(blob);
+  const { context } = canvasOf(bitmap.width, bitmap.height);
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return Array.from(context.getImageData(x, y, 1, 1).data);
+}
+
 // Reads the file back the way anything else would: through this package's own demuxer, and
 // through a decoder that knows nothing about how the file was made.
 async function readBack(bytes) {
@@ -249,6 +266,51 @@ async function main() {
     // Only where the browser said it could write one. Chrome on Linux encodes H.264 and refuses
     // AAC, and the export then goes silent on purpose rather than failing halfway through.
     check("the sound is in there where the browser can encode it", hasAudio, chosenHasAudio);
+  });
+
+  // A still is the whole of what an agent sees of its own work, so what is checked is the colour
+  // at the instant asked for: four instants, three different pictures, one of them past a cut.
+  // Anything that renders one instant and hands it out four times fails on the second.
+  await test("a still is the picture of the instant it was asked for", async () => {
+    const FRAME = SECOND / 30;
+    const times = [0, 10 * FRAME, HALF, HALF + 5 * FRAME];
+    const stills = await R.renderStills({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      times,
+      width: WIDTH,
+      height: HEIGHT,
+    });
+    check("one picture per instant", stills.length, times.length);
+    check("and every one of them a PNG", await Promise.all(stills.map(isPng)), times.map(() => true));
+
+    const pixels = [];
+    for (const still of stills) pixels.push(await pixelOf(still, WIDTH / 2, HEIGHT / 2));
+    check(
+      "each showing what its clip reads at that instant",
+      pixels.map((pixel) => pixel.slice(0, 3)),
+      [colourAt(0), colourAt(10), colourAt(0), colourAt(5)],
+      12,
+    );
+    check("opaque where a clip covers the frame", pixels.map((pixel) => pixel[3]), times.map(() => 255));
+  });
+
+  await test("no instants asked for is refused rather than answered with nothing", async () => {
+    let message = "resolved";
+    try {
+      await R.renderStills({
+        project: doc.state,
+        sourceTimes: doc.sourceTimesAt,
+        effectParams: doc.effectParamsAt,
+        times: [],
+        width: WIDTH,
+        height: HEIGHT,
+      });
+    } catch (error) {
+      message = error.message;
+    }
+    check("and says so with a catalogue key", message, "error.stillNoTimes");
   });
 
   // The draw list maps into clip space from the project's own size, so a different output size is

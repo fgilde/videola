@@ -36,3 +36,5 @@ export { Compositor } from "./render/compositor";
 export { blendState, drawList } from "./render/draw-list";
 export type { BlendState, DrawItem, DrawList, EffectPass } from "./render/draw-list";
 export { compileProgram, setUniforms } from "./render/program";
+export { renderStills } from "./render/still";
+export type { StillRequest } from "./render/still";

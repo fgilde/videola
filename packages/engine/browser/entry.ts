@@ -5,6 +5,7 @@ export { contentHash, importFile, mediaHash } from "@videola/media";
 export { probe } from "../src/decode/demuxer";
 export { EXPORT_FORMATS, formatSupport } from "../src/export/format";
 export { EXPORT_CANCELLED, frameTimes, startExport } from "../src/export/run";
+export { renderStills } from "../src/render/still";
 export {
   ALL_FORMATS,
   AudioBufferSource,
