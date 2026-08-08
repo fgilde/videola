@@ -1,4 +1,25 @@
-import type { BlendMode, Clip, MediaAsset, Project, Time, Track, Transform } from "@videola/core";
+import { clampParam, effect } from "../effects/registry";
+
+import type {
+  BlendMode,
+  Clip,
+  EffectParamSnapshot,
+  MediaAsset,
+  ParamValue,
+  Project,
+  Time,
+  Track,
+  Transform,
+  Transition,
+} from "@videola/core";
+import type { EffectManifest } from "../effects/registry";
+
+// One entry per shader pass, with every uniform the shader declares already resolved, clamped and
+// named the way the shader names it. The compositor looks nothing up.
+export interface EffectPass {
+  effect: string;
+  values: Readonly<Record<string, number>>;
+}
 
 export interface DrawItem {
   clip: string;
@@ -6,6 +27,12 @@ export interface DrawItem {
   uv: readonly [number, number, number, number];
   opacity: number;
   blend: BlendMode;
+  effects: readonly EffectPass[];
+  // Set while the clip's incoming transition is running. The clip is then mixed into the picture
+  // the frame already holds rather than composited over it, and `opacity` is already part of
+  // `progress` -- a transition at half opacity is a half transition, not a transition that is
+  // afterwards faded.
+  mix?: EffectPass;
 }
 
 export interface DrawList {
@@ -34,13 +61,13 @@ interface Size {
 //   rotation        degrees, positive turns clockwise on screen
 //   anchor          fraction of the uncropped source, so cropping does not move the pivot
 //   crop            fraction cut off each side
-export function drawList(project: Project, at: Time): DrawList {
+export function drawList(project: Project, at: Time, params: EffectParamSnapshot): DrawList {
   const frame = { width: project.settings.width, height: project.settings.height };
   const items: DrawItem[] = [];
   for (const track of project.timeline.tracks) {
     if (!paints(track)) continue;
     for (const clip of track.clips) {
-      const item = drawItem(clip, at, project.library, frame);
+      const item = drawItem(clip, at, project.library, frame, params);
       if (item !== undefined) items.push(item);
     }
   }
@@ -100,6 +127,7 @@ function drawItem(
   at: Time,
   library: readonly MediaAsset[],
   frame: Size,
+  params: EffectParamSnapshot,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
   const transform = clip.transform;
@@ -108,13 +136,73 @@ function drawItem(
   if (source === undefined) return undefined;
   const uv = croppedRect(transform);
   if (uv[2] <= 0 || uv[3] <= 0) return undefined;
+  const mix = mixPass(clip, at, transform.opacity);
+  // A transition that has not started contributes nothing, and dropping it here also spares the
+  // decoder a frame nobody will see -- playback asks for exactly the clips in this list.
+  if (mix !== undefined && mix.values.progress === 0) return undefined;
   return {
     clip: clip.id,
     matrix: quadMatrix(transform, uv, source, frame),
     uv,
     opacity: transform.opacity,
     blend: clip.blend,
+    effects: effectPasses(clip, params),
+    ...(mix === undefined ? {} : { mix }),
   };
+}
+
+// An effect type nobody implements is skipped rather than refused: a project written by a later
+// version must still play, minus what this one cannot draw.
+function effectPasses(clip: Clip, params: EffectParamSnapshot): EffectPass[] {
+  const passes: EffectPass[] = [];
+  for (const authored of clip.effects) {
+    if (!authored.enabled) continue;
+    const manifest = effect(authored.effectType);
+    if (manifest === undefined || manifest.inputs !== 1) continue;
+    passes.push({ effect: manifest.id, values: uniforms(manifest, params.get(authored.id)) });
+  }
+  return passes;
+}
+
+// The incoming clip's transition, as far into it as `at` has come. Once the window is behind the
+// moment the clip is composited the ordinary way again -- a mix at full progress would paint the
+// whole frame, including where the clip itself is transparent.
+function mixPass(clip: Clip, at: Time, opacity: number): EffectPass | undefined {
+  const transition = clip.transitionIn;
+  if (transition == null || transition.duration <= 0) return undefined;
+  const manifest = effect(transition.transitionType);
+  if (manifest?.inputs !== 2) return undefined;
+  const progress = (at - windowStart(clip.start, transition)) / transition.duration;
+  if (progress >= 1) return undefined;
+  return { effect: manifest.id, values: { progress: Math.max(progress, 0) * opacity } };
+}
+
+// ponytail: a centred or trailing transition reaches back before the clip starts, where the clip
+// is not drawn at all -- so half of it is simply not seen. Playing it out needs handles, material
+// past the cut that no command in M1 creates. Overlap the two clips and align the transition to
+// `in`, which is what the guide describes.
+function windowStart(start: Time, transition: Transition): Time {
+  switch (transition.alignment) {
+    case "in":
+      return start;
+    case "out":
+      return start - transition.duration;
+    default:
+      return start - Math.round(transition.duration / 2);
+  }
+}
+
+// Unpacking the `ParamValue` is the only thing TypeScript does to a parameter -- the value itself,
+// keyframed or not, was decided in the core. What is usable as a uniform is `clampParam`'s call.
+function uniforms(
+  manifest: EffectManifest,
+  resolved: ReadonlyMap<string, ParamValue> | undefined,
+): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const param of manifest.params) {
+    values[param.key] = clampParam(param, resolved?.get(param.key)?.value);
+  }
+  return values;
 }
 
 // ponytail: generators and compound clips have no size and are dropped. Solids and text are M3,

@@ -1,4 +1,10 @@
-import type { DocumentBackend, MediaBytes, SaveOptions, SourceTimes } from "./backend";
+import type {
+  DocumentBackend,
+  EffectParams,
+  MediaBytes,
+  SaveOptions,
+  SourceTimes,
+} from "./backend";
 import type { Command, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
 
 type Listener = (project: Project) => void;
@@ -36,6 +42,8 @@ export class VideolaDocument {
   // Bound to the instance, because playback holds it as a plain function for the length of a
   // session and never sees the document it came from.
   sourceTimesAt: SourceTimes = (at) => this.#backend.sourceTimesAt(at);
+
+  effectParamsAt: EffectParams = (at) => this.#backend.effectParamsAt(at);
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);

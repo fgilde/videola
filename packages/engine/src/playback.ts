@@ -1,7 +1,13 @@
 import { frameDuration } from "@videola/core";
 import { mediaHash } from "@videola/media";
 
-import type { Project, SourceTimes, Time } from "@videola/core";
+import type {
+  EffectParams,
+  EffectParamSnapshot,
+  Project,
+  SourceTimes,
+  Time,
+} from "@videola/core";
 
 import { Clock } from "./clock";
 import type { ClockSource } from "./clock";
@@ -32,6 +38,7 @@ export interface PlaybackOptions {
   audio: AudioTransport;
   graph: AudioGraph;
   sourceTimes: SourceTimes;
+  effectParams: EffectParams;
   createFrameSource?: () => FrameSource;
 }
 
@@ -42,6 +49,7 @@ export class Playback {
   #audio: AudioTransport;
   #graph: AudioGraph;
   #sourceTimes: SourceTimes;
+  #effectParams: EffectParams;
   #createFrameSource: () => FrameSource;
   #clock: Clock;
   #context?: GlContext;
@@ -57,6 +65,7 @@ export class Playback {
     this.#audio = options.audio;
     this.#graph = options.graph;
     this.#sourceTimes = options.sourceTimes;
+    this.#effectParams = options.effectParams;
     this.#createFrameSource = options.createFrameSource ?? ((): FrameSource => new VideoSource());
     this.#clock = new Clock(options.audio);
     // Subscribed before anyone else, so a consumer's listener sees the time the picture is
@@ -192,18 +201,26 @@ export class Playback {
     const project = this.#project;
     const compositor = this.#compositor;
     if (project === undefined || compositor === undefined) return;
-    const frames = await this.#frames(project, at);
-    compositor.render(project, at, frames);
+    // Asked for once and used twice, before anything is awaited: the list of clips to fetch and
+    // the picture that gets drawn then describe the same moment, even if the project changes
+    // while a decode is in flight.
+    const params = this.#effectParams(at);
+    const frames = await this.#frames(project, at, params);
+    compositor.render(project, at, frames, params);
   }
 
   // ponytail: two clips of the same medium share one source, and decoding for the second can
   // evict the first one's frame while this gather is still running. The compositor holds the
   // previous picture for that clip rather than blanking it, so the cost is one stale frame. A
   // real fix is a pin on the cache entry for the length of the gather.
-  async #frames(project: Project, at: Time): Promise<Map<string, VideoFrame>> {
+  async #frames(
+    project: Project,
+    at: Time,
+    params: EffectParamSnapshot,
+  ): Promise<Map<string, VideoFrame>> {
     const sourceTimes = this.#sourceTimes(at);
     const found = await Promise.all(
-      drawList(project, at).items.map((item) => this.#frameFor(item.clip, sourceTimes)),
+      drawList(project, at, params).items.map((item) => this.#frameFor(item.clip, sourceTimes)),
     );
     return new Map(found.filter((entry) => entry !== undefined));
   }

@@ -68,8 +68,11 @@ manipuliert oder beschädigt.
 
 ## Effekte: ein Shader, mehrere Ausführungsorte
 
-**Geplant, nichts davon gebaut.** Im Modell gibt es einen `Effect`-Typ und zwei Commands, die ihn
-pflegen. Es gibt keine Effekt-Registry, keinen Shader und nichts, das rendert.
+**Gebaut für WebGL2, mit zwei Effekten.** Es gibt eine Effekt-Registry, einen GLSL-Shader je Effekt
+und einen Compositor, der die Kette fährt und einen Übergang mischt — wie einer geschrieben wird und
+worauf er sich verlassen darf, steht in [Effekte und
+Übergänge](/de/guide/effects-and-transitions). Was folgt, ist die Form, die die Shader annehmen,
+sobald es einen zweiten Compositor gibt.
 
 Der Entwurf sieht pro Effekt zwei Dateien vor: `effect.json` mit Parametern und Labels und
 `shader.wgsl` mit dem Pass. WGSL läuft unverändert in Browser-WebGPU **und** in Rust-`wgpu`; für den
@@ -88,7 +91,8 @@ zwei Eingängen und einem `progress`-Parameter, kein zweites Subsystem.
 | Theme, deutsche und englische Kataloge, Layout-Erkennung, Anwendungsrahmen | gebaut |
 | Nativer Link des Kerns in die Tauri-Hülle und in einen Server | geplant |
 | Timeline, Vorschau, Wiedergabe, Audio-Graph | geplant |
-| Effekt-Registry, WGSL-Shader, Compositor über WebGPU/WebGL2/wgpu | geplant |
+| Effekt-Registry, GLSL-Shader, WebGL2-Compositor, Helligkeit und Überblendung | gebaut |
+| Geteilte WGSL-Quellen, WebGPU- und `wgpu`-Compositor | geplant |
 | Export in jeder Form; FFmpeg | geplant |
 | REST-API, MCP-Server, generierter Command-Katalog | geplant |
 | Template-Modus (`.videolat`, Galerie, Wizard) | geplant |

@@ -14,7 +14,8 @@ function project(width, height, background, clips, sourceWidth, sourceHeight) {
     library: [{ id: MEDIA, width: sourceWidth ?? width, height: sourceHeight ?? height }],
     timeline: { tracks: [{ id: "trk_0", kind: "video", hidden: false, clips: clips.map((c, i) => ({
       id: c.id ?? ("clp_" + i), source: { kind: "media", media: MEDIA }, start: 0, duration: 1000,
-      blend: c.blend ?? "normal", transform: transform(c.t) })) }] },
+      blend: c.blend ?? "normal", effects: c.effects ?? [], transitionIn: c.transitionIn,
+      transform: transform(c.t) })) }] },
   };
 }
 
@@ -55,6 +56,17 @@ function overPage(canvas, pageColor, x, y) {
   return Array.from(two.getImageData(x, y, 1, 1).data);
 }
 
+// The resolved parameters come from the Rust core in the running application; here they are
+// handed in, because what these checks are about is the pixel the value produces.
+function draw(compositor, scene, at, frames, params) {
+  compositor.render(scene, at, frames, params ?? new Map());
+}
+
+function floats(entries) {
+  return new Map(entries.map(([id, values]) => [id,
+    new Map(values.map(([key, value]) => [key, { kind: "float", value }]))]));
+}
+
 const results = [];
 
 function check(name, got, want, tolerance) {
@@ -80,7 +92,7 @@ test("driver", () => {
   check("shaders compile and link", (() => {
     const { compositor, scene, context: c } = rig(4, 4, "#ff0000", [{}]);
     const f = frame(4, 4, () => [0, 0, 255, 255]);
-    compositor.render(scene, 0, new Map([["clp_0", f]]));
+    draw(compositor, scene, 0, new Map([["clp_0", f]]));
     f.close();
     return [c.gl.getError(), ...reader(compositor.readPixels(), 4, 4)(2, 2)];
   })(), [0, 0, 0, 255, 255]);
@@ -90,7 +102,7 @@ test("premultiplied alpha", () => {
   const half = (clips, texel) => {
     const { compositor, scene } = rig(4, 4, "#ff0000", clips);
     const f = frame(4, 4, () => texel);
-    compositor.render(scene, 0, new Map([["clp_0", f]]));
+    draw(compositor, scene, 0, new Map([["clp_0", f]]));
     f.close();
     return reader(compositor.readPixels(), 4, 4)(2, 2);
   };
@@ -105,7 +117,7 @@ test("two clips", () => {
   const { compositor, scene } = rig(4, 4, "#000000", [{ id: "clp_a" }, { id: "clp_b", t: { opacity: 0.5 } }]);
   const red = frame(4, 4, () => [255, 0, 0, 255]);
   const green = frame(4, 4, () => [0, 255, 0, 255]);
-  compositor.render(scene, 0, new Map([["clp_a", red], ["clp_b", green]]));
+  draw(compositor, scene, 0, new Map([["clp_a", red], ["clp_b", green]]));
   red.close();
   green.close();
   check("upper clip at half opacity over lower", reader(compositor.readPixels(), 4, 4)(2, 2),
@@ -122,7 +134,7 @@ test("blend modes keep the picture opaque", () => {
         [{ id: "clp_a" }, { id: "clp_b", blend: mode, t: { opacity: alpha === 255 ? 1 : 0.5 } }]);
       const lower = frame(4, 4, () => [200, 100, 50, 255]);
       const upper = frame(4, 4, () => [100, 150, 200, alpha]);
-      compositor.render(scene, 0, new Map([["clp_a", lower], ["clp_b", upper]]));
+      draw(compositor, scene, 0, new Map([["clp_a", lower], ["clp_b", upper]]));
       lower.close();
       upper.close();
       const buffer = reader(compositor.readPixels(), 4, 4)(2, 2);
@@ -140,7 +152,7 @@ test("a closed frame does not black out the picture", () => {
   const { compositor, scene, context } = rig(4, 4, "#ff0000", [{}]);
   const dead = frame(4, 4, () => [0, 255, 0, 255]);
   dead.close();
-  compositor.render(scene, 0, new Map([["clp_0", dead]]));
+  draw(compositor, scene, 0, new Map([["clp_0", dead]]));
   check("background survives a closed frame", reader(compositor.readPixels(), 4, 4)(2, 2),
     [255, 0, 0, 255]);
   check("and no driver error was left behind", context.gl.getError(), 0);
@@ -149,7 +161,7 @@ test("a closed frame does not black out the picture", () => {
 test("a frame the driver cannot hold is left out", () => {
   const { compositor, scene, context } = rig(4, 4, "#ff0000", [{}]);
   const huge = frame(context.maxTextureSize + 1, 1, () => [0, 255, 0, 255]);
-  compositor.render(scene, 0, new Map([["clp_0", huge]]));
+  draw(compositor, scene, 0, new Map([["clp_0", huge]]));
   huge.close();
   check("background survives an oversize frame", reader(compositor.readPixels(), 4, 4)(2, 2),
     [255, 0, 0, 255]);
@@ -158,7 +170,7 @@ test("a frame the driver cannot hold is left out", () => {
 
 test("background with alpha", () => {
   const { canvas, compositor } = rig(4, 4, "#80808080", []);
-  compositor.render(project(4, 4, "#80808080", []), 0, new Map());
+  draw(compositor, project(4, 4, "#80808080", []), 0, new Map());
   // Half of the grey, because half of it is the black page underneath.
   check("a half-transparent background over a black page", overPage(canvas, "#000000", 1, 1),
     [64, 64, 64, 255]);
@@ -167,11 +179,11 @@ test("background with alpha", () => {
 test("dispose is final", () => {
   const { compositor, scene, context } = rig(4, 4, "#ff0000", [{}]);
   const f = frame(4, 4, () => [0, 0, 255, 255]);
-  compositor.render(scene, 0, new Map([["clp_0", f]]));
+  draw(compositor, scene, 0, new Map([["clp_0", f]]));
   compositor.dispose();
   // A queued animation frame after the preview unmounted. Nothing may reach the driver, so the
   // buffer still holds the last real render -- read past the compositor to see it.
-  compositor.render(project(4, 4, "#00ff00", []), 0, new Map());
+  draw(compositor, project(4, 4, "#00ff00", []), 0, new Map());
   compositor.dispose();
   f.close();
   const raw = new Uint8Array(4 * 4 * 4);
@@ -184,7 +196,7 @@ test("geometry", () => {
   const { compositor, scene } = rig(16, 16, "#000000",
     [{ t: { rotation: 90, anchorX: 0, anchorY: 0, scaleX: 0.5, scaleY: 0.5 } }], 16, 16);
   const f = frame(16, 16, () => [255, 255, 255, 255]);
-  compositor.render(scene, 0, new Map([["clp_0", f]]));
+  draw(compositor, scene, 0, new Map([["clp_0", f]]));
   f.close();
   const at = reader(compositor.readPixels(), 16, 16);
   // Anchor at the source's top-left corner, which sits in the middle of the frame. A quarter turn
@@ -194,7 +206,7 @@ test("geometry", () => {
   const quad = rig(16, 16, "#000000", [{}], 16, 16);
   const corners = frame(16, 16, (x, y) => (y < 8 ? (x < 8 ? [255, 0, 0, 255] : [0, 255, 0, 255])
     : (x < 8 ? [0, 0, 255, 255] : [255, 255, 0, 255])));
-  quad.compositor.render(quad.scene, 0, new Map([["clp_0", corners]]));
+  draw(quad.compositor, quad.scene, 0, new Map([["clp_0", corners]]));
   corners.close();
   const q = reader(quad.compositor.readPixels(), 16, 16);
   check("top left is red", q(4, 4), [255, 0, 0, 255]);
@@ -203,12 +215,176 @@ test("geometry", () => {
   check("bottom right is yellow", q(12, 12), [255, 255, 0, 255]);
 });
 
+const BRIGHTNESS = [{ id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} }];
+const CROSSFADE = { transitionType: "crossfade", duration: 1000, alignment: "in", params: {} };
+
+// One clip carrying brightness, rendered once. The value is what the core would have resolved for
+// this moment; what is measured is the pixel it produces.
+function brightened(amount, texel, over) {
+  const { compositor, scene, canvas } = rig(4, 4, (over && over.background) || "#000000",
+    [{ effects: BRIGHTNESS, t: (over && over.t) || {}, blend: over && over.blend }]);
+  const f = frame(4, 4, () => texel);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]), floats([["eff_1", [["amount", amount]]]]));
+  f.close();
+  return { canvas, at: reader(compositor.readPixels(), 4, 4) };
+}
+
+test("brightness moves real pixels", () => {
+  check("a gain of two doubles a mid grey", brightened(2, [64, 64, 64, 255]).at(2, 2),
+    [128, 128, 128, 255]);
+  check("a gain of one is the picture it was given", brightened(1, [64, 64, 64, 255]).at(2, 2),
+    [64, 64, 64, 255]);
+  check("a gain of zero is black and still opaque", brightened(0, [64, 64, 64, 255]).at(2, 2),
+    [0, 0, 0, 255]);
+});
+
+// Two moments of the same clip with the value the core resolved for each: the visible change over
+// time that a pair of keyframes produces. The interpolation itself is the core's, and proven there.
+test("a brightness that changes over time changes the picture", () => {
+  const early = brightened(0.5, [128, 128, 128, 255]).at(2, 2);
+  const late = brightened(2, [128, 128, 128, 255]).at(2, 2);
+  check("dark at the first keyframe", early, [64, 64, 64, 255]);
+  check("bright at the second", late, [255, 255, 255, 255]);
+});
+
+// The chain carries premultiplied colour, where rgb greater than a is not a colour at all. Without
+// the clamp this composites as if the clip were opaque, and a half-transparent overlay turns into
+// a solid one the moment anybody brightens it.
+test("brightness keeps a half-transparent clip half transparent", () => {
+  const { at } = brightened(3, [255, 255, 255, 128], { background: "#ff0000" });
+  check("white at half alpha over red stays half red", at(2, 2), [255, 128, 128, 255]);
+});
+
+test("brightness and opacity are two different things", () => {
+  const { at } = brightened(2, [64, 64, 64, 255], { t: { opacity: 0.5 } });
+  check("a doubled clip at half opacity is back where it started", at(2, 2), [64, 64, 64, 255]);
+});
+
+test("an effected clip still honours its blend mode", () => {
+  const { at } = brightened(2, [32, 32, 32, 255], { blend: "add", background: "#ff0000" });
+  check("added onto the background rather than over it", at(2, 2), [255, 64, 64, 255]);
+});
+
+// The crossfade the definition of done asks for: two clips overlapping in time, the incoming one
+// carrying the transition. The middle of a dissolve is a measurable colour.
+function dissolve(at, over) {
+  const spec = over || {};
+  const upper = Object.assign({ id: "clp_b", transitionIn: CROSSFADE }, spec);
+  const { compositor, canvas, scene } = rig(4, 4, "#000000", [{ id: "clp_a" }, upper]);
+  const red = frame(4, 4, () => [255, 0, 0, 255]);
+  const blue = frame(4, 4, () => spec.upper || [0, 0, 255, 255]);
+  draw(compositor, scene, at, new Map([["clp_a", red], ["clp_b", blue]]),
+    floats([["eff_1", [["amount", 2]]]]));
+  red.close();
+  blue.close();
+  return { canvas, at: reader(compositor.readPixels(), 4, 4) };
+}
+
+test("a crossfade between two clips", () => {
+  check("a quarter in", dissolve(250).at(2, 2), [191, 0, 64, 255]);
+  check("the middle is half of each", dissolve(500).at(2, 2), [128, 0, 128, 255]);
+  check("three quarters in", dissolve(750).at(2, 2), [64, 0, 191, 255]);
+  // Past its window the incoming clip is composited the ordinary way, which for an opaque clip
+  // means it covers what is under it.
+  const short = { transitionIn: { transitionType: "crossfade", duration: 500, alignment: "in",
+    params: {} } };
+  check("past the window the incoming clip stands alone", dissolve(750, short).at(2, 2),
+    [0, 0, 255, 255]);
+});
+
+// Where the two axes cross: half opacity halfway through is a quarter of the way over, not a half
+// that is afterwards faded.
+test("a crossfade on a clip that is not fully opaque", () => {
+  check("three eighths of the way over", dissolve(750, { t: { opacity: 0.5 } }).at(2, 2),
+    [159, 0, 96, 255]);
+});
+
+// A dim blue that only a gain can lift: without the effect running first, the middle of this
+// dissolve is [128, 0, 64].
+test("a clip runs its own effects before it is mixed in", () => {
+  const dim = { upper: [0, 0, 128, 255] };
+  check("dissolved as it arrives", dissolve(500, dim).at(2, 2), [128, 0, 64, 255]);
+  check("brightened first, then dissolved",
+    dissolve(500, Object.assign({ effects: BRIGHTNESS }, dim)).at(2, 2), [128, 0, 128, 255]);
+});
+
+// A mix writes the whole frame, so a hole in the alpha channel there is a hole in the picture.
+test("a crossfade leaves the picture opaque", () => {
+  const shot = dissolve(500);
+  check("nothing of the page comes through", overPage(shot.canvas, "#00ff00", 2, 2),
+    shot.at(2, 2));
+});
+
+// Two passes in one chain, which is where the targets have to take turns: a pass that reads the
+// texture it writes is a feedback loop, and no single-effect check can see it.
+test("two effects in a row each do their bit", () => {
+  const twice = [
+    { id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+    { id: "eff_2", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+  ];
+  const { compositor, scene } = rig(4, 4, "#000000", [{ effects: twice }]);
+  const f = frame(4, 4, () => [32, 32, 32, 255]);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]),
+    floats([["eff_1", [["amount", 2]]], ["eff_2", [["amount", 2]]]]));
+  f.close();
+  check("a gain of two applied twice", reader(compositor.readPixels(), 4, 4)(2, 2),
+    [128, 128, 128, 255]);
+});
+
+// The intermediate target outlives the frame it was drawn for. A clip that no longer covers the
+// whole frame would otherwise be composited together with what the last frame left in there.
+test("an intermediate target does not carry the last frame over", () => {
+  const { compositor, context } = rig(8, 8, "#ff0000", [{ effects: BRIGHTNESS }]);
+  const white = frame(8, 8, () => [255, 255, 255, 255]);
+  const full = project(8, 8, "#ff0000", [{ effects: BRIGHTNESS }]);
+  const small = project(8, 8, "#ff0000", [{ effects: BRIGHTNESS, t: { scaleX: 0.5, scaleY: 0.5 } }]);
+  draw(compositor, full, 0, new Map([["clp_0", white]]), floats([["eff_1", [["amount", 1]]]]));
+  draw(compositor, small, 0, new Map([["clp_0", white]]), floats([["eff_1", [["amount", 1]]]]));
+  white.close();
+  const at = reader(compositor.readPixels(), 8, 8);
+  check("the corner is background again", at(0, 0), [255, 0, 0, 255]);
+  check("and the clip is where it belongs", at(4, 4), [255, 255, 255, 255]);
+  check("with no driver error", context.gl.getError(), 0);
+});
+
+// devicePixelRatio changes the drawing buffer without anyone calling resize. A target left at the
+// old size keeps a quarter of the picture and stretches it over the whole frame.
+test("an intermediate target follows the drawing buffer", () => {
+  const { canvas, compositor } = rig(8, 8, "#000000", [{ effects: BRIGHTNESS }]);
+  const small = frame(8, 8, () => [255, 255, 255, 255]);
+  draw(compositor, project(8, 8, "#000000", [{ effects: BRIGHTNESS }]), 0,
+    new Map([["clp_0", small]]), floats([["eff_1", [["amount", 1]]]]));
+  small.close();
+  canvas.width = 16;
+  canvas.height = 16;
+  const corners = frame(16, 16, (x, y) => (y < 8 ? (x < 8 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+    : (x < 8 ? [0, 0, 255, 255] : [255, 255, 0, 255])));
+  draw(compositor, project(16, 16, "#000000", [{ effects: BRIGHTNESS }], 16, 16), 0,
+    new Map([["clp_0", corners]]), floats([["eff_1", [["amount", 1]]]]));
+  corners.close();
+  const at = reader(compositor.readPixels(), 16, 16);
+  check("top left through the chain is red", at(4, 4), [255, 0, 0, 255]);
+  check("bottom right through the chain is yellow", at(12, 12), [255, 255, 0, 255]);
+});
+
+test("the effect chain leaves no driver error behind", () => {
+  const { context, compositor, scene } = rig(4, 4, "#000000",
+    [{ id: "clp_a" }, { id: "clp_b", effects: BRIGHTNESS, transitionIn: CROSSFADE }]);
+  const a = frame(4, 4, () => [255, 0, 0, 255]);
+  const b = frame(4, 4, () => [0, 0, 255, 255]);
+  draw(compositor, scene, 500, new Map([["clp_a", a], ["clp_b", b]]),
+    floats([["eff_1", [["amount", 2]]]]));
+  a.close();
+  b.close();
+  check("glGetError after a chain and a mix", context.gl.getError(), 0);
+});
+
 test("a canvas resized behind our back", () => {
   const { canvas, compositor } = rig(8, 8, "#ff0000", [{}]);
   canvas.width = 16;
   canvas.height = 16;
   const f = frame(8, 8, () => [0, 0, 255, 255]);
-  compositor.render(project(16, 16, "#ff0000", [{}], 16, 16), 0, new Map([["clp_0", f]]));
+  draw(compositor, project(16, 16, "#ff0000", [{}], 16, 16), 0, new Map([["clp_0", f]]));
   f.close();
   const pixels = compositor.readPixels();
   check("the viewport follows the drawing buffer", pixels.length, 16 * 16 * 4);
@@ -219,7 +395,7 @@ test("offscreen canvas", () => {
   const context = R.createContext(new OffscreenCanvas(4, 4));
   const compositor = new R.Compositor(context);
   const f = frame(4, 4, () => [0, 0, 255, 255]);
-  compositor.render(project(4, 4, "#ff0000", [{}]), 0, new Map([["clp_0", f]]));
+  draw(compositor, project(4, 4, "#ff0000", [{}]), 0, new Map([["clp_0", f]]));
   f.close();
   check("the export worker's canvas renders the same picture",
     reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255]);
@@ -239,7 +415,7 @@ lossContext.onLost(() => { lostSeen += 1; });
 lossContext.onRestored(() => { restoredSeen += 1; });
 lossCanvas.addEventListener("webglcontextlost", (e) => { prevented = e.defaultPrevented; });
 const first = blue();
-lossCompositor.render(lossScene, 0, new Map([["clp_0", first]]));
+draw(lossCompositor, lossScene, 0, new Map([["clp_0", first]]));
 first.close();
 const lose = lossContext.gl.getExtension("WEBGL_lose_context");
 lose.loseContext();
@@ -247,13 +423,13 @@ setTimeout(() => {
   check("the loss event is cancelled so the browser will restore", prevented, true);
   check("the loss reaches its listener", lostSeen, 1);
   const during = blue();
-  lossCompositor.render(lossScene, 0, new Map([["clp_0", during]]));
+  draw(lossCompositor, lossScene, 0, new Map([["clp_0", during]]));
   during.close();
   lose.restoreContext();
   setTimeout(() => {
     check("the restoration reaches its listener", restoredSeen, 1);
     const after = blue();
-    lossCompositor.render(lossScene, 0, new Map([["clp_0", after]]));
+    draw(lossCompositor, lossScene, 0, new Map([["clp_0", after]]));
     after.close();
     check("and the picture is back", reader(lossCompositor.readPixels(), 4, 4)(2, 2),
       [0, 0, 255, 255]);
@@ -274,7 +450,7 @@ function playbackScene(clips) {
     library: [{ id: MEDIA, width: 4, height: 4 }],
     timeline: { tracks: [{ id: "trk_0", kind: "video", hidden: false, clips: clips.map((id) => ({
       id, source: { kind: "media", media: MEDIA }, start: 0, duration: 1000, inPoint: 0,
-      blend: "normal", speed: { rate: 1, reverse: false }, volume: 1, pan: 0,
+      blend: "normal", effects: [], speed: { rate: 1, reverse: false }, volume: 1, pan: 0,
       fades: { inDuration: 0, outDuration: 0 }, transform: transform() })) }] },
     master: { volume: 1, effects: [] },
   };
@@ -307,6 +483,7 @@ function playbackOver(canvas, source, times) {
     graph: new R.AudioGraph(new OfflineAudioContext(2, 1, 48000),
       { bufferFor: () => Promise.reject(new Error("no audio in this check")) }),
     sourceTimes: times,
+    effectParams: () => new Map(),
     createFrameSource: () => source,
   });
 }
@@ -315,10 +492,10 @@ async function playbackChecks() {
   test("a late frame holds the picture the clip already had", () => {
     const { compositor, scene } = rig(4, 4, "#ff0000", [{}]);
     const blue = solid([0, 0, 255, 255]);
-    compositor.render(scene, 0, new Map([["clp_0", blue]]));
+    draw(compositor, scene, 0, new Map([["clp_0", blue]]));
     blue.close();
 
-    compositor.render(scene, 0, new Map());
+    draw(compositor, scene, 0, new Map());
 
     check("the clip is still blue after a tick with no frame",
       reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255]);
@@ -326,7 +503,7 @@ async function playbackChecks() {
 
   test("a clip that never had a frame paints nothing at all", () => {
     const { compositor, scene } = rig(4, 4, "#ff0000", [{}]);
-    compositor.render(scene, 0, new Map());
+    draw(compositor, scene, 0, new Map());
     check("the background shows through instead of black",
       reader(compositor.readPixels(), 4, 4)(2, 2), [255, 0, 0, 255]);
   });

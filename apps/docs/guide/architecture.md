@@ -157,9 +157,10 @@ taken from user input, so a hostile `originalName` cannot steer a file out of `m
 
 ## Effects: one shader, several execution sites
 
-**Planned. None of this is built.** There is an `Effect` type in the model — an id, an effect type,
-an enabled flag and a parameter map — and two commands that add an effect and set a parameter. There
-is no effect registry, no shader, and nothing that renders.
+**Built for WebGL2, with two effects.** There is an effect registry, a GLSL shader per effect, and a
+compositor that runs the chain and mixes a transition — see [Effects and
+transitions](/guide/effects-and-transitions) for how one is written and what it may rely on. What is
+below is the shape the shaders take once a second compositor exists.
 
 The intended design is the same "write it once" rule applied to rendering. An effect is two files: an
 `effect.json` describing its parameters, its bilingual labels and its UI hints, and a `shader.wgsl`
@@ -196,7 +197,8 @@ it. Transitions fall out of the same mechanism: a transition is an effect with t
 | Theme, German and English catalogues, layout detection, app shell | built |
 | Native linking of the core into the Tauri shell and a server | planned |
 | Timeline UI, preview, playback, audio graph | planned |
-| Effect registry, WGSL shaders, WebGPU/WebGL2/wgpu compositor | planned |
+| Effect registry, GLSL shaders, WebGL2 compositor, brightness and cross dissolve | built |
+| Shared WGSL sources, WebGPU and `wgpu` compositors | planned |
 | Export in any form; FFmpeg | planned |
 | REST API, MCP server, generated command catalogue | planned |
 | Template mode (`.videolat`, gallery, wizard) | planned |

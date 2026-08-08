@@ -31,6 +31,7 @@ function fakeBackend(): DocumentBackend {
     // re-serializes the project on each state() invocation.
     state: () => ({ ...project }),
     sourceTimesAt: () => new Map(),
+    effectParamsAt: () => new Map(),
     dispatch: vi.fn((dispatch) => {
       if (dispatch.command.type === "track.add") {
         project = {
