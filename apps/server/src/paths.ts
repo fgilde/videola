@@ -29,17 +29,20 @@ export class Storage {
     return this.#contained(given, await realpath(target).catch(() => null));
   }
 
+  // Containment is settled before anything is created. Creating the directory first and checking
+  // afterwards would leave a refused request having made directories outside the storage root —
+  // the refusal is honest, the side effect is not.
   async forWriting(given: string): Promise<string> {
     const target = await this.#joined(given);
+    await this.#contained(given, await resolvedAncestor(target));
     await mkdir(dirname(target), { recursive: true });
-    const parent = await realpath(dirname(target)).catch(() => null);
-    await this.#contained(given, parent === null ? null : join(parent, basename(target)));
     return target;
   }
 
   async #joined(given: string): Promise<string> {
-    // An absolute path in a request would make `resolve` discard the root entirely, so it is
-    // refused outright rather than silently reinterpreted as relative to the root.
+    // The containment check below would refuse an absolute path anyway (`resolve` discards the root
+    // for one, landing outside it). This is here so that a hostile path costs no file system call
+    // at all — kept deliberately as the cheaper refusal, not as the only one.
     if (given === "" || isAbsolute(given)) throw new PathOutsideRoot(given);
     return resolve(await this.#root, given);
   }
@@ -50,6 +53,22 @@ export class Storage {
       throw new PathOutsideRoot(given);
     }
     return real;
+  }
+}
+
+// The path a file *would* have, with every symlink on the part that already exists resolved. A
+// target that does not exist yet cannot be handed to `realpath`, and resolving only its parent is
+// not enough either: several levels of it may be missing at once.
+async function resolvedAncestor(target: string): Promise<string | null> {
+  const missing: string[] = [basename(target)];
+  let existing = dirname(target);
+  for (;;) {
+    const real = await realpath(existing).catch(() => null);
+    if (real !== null) return join(real, ...[...missing].reverse());
+    const parent = dirname(existing);
+    if (parent === existing) return null;
+    missing.push(basename(existing));
+    existing = parent;
   }
 }
 

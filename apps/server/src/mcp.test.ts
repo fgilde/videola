@@ -50,6 +50,16 @@ function parse(text: string): any {
   return JSON.parse(text);
 }
 
+function referencesIn(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(referencesIn);
+  if (typeof value !== "object" || value === null) return [];
+  return Object.entries(value).flatMap(([key, nested]) =>
+    key === "$ref" && typeof nested === "string"
+      ? [nested.replace("#/$defs/", "")]
+      : referencesIn(nested),
+  );
+}
+
 const MEDIA_BYTES = Buffer.from("pretend this is an mp4");
 const MEDIA_ID = `med_${createHash("sha256").update(MEDIA_BYTES).digest("hex")}`;
 const OTHER_BYTES = Buffer.from("a second pretend mp4");
@@ -211,6 +221,26 @@ describe("the tool catalogue", () => {
     for (const tool of await tools()) {
       expect(tool.description ?? "").not.toBe("");
       expect(tool.inputSchema.type).toBe("object");
+    }
+  });
+
+  // A schema is only usable if it carries the definitions it points at. The generator prunes `$defs`
+  // to what each command reaches, and pruning one reference too many leaves a tool describing itself
+  // with a dangling pointer — which an agent cannot recover from and no property check would notice.
+  it("carries every definition its schemas refer to", async () => {
+    for (const tool of await tools()) {
+      const defs = Object.keys((tool.inputSchema["$defs"] as Record<string, unknown>) ?? {});
+      for (const reference of referencesIn(tool.inputSchema)) {
+        expect(defs, `${tool.name} refers to ${reference}`).toContain(reference);
+      }
+    }
+  });
+
+  it("does not carry definitions no schema refers to", async () => {
+    for (const tool of await tools()) {
+      const defs = Object.keys((tool.inputSchema["$defs"] as Record<string, unknown>) ?? {});
+      const used = new Set(referencesIn(tool.inputSchema));
+      expect(defs.filter((name) => !used.has(name))).toEqual([]);
     }
   });
 

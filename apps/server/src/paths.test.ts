@@ -78,6 +78,22 @@ describe("Storage.forWriting", () => {
   it("refuses to write above the root", async () => {
     await expect(new Storage(root).forWriting("../new.videola")).rejects.toThrow(PathOutsideRoot);
   });
+
+  // A refusal that has already created directories outside the storage root is not a refusal.
+  it("creates nothing outside the root when it refuses", async () => {
+    await expect(new Storage(root).forWriting("../outside/made/up/new.videola")).rejects.toThrow(
+      PathOutsideRoot,
+    );
+
+    expect(await readdir(outside)).toEqual([]);
+  });
+
+  it("resolves a target several missing levels deep inside the root", async () => {
+    const target = await new Storage(root).forWriting("a/b/c/new.videola");
+
+    await writeFile(target, "z");
+    expect(await readFile(join(root, "a", "b", "c", "new.videola"), "utf8")).toBe("z");
+  });
 });
 
 describe("writeAtomic", () => {

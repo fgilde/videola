@@ -149,6 +149,24 @@ describe("validateProject", () => {
     ]);
   });
 
+  // `clip.add` refuses a duration of zero and `clip.trim` refuses a trim that would empty a clip,
+  // so this too only arrives from a project file — where `normalize` bounds the value but never
+  // insists it is positive.
+  it("reports a clip with no duration", async () => {
+    const model = await project((id) => {
+      api.apply(id, [cmd.trackAdd("video", "V1")]);
+      const track = api.state(id).timeline.tracks[0]?.id ?? "";
+      api.apply(id, [
+        cmd.clipAdd(track, { kind: "generator", generator: { type: "solid", color: "#000" } }, 0, secondsToTime(1)),
+      ]);
+    });
+    const clip = model.timeline.tracks[0]?.clips[0];
+    if (clip === undefined) throw new Error("no clip");
+    clip.duration = 0;
+
+    expect(validateProject(model)).toMatchObject([{ code: "clip.emptyDuration", severity: "error" }]);
+  });
+
   // No M1 command sets fades, so this state only arrives with a hand-authored project.json — which
   // `normalize` bounds but never compares against the clip's own length. The clip itself still
   // comes from the real core; only the field no command can reach is set here.
