@@ -127,6 +127,14 @@ export class Playback {
     this.seek(this.#clock.now() + direction * frameDuration(fps));
   }
 
+  // An edit changes the picture without moving the playhead, and resizing the canvas empties the
+  // drawing buffer without moving it either. Neither is a seek: routing them through seek would
+  // rebuild the whole audio graph at the same position, once per keystroke and once per pixel of
+  // window resize.
+  refresh(): void {
+    this.#show(this.#clock.now());
+  }
+
   onTime(cb: (t: Time) => void): () => void {
     return this.#clock.onTick(cb);
   }

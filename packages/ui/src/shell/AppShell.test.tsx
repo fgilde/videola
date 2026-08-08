@@ -39,6 +39,7 @@ describe("AppShell", () => {
     act(() => screen.getByRole("button", { name: "Deutsch / English" }).click());
     expect(screen.getByRole("button", { name: "New project" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import media" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add track" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Redo" })).toBeTruthy();
@@ -76,12 +77,12 @@ describe("AppShell", () => {
   it("keeps every action button in the DOM at phone width", () => {
     stubEnvironment(390);
     render(
-      <AppShell layoutPreference="phone" onNew={() => {}} onOpen={() => {}} onImport={() => {}}>
+      <AppShell layoutPreference="phone" onNew={() => {}} onOpen={() => {}} onImportMedia={() => {}} onAddTrack={() => {}}>
         content
       </AppShell>,
     );
     expect(screen.getByTestId("app-shell").dataset.layout).toBe("phone");
-    for (const name of ["Neues Projekt", "Öffnen", "Spur hinzufügen", "Rückgängig", "Wiederholen", "Speichern"]) {
+    for (const name of ["Neues Projekt", "Öffnen", "Medien importieren", "Spur hinzufügen", "Rückgängig", "Wiederholen", "Speichern"]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
   });

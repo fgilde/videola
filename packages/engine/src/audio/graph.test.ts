@@ -468,3 +468,55 @@ describe("AudioGraph, prepare under load", () => {
     expect(at(out, 0.1)).toBeCloseTo(0.25, 2);
   });
 });
+
+// prepare() runs after every edit, so a clip dragged along the timeline is prepared once per
+// pointer movement. What the decode depends on is the range, not where the clip sits.
+describe("AudioGraph, repeated prepares", () => {
+  it("decodes a range once, however often the timeline is edited", async () => {
+    const ctx = context(0.3);
+    const source = dc(ctx);
+    const decode = vi.spyOn(source, "bufferFor");
+    const graph = new AudioGraph(ctx, source);
+
+    await graph.prepare(project([track("A1", [clip()])]));
+    await graph.prepare(project([track("A1", [clip({ start: SECOND })])]));
+    await graph.prepare(project([track("A1", [clip({ start: 2 * SECOND })])]));
+
+    expect(decode).toHaveBeenCalledOnce();
+  });
+
+  it("decodes again once the clip reads a different part of the medium", async () => {
+    const ctx = context(0.3);
+    const source = dc(ctx);
+    const decode = vi.spyOn(source, "bufferFor");
+    const graph = new AudioGraph(ctx, source);
+
+    await graph.prepare(project([track("A1", [clip()])]));
+    await graph.prepare(project([track("A1", [clip({ inPoint: SECOND })])]));
+
+    expect(decode).toHaveBeenCalledTimes(2);
+  });
+
+  // A medium that was missing and has been relinked has to be tried again, so the failure must
+  // not settle into the cache as an answer.
+  it("tries a medium again after a failed decode", async () => {
+    const ctx = context(0.3);
+    const good = dc(ctx);
+    let calls = 0;
+    const source: AudioBufferSource = {
+      async bufferFor(hash, from, to) {
+        calls += 1;
+        if (calls === 1) throw new Error("error.mediaMissing");
+        return good.bufferFor(hash, from, to);
+      },
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const graph = new AudioGraph(ctx, source);
+
+    await graph.prepare(project([track("A1", [clip()])]));
+    await graph.prepare(project([track("A1", [clip()])]));
+    graph.startAt(ctx.currentTime, 0);
+
+    expect(at(await drain(ctx), 0.1)).toBeCloseTo(1, 2);
+  });
+});

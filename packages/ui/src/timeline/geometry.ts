@@ -2,6 +2,7 @@ import {
   FLICKS_PER_SECOND,
   frameDuration,
   type Clip,
+  type Project,
   type Rate,
   type Time,
   type Track,
@@ -26,6 +27,16 @@ export const MAX_FLICKS_PER_PIXEL = 10 * FLICKS_PER_SECOND;
 // being as wide as the project and the scroll offset gets driven by hand.
 export function minZoomFor(contentDuration: Time): number {
   return Math.max(MIN_FLICKS_PER_PIXEL, contentDuration / MAX_ELEMENT_WIDTH_PX);
+}
+
+// Where the timeline stops and where "jump to the end" lands. Clips are kept sorted by start,
+// but the last one is not necessarily the one that ends last.
+export function projectEnd(project: Project): Time {
+  return project.timeline.tracks.reduce(
+    (longest, track) =>
+      track.clips.reduce((end, clip) => Math.max(end, clip.start + clip.duration), longest),
+    0,
+  );
 }
 
 export const MIN_TRACK_HEIGHT = 44;

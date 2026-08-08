@@ -24,6 +24,7 @@ export class AudioGraph {
   #voices: Voice[] = [];
   #live: AudioNode[] = [];
   #playing: AudioBufferSourceNode[] = [];
+  #buffers = new Map<string, AudioBuffer>();
   #generation = 0;
 
   constructor(ctx: BaseAudioContext, source: AudioBufferSource) {
@@ -83,9 +84,19 @@ export class AudioGraph {
 
   // One medium missing must not take the rest of the timeline with it. The library is where a
   // gap gets reported to the user; here it costs one clip its sound and nothing else.
+  //
+  // Keyed by what the decode actually depends on, not by clip id: `prepare` runs again after
+  // every edit, and without this a clip dragged across the timeline is decoded from OPFS once
+  // per pointer movement. Splitting a clip reuses neither half, which is right -- their ranges
+  // differ. The map is the same session-long hold the note above already describes.
   async #load(hash: string, clip: Clip): Promise<AudioBuffer | undefined> {
+    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}`;
+    const cached = this.#buffers.get(key);
+    if (cached !== undefined) return cached;
     try {
-      return await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+      const buffer = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+      this.#buffers.set(key, buffer);
+      return buffer;
     } catch (error) {
       console.error(error);
       return undefined;

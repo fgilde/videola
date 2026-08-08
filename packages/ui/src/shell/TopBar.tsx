@@ -8,7 +8,8 @@ export interface TopBarActions {
   onNew?: () => void;
   onOpen?: () => void;
   onSave?: () => void;
-  onImport?: () => void;
+  onImportMedia?: () => void;
+  onAddTrack?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -27,7 +28,14 @@ export function TopBar(actions: TopBarActions): ReactElement {
       <button className="v-button" onClick={actions.onOpen} disabled={!actions.onOpen}>
         {t("action.open")}
       </button>
-      <button className="v-button" onClick={actions.onImport} disabled={!actions.onImport}>
+      <button
+        className="v-button"
+        onClick={actions.onImportMedia}
+        disabled={!actions.onImportMedia}
+      >
+        {t("action.importMedia")}
+      </button>
+      <button className="v-button" onClick={actions.onAddTrack} disabled={!actions.onAddTrack}>
         {t("action.addTrack")}
       </button>
       <button className="v-button" onClick={actions.onUndo} disabled={actions.canUndo !== true}>

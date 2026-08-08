@@ -457,6 +457,39 @@ describe("Playback", () => {
     expect(renders(recording)).toBe(painted);
   });
 
+  // An edit and a canvas resize both need the picture back where it already is. Sending them
+  // through seek would rebuild the whole audio graph, once per keystroke.
+  it("repaints where it stands without rescheduling the sound", async () => {
+    const { playback, graph, recording, sourceTimes } = rig(times((at) => [["clp_1", at]]));
+    await playback.load(project([clip("clp_1")]));
+    playback.seek(2 * SECOND);
+    playback.play();
+    await settle();
+    const painted = renders(recording);
+    const startAt = vi.spyOn(graph, "startAt");
+
+    playback.refresh();
+    await settle();
+
+    expect(renders(recording)).toBe(painted + 1);
+    expect(sourceTimes).toHaveBeenLastCalledWith(2 * SECOND);
+    expect(startAt).not.toHaveBeenCalled();
+  });
+
+  it("paints nothing on a refresh after dispose", async () => {
+    const { playback, recording } = rig(times((at) => [["clp_1", at]]));
+    await playback.load(project([clip("clp_1")]));
+    playback.seek(SECOND);
+    await settle();
+    const painted = renders(recording);
+
+    playback.dispose();
+    playback.refresh();
+    await settle();
+
+    expect(renders(recording)).toBe(painted);
+  });
+
   it("keeps time before a canvas is attached instead of throwing on every tick", async () => {
     const ctx = new OfflineAudioContext(2, SAMPLE_RATE, SAMPLE_RATE) as unknown as BaseAudioContext;
     const sources = new FakeSources();

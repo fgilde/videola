@@ -68,6 +68,20 @@
   background: var(--v-bg);
 }
 
+/* Picture above, transport under it, timeline at the bottom -- the arrangement every editor
+   has, and on a phone the same one, because the preview must stay visible while the timeline
+   scrolls under it. Both flexible rows carry minmax(0, ...) so a canvas or a scroll container
+   inside them can shrink; a bare 1fr floors at its content and pushes the timeline off-screen. */
+.v-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%);
+  height: 100%;
+}
+
+.v-shell[data-layout="phone"] .v-editor {
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(160px, 50%);
+}
+
 .v-shell[data-layout="tablet"] .v-button,
 .v-shell[data-layout="phone"] .v-button {
   min-height: var(--v-touch-target);

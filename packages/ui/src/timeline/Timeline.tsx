@@ -18,6 +18,7 @@ import { Track } from "./Track";
 import { findClip, useTimelineGestures } from "./useTimelineGestures";
 import {
   clampZoom,
+  projectEnd,
   timeToX,
   trackHeight,
   visibleRange,
@@ -58,8 +59,8 @@ export function Timeline({
   const [selected, setSelected] = useState<ClipId>();
   const [snapEnabled, setSnapEnabled] = useState(true);
   const viewport = useViewport(scrollRef);
-  const projectEnd = useMemo(() => timelineEnd(project), [project]);
-  const zoom = useAnchoredZoom(scrollRef, flicksPerPixel, setFlicksPerPixel, projectEnd);
+  const end = useMemo(() => projectEnd(project), [project]);
+  const zoom = useAnchoredZoom(scrollRef, flicksPerPixel, setFlicksPerPixel, end);
   const range: TimeRange = visibleRange(viewport.scrollLeft, viewport.width, flicksPerPixel);
 
   const select = useCallback(
@@ -94,7 +95,7 @@ export function Timeline({
   // and then dispatches the current playhead offers an edit the core will refuse.
   const menuClip = menu === undefined ? undefined : findClip(project, menu.clip)?.clip;
   // One viewport of slack past the end, so a clip can always be dragged beyond what exists.
-  const contentWidth = timeToX(projectEnd, flicksPerPixel) + Math.max(viewport.width, 1);
+  const contentWidth = timeToX(end, flicksPerPixel) + Math.max(viewport.width, 1);
 
   return (
     <section className="v-timeline" aria-label={t("timeline.label")} data-testid="timeline">
@@ -200,14 +201,6 @@ export function Timeline({
       )}
     </section>
   );
-}
-
-function timelineEnd(project: Project): Time {
-  return project.timeline.tracks.reduce((longest, track) => {
-    // Clips are kept sorted by start, but the last one is not necessarily the longest.
-    const end = track.clips.reduce((last, clip) => Math.max(last, clip.start + clip.duration), 0);
-    return Math.max(longest, end);
-  }, 0);
 }
 
 interface Viewport {
