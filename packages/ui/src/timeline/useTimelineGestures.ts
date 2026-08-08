@@ -112,6 +112,9 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
     (event: PointerEvent<HTMLElement>) => {
       const config = latest.current;
       notePointerType(event.pointerType, setTrimZonePx);
+      // A press left over from an earlier pointerdown would fire into this gesture and cancel
+      // its drag half a second in; only one press timer may ever be pending.
+      cancelLongPress();
       pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
       setMenu(undefined);
 

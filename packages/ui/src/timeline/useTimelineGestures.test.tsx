@@ -561,6 +561,22 @@ describe("clip context menu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
+  it("lets no press timer from an earlier pointerdown fire into the next gesture", async () => {
+    const doc = await documentWithOneClip();
+    render(<Harness doc={doc} />);
+    fireEvent.pointerDown(clipElement(), { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 40 });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    fireEvent.pointerDown(clipElement(), { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 40 });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    // 600 ms after the first press, 200 ms after the second: only a leaked timer opens here.
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it("opens on a right click for a mouse, in place of the browser menu", async () => {
     const doc = await documentWithOneClip();
     render(<Harness doc={doc} />);
