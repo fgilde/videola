@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-updates",
+  "description": "Der Updater existiert nur auf den drei Desktop-Systemen; auf Android und iOS gibt es die Berechtigung nicht, weil es das Plugin dort nicht gibt.",
+  "platforms": ["linux", "macOS", "windows"],
+  "windows": ["main"],
+  "permissions": ["updater:default"]
+}

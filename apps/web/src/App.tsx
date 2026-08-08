@@ -63,6 +63,7 @@ import {
 } from "@videola/ui";
 
 import { useThumbnails } from "./thumbnails";
+import { offerUpdate } from "./updates";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed" | "error.importFailed";
 
@@ -607,6 +608,7 @@ export function App(): ReactElement {
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
           </div>
+          <UpdateCheck />
           {project === undefined || doc === undefined ? (
             <p style={{ padding: "var(--v-space-6)" }}>…</p>
           ) : (
@@ -772,6 +774,19 @@ function adoptFormat(doc: VideolaDocument, asset: MediaAsset): void {
 function added(doc: VideolaDocument, kind: TrackKind, name: string): Track | undefined {
   doc.dispatch(cmd.trackAdd(kind, name));
   return doc.state.timeline.tracks.find((candidate) => candidate.kind === kind);
+}
+
+// It renders nothing and exists only to sit inside the I18nProvider, which is where `t` lives.
+// The ref is what keeps a change of locale from asking a second time.
+function UpdateCheck(): null {
+  const { t } = useI18n();
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
+    void offerUpdate(t);
+  }, [t]);
+  return null;
 }
 
 function ErrorBanner({ error }: { error?: ShellError }): ReactElement | null {
