@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FLICKS_PER_SECOND, type Clip, type Project, type Track } from "@videola/core";
 
 import { I18nProvider } from "../i18n/I18nProvider";
-import { MAX_ELEMENT_WIDTH_PX } from "./geometry";
 import { Timeline } from "./Timeline";
 
 const VIEWPORT_WIDTH = 900;
@@ -166,18 +165,46 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-playhead").style.left).toBe("0px");
   });
 
-  it("refuses to zoom past the point where the content element stops laying out", () => {
+  // A wheel delivers ten notches into one task and a finger drums faster than React re-renders.
+  // Reading the zoom from state made all but the first step of a burst a no-op.
+  it("compounds a burst of zoom steps that lands in a single task", () => {
+    const clip = makeClip("clp_1", 0, 60 * FLICKS_PER_SECOND);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
+    const width = () => Number.parseFloat(document.querySelector<HTMLElement>("[data-clip-id]")?.style.width ?? "0");
+    const before = width();
+
+    const scroll = stubViewport();
+    act(() => {
+      const button = screen.getByRole("button", { name: "Vergrößern" });
+      for (let step = 0; step < 4; step += 1) button.click();
+    });
+
+    expect(width()).toBe(before * 16);
+    // The anchor belongs to the first step of the burst: 4.5 s sat under the viewport centre,
+    // and sixteen times in it must still be there. Only the first call sees a scroll offset the
+    // layout effect has not already invalidated.
+    expect(scroll.scrollLeft).toBe(4.5 * 1600 - 450);
+  });
+
+  // Asserting the width against MAX_ELEMENT_WIDTH_PX would only restate the definition of the
+  // floor. What is worth knowing is that the floor is reached and then holds: further clicks
+  // stop changing anything instead of creeping past it one step at a time.
+  it("comes to rest at the zoom floor instead of creeping past it", () => {
     const clip = makeClip("clp_1", 0, 24 * 3600 * FLICKS_PER_SECOND);
     const { container } = renderTimeline(
       <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
     );
+    const width = () =>
+      Number.parseFloat(container.querySelector<HTMLElement>(".v-timeline__content")?.style.width ?? "0");
+
     for (let step = 0; step < 40; step += 1) {
       act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
     }
-    const content = container.querySelector<HTMLElement>(".v-timeline__content");
-    expect(Number.parseFloat(content?.style.width ?? "0")).toBeLessThanOrEqual(
-      MAX_ELEMENT_WIDTH_PX + VIEWPORT_WIDTH,
-    );
+    const settled = width();
+    act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
+
+    expect(width()).toBe(settled);
+    expect(settled).toBeGreaterThan(VIEWPORT_WIDTH);
   });
 
   it("shows the empty hint when the project has no tracks", () => {
@@ -218,6 +245,35 @@ describe("Timeline virtualisation", () => {
   it("keeps the whole timeline subtree small enough to be a real DOM", () => {
     renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     expect(screen.getByTestId("timeline").querySelectorAll("*").length).toBeLessThan(200);
+  });
+
+  // The window is measured in time, so zooming out widens it until it holds everything.
+  // Measuring only at the default zoom measures the one place where the material is sparse.
+  it("keeps the node count bounded at every zoom step, not just the default one", () => {
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
+    const timeline = screen.getByTestId("timeline");
+    const counts: number[] = [];
+
+    for (let step = 0; step < 22; step += 1) {
+      counts.push(timeline.querySelectorAll("*").length);
+      act(() => screen.getByRole("button", { name: "Verkleinern" }).click());
+    }
+
+    expect(Math.max(...counts)).toBeLessThan(400);
+    expect(document.querySelectorAll("[data-clip-id]").length).toBeGreaterThan(0);
+  });
+
+  it("stands in for a run of clips too narrow to tell apart", () => {
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
+    for (let step = 0; step < 10; step += 1) {
+      act(() => screen.getByRole("button", { name: "Verkleinern" }).click());
+    }
+
+    const runs = [...document.querySelectorAll<HTMLElement>("[data-clip-run]")];
+    expect(runs.length).toBeGreaterThan(0);
+    expect(runs.reduce((sum, run) => sum + Number(run.dataset.clipRun), 0)).toBeGreaterThan(1000);
+    // A run is not a clip: nothing on it pretends to be trimmable.
+    expect(document.querySelectorAll("[data-clip-run] [data-edge]")).toHaveLength(0);
   });
 
   it("still reserves scroll width for the whole hour", () => {

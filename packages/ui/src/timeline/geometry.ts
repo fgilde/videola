@@ -40,7 +40,9 @@ export interface TimeRange {
 export function clampZoom(flicksPerPixel: number, contentDuration = 0): number {
   const floor = minZoomFor(contentDuration);
   if (!Number.isFinite(flicksPerPixel) || flicksPerPixel <= 0) return floor;
-  return Math.min(MAX_FLICKS_PER_PIXEL, Math.max(floor, flicksPerPixel));
+  // The floor is the outer clamp: written the other way round it loses to the ceiling once a
+  // project is long enough for the two to cross, and the content element silently truncates.
+  return Math.max(floor, Math.min(MAX_FLICKS_PER_PIXEL, flicksPerPixel));
 }
 
 export function timeToX(time: Time, flicksPerPixel: number): number {
@@ -70,13 +72,67 @@ export function clipsInRange(clips: readonly Clip[], range: TimeRange): Clip[] {
   return clips.filter((clip) => clip.start < range.to && clip.start + clip.duration > range.from);
 }
 
+export const MIN_CLIP_BOX_PX = 8;
+export const MIN_TRIM_ZONE_PX = 5;
+export const MIN_CLIP_LABEL_PX = 24;
+
+export interface ClipBox {
+  clip: Clip;
+  start: Time;
+  end: Time;
+  count: number;
+}
+
+// Windowing in time alone is not enough. Zoom out far enough and the window holds the whole
+// project, so an hour of one-second clips becomes an hour of DOM nodes. A run of clips that would
+// draw thinner than a few pixels cannot be told apart on screen anyway, so it draws as one box.
+// That makes the node count a function of the viewport instead of the material: every box either
+// spans at least minWidthPx or is followed by a gap that wide, so their number is bounded by the
+// visible width divided by that constant.
+export function clipBoxes(
+  clips: readonly Clip[],
+  range: TimeRange,
+  flicksPerPixel: number,
+  minWidthPx = MIN_CLIP_BOX_PX,
+): ClipBox[] {
+  const boxes: ClipBox[] = [];
+  let run: ClipBox | undefined;
+
+  for (const clip of clipsInRange(clips, range)) {
+    const end = clip.start + clip.duration;
+    if (run === undefined) {
+      run = { clip, start: clip.start, end, count: 1 };
+      continue;
+    }
+    const wideEnough = timeToX(run.end - run.start, flicksPerPixel) >= minWidthPx;
+    // A visible gap has to break the run, or one box would span an empty stretch of timeline.
+    const gapVisible = timeToX(clip.start - run.end, flicksPerPixel) >= minWidthPx;
+    if (wideEnough || gapVisible) {
+      boxes.push(run);
+      run = { clip, start: clip.start, end, count: 1 };
+      continue;
+    }
+    run.end = Math.max(run.end, end);
+    run.count += 1;
+  }
+
+  if (run !== undefined) boxes.push(run);
+  return boxes;
+}
+
 const STEP_SECONDS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
-const STEP_FRAMES = [1, 2, 5, 10];
+// Reaches past 10 frames, or a thousand-frame-per-second project falls off the end of the frame
+// ladder and lands on whole seconds, jumping the tick spacing by a factor of forty. Steps of a
+// second or more are the seconds ladder's business -- 50 frames of 30 is 1.667 s, which is a
+// tick nobody can read.
+const STEP_FRAMES = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 
 export function tickStep(flicksPerPixel: number, fps: Rate, minSpacingPx = 90): Time {
   const frame = frameDuration(fps);
   for (const frames of STEP_FRAMES) {
-    if (timeToX(frame * frames, flicksPerPixel) >= minSpacingPx) return frame * frames;
+    const step = frame * frames;
+    if (step >= FLICKS_PER_SECOND) break;
+    if (timeToX(step, flicksPerPixel) >= minSpacingPx) return step;
   }
   for (const seconds of STEP_SECONDS) {
     const step = seconds * FLICKS_PER_SECOND;

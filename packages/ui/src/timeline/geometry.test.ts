@@ -4,11 +4,13 @@ import { FLICKS_PER_SECOND, type Clip, type Rate, type Track } from "@videola/co
 
 import {
   clampZoom,
+  clipBoxes,
   clipsInRange,
   frameDuration,
   MAX_ELEMENT_WIDTH_PX,
   MAX_FLICKS_PER_PIXEL,
   MIN_FLICKS_PER_PIXEL,
+  minZoomFor,
   rulerTicks,
   tickStep,
   timeToX,
@@ -45,18 +47,29 @@ describe("zoom", () => {
     expect(clampZoom(0)).toBe(MIN_FLICKS_PER_PIXEL);
   });
 
-  // The content element is as wide as the project, so the zoom floor has to rise with the
-  // project length. A fixed floor put a 24 hour project at 305 million pixels, ten times past
-  // what a browser still lays out - it would have scrolled to a silently truncated end.
-  it("keeps even the longest project the core accepts inside the element width", () => {
-    for (const hours of [1, 6, 24]) {
-      const duration = hours * 3600 * FLICKS_PER_SECOND;
-      expect(timeToX(duration, clampZoom(1, duration))).toBeLessThanOrEqual(MAX_ELEMENT_WIDTH_PX);
-    }
+  // What this cannot answer: whether 30 million is a width a browser honours. That is a fact
+  // about Chrome, and packages/ui/browser measures it -- the ceiling is 33,554,428 px.
+  // What it can answer is that the floor rises with the project, which a fixed floor did not:
+  // a 24 hour project came out 305 million pixels wide and scrolled to a truncated end.
+  it("raises the zoom floor in step with the project length", () => {
+    const day = 24 * 3600 * FLICKS_PER_SECOND;
+    expect(minZoomFor(day)).toBe(day / MAX_ELEMENT_WIDTH_PX);
+    expect(minZoomFor(day)).toBeGreaterThan(MIN_FLICKS_PER_PIXEL);
   });
 
   it("does not raise the floor for a project that fits anyway", () => {
     expect(clampZoom(1, 60 * FLICKS_PER_SECOND)).toBe(MIN_FLICKS_PER_PIXEL);
+  });
+
+  // Written as min(MAX, max(floor, x)) the ceiling wins once the two cross, and the clamp
+  // returns a zoom below its own floor - the element width it exists to protect.
+  it("never returns a zoom under its own floor, however long the project", () => {
+    for (const years of [1, 10, 100]) {
+      const duration = years * 365 * 24 * 3600 * FLICKS_PER_SECOND;
+      expect(clampZoom(MAX_FLICKS_PER_PIXEL, duration)).toBeGreaterThanOrEqual(
+        minZoomFor(duration),
+      );
+    }
   });
 });
 
@@ -96,6 +109,44 @@ describe("clipsInRange", () => {
   });
 });
 
+describe("clipBoxes", () => {
+  const wholeHour = { from: 0, to: 3600 * FLICKS_PER_SECOND };
+  // One hour across 1460 px: every clip draws a tenth of a pixel.
+  const zoomedOut = (3600 * FLICKS_PER_SECOND) / 1460;
+
+  function everySecond(count: number): Clip[] {
+    return Array.from({ length: count }, (_, index) =>
+      clip(index * FLICKS_PER_SECOND, FLICKS_PER_SECOND, `clp_${index}`),
+    );
+  }
+
+  it("draws one box per clip while they are far enough apart to tell apart", () => {
+    const boxes = clipBoxes(everySecond(3), { from: 0, to: 10 * FLICKS_PER_SECOND }, FLICKS_PER_SECOND / 100);
+    expect(boxes.map((box) => box.count)).toEqual([1, 1, 1]);
+  });
+
+  it("bounds the number of boxes by the visible width, not by the material", () => {
+    const boxes = clipBoxes(everySecond(3600), wholeHour, zoomedOut);
+    expect(boxes.length).toBeLessThanOrEqual(1460 / 8 + 1);
+    expect(boxes.reduce((sum, box) => sum + box.count, 0)).toBe(3600);
+  });
+
+  // Without this a track holding two clips an hour apart draws one bar across the whole hour:
+  // material where there is none.
+  it("breaks a run at a gap wide enough to see, however thin the clips are", () => {
+    const far = [clip(0, FLICKS_PER_SECOND, "a"), clip(3000 * FLICKS_PER_SECOND, FLICKS_PER_SECOND, "b")];
+    const boxes = clipBoxes(far, wholeHour, zoomedOut);
+    expect(boxes).toHaveLength(2);
+    expect(boxes.map((box) => box.count)).toEqual([1, 1]);
+  });
+
+  it("keeps the first clip of a run as the one a gesture acts on", () => {
+    const boxes = clipBoxes(everySecond(3600), wholeHour, zoomedOut);
+    expect(boxes[0]?.clip.id).toBe("clp_0");
+    expect(boxes[0]?.count).toBeGreaterThan(1);
+  });
+});
+
 describe("tickStep", () => {
   it("grows the step so labels keep their minimum spacing", () => {
     const step = tickStep(1_000_000, PAL, 90);
@@ -114,6 +165,18 @@ describe("tickStep", () => {
   it("derives the frame duration from the rational rate, not from a rounded one", () => {
     expect(frameDuration(NTSC)).toBe(Math.round((FLICKS_PER_SECOND * 1001) / 30000));
     expect(frameDuration(NTSC)).not.toBe(Math.round(FLICKS_PER_SECOND / 30));
+  });
+
+  // The ladder used to stop at ten frames. Above a few hundred frames per second that is still
+  // under the label spacing, so the next step was a whole second and the ruler jumped.
+  it("leaves no gap in the ladder, at any frame rate", () => {
+    for (const fps of [PAL, NTSC, { numerator: 240, denominator: 1 }, { numerator: 1000, denominator: 1 }]) {
+      for (let zoom = MIN_FLICKS_PER_PIXEL; zoom <= MAX_FLICKS_PER_PIXEL; zoom *= 1.3) {
+        const spacing = timeToX(tickStep(zoom, fps), zoom);
+        expect(spacing, `${fps.numerator}/${fps.denominator} at ${zoom}`).toBeGreaterThanOrEqual(90);
+        expect(spacing, `${fps.numerator}/${fps.denominator} at ${zoom}`).toBeLessThan(90 * 4);
+      }
+    }
   });
 
   it("survives a degenerate rate instead of returning NaN", () => {

@@ -37,6 +37,9 @@
 }
 
 .v-timeline__header {
+  /* The track colour lives here, not on the row: a row starts at content x 0 and scrolls out of
+     sight, the header column is sticky and keeps showing it. */
+  border-left: 3px solid transparent;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -61,9 +64,10 @@
 .v-timeline__scroll {
   overflow-x: auto;
   overflow-y: hidden;
-  /* The browser must not steal horizontal panning or pinch from the pointer handlers, and
-     a vertical swipe on the timeline belongs to the page, not to the track area. */
-  touch-action: pan-y;
+  /* Panning belongs to the browser -- the gestures implement none, and the surface is wider
+     than the viewport by design. Only pinch is taken away, because two pointers zoom here.
+     Clips and the ruler opt out again below, where a drag is ours. */
+  touch-action: pan-x pan-y;
 }
 
 .v-timeline__content {
@@ -78,6 +82,8 @@
   font-family: var(--v-font-mono);
   font-size: 0.72rem;
   user-select: none;
+  /* Scrubbing is the gesture's. */
+  touch-action: none;
 }
 
 .v-ruler__tick {
@@ -92,7 +98,6 @@
 .v-track {
   position: relative;
   border-bottom: 1px solid var(--v-border);
-  border-left: 3px solid transparent;
 }
 
 .v-clip {
@@ -101,10 +106,15 @@
   bottom: 4px;
   box-sizing: border-box;
   min-width: 2px;
-  padding: 2px 4px;
   background: var(--v-surface);
-  border: 1px solid var(--v-border-strong);
+  /* An outline rather than a border: the trim zones are positioned against the padding box, so
+     a border would leave its own width of the clip's outer edge outside the hit area. */
+  outline: 1px solid var(--v-border-strong);
+  outline-offset: -1px;
+  border: none;
   border-radius: var(--v-radius-sm);
+  /* Dragging a clip is the gesture's, not the browser's pan. */
+  touch-action: none;
   color: var(--v-text);
   overflow: hidden;
   user-select: none;
@@ -112,12 +122,15 @@
 }
 
 .v-clip[data-selected="true"] {
-  border-color: var(--v-accent);
+  outline-color: var(--v-accent);
   box-shadow: inset 0 0 0 1px var(--v-accent);
 }
 
 .v-clip__label {
   display: block;
+  /* The inset lives on the label, so a clip narrower than the padding still draws its own
+     width instead of being inflated to fit text it cannot show anyway. */
+  padding: 2px 4px;
   font-size: 0.75rem;
   white-space: nowrap;
   text-overflow: ellipsis;

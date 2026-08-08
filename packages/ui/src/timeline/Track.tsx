@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import type { ClipId, Track as TrackModel } from "@videola/core";
 
 import { Clip } from "./Clip";
-import { clipsInRange, trackHeight, type TimeRange } from "./geometry";
+import { clipBoxes, trackHeight, type TimeRange } from "./geometry";
 
 export interface TrackProps {
   track: TrackModel;
@@ -31,15 +31,15 @@ export function Track({
       className="v-track"
       data-track-id={track.id}
       data-track-index={index}
-      style={{ height: `${trackHeight(track)}px`, borderColor: track.colorHex }}
+      style={{ height: `${trackHeight(track)}px` }}
     >
-      {clipsInRange(track.clips, range).map((clip) => (
+      {clipBoxes(track.clips, range, flicksPerPixel).map((box) => (
         <Clip
-          key={clip.id}
-          clip={clip}
+          key={box.clip.id}
+          box={box}
           flicksPerPixel={flicksPerPixel}
           mediaNames={mediaNames}
-          selected={clip.id === selected}
+          selected={box.count === 1 && box.clip.id === selected}
           trimZonePx={trimZonePx}
           onSelect={onSelect}
         />

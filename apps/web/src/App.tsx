@@ -68,17 +68,14 @@ export function App(): ReactElement {
     });
   }, [doc]);
 
+  // Deliberately not wrapped in try/catch: the timeline decides which refusals are ordinary,
+  // and it can only do that if they reach it. Catching here turned a trim held against its
+  // limit into nine error banners in a single drag.
   const edit = useCallback(
     (command: Command, coalesceKey?: string) => {
-      if (doc === undefined) return;
-      try {
-        doc.dispatch(command, coalesceKey);
-        setError(undefined);
-      } catch (err) {
-        reportError("error.actionFailed", err);
-      }
+      doc?.dispatch(command, coalesceKey);
     },
-    [doc, reportError],
+    [doc],
   );
 
   const addTrack = useCallback(() => {
@@ -221,7 +218,6 @@ function Status({ project }: { project?: Project }): ReactElement {
       <span>
         {project.settings.width}×{project.settings.height}
       </span>
-      {tracks === 0 && <em>{t("empty.noTracks")}</em>}
     </div>
   );
 }

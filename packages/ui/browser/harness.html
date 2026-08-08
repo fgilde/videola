@@ -1,0 +1,296 @@
+<body><pre id="out">pending</pre>
+<link rel="stylesheet" href="./bundle.css">
+<style>
+  html, body { margin: 0; }
+  /* An offset host, so anything that forgets to subtract the surface origin shows up. */
+  #host { position: absolute; left: 37px; top: 53px; width: 1060px; height: 420px; }
+  #out { position: absolute; left: 0; top: 900px; }
+</style>
+<script src="./bundle.js"></script>
+<script>
+const SECOND = 705600000;
+const results = [];
+
+function check(name, got, want) {
+  results.push({ name, ok: JSON.stringify(got) === JSON.stringify(want), got, want });
+}
+
+function checkAtMost(name, got, limit) {
+  results.push({ name, ok: typeof got === "number" && got <= limit, got, want: "<= " + limit });
+}
+
+function checkAtLeast(name, got, limit) {
+  results.push({ name, ok: typeof got === "number" && got >= limit, got, want: ">= " + limit });
+}
+
+function test(name, fn) {
+  try {
+    fn();
+  } catch (error) {
+    results.push({ name, ok: false, got: "THREW " + error.name + ": " + error.message, want: "no throw" });
+  }
+}
+
+function clip(id, startSeconds, durationSeconds, over) {
+  return Object.assign({
+    id,
+    label: id,
+    source: { kind: "generator", generator: { type: "solid", color: "#ff0000" } },
+    start: Math.round(startSeconds * SECOND),
+    duration: Math.round(durationSeconds * SECOND),
+    inPoint: 0,
+    speed: { rate: 1, reverse: false, preservePitch: true },
+    transform: {}, blend: "normal", fades: { inDuration: 0, outDuration: 0 },
+    volume: 1, pan: 0, effects: [], keyframes: {},
+  }, over || {});
+}
+
+function track(id, clips, colorHex) {
+  return { id, kind: "video", name: id, colorHex: colorHex || "#5b8cff", height: 72,
+    locked: false, hidden: false, muted: false, solo: false, volume: 1, pan: 0,
+    clips: clips, effects: [] };
+}
+
+function project(tracks, markers) {
+  return {
+    schemaVersion: 1, meta: { id: "prj_1", title: "", tags: [] },
+    settings: { width: 1920, height: 1080, fps: { numerator: 30, denominator: 1 },
+      sampleRate: 48000, colorSpace: "srgb", background: "#000000" },
+    library: [], timeline: { tracks: tracks }, markers: markers || [],
+    master: { volume: 1, effects: [] },
+  };
+}
+
+const host = document.createElement("div");
+host.id = "host";
+document.body.append(host);
+const root = T.createRoot(host);
+
+// The dispatch only records. A faithful fake of the core would be the trap Gruppe B paid for;
+// what this harness is for is boxes, and the commands are recorded to prove which one was sent.
+let sent = [];
+let seeks = [];
+
+// Every check starts from a fresh mount: zoom, selection and scroll all live inside the
+// component, and a leftover from the previous check is a silent lie about the next one.
+function draw(scene, playhead, dispatch) {
+  T.flushSync(function () { root.render(null); });
+  T.flushSync(function () {
+    root.render(T.createElement(T.I18nProvider, null, T.createElement(T.Timeline, {
+      project: scene,
+      playhead: playhead || 0,
+      dispatch: dispatch || function (command, key) { sent.push({ command: command, key: key }); },
+      onSeek: function (time) { seeks.push(time); },
+    })));
+  });
+}
+
+function reset() { sent = []; seeks = []; }
+function q(selector) { return host.querySelector(selector); }
+function all(selector) { return Array.from(host.querySelectorAll(selector)); }
+function surface() { return q(".v-timeline__scroll"); }
+function toolbar() { return all(".v-timeline__toolbar .v-button"); }
+
+function pointer(type, target, init) {
+  const event = new PointerEvent(type, Object.assign({
+    bubbles: true, cancelable: true, pointerId: 1, pointerType: "mouse", isPrimary: true,
+    button: 0, buttons: 1, view: window,
+  }, init));
+  T.flushSync(function () { target.dispatchEvent(event); });
+  return event;
+}
+
+// Surface coordinates to page coordinates, so every check states where it is pointing in the
+// same terms the user does.
+function atSurface(x, y) {
+  const box = surface().getBoundingClientRect();
+  return { clientX: box.left + x, clientY: box.top + y };
+}
+
+function click(element) {
+  T.flushSync(function () { element.click(); });
+}
+
+// ---------------------------------------------------------------- the element width ceiling
+
+test("element width", function () {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;top:2000px;height:1px";
+  probe.style.width = T.MAX_ELEMENT_WIDTH_PX + "px";
+  document.body.append(probe);
+  check("a content div as wide as the ceiling keeps its width",
+    Math.round(probe.getBoundingClientRect().width), T.MAX_ELEMENT_WIDTH_PX);
+  probe.remove();
+});
+
+// ---------------------------------------------------------------- virtualisation over zoom
+
+test("virtualisation", function () {
+  const clips = [];
+  for (let i = 0; i < 3600; i += 1) clips.push(clip("clp_" + i, i, 1));
+  const hour = project([track("trk_1", clips)]);
+  draw(hour);
+
+  const counts = [];
+  const boxes = [];
+  for (let step = 0; step < 22; step += 1) {
+    counts.push(q(".v-timeline").querySelectorAll("*").length);
+    boxes.push(all("[data-clip-id], [data-clip-run]").length);
+    click(toolbar()[0]);
+  }
+  checkAtMost("the whole subtree stays small at every zoom step", Math.max.apply(null, counts), 400);
+  checkAtMost("clip boxes stay bounded by the viewport, not by the material",
+    Math.max.apply(null, boxes), 200);
+  checkAtLeast("and something is still drawn when fully zoomed out",
+    boxes[boxes.length - 1], 1);
+});
+
+test("virtualisation while scrolled", function () {
+  const clips = [];
+  for (let i = 0; i < 3600; i += 1) clips.push(clip("clp_" + i, i, 1));
+  draw(project([track("trk_1", clips)]));
+  surface().scrollLeft = 120000;
+  surface().dispatchEvent(new Event("scroll"));
+  T.flushSync(function () {});
+  checkAtMost("scrolled far out, the subtree is still small",
+    q(".v-timeline").querySelectorAll("*").length, 400);
+  checkAtLeast("and the window followed the scroll", all("[data-clip-id]").length, 1);
+});
+
+test("scroll width", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 3600)])]));
+  checkAtLeast("the surface scrolls the whole hour", surface().scrollWidth, 360000);
+});
+
+// ---------------------------------------------------------------- touch targets as geometry
+
+test("touch targets", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 10)])]));
+  const box = q("[data-clip-id]").getBoundingClientRect();
+  const zone = q('[data-edge="end"]').getBoundingClientRect();
+  check("the coarse trim zone is 44 px wide", Math.round(zone.width), 44);
+  check("and reaches the clip's outer edge", Math.round(zone.right - box.right), 0);
+  const startZone = q('[data-edge="start"]').getBoundingClientRect();
+  check("the leading zone reaches the other outer edge", Math.round(startZone.left - box.left), 0);
+  check("--v-touch-target resolves",
+    getComputedStyle(document.documentElement).getPropertyValue("--v-touch-target").trim(), "44px");
+  checkAtLeast("a track row is at least a touch target tall",
+    Math.round(q(".v-track").getBoundingClientRect().height), 44);
+});
+
+test("narrow clip zones", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 0.333)])]));
+  const box = q("[data-clip-id]").getBoundingClientRect();
+  const startZone = q('[data-edge="start"]').getBoundingClientRect();
+  const endZone = q('[data-edge="end"]').getBoundingClientRect();
+  checkAtMost("the two zones never overlap on a narrow clip",
+    Math.round(startZone.right - endZone.left), 0);
+  checkAtLeast("and both stay grabbable", Math.round(Math.min(startZone.width, endZone.width)), 2);
+  checkAtLeast("the clip is not inflated past its own duration by padding",
+    35, Math.round(box.width));
+});
+
+// ---------------------------------------------------------------- touch panning
+
+test("touch action", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 3600)])]));
+  const surfaceAction = getComputedStyle(surface()).touchAction;
+  check("the surface lets the browser pan sideways",
+    surfaceAction === "auto" || surfaceAction.includes("pan-x"), true);
+  check("a clip keeps its own drag", getComputedStyle(q("[data-clip-id]")).touchAction, "none");
+  check("the ruler keeps its own scrub", getComputedStyle(q(".v-ruler")).touchAction, "none");
+});
+
+// ---------------------------------------------------------------- page offsets
+
+test("page offset", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 10)])]));
+  reset();
+  const at = atSurface(500, 8);
+  pointer("pointerdown", q(".v-ruler"), at);
+  pointer("pointerup", surface(), at);
+  check("scrubbing at surface x 500 seeks five seconds", seeks[seeks.length - 1], 5 * SECOND);
+});
+
+test("track colour survives scrolling", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 3600)], "#ff00ff")]));
+  surface().scrollLeft = 4000;
+  const header = q(".v-timeline__header");
+  const colour = getComputedStyle(header).borderLeftColor;
+  check("the track colour sits in the sticky header", colour, "rgb(255, 0, 255)");
+  checkAtLeast("and the header is still on screen",
+    Math.round(header.getBoundingClientRect().width), 1);
+});
+
+// ---------------------------------------------------------------- zoom bursts
+
+test("zoom burst", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 60)])]));
+  const before = q("[data-clip-id]").getBoundingClientRect().width;
+  for (let i = 0; i < 4; i += 1) toolbar()[1].click();
+  T.flushSync(function () {});
+  const after = q("[data-clip-id]").getBoundingClientRect().width;
+  checkAtLeast("four zoom steps in one task compound", Math.round(after / before), 16);
+});
+
+// ---------------------------------------------------------------- the context menu
+
+test("context menu", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 10)])]), 3 * SECOND);
+  const at = atSurface(200, 90);
+  const menuEvent = new MouseEvent("contextmenu", Object.assign({ bubbles: true, cancelable: true }, at));
+  T.flushSync(function () { q("[data-clip-id]").dispatchEvent(menuEvent); });
+  const items = all('[role="menuitem"]');
+  check("both items are there", items.length, 2);
+  checkAtLeast("each item is a touch target", Math.round(items[1].getBoundingClientRect().height), 44);
+  const menuBox = q('[role="menu"]').getBoundingClientRect();
+  check("the menu lands on the pointer",
+    [Math.round(menuBox.left), Math.round(menuBox.top)], [at.clientX, at.clientY]);
+});
+
+// ---------------------------------------------------------------- the buttons the mouse has
+
+test("secondary buttons", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 10)])]));
+  reset();
+  const from = atSurface(100, 90);
+  pointer("pointerdown", q("[data-clip-id]"), Object.assign({ button: 2, buttons: 2 }, from));
+  pointer("pointermove", surface(), Object.assign({ button: 2, buttons: 2 }, atSurface(400, 90)));
+  pointer("pointerup", surface(), Object.assign({ button: 2, buttons: 0 }, atSurface(400, 90)));
+  check("the right mouse button edits nothing", sent.length, 0);
+});
+
+// ---------------------------------------------------------------- a cancelled drag
+
+test("pointer cancel", function () {
+  draw(project([track("trk_1", [clip("clp_1", 2, 10)])]));
+  reset();
+  pointer("pointerdown", q("[data-clip-id]"), atSurface(300, 90));
+  pointer("pointermove", surface(), atSurface(600, 90));
+  pointer("pointercancel", surface(), atSurface(600, 90));
+  const last = sent[sent.length - 1];
+  check("a cancelled drag puts the clip back",
+    last === undefined ? "nothing sent" : last.command.start, 2 * SECOND);
+  check("under the same coalesce key", last === undefined ? "nothing sent" : last.key, sent[0].key);
+});
+
+// ---------------------------------------------------------------- a drag at the limit
+
+test("limit dragging", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 2)])]));
+  let escaped = 0;
+  const onError = function () { escaped += 1; };
+  window.addEventListener("error", onError);
+  // What the core does when a trim would empty a clip, and what apps/web hands the timeline.
+  draw(project([track("trk_1", [clip("clp_1", 0, 2)])]), 0, function () {
+    throw new Error("invalid argument: trim would empty the clip");
+  });
+  pointer("pointerdown", q('[data-edge="end"]'), atSurface(200, 90));
+  for (let i = 1; i <= 40; i += 1) pointer("pointermove", surface(), atSurface(200 - i * 10, 90));
+  pointer("pointerup", surface(), atSurface(-200, 90));
+  window.removeEventListener("error", onError);
+  check("a refused edit never escapes the gesture", escaped, 0);
+});
+
+document.getElementById("out").textContent = JSON.stringify(results);
+</script></body>
