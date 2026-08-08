@@ -63,7 +63,8 @@ interface Resources {
 // fails as an INVALID_OPERATION that nothing throws on -- the texture then keeps the previous
 // frame, or, if it never had one, samples as opaque black over everything below it. `#draw`
 // therefore checks each frame before uploading. That check is the last line of defence, not the
-// contract: a caller that lets frames die mid-render loses the clip for that frame either way.
+// contract: a caller that lets frames die mid-render gets the previous picture for that clip, and
+// nothing at all if there was no previous one.
 //
 // Nothing here keeps a frame past the call. texImage2D copies the pixels, so the texture outlives
 // the frame it came from -- and a closed frame reports zero for its size, which is why the size
@@ -88,9 +89,13 @@ export class Compositor {
     const program = this.#begin(list.background);
     for (const item of list.items) {
       const frame = frames.get(item.clip);
-      if (frame !== undefined && uploadable(frame, this.#maxTextureSize)) {
-        this.#draw(program, item, frame);
-      }
+      const fresh = frame !== undefined && uploadable(frame, this.#maxTextureSize);
+      // A frame that is late must not blank the clip. texImage2D copied the last one into the
+      // texture, so redrawing without an upload holds the picture instead of punching a hole for
+      // one tick -- and a clip that never had a frame is still left out, because its texture would
+      // sample as opaque black.
+      if (!fresh && !this.#textures.has(item.clip)) continue;
+      this.#draw(program, item, fresh ? frame : undefined);
     }
     this.#release(new Set(list.items.map((item) => item.clip)));
   }
@@ -144,11 +149,13 @@ export class Compositor {
     return resources.program;
   }
 
-  #draw(program: WebGLProgram, item: DrawItem, frame: VideoFrame): void {
+  #draw(program: WebGLProgram, item: DrawItem, frame: VideoFrame | undefined): void {
     const gl = this.#gl;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.#texture(item.clip));
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+    if (frame !== undefined) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+    }
     const blend = blendState(item.blend);
     // The alpha channel is always a plain over-operator, whatever the colours do. Letting the
     // colour equation touch alpha lets subtract compute 1 - 1 = 0, and a transparent hole in a

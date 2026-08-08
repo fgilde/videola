@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { cmd } from "./commands";
+import { cmd, FLICKS_PER_SECOND } from "./commands";
 import { VideolaDocument } from "./document";
+import type { Clip } from "./generated";
 import { createWasmBackend } from "./wasm-backend";
 import { initSync } from "./wasm/videola_core.js";
 
@@ -38,5 +39,72 @@ describe("save and reopen through the real WASM backend", () => {
     const reopened = new VideolaDocument(await createWasmBackend(bytes));
     expect(reopened.state.timeline.tracks).toHaveLength(1);
     expect(reopened.state.timeline.tracks[0]?.name).toBe("V1");
+  });
+});
+
+const MEDIA = `med_${"a".repeat(64)}`;
+const SECOND = FLICKS_PER_SECOND;
+
+async function timeline(): Promise<VideolaDocument> {
+  const doc = new VideolaDocument(await createWasmBackend());
+  doc.dispatch(cmd.trackAdd("video", "V1"));
+  doc.dispatch(cmd.trackAdd("video", "V2"));
+  return doc;
+}
+
+function trackId(doc: VideolaDocument, index: number): string {
+  return doc.state.timeline.tracks[index]!.id;
+}
+
+function clipOn(doc: VideolaDocument, track: number): Clip {
+  return doc.state.timeline.tracks[track]!.clips[0]!;
+}
+
+// The batch query is the one thing playback asks the core sixty times a second, and no fake
+// stands in for it here: the arithmetic, the clamp and the boundary marshalling are all Rust.
+describe("source times through the real WASM backend", () => {
+  it("answers for every clip the moment touches and for no other", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
+    doc.dispatch(
+      cmd.clipAdd(trackId(doc, 1), { kind: "media", media: MEDIA }, 3 * SECOND, 4 * SECOND),
+    );
+    const lower = clipOn(doc, 0);
+    const upper = clipOn(doc, 1);
+
+    expect(doc.sourceTimesAt(SECOND)).toEqual(new Map([[lower.id, SECOND]]));
+    expect(doc.sourceTimesAt(3.5 * SECOND)).toEqual(
+      new Map([
+        [lower.id, 3.5 * SECOND],
+        [upper.id, 0.5 * SECOND],
+      ]),
+    );
+    // The end is exclusive on both, so the moment the lower one ends only the upper answers.
+    expect(doc.sourceTimesAt(4 * SECOND)).toEqual(new Map([[upper.id, SECOND]]));
+    expect(doc.sourceTimesAt(9 * SECOND)).toEqual(new Map());
+  });
+
+  it("keeps a reversed clip's first frame inside the range it may read", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    doc.dispatch(cmd.clipSetSpeed(clipOn(doc, 0).id, 2, true));
+    const clip = clipOn(doc, 0);
+    const consumed = clip.duration * clip.speed.rate;
+
+    // Straight from source_time_at this would be `consumed`, one flick past the last sample --
+    // the decoder reads past end of media and the first frame of a reversed clip is black.
+    expect(doc.sourceTimesAt(0)).toEqual(new Map([[clip.id, clip.inPoint + consumed - 1]]));
+    expect(doc.sourceTimesAt(SECOND)).toEqual(new Map([[clip.id, clip.inPoint + consumed / 2]]));
+  });
+
+  it("carries whole flicks across the boundary, not seconds", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    const clip = clipOn(doc, 0);
+
+    const at = doc.sourceTimesAt(333_667)!.get(clip.id);
+
+    expect(at).toBe(333_667);
+    expect(Number.isInteger(at)).toBe(true);
   });
 });

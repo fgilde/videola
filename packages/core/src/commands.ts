@@ -4,6 +4,7 @@ import type {
   MediaAsset,
   ParamValue,
   ProjectSettings,
+  Rate,
   Time,
   TrackKind,
   TrimEdge,
@@ -17,6 +18,15 @@ export function secondsToTime(seconds: number): Time {
 
 export function timeToSeconds(time: Time): number {
   return time / FLICKS_PER_SECOND;
+}
+
+// The rate stays rational to the last division: 30000/1001 is not 29.97, and a frame step built
+// from the decimal drifts off the timeline's own ruler after a few hundred frames. Everything
+// that moves by a frame -- the ruler, the transport, playback -- has to land on the same value.
+export function frameDuration(fps: Rate): Time {
+  const rate = fps.numerator / fps.denominator;
+  if (!Number.isFinite(rate) || rate <= 0) return FLICKS_PER_SECOND;
+  return Math.round(FLICKS_PER_SECOND / rate);
 }
 
 export const cmd = {

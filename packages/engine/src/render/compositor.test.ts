@@ -109,6 +109,30 @@ describe("Compositor", () => {
     expect(uploads(recording)).toHaveLength(1);
   });
 
+  // The frame after a seek is not there yet, and a clip that vanishes for that one tick is a
+  // black flash in the middle of the picture.
+  it("redraws a clip from its own texture when the next frame is late", () => {
+    const { compositor, recording } = attached();
+    const scene = project([[{ id: "clp_1" }]]);
+    compositor.render(scene, 0, framesFor("clp_1"));
+
+    compositor.render(scene, 0, new Map());
+
+    expect(recording.named("drawArrays")).toHaveLength(2);
+    expect(uploads(recording)).toHaveLength(1);
+  });
+
+  it("holds nothing for a clip whose frame died before it ever arrived", () => {
+    const { compositor, recording } = attached();
+    const scene = project([[{ id: "clp_1" }]]);
+
+    compositor.render(scene, 0, new Map([["clp_1", opaqueFrame({ format: null })]]));
+    compositor.render(scene, 0, new Map());
+
+    expect(recording.named("drawArrays")).toHaveLength(0);
+    expect(recording.named("createTexture")).toHaveLength(0);
+  });
+
   it("keeps a clip's texture across renders and releases it once the clip is gone", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);

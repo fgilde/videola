@@ -1,7 +1,7 @@
 import init, { WasmDocument } from "./wasm/videola_core.js";
 
 import type { DocumentBackend, ImportMediaResult, MediaBytes, SaveOptions } from "./backend";
-import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
+import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project, Time } from "./generated";
 
 let ready: Promise<unknown> | undefined;
 
@@ -20,6 +20,7 @@ export async function createWasmBackend(bytes?: Uint8Array): Promise<DocumentBac
   const handle = bytes === undefined ? new WasmDocument() : WasmDocument.open(bytes);
   return {
     state: () => handle.state() as Project,
+    sourceTimesAt: (at: Time) => handle.sourceTimesAt(at) as ReadonlyMap<string, Time>,
     dispatch: (dispatch: Dispatch) => handle.dispatch(dispatch) as DispatchResult,
     undo: () => handle.undo() as DispatchResult,
     redo: () => handle.redo() as DispatchResult,

@@ -1,4 +1,15 @@
-import { FLICKS_PER_SECOND, type Clip, type Rate, type Time, type Track } from "@videola/core";
+import {
+  FLICKS_PER_SECOND,
+  frameDuration,
+  type Clip,
+  type Rate,
+  type Time,
+  type Track,
+} from "@videola/core";
+
+// The ruler and the transport must step by the same amount playback does, so the definition
+// lives in the core next to the other time arithmetic and is only re-exported here.
+export { frameDuration };
 
 // Browsers stop honouring element widths somewhere above 33 million pixels, and the content div
 // is as wide as the whole project. Staying below that is what keeps the scroll container from
@@ -57,12 +68,6 @@ export function visibleRange(
 // binary search on the lower bound is the upgrade if a project ever holds enough clips to show.
 export function clipsInRange(clips: readonly Clip[], range: TimeRange): Clip[] {
   return clips.filter((clip) => clip.start < range.to && clip.start + clip.duration > range.from);
-}
-
-export function frameDuration(fps: Rate): Time {
-  const rate = fps.numerator / fps.denominator;
-  if (!Number.isFinite(rate) || rate <= 0) return FLICKS_PER_SECOND;
-  return Math.round(FLICKS_PER_SECOND / rate);
 }
 
 const STEP_SECONDS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];

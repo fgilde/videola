@@ -30,6 +30,7 @@ function fakeBackend(): DocumentBackend {
     // A fresh object every call mirrors the real backend, which fully
     // re-serializes the project on each state() invocation.
     state: () => ({ ...project }),
+    sourceTimesAt: () => new Map(),
     dispatch: vi.fn((dispatch) => {
       if (dispatch.command.type === "track.add") {
         project = {

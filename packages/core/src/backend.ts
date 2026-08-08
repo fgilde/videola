@@ -1,4 +1,4 @@
-import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
+import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project, Time } from "./generated";
 
 export interface SaveOptions {
   appVersion: string;
@@ -17,8 +17,15 @@ export interface ImportMediaResult {
   result: DispatchResult;
 }
 
+// Every clip the moment touches, mapped to the point in its own medium it reads from — one call
+// per frame instead of one per clip, because playback asks at display rate. The times are already
+// clamped to what a decoder may be handed, so a reversed clip's first frame is a real sample and
+// not the exclusive end of its range.
+export type SourceTimes = (at: Time) => ReadonlyMap<string, Time>;
+
 export interface DocumentBackend {
   state(): Project;
+  sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
