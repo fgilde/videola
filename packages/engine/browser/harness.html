@@ -3,6 +3,8 @@
 import * as R from "./bundle.js";
 
 const results = [];
+let chosen;
+let chosenHasAudio = false;
 let file = null;
 
 // Exact unless a tolerance is named, and a named tolerance compares numbers however deeply they
@@ -57,14 +59,19 @@ function canvasOf(width, height) {
   return { canvas, context: canvas.getContext("2d") };
 }
 
-// A real H.264 file, made the way any file arrives: encoded, muxed, handed over as bytes. Its
-// pictures are what the export has to carry through into its own output.
-async function makeVideoFixture() {
+// A real encoded file, made the way any file arrives: encoded, muxed, handed over as bytes. Its
+// pictures are what the export has to carry through into its own output. The container follows
+// what this browser can encode -- Chrome on Linux has no H.264 encoder, and a fixture nobody can
+// write is not a fixture.
+async function makeVideoFixture(webm) {
   const { canvas, context } = canvasOf(WIDTH, HEIGHT);
   const target = new R.BufferTarget();
-  const output = new R.Output({ format: new R.Mp4OutputFormat(), target });
+  const output = new R.Output({
+    format: webm ? new R.WebMOutputFormat() : new R.Mp4OutputFormat(),
+    target,
+  });
   const source = new R.CanvasSource(canvas, {
-    codec: "avc",
+    codec: webm ? "vp9" : "avc",
     quality: new R.Quality({ bitrate: 4_000_000 }),
   });
   output.addVideoTrack(source, { frameRate: 30 });
@@ -76,7 +83,9 @@ async function makeVideoFixture() {
     await source.add(index / 30, 1 / 30);
   }
   await output.finalize();
-  return new File([target.buffer], "pattern.mp4", { type: "video/mp4" });
+  return webm
+    ? new File([target.buffer], "pattern.webm", { type: "video/webm" })
+    : new File([target.buffer], "pattern.mp4", { type: "video/mp4" });
 }
 
 // One second of a steady tone, so the export has something to put in an audio track and an
@@ -102,9 +111,9 @@ async function makeAudioFixture() {
 
 // The real import path into the real core: hash, OPFS, probe, dispatch. Nothing below is told
 // where a clip reads from -- the core is asked, over the wasm boundary, as playback asks it.
-async function buildProject() {
+async function buildProject(webm) {
   const doc = new R.VideolaDocument(await R.createWasmBackend());
-  const video = await R.importFile(await makeVideoFixture(), doc, R.probe);
+  const video = await R.importFile(await makeVideoFixture(webm), doc, R.probe);
   const audio = await R.importFile(await makeAudioFixture(), doc, R.probe);
   doc.dispatch(R.cmd.trackAdd("video", "V1"));
   doc.dispatch(R.cmd.trackAdd("audio", "A1"));
@@ -125,7 +134,7 @@ function worker() {
 
 function options(over) {
   return {
-    format: R.EXPORT_FORMATS[0],
+    format: chosen ?? R.EXPORT_FORMATS[0],
     width: WIDTH,
     height: HEIGHT,
     fps: FPS,
@@ -175,11 +184,16 @@ async function main() {
       sampleRate: 48000,
       channels: 2,
     });
-    check("H.264 in MP4 is offered here", support[0].video, true);
-    check("and so is its sound", support[0].audio, true);
+    // Chrome on Linux carries no H.264 encoder, so demanding MP4 would fail on a machine where the
+    // product itself would just have offered WebM. What has to hold is that *something* encodes.
+    const usable = R.EXPORT_FORMATS.map((format, index) => ({ format, ...support[index] }))
+      .filter((entry) => entry.video);
+    check("at least one format encodes here", usable.length > 0, true);
+    chosen = usable[0]?.format;
+    chosenHasAudio = usable[0]?.audio === true;
   });
 
-  const doc = await buildProject();
+  const doc = await buildProject(chosen?.id === "webm");
 
   await test("a one second export comes back as a file", async () => {
     const seen = [];
@@ -333,13 +347,16 @@ async function report() {
     method: "POST",
     body: JSON.stringify({
       results,
-      fileName: "export.mp4",
+      fileName: chosen?.id === "webm" ? "export.webm" : "export.mp4",
       expected: {
         size: [WIDTH, HEIGHT],
         frameRate: "30/1",
         frames: OUTPUT_FRAMES,
         seconds: OUTPUT_FRAMES / 30,
         hertz: TONE_HERTZ,
+        videoCodec: chosen?.id === "webm" ? "vp9" : "h264",
+        audioCodec: chosen?.id === "webm" ? "opus" : "aac",
+        hasAudio: chosenHasAudio,
       },
     }),
   });

@@ -144,7 +144,7 @@ function ffmpegChecks(path, expected) {
   }
   const video = report.probed.streams.find((stream) => stream.codec_type === "video");
   const audio = report.probed.streams.find((stream) => stream.codec_type === "audio");
-  add("ffprobe agrees on the codec", video?.codec_name, "h264");
+  add("ffprobe agrees on the codec", video?.codec_name, expected.videoCodec ?? "h264");
   add("ffprobe agrees on the resolution", [video?.width, video?.height], expected.size);
   add("ffprobe agrees on the frame rate", video?.r_frame_rate, expected.frameRate);
   add("ffprobe counts every frame", Number(video?.nb_frames), expected.frames);
@@ -153,7 +153,7 @@ function ffmpegChecks(path, expected) {
     Math.round(Number(report.probed.format.duration) * 100),
     Math.round(expected.seconds * 100),
   );
-  add("ffprobe finds the sound", audio?.codec_name, "aac");
+  add("ffprobe finds the sound", audio?.codec_name, expected.audioCodec ?? "aac");
   add("and its sample rate and channels", [audio?.sample_rate, audio?.channels], ["48000", 2]);
   add("ffmpeg decodes every frame back", report.decoded.trim(), "");
   const tone = toneStrength(path, expected.hertz);
