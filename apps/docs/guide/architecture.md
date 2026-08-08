@@ -71,7 +71,7 @@ reverse patch; redo applies the forward one.
 The alternative is the conventional one: each command implements its own inverse. That is where undo
 bugs come from. An inverse has to be written and maintained for every command, it is only exercised
 when someone presses Ctrl+Z on that exact command, and it silently goes stale the moment the forward
-operation is changed without the inverse being updated. Twenty-six commands mean twenty-six inverses
+operation is changed without the inverse being updated. Thirty-seven commands would mean thirty-seven inverses
 to keep honest; a diff means none. The undo machinery is written once and is correct for the next
 command before it is written.
 

@@ -44,12 +44,16 @@ and every clip pointing at it would quietly show the wrong picture.
 
 | Gesture | Result |
 |---|---|
-| Click a clip | selects it |
-| Drag the middle of a clip | moves it, across tracks too |
+| Click a clip | selects it, and the whole group if it is in one |
+| Ctrl/Cmd or Shift click | adds a clip to the selection, or takes it out again |
+| Drag the middle of a clip | moves the whole selection, across tracks when one clip is dragged |
 | Drag a clip edge | trims that edge |
 | Drag in the ruler | scrubs |
 | Two pointers | zooms by the change in distance |
-| Long press | opens the context menu — split at the playhead, delete |
+| Long press, right click | opens the context menu of the clip or the marker under the pointer |
+
+A press inside a selection of several clips keeps it — otherwise the press that starts a drag would
+have thrown away what it is about to move. Releasing without dragging narrows it to the one clip.
 
 Everything runs through Pointer Events, so mouse, pen and finger take the same path. When the
 pointer is not a mouse the trim zones grow to 44 px, because a 4 px target at the end of a clip is
@@ -66,6 +70,65 @@ the undo stack instead of two hundred keyframes on the same spot.
 markers and a grid. The catch radius is computed in pixels and converted to flicks, never the other
 way round, so it stays the same size on screen at every zoom level. Holding a modifier during a
 drag suspends it.
+
+### Edge and clip modes
+
+Two lists in the toolbar decide which command a drag sends. They are lists rather than modifier
+keys because a finger has no modifiers, and because the mode has to be readable *before* the drag
+rather than guessed from what it just did.
+
+| Edge drag | What moves |
+|---|---|
+| **Trim** | that edge, and nothing else |
+| **Ripple** | that edge, and every clip after it on the same track by the same step |
+| **Roll** | the cut this edge shares with its neighbour: the pair keeps its total length |
+
+| Clip drag | What moves |
+|---|---|
+| **Move** | the clip, along the track and across tracks |
+| **Slip** | the material behind the clip, which stays where it is and keeps its length |
+| **Slide** | the clip along the track, with the clips that meet it absorbing the step |
+
+Roll refuses where no clip meets that edge, and every one of them refuses a step that would empty a
+clip or read from before the start of the material. A refusal during a drag is ordinary: the edit
+simply does not happen, and no error is reported for it.
+
+A ripple of the *head* is the one that looks odd until you try it: the clip stays where it is and
+its material moves, because leaving the clip glued to what is in front of it is the whole point of a
+ripple. What the pointer changes there is the length, not the position.
+
+### Deleting, cutting and pasting
+
+| Key | Result |
+|---|---|
+| <kbd>Delete</kbd> | removes the selection and leaves the gap |
+| <kbd>Shift</kbd>+<kbd>Delete</kbd> | removes it and closes the gap: every later clip on the track moves up |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> | copy, cut, paste at the playhead |
+| <kbd>Ctrl</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> | group, ungroup |
+| <kbd>M</kbd> | sets a marker at the playhead |
+
+All of them sit in the clip's context menu as well, and an entry that cannot do anything — paste
+with an empty clipboard, group with one clip selected — is disabled rather than sending a command
+the core would refuse.
+
+Ripple delete only moves what begins at or after the end of the deleted clip. A clip that reaches
+across that end stays where it is: closing a gap must not create an overlap nobody authored.
+
+The clipboard holds whole clips, not references — speed, transform, effects, keyframes and the
+material offset travel with them. A paste puts the earliest one on the playhead and keeps the
+spacing of the rest, on the track each came from where that track still exists. Ids are minted by
+the core, so a clip pasted twice is two clips and not one clip mentioned twice.
+
+Grouped clips are selected together and dragged together, and a group survives everything except
+**Ungroup**. A pasted copy joins no group: it carries the original's material and look, not its
+membership.
+
+### Markers
+
+**Set marker** in the toolbar, or <kbd>M</kbd>, puts one at the playhead. Clicking a marker moves
+the playhead there; its own context menu deletes it. Markers are snap candidates, which is what they
+are mostly for — `marker.rename` exists as a command for the API and the MCP server, but the
+surface offers no text field for it yet.
 
 ### Zoom
 

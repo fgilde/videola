@@ -47,12 +47,17 @@ Bild.
 
 | Geste | Wirkung |
 |---|---|
-| Klick auf einen Clip | wählt ihn aus |
-| Ziehen in der Clipmitte | verschiebt ihn, auch über Spuren hinweg |
+| Klick auf einen Clip | wählt ihn aus, und die ganze Gruppe, wenn er in einer ist |
+| Strg/Cmd- oder Umschalt-Klick | nimmt einen Clip in die Auswahl auf oder wieder heraus |
+| Ziehen in der Clipmitte | verschiebt die ganze Auswahl, bei einem Clip auch über Spuren hinweg |
 | Ziehen an einer Clipkante | trimmt diese Kante |
 | Ziehen im Lineal | scrubbt |
 | Zwei Zeiger | zoomen über die Abstandsänderung |
-| Langes Drücken | öffnet das Kontextmenü — am Playhead teilen, löschen |
+| Langes Drücken, rechte Maustaste | öffnet das Kontextmenü des Clips oder des Markers darunter |
+
+Ein Druck innerhalb einer mehrteiligen Auswahl behält sie — sonst hätte der Druck, der den Zug
+beginnt, gerade das weggeworfen, was er gleich bewegen soll. Loslassen ohne Zug engt auf den einen
+Clip ein.
 
 Alles läuft über Pointer Events, damit Maus, Stift und Finger denselben Weg nehmen. Ist der Zeiger
 keine Maus, wachsen die Trimm-Zonen auf 44 px — ein 4 px breites Ziel am Clipende ist mit dem
@@ -69,6 +74,67 @@ Parameter zu einem Eintrag im Verlauf statt zu zweihundert Keyframes an derselbe
 jeder Spur, Marker und ein Raster. Der Fangradius wird in **Pixeln** gerechnet und in Flicks
 umgerechnet, nie umgekehrt — so bleibt er auf jeder Zoomstufe gleich groß auf dem Schirm. Eine
 gedrückte Modifikatortaste während des Zugs setzt ihn aus.
+
+### Kanten- und Zugmodus
+
+Zwei Listen in der Werkzeugleiste entscheiden, welches Kommando ein Zug schickt. Listen statt
+Modifikatortasten, weil ein Finger keine Modifikatoren hat und weil der Modus **vor** dem Zug
+lesbar sein muss, nicht aus dem erschlossen, was er gerade angerichtet hat.
+
+| Kante ziehen | Was sich bewegt |
+|---|---|
+| **Trimmen** | diese Kante, sonst nichts |
+| **Ripple** | diese Kante, und jeder spätere Clip derselben Spur um denselben Schritt |
+| **Roll** | der Schnitt, den diese Kante mit dem Nachbarn teilt: das Paar behält seine Gesamtlänge |
+
+| Clip ziehen | Was sich bewegt |
+|---|---|
+| **Verschieben** | der Clip, entlang der Spur und über Spuren hinweg |
+| **Slip** | das Material hinter dem Clip; der Clip bleibt liegen und behält seine Länge |
+| **Slide** | der Clip entlang der Spur, wobei die anliegenden Clips den Schritt aufnehmen |
+
+Roll lehnt ab, wo kein Clip an dieser Kante liegt, und alle lehnen einen Schritt ab, der einen Clip
+leeren oder vor dem Anfang des Materials lesen würde. Eine Ablehnung während eines Zugs ist
+gewöhnlich: die Bearbeitung findet einfach nicht statt, und gemeldet wird dafür nichts.
+
+Ein Ripple am **Kopf** sieht befremdlich aus, bis man ihn benutzt: der Clip bleibt liegen und sein
+Material wandert, denn genau darum geht es beim Ripple — der Clip bleibt an dem kleben, was vor ihm
+liegt. Was der Zeiger dort ändert, ist die Länge, nicht die Position.
+
+### Löschen, ausschneiden, einfügen
+
+| Taste | Wirkung |
+|---|---|
+| <kbd>Entf</kbd> | entfernt die Auswahl und lässt die Lücke stehen |
+| <kbd>Umschalt</kbd>+<kbd>Entf</kbd> | entfernt sie und schließt die Lücke: jeder spätere Clip der Spur rückt auf |
+| <kbd>Strg</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd> | kopieren, ausschneiden, am Playhead einfügen |
+| <kbd>Strg</kbd>+<kbd>G</kbd> / <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>G</kbd> | gruppieren, Gruppierung aufheben |
+| <kbd>M</kbd> | setzt einen Marker am Playhead |
+
+Alles steht auch im Kontextmenü des Clips, und ein Eintrag, der nichts bewirken kann — Einfügen
+ohne Zwischenablage, Gruppieren mit einem einzigen Clip — ist deaktiviert, statt ein Kommando zu
+schicken, das der Kern ablehnen würde.
+
+Ripple-Delete bewegt nur, was am Ende des gelöschten Clips oder danach beginnt. Ein Clip, der über
+dieses Ende hinwegreicht, bleibt liegen: das Schließen einer Lücke darf keine Überlappung erzeugen,
+die niemand gebaut hat.
+
+Die Zwischenablage hält ganze Clips, keine Verweise — Geschwindigkeit, Transformation, Effekte,
+Keyframes und der Materialversatz reisen mit. Ein Einfügen setzt den frühesten auf den Playhead und
+behält die Abstände der übrigen, auf der Spur, von der jeder kam, sofern es sie noch gibt. Die Ids
+vergibt der Kern, ein zweimal eingefügter Clip ist also zweimal ein Clip und nicht einmal ein Clip
+mit zwei Erwähnungen.
+
+Gruppierte Clips werden zusammen ausgewählt und zusammen gezogen, und eine Gruppe überlebt alles
+außer **Gruppierung aufheben**. Eine eingefügte Kopie tritt keiner Gruppe bei: sie trägt Material
+und Aussehen des Originals, nicht seine Mitgliedschaft.
+
+### Marker
+
+**Marker setzen** in der Werkzeugleiste oder <kbd>M</kbd> setzt einen am Playhead. Ein Klick auf
+einen Marker springt mit dem Playhead dorthin; sein eigenes Kontextmenü löscht ihn. Marker sind
+Fangkandidaten, und dafür sind sie vor allem da — `marker.rename` gibt es als Kommando für die API
+und den MCP-Server, ein Textfeld dafür hat die Oberfläche noch nicht.
 
 ### Zoom
 
