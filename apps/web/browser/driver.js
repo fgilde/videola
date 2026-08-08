@@ -31,6 +31,28 @@ async function pickFixture() {
   FIXTURE = { name: "fixture.webm", type: "video/webm" };
 }
 
+// Printed on every run, not only a failing one: which container the browser could read, and
+// whether WebGL2 came up at all, are the two facts that explain most of what follows.
+async function announce() {
+  let webgl = "no";
+  try {
+    webgl = document.createElement("canvas").getContext("webgl2") === null ? "no" : "yes";
+  } catch {
+    webgl = "threw";
+  }
+  let decoders = [];
+  for (const codec of ["avc1.42001E", "vp09.00.10.08", "vp8"]) {
+    try {
+      const ok = await VideoDecoder.isConfigSupported({ codec, codedWidth: 640, codedHeight: 360 });
+      if (ok.supported) decoders.push(codec);
+    } catch {
+      // Unsupported and unaskable are the same answer here.
+    }
+  }
+  window.__videolaEnv =
+    `fixture=${FIXTURE.name} webgl2=${webgl} decoders=${decoders.join("|") || "none"}`;
+}
+
 (function () {
   const results = [];
   const noise = [];
@@ -1046,6 +1068,7 @@ async function pickFixture() {
   }
 
   pickFixture()
+    .then(announce)
     .then(() =>
       templates ? runTemplates() : phone ? runPhone() : tablet ? runTablet() : run(),
     )
@@ -1056,6 +1079,12 @@ async function pickFixture() {
       if (noise.length > 0) {
         results.push({ name: "nothing reached the console", ok: false, got: noise, want: [] });
       }
+      results.push({
+        name: `ENV ${window.__videolaEnv ?? "unknown"}`,
+        ok: true,
+        got: "noted",
+        want: "noted",
+      });
       return fetch("/results", { method: "POST", body: JSON.stringify(results) });
     });
 })();

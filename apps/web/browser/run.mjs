@@ -269,6 +269,9 @@ try {
   // where both panels are on screen at the same time.
   const slate = await driveTouch(TABLET, "tablet=1", 180_000, "the tablet");
   const results = [...live, ...drawn, ...baked, ...pocket, ...slate];
+  for (const note of results.filter((entry) => entry.name.startsWith("ENV "))) {
+    console.log(note.name);
+  }
   for (const result of results.filter((entry) => !entry.ok)) {
     console.error(
       `FAIL ${result.name}\n  got  ${JSON.stringify(result.got)}\n  want ${JSON.stringify(result.want)}`,
