@@ -8,7 +8,9 @@ use videola_core::command::{Command, Dispatch};
 use videola_core::format::{
     reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
 };
-use videola_core::model::{ClipId, MediaAsset, MediaId, MediaKind, Project, Time};
+use videola_core::model::{
+    ClipId, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project, Time,
+};
 use videola_core::{CoreError, DispatchResult, Document, Result};
 
 pub struct DocumentHost {
@@ -67,6 +69,23 @@ impl DocumentHost {
             .iter()
             .flat_map(|track| &track.clips)
             .filter_map(|clip| Some((clip.id.clone(), clip.readable_source_time_at(at)?)))
+            .collect()
+    }
+
+    // A batch for the same reason: the preview resolves every parameter of every effect it is
+    // about to draw, once per frame. Keyed by effect id, which is unique across the project, so a
+    // caller that has the effect needs no clip to look one up. Disabled effects are in as well --
+    // the inspector shows their values and the renderer skips them, and deciding that here would
+    // give the two consumers different data.
+    pub fn effect_params_at(&self, at: Time) -> BTreeMap<EffectId, BTreeMap<String, ParamValue>> {
+        self.project()
+            .timeline
+            .tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .filter(|clip| clip.contains(at))
+            .flat_map(|clip| &clip.effects)
+            .map(|effect| (effect.id.clone(), resolved_params(effect, at)))
             .collect()
     }
 
@@ -189,6 +208,18 @@ impl MediaStore for SaveStore<'_> {
     }
 }
 
+// Every key the effect can answer for: a keyframed parameter need not have a static entry, and a
+// static one need not be keyframed. `param_at` decides which of the two wins -- that rule stays
+// here, so the renderer and the inspector cannot end up interpolating differently.
+fn resolved_params(effect: &Effect, at: Time) -> BTreeMap<String, ParamValue> {
+    effect
+        .params
+        .keys()
+        .chain(effect.keyframes.keys())
+        .filter_map(|key| Some((key.clone(), effect.param_at(key, at)?)))
+        .collect()
+}
+
 fn parse_kind(kind: &str) -> Result<MediaKind> {
     MediaKind::deserialize(StrDeserializer::<DeError>::new(kind))
         .map_err(|_| CoreError::InvalidArgument(format!("unknown media kind: {kind}")))
@@ -197,6 +228,8 @@ fn parse_kind(kind: &str) -> Result<MediaKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use videola_core::model::{Clip, Interp, Keyframe, Track, TrackKind};
 
     // Constructing near the 2 GiB cap directly instead of actually allocating gigabytes of
     // zeroes keeps this test instant while still exercising the exact boundary.
@@ -327,6 +360,80 @@ mod tests {
 
         assert_eq!(times.keys().collect::<Vec<_>>(), vec![&clips[1]]);
         assert!(host.source_times_at(Time::from_seconds(9.0)).is_empty());
+    }
+
+    // One clip carrying one effect whose `amount` is both static and keyframed, so the two rules
+    // the batch has to keep apart are present at once.
+    fn host_with_effect(keys: Vec<Keyframe>) -> (DocumentHost, EffectId) {
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(4.0),
+        );
+        let mut effect = Effect::new("brightness");
+        effect
+            .params
+            .insert("amount".into(), ParamValue::Float(2.0));
+        if !keys.is_empty() {
+            effect.keyframes.insert("amount".into(), keys);
+        }
+        let id = effect.id.clone();
+        clip.effects.push(effect);
+        let mut project = Project::default();
+        project
+            .timeline
+            .tracks
+            .push(Track::new(TrackKind::Video, "V".into()));
+        project.timeline.tracks[0].clips.push(clip);
+        let host = DocumentHost {
+            document: Document::from_project(project).unwrap(),
+            media: MemoryMediaStore::default(),
+            media_bytes_total: 0,
+            warnings: Vec::new(),
+        };
+        (host, id)
+    }
+
+    fn ramp(seconds: f64, value: f32) -> Keyframe {
+        Keyframe {
+            time: Time::from_seconds(seconds),
+            value: ParamValue::Float(value),
+            interp: Interp::Linear,
+            handle_in: None,
+            handle_out: None,
+        }
+    }
+
+    #[test]
+    fn keyframed_parameters_come_out_interpolated_at_the_moment_asked_for() {
+        let (host, effect) = host_with_effect(vec![ramp(0.0, 0.0), ramp(2.0, 1.0)]);
+
+        let at_quarter = host.effect_params_at(Time::from_seconds(0.5));
+        let at_half = host.effect_params_at(Time::from_seconds(1.0));
+
+        assert_eq!(at_quarter[&effect]["amount"], ParamValue::Float(0.25));
+        assert_eq!(at_half[&effect]["amount"], ParamValue::Float(0.5));
+    }
+
+    #[test]
+    fn a_parameter_without_keyframes_keeps_its_static_value() {
+        let (host, effect) = host_with_effect(Vec::new());
+
+        let params = host.effect_params_at(Time::from_seconds(1.0));
+
+        assert_eq!(params[&effect]["amount"], ParamValue::Float(2.0));
+    }
+
+    // The crossing the renderer walks every frame: a keyframe ramp that reaches past the clip.
+    // Outside the clip the effect is simply not in the batch, however the ramp would evaluate.
+    #[test]
+    fn effects_of_a_clip_the_moment_does_not_touch_are_absent() {
+        let (host, effect) = host_with_effect(vec![ramp(0.0, 0.0), ramp(8.0, 1.0)]);
+
+        assert!(host
+            .effect_params_at(Time::from_seconds(3.999))
+            .contains_key(&effect));
+        assert!(host.effect_params_at(Time::from_seconds(4.0)).is_empty());
     }
 
     fn options() -> SaveOptions {

@@ -61,6 +61,16 @@ impl WasmDocument {
         )?)
     }
 
+    // A `Map` of `Map`s, for the same reason -- and `to_js_value` would be the wrong tool twice
+    // over here, because `serialize_maps_as_objects` would flatten both levels.
+    #[wasm_bindgen(js_name = effectParamsAt)]
+    pub fn effect_params_at(&self, at: JsValue) -> std::result::Result<JsValue, JsError> {
+        let at: Time = serde_wasm_bindgen::from_value(at)?;
+        Ok(serde_wasm_bindgen::to_value(
+            &self.host.effect_params_at(at),
+        )?)
+    }
+
     #[wasm_bindgen(js_name = historyLabels)]
     pub fn history_labels(&self) -> std::result::Result<JsValue, JsError> {
         to_js_value(&self.host.history_labels())

@@ -97,6 +97,22 @@ describe("source times through the real WASM backend", () => {
     expect(doc.sourceTimesAt(SECOND)).toEqual(new Map([[clip.id, clip.inPoint + consumed / 2]]));
   });
 
+  // Two levels of Map, and `to_js_value` would have flattened both into object literals. Asking
+  // through `.get` is the point: an object literal answers `undefined` here and nothing throws.
+  it("hands effect parameters over as maps keyed by effect id", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const clip = clipOn(doc, 0);
+    doc.dispatch(cmd.effectAdd(clip.id, "brightness"));
+    doc.dispatch(cmd.effectSetParam(clip.id, "brightness", "amount", { kind: "float", value: 1.5 }));
+    const effect = clipOn(doc, 0).effects[0]!;
+
+    const params = doc.effectParamsAt(SECOND);
+
+    expect(params.get(effect.id)?.get("amount")).toEqual({ kind: "float", value: 1.5 });
+    expect(doc.effectParamsAt(2 * SECOND).size).toBe(0);
+  });
+
   it("carries whole flicks across the boundary, not seconds", async () => {
     const doc = await timeline();
     doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, SECOND));

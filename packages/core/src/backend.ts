@@ -1,4 +1,12 @@
-import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project, Time } from "./generated";
+import type {
+  Dispatch,
+  DispatchResult,
+  LoadWarning,
+  MediaKind,
+  ParamValue,
+  Project,
+  Time,
+} from "./generated";
 
 export interface SaveOptions {
   appVersion: string;
@@ -23,9 +31,16 @@ export interface ImportMediaResult {
 // not the exclusive end of its range.
 export type SourceTimes = (at: Time) => ReadonlyMap<string, Time>;
 
+// Every effect on every clip the moment touches, keyed by effect id, with the value of every
+// parameter it can answer for — interpolated where keyframes exist. Batched for the same reason
+// as `SourceTimes`, and carrying the same rule: the interpolation stays in the core, so the
+// preview and the export cannot arrive at different numbers for the same frame.
+export type EffectParams = (at: Time) => ReadonlyMap<string, ReadonlyMap<string, ParamValue>>;
+
 export interface DocumentBackend {
   state(): Project;
   sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
+  effectParamsAt(at: Time): ReadonlyMap<string, ReadonlyMap<string, ParamValue>>;
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
