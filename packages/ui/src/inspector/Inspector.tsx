@@ -7,7 +7,9 @@ import {
   type Clip,
   type ClipId,
   type Command,
+  type Effect,
   type EffectParamSnapshot,
+  type Interp,
   type MediaAsset,
   type ParamValue,
   type Project,
@@ -326,74 +328,19 @@ function Effects({
         return (
           <div key={authored.id} className="v-inspector__effect">
             <h4 className="v-inspector__effectName">{manifest.name[locale]}</h4>
-            {manifest.params.map((param) => {
-              const track = authored.keyframes[param.key] ?? [];
-              const keyframed = track.length > 0;
-              const value = shown(param, resolved.get(authored.id)?.get(param.key)?.value);
-              return (
-                <ParamRow
-                  key={param.key}
-                  label={param.name[locale]}
-                  value={value}
-                  min={param.min}
-                  max={param.max}
-                  // A keyframed parameter can only be written at a moment the clip covers, and
-                  // its static value is ignored -- so with the playhead elsewhere the slider has
-                  // nothing it could truthfully do.
-                  disabled={keyframed && !inside}
-                  onChange={(next, coalesceKey) =>
-                    send(
-                      keyframed
-                        ? cmd.keyframeAdd(
-                            clip.id,
-                            authored.effectType,
-                            param.key,
-                            playhead,
-                            float(next),
-                            keyframeAt(track, playhead)?.interp ?? "linear",
-                          )
-                        : cmd.effectSetParam(
-                            clip.id,
-                            authored.effectType,
-                            param.key,
-                            float(next),
-                          ),
-                      coalesceKey,
-                    )
-                  }
-                  keyframes={{
-                    at: playhead,
-                    track,
-                    settable: inside,
-                    onAdd: () =>
-                      send(
-                        cmd.keyframeAdd(
-                          clip.id,
-                          authored.effectType,
-                          param.key,
-                          playhead,
-                          float(value),
-                        ),
-                      ),
-                    onRemove: () =>
-                      send(
-                        cmd.keyframeRemove(clip.id, authored.effectType, param.key, playhead),
-                      ),
-                    onGoTo: onSeek,
-                    onInterp: (interp) =>
-                      send(
-                        cmd.keyframeSetInterp(
-                          clip.id,
-                          authored.effectType,
-                          param.key,
-                          playhead,
-                          interp,
-                        ),
-                      ),
-                  }}
-                />
-              );
-            })}
+            {manifest.params.map((param) => (
+              <EffectParam
+                key={param.key}
+                clip={clip.id}
+                effect={authored}
+                param={param}
+                value={shown(param, resolved.get(authored.id)?.get(param.key)?.value)}
+                playhead={playhead}
+                inside={inside}
+                send={send}
+                onSeek={onSeek}
+              />
+            ))}
           </div>
         );
       })}
@@ -408,6 +355,67 @@ function Effects({
         </button>
       ))}
     </Group>
+  );
+}
+
+// One parameter of one effect. Split out because `Effects` decides *which* rows exist and this
+// decides what one row does -- and because five levels of nested arrows in a map is where a
+// wrong `clip.id` hides.
+function EffectParam({
+  clip,
+  effect,
+  param,
+  value,
+  playhead,
+  inside,
+  send,
+  onSeek,
+}: {
+  clip: ClipId;
+  effect: Effect;
+  param: EffectParamDescriptor;
+  value: number;
+  playhead: Time;
+  inside: boolean;
+  send: Send;
+  onSeek: (time: Time) => void;
+}): ReactElement {
+  const { locale } = useI18n();
+  const track = effect.keyframes[param.key] ?? [];
+  const keyframed = track.length > 0;
+  const set = (next: number, interp: Interp = "linear"): Command =>
+    cmd.keyframeAdd(clip, effect.effectType, param.key, playhead, float(next), interp);
+
+  return (
+    <ParamRow
+      label={param.name[locale]}
+      value={value}
+      min={param.min}
+      max={param.max}
+      // A keyframed parameter can only be written at a moment the clip covers, and its static
+      // value is ignored once a track exists -- so with the playhead elsewhere the slider has
+      // nothing it could truthfully do.
+      disabled={keyframed && !inside}
+      onChange={(next, coalesceKey) =>
+        send(
+          keyframed
+            ? // Not a plain "linear": the upsert must not turn a held keyframe into a ramp.
+              set(next, keyframeAt(track, playhead)?.interp ?? "linear")
+            : cmd.effectSetParam(clip, effect.effectType, param.key, float(next)),
+          coalesceKey,
+        )
+      }
+      keyframes={{
+        at: playhead,
+        track,
+        settable: inside,
+        onAdd: () => send(set(value)),
+        onRemove: () => send(cmd.keyframeRemove(clip, effect.effectType, param.key, playhead)),
+        onGoTo: onSeek,
+        onInterp: (interp) =>
+          send(cmd.keyframeSetInterp(clip, effect.effectType, param.key, playhead, interp)),
+      }}
+    />
   );
 }
 
