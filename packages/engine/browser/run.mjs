@@ -153,9 +153,18 @@ function ffmpegChecks(path, expected) {
     Math.round(Number(report.probed.format.duration) * 100),
     Math.round(expected.seconds * 100),
   );
+  add("ffmpeg decodes every frame back", report.decoded.trim(), "");
+  // A browser can carry a format's picture and refuse its sound -- Chrome on Linux encodes H.264
+  // and not AAC -- and the export then writes a silent file on purpose. Asking ffmpeg for a track
+  // that is deliberately absent is not a failure of the export, so what is checked is that the
+  // file matches what the browser said it could write.
+  if (expected.hasAudio === false) {
+    add("no sound, because this browser cannot encode any", audio, undefined);
+    console.log("note: silent export -- this browser encodes no audio codec for the chosen format");
+    return checks;
+  }
   add("ffprobe finds the sound", audio?.codec_name, expected.audioCodec ?? "aac");
   add("and its sample rate and channels", [audio?.sample_rate, audio?.channels], ["48000", 2]);
-  add("ffmpeg decodes every frame back", report.decoded.trim(), "");
   const tone = toneStrength(path, expected.hertz);
   add("the sound in the file is the tone that went in", tone > 100 * toneStrength(path, 550), true);
   return checks;
