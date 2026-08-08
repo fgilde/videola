@@ -268,22 +268,26 @@ Eigenschaften. Unten die Zeitleiste mit **V1 und V2**: auf V1 die beiden angehae
 
 ---
 
-## Eine Anmerkung zum Bauen
+## Eine Anmerkung zum Bauen, und eine widerlegte Annahme
 
 `wasm-pack` ist in diesem Worktree dreimal abgebrochen (`STATUS_ILLEGAL_INSTRUCTION`,
-`STATUS_ACCESS_VIOLATION`) und der vierte Lauf hat ueber eine Stunde CPU auf einer einzigen Kiste
-verbraucht, ohne fertig zu werden — vier Agenten bauen parallel Rust auf derselben Maschine.
+`STATUS_ACCESS_VIOLATION`) und ein vierter Lauf hat ueber eine Stunde CPU verbraucht, ohne fertig
+zu werden — mehrere Agenten bauen parallel Rust auf derselben Maschine.
 
-Um nicht daran zu haengen, habe ich das Artefakt aus einem Nachbar-Worktree uebernommen, **aber
-erst nachdem die Wiederholbarkeit belegt war**: die Rust-Quellen von `videola`, `videola-effects`,
-`videola-audio` und diesem Worktree sind byte-identisch (`sha256` ueber alle `.rs` und
-`Cargo.toml`), `Cargo.lock` und `rust-toolchain.toml` ebenso, und die drei unabhaengig gebauten
-`videola_core_bg.wasm` sind **byte-identisch zueinander**. `videola-editor` weicht ab und wurde
-ausgeschlossen. Das Artefakt ist ohnehin `.gitignore`d und nicht Teil eines Commits.
+Um nicht daran zu haengen, habe ich zwischenzeitlich das Artefakt aus einem Nachbar-Worktree
+uebernommen, nachdem drei Worktrees mit byte-identischen Rust-Quellen, `Cargo.lock` und
+`rust-toolchain.toml` **byte-identische** `videola_core_bg.wasm` erzeugt hatten.
 
-Trotzdem ist es eine uebernommene und keine selbst erzeugte Ausgabe, und das gehoert benannt: ein
-eigener Lauf lief beim Schreiben dieses Berichts noch. Nichts in diesem Meilenstein fasst
-`crates/` an.
+**Diese Annahme war falsch, und der eigene Lauf hat sie widerlegt.** Der spaetere Bau in diesem
+Worktree liefert einen anderen Hash und **1.629.619 statt 2.359.558 Bytes** — er hat `wasm-bindgen`
+frisch geholt und `wasm-opt` durchlaufen lassen. Drei uebereinstimmende Ausgaben belegen also
+nicht, dass der Bau reproduzierbar ist, sondern nur, dass drei Laeufe dieselbe zwischengespeicherte
+Werkzeugversion benutzt haben. Ein Beispiel dafuer, wie eine Stichprobe wie ein Beweis aussieht.
+
+**Der Endstand haengt daran nicht.** Alle oben genannten Zahlen — `typecheck`, 737 Tests, `build`
+und alle vier Harnessen — sind danach **gegen das selbst gebaute Artefakt** noch einmal vollstaendig
+durchgelaufen und gruen. Das Artefakt ist `.gitignore`d und in keinem Commit; nichts in diesem
+Meilenstein fasst `crates/` an.
 
 ---
 
