@@ -127,11 +127,21 @@
 }
 
 /* The mixer is a strip along the bottom rather than a column: it is per track, so it wants the
-   same width the timeline has, and its height is its own -- an `auto` row keeps it out of the
-   picture's way. Without an area of its own it landed in an implicit row and squeezed the preview
-   to nothing, which is exactly what the tablet check catches. */
+   same width the timeline has. Without an area of its own it landed in an implicit row and squeezed
+   the preview to nothing, which is exactly what the tablet check catches.
+
+   An `auto` row on its own stopped being enough once a strip carried an insert chain: "its own
+   height" is then a fader plus however many effects the project holds, and an unbounded auto row
+   takes all of it out of the `1fr` above. The cap turns further growth into scrolling -- `.v-mixer`
+   already scrolls -- so a fourth effect cannot collapse the picture. Left off on a phone, where the
+   mixer is a full panel of its own and has the room. */
 .v-editor > .v-mixer {
   grid-area: mixer;
+  max-height: 20vh;
+}
+
+.v-shell[data-layout="phone"] .v-editor > .v-mixer {
+  max-height: none;
 }
 
 .v-editor > .v-banners {

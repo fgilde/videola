@@ -36,6 +36,14 @@
   gap: 8px;
 }
 
+/* The offers wrap along a row rather than stacking. Three 44 px buttons in a column is 132 px of
+   strip before a project has a single effect on it, and that height comes straight out of the
+   picture above. */
+.v-mixer__chain > .v-button {
+  display: inline-block;
+  width: fit-content;
+}
+
 .v-mixer__effect {
   display: flex;
   flex-direction: column;
