@@ -301,7 +301,10 @@ function applyMove(
   const top = config.tracksArea.current?.getBoundingClientRect().top ?? 0;
   const row = trackAt(tracks, active.clientY + dy - top);
   const toTrack = tracks[row]?.id ?? found.track;
-  attempt(() => config.dispatch(cmd.clipMove(active.clip, toTrack, snapped.time), active.key));
+  // The command is built outside the guard: only what the core throws is ordinary here, a
+  // TypeError of our own has no business being swallowed.
+  const command = cmd.clipMove(active.clip, toTrack, snapped.time);
+  attempt(() => config.dispatch(command, active.key));
   return snapped.candidate;
 }
 
@@ -320,7 +323,8 @@ function applyTrim(
   const snapped = snapTime(wanted, candidatesFor(config, active.clip), options);
   const step = snapped.time - edgeTime(found.clip, active.edge);
   if (step !== 0) {
-    attempt(() => config.dispatch(cmd.clipTrim(active.clip, active.edge, step), active.key));
+    const command = cmd.clipTrim(active.clip, active.edge, step);
+    attempt(() => config.dispatch(command, active.key));
   }
   return snapped.candidate;
 }
@@ -364,7 +368,8 @@ function snapOptions(config: GestureConfig, modifierHeld: boolean): SnapOptions 
 
 // The core is the authority on what an edit may do. A rejected step during a drag means the edge
 // hit its limit, not that the gesture is broken -- the next move recomputes from where the core
-// left the clip.
+// left the clip. This is why TimelineProps.dispatch has to throw rather than report: a caller
+// that catches first turns every limit into an error banner, one per pointer movement.
 function attempt(action: () => void): void {
   try {
     action();

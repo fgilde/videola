@@ -34,6 +34,11 @@ const ZOOM_FACTOR = 2;
 export interface TimelineProps {
   project: Project;
   playhead: Time;
+  /**
+   * Must throw when the core refuses a command, and must not report it itself. Hitting a clip's
+   * limit is ordinary during a drag and the timeline swallows it; a caller that catches first
+   * produces one error banner per pointer movement.
+   */
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
   onSelectionChange?: (clip: ClipId | undefined) => void;
