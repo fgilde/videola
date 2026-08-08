@@ -192,11 +192,14 @@ try {
     { stdio: "ignore" },
   );
 
+  // Unreferenced, or the loser of the race holds the process open for its full five minutes after
+  // a run that finished in forty seconds. The listening server is what keeps the loop alive until
+  // then, so the deadline still arrives when the page really never reports.
   const page = await Promise.race([
     reported,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("the harness never reported back")), RUN_TIMEOUT_MS),
-    ),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("the harness never reported back")), RUN_TIMEOUT_MS).unref();
+    }),
   ]);
 
   const results = [...page.results];
