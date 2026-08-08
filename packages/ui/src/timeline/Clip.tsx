@@ -3,27 +3,44 @@ import type { ReactElement } from "react";
 import type { Clip as ClipModel, MediaAsset } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
-import { timeToX } from "./geometry";
+import { timeToX, trimZoneWidth } from "./geometry";
 
 export interface ClipProps {
   clip: ClipModel;
   flicksPerPixel: number;
   mediaNames: ReadonlyMap<string, string>;
+  selected: boolean;
+  trimZonePx: number;
+  onSelect: (clip: string) => void;
 }
 
-export function Clip({ clip, flicksPerPixel, mediaNames }: ClipProps): ReactElement {
+export function Clip({
+  clip,
+  flicksPerPixel,
+  mediaNames,
+  selected,
+  trimZonePx,
+  onSelect,
+}: ClipProps): ReactElement {
   const { t } = useI18n();
+  const width = timeToX(clip.duration, flicksPerPixel);
+  const zone = `${trimZoneWidth(width, trimZonePx)}px`;
   return (
-    <div
+    // A real button so focus, the accessible name and keyboard activation come from the
+    // platform; the pointer gestures read the same element through the event target.
+    <button
+      type="button"
       className="v-clip"
       data-clip-id={clip.id}
-      style={{
-        left: `${timeToX(clip.start, flicksPerPixel)}px`,
-        width: `${timeToX(clip.duration, flicksPerPixel)}px`,
-      }}
+      data-selected={selected}
+      aria-pressed={selected}
+      style={{ left: `${timeToX(clip.start, flicksPerPixel)}px`, width: `${width}px` }}
+      onClick={() => onSelect(clip.id)}
     >
       <span className="v-clip__label">{clipLabel(clip, mediaNames, t)}</span>
-    </div>
+      <span className="v-clip__trim" data-edge="start" style={{ width: zone }} />
+      <span className="v-clip__trim" data-edge="end" style={{ width: zone }} />
+    </button>
   );
 }
 

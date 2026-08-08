@@ -99,7 +99,7 @@ describe("Timeline", () => {
 
   it("draws tracks[0] at the bottom, matching the order the compositor blends in", () => {
     const project = makeProject([makeTrack("trk_bottom"), makeTrack("trk_top")]);
-    renderTimeline(<Timeline project={project} playhead={0} />);
+    renderTimeline(<Timeline project={project} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
 
     const rows = [...document.querySelectorAll<HTMLElement>("[data-track-index]")];
     expect(rows.map((row) => row.dataset.trackIndex)).toEqual(["1", "0"]);
@@ -113,7 +113,7 @@ describe("Timeline", () => {
       [makeTrack("trk_1", [clip])],
       [{ id: "med_a", originalName: "beach.mp4" }] as Project["library"],
     );
-    renderTimeline(<Timeline project={project} playhead={0} />);
+    renderTimeline(<Timeline project={project} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
 
     expect(screen.getByText("beach.mp4")).toBeTruthy();
   });
@@ -122,27 +122,27 @@ describe("Timeline", () => {
     const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND, {
       source: { kind: "media", media: "med_gone" },
     } as Partial<Clip>);
-    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
 
     expect(screen.getByText("Ohne Namen")).toBeTruthy();
   });
 
   it("places the playhead at its pixel position", () => {
     const project = makeProject([makeTrack("trk_1")]);
-    renderTimeline(<Timeline project={project} playhead={2 * FLICKS_PER_SECOND} />);
+    renderTimeline(<Timeline project={project} playhead={2 * FLICKS_PER_SECOND} dispatch={() => {}} onSeek={() => {}} />);
 
     // The default zoom is 100 px per second.
     expect(screen.getByTestId("timeline-playhead").style.left).toBe("200px");
   });
 
   it("writes the ruler in timecode of the project frame rate", () => {
-    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1")])} playhead={0} />);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1")])} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     expect(screen.getByText("00:00:01.00")).toBeTruthy();
   });
 
   it("halves the flicks per pixel when zooming in, so a clip draws twice as wide", () => {
     const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND);
-    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     const width = () => document.querySelector<HTMLElement>("[data-clip-id]")?.style.width;
 
     expect(width()).toBe("100px");
@@ -157,7 +157,7 @@ describe("Timeline", () => {
   it("keeps the time under the zoom anchor where it was", () => {
     const scroll = stubViewport();
     const clip = makeClip("clp_1", 0, 60 * FLICKS_PER_SECOND);
-    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
 
     // The anchor is the viewport centre, 450 px in, at 100 px per second: 4.5 s.
     act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
@@ -169,7 +169,7 @@ describe("Timeline", () => {
   it("refuses to zoom past the point where the content element stops laying out", () => {
     const clip = makeClip("clp_1", 0, 24 * 3600 * FLICKS_PER_SECOND);
     const { container } = renderTimeline(
-      <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />,
+      <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
     );
     for (let step = 0; step < 40; step += 1) {
       act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
@@ -181,7 +181,7 @@ describe("Timeline", () => {
   });
 
   it("shows the empty hint when the project has no tracks", () => {
-    renderTimeline(<Timeline project={makeProject()} playhead={0} />);
+    renderTimeline(<Timeline project={makeProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     expect(screen.getByText(/Noch keine Spuren/)).toBeTruthy();
   });
 });
@@ -203,7 +203,7 @@ describe("Timeline virtualisation", () => {
     const project = hourLongProject();
     expect(project.timeline.tracks[0]?.clips).toHaveLength(3600);
 
-    renderTimeline(<Timeline project={project} playhead={0} />);
+    renderTimeline(<Timeline project={project} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
 
     const drawn = document.querySelectorAll("[data-clip-id]").length;
     expect(drawn).toBeGreaterThan(0);
@@ -211,17 +211,17 @@ describe("Timeline virtualisation", () => {
   });
 
   it("keeps the ruler windowed too", () => {
-    renderTimeline(<Timeline project={hourLongProject()} playhead={0} />);
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     expect(document.querySelectorAll("[data-tick]").length).toBeLessThan(40);
   });
 
   it("keeps the whole timeline subtree small enough to be a real DOM", () => {
-    renderTimeline(<Timeline project={hourLongProject()} playhead={0} />);
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     expect(screen.getByTestId("timeline").querySelectorAll("*").length).toBeLessThan(200);
   });
 
   it("still reserves scroll width for the whole hour", () => {
-    const { container } = renderTimeline(<Timeline project={hourLongProject()} playhead={0} />);
+    const { container } = renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     const content = container.querySelector<HTMLElement>(".v-timeline__content");
     expect(Number.parseFloat(content?.style.width ?? "0")).toBeGreaterThan(360_000);
   });

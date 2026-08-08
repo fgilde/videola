@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-import type { Track as TrackModel } from "@videola/core";
+import type { ClipId, Track as TrackModel } from "@videola/core";
 
 import { Clip } from "./Clip";
 import { clipsInRange, trackHeight, type TimeRange } from "./geometry";
@@ -11,6 +11,9 @@ export interface TrackProps {
   flicksPerPixel: number;
   range: TimeRange;
   mediaNames: ReadonlyMap<string, string>;
+  selected: ClipId | undefined;
+  trimZonePx: number;
+  onSelect: (clip: ClipId) => void;
 }
 
 export function Track({
@@ -19,6 +22,9 @@ export function Track({
   flicksPerPixel,
   range,
   mediaNames,
+  selected,
+  trimZonePx,
+  onSelect,
 }: TrackProps): ReactElement {
   return (
     <div
@@ -33,6 +39,9 @@ export function Track({
           clip={clip}
           flicksPerPixel={flicksPerPixel}
           mediaNames={mediaNames}
+          selected={clip.id === selected}
+          trimZonePx={trimZonePx}
+          onSelect={onSelect}
         />
       ))}
     </div>

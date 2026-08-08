@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 
-import { cmd, createWasmBackend, VideolaDocument, type LoadWarning, type Project } from "@videola/core";
+import {
+  cmd,
+  createWasmBackend,
+  VideolaDocument,
+  type Command,
+  type LoadWarning,
+  type Project,
+  type Time,
+} from "@videola/core";
 import { mediaForProject } from "@videola/media";
 import { AppShell, Timeline, useI18n } from "@videola/ui";
 
@@ -18,6 +26,7 @@ export function App(): ReactElement {
   const [warnings, setWarnings] = useState<LoadWarning[]>([]);
   const [flags, setFlags] = useState({ canUndo: false, canRedo: false });
   const [error, setError] = useState<ShellError>();
+  const [playhead, setPlayhead] = useState<Time>(0);
   const nextErrorId = useRef(0);
 
   // A stable identity per report, so an identical repeat error still replaces the DOM node
@@ -58,6 +67,19 @@ export function App(): ReactElement {
       setFlags({ canUndo: doc.canUndo, canRedo: doc.canRedo });
     });
   }, [doc]);
+
+  const edit = useCallback(
+    (command: Command, coalesceKey?: string) => {
+      if (doc === undefined) return;
+      try {
+        doc.dispatch(command, coalesceKey);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
 
   const addTrack = useCallback(() => {
     if (doc === undefined) return;
@@ -142,7 +164,14 @@ export function App(): ReactElement {
       <ErrorBanner error={error} />
       <WarningBanner warnings={warnings} />
       <Status project={project} />
-      {project !== undefined && <Timeline project={project} playhead={0} />}
+      {project !== undefined && (
+        <Timeline
+          project={project}
+          playhead={playhead}
+          dispatch={edit}
+          onSeek={setPlayhead}
+        />
+      )}
     </AppShell>
   );
 }

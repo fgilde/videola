@@ -15,7 +15,7 @@ export function Ruler({ range, flicksPerPixel, fps }: RulerProps): ReactElement 
   const { t, formatTimecode } = useI18n();
   const step = tickStep(flicksPerPixel, fps);
   return (
-    <div className="v-ruler" data-testid="timeline-ruler" aria-label={t("timeline.ruler")}>
+    <div className="v-ruler" data-timeline-ruler aria-label={t("timeline.ruler")}>
       {rulerTicks(range, step).map((at) => (
         <span
           key={at}

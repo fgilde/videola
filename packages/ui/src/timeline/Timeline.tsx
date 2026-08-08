@@ -8,12 +8,14 @@ import {
   type RefObject,
 } from "react";
 
-import { FLICKS_PER_SECOND, type Project, type Time } from "@videola/core";
+import { cmd, FLICKS_PER_SECOND, type ClipId, type Command, type Project, type Time } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
 import { mediaNameIndex } from "./Clip";
+import { ContextMenu } from "./ContextMenu";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
+import { useTimelineGestures } from "./useTimelineGestures";
 import {
   clampZoom,
   timeToX,
@@ -21,6 +23,7 @@ import {
   visibleRange,
   xToTime,
   type TimeRange,
+  type ZoomBy,
 } from "./geometry";
 import "./Timeline.css";
 
@@ -31,20 +34,52 @@ const ZOOM_FACTOR = 2;
 export interface TimelineProps {
   project: Project;
   playhead: Time;
+  dispatch: (command: Command, coalesceKey?: string) => void;
+  onSeek: (time: Time) => void;
+  onSelectionChange?: (clip: ClipId | undefined) => void;
 }
 
-export function Timeline({ project, playhead }: TimelineProps): ReactElement {
+export function Timeline({
+  project,
+  playhead,
+  dispatch,
+  onSeek,
+  onSelectionChange,
+}: TimelineProps): ReactElement {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const tracksRef = useRef<HTMLDivElement>(null);
   const [flicksPerPixel, setFlicksPerPixel] = useState(DEFAULT_FLICKS_PER_PIXEL);
+  const [selected, setSelected] = useState<ClipId>();
   const viewport = useViewport(scrollRef);
   const projectEnd = useMemo(() => timelineEnd(project), [project]);
   const zoom = useAnchoredZoom(scrollRef, flicksPerPixel, setFlicksPerPixel, projectEnd);
+
+  const select = useCallback(
+    (clip: ClipId | undefined) => {
+      setSelected(clip);
+      onSelectionChange?.(clip);
+    },
+    [onSelectionChange],
+  );
+
+  const gestures = useTimelineGestures({
+    project,
+    playhead,
+    flicksPerPixel,
+    surface: scrollRef,
+    tracksArea: tracksRef,
+    dispatch,
+    onSeek,
+    onSelect: select,
+    zoom,
+  });
 
   const tracks = project.timeline.tracks;
   // Top row first, because tracks[0] is the one the compositor draws lowest.
   const rows = useMemo(() => tracks.map((track, index) => ({ track, index })).reverse(), [tracks]);
   const mediaNames = useMemo(() => mediaNameIndex(project.library), [project.library]);
+  const menu = gestures.menu;
   const range: TimeRange = visibleRange(viewport.scrollLeft, viewport.width, flicksPerPixel);
   // One viewport of slack past the end, so a clip can always be dragged beyond what exists.
   const contentWidth = timeToX(projectEnd, flicksPerPixel) + Math.max(viewport.width, 1);
@@ -83,10 +118,18 @@ export function Timeline({ project, playhead }: TimelineProps): ReactElement {
           ))}
         </div>
 
-        <div className="v-timeline__scroll" ref={scrollRef}>
+        <div
+          className="v-timeline__scroll"
+          ref={scrollRef}
+          onPointerDown={gestures.onPointerDown}
+          onPointerMove={gestures.onPointerMove}
+          onPointerUp={gestures.onPointerUp}
+          onPointerCancel={gestures.onPointerCancel}
+          onContextMenu={gestures.onContextMenu}
+        >
           <div className="v-timeline__content" style={{ width: `${contentWidth}px` }}>
             <Ruler range={range} flicksPerPixel={flicksPerPixel} fps={project.settings.fps} />
-            <div className="v-timeline__tracks">
+            <div className="v-timeline__tracks" ref={tracksRef}>
               {rows.map(({ track, index }) => (
                 <Track
                   key={track.id}
@@ -95,6 +138,9 @@ export function Timeline({ project, playhead }: TimelineProps): ReactElement {
                   flicksPerPixel={flicksPerPixel}
                   range={range}
                   mediaNames={mediaNames}
+                  selected={selected}
+                  trimZonePx={gestures.trimZonePx}
+                  onSelect={select}
                 />
               ))}
             </div>
@@ -108,6 +154,22 @@ export function Timeline({ project, playhead }: TimelineProps): ReactElement {
       </div>
 
       {tracks.length === 0 && <p className="v-timeline__empty">{t("empty.noTracks")}</p>}
+
+      {menu !== undefined && (
+        <ContextMenu
+          menu={menu}
+          onSplit={() => {
+            dispatch(cmd.clipSplit(menu.clip, playhead));
+            gestures.closeMenu();
+          }}
+          onDelete={() => {
+            dispatch(cmd.clipRemove(menu.clip));
+            select(undefined);
+            gestures.closeMenu();
+          }}
+          onClose={gestures.closeMenu}
+        />
+      )}
     </section>
   );
 }
@@ -151,8 +213,6 @@ function useViewport(ref: RefObject<HTMLElement | null>): Viewport {
   return viewport;
 }
 
-export type ZoomBy = (factor: number, anchorX: number) => void;
-
 // Zooming keeps the time under the anchor pixel where it was; without that the timeline jumps
 // away from whatever the user was pointing at.
 function useAnchoredZoom(
@@ -161,7 +221,7 @@ function useAnchoredZoom(
   setFlicksPerPixel: (next: number) => void,
   contentDuration: Time,
 ): ZoomBy {
-  const pending = useRef<{ time: Time; x: number }>(undefined);
+  const pending = useRef<{ time: Time; x: number } | undefined>(undefined);
 
   useLayoutEffect(() => {
     const anchor = pending.current;

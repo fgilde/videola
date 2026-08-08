@@ -107,3 +107,5 @@ export function trackAt(tracks: readonly Track[], y: number): number {
 export function trimZoneWidth(clipWidthPx: number, pointerZonePx: number): number {
   return Math.max(2, Math.min(pointerZonePx, clipWidthPx / 3));
 }
+
+export type ZoomBy = (factor: number, anchorX: number) => void;
