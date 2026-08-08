@@ -37,7 +37,6 @@ export interface ClipMenu {
   clip: ClipId;
   x: number;
   y: number;
-  canSplit: boolean;
 }
 
 export interface TimelineGestures {
@@ -95,17 +94,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   useEffect(() => cancelLongPress, [cancelLongPress]);
 
   const openMenu = useCallback((clip: ClipId, x: number, y: number) => {
-    const { project, playhead } = latest.current;
-    const found = findClip(project, clip);
-    setMenu({
-      clip,
-      x,
-      y,
-      canSplit:
-        found !== undefined &&
-        playhead > found.clip.start &&
-        playhead < found.clip.start + found.clip.duration,
-    });
+    setMenu({ clip, x, y });
   }, []);
 
   const onPointerDown = useCallback(
@@ -413,7 +402,7 @@ function hitTest(target: EventTarget | null): Hit | undefined {
   return { kind: "clip", clip: id, edge: edge === "start" || edge === "end" ? edge : undefined };
 }
 
-function findClip(project: Project, id: ClipId): { clip: Clip; track: TrackId } | undefined {
+export function findClip(project: Project, id: ClipId): { clip: Clip; track: TrackId } | undefined {
   for (const track of project.timeline.tracks) {
     const clip = track.clips.find((candidate) => candidate.id === id);
     if (clip !== undefined) return { clip, track: track.id };

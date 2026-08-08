@@ -166,6 +166,22 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-playhead").style.left).toBe("0px");
   });
 
+  // A wheel delivers ten notches into one task and a finger drums faster than React re-renders.
+  // Reading the zoom from state made all but the first step of a burst a no-op.
+  it("compounds a burst of zoom steps that lands in a single task", () => {
+    const clip = makeClip("clp_1", 0, 60 * FLICKS_PER_SECOND);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
+    const width = () => Number.parseFloat(document.querySelector<HTMLElement>("[data-clip-id]")?.style.width ?? "0");
+    const before = width();
+
+    act(() => {
+      const button = screen.getByRole("button", { name: "Vergrößern" });
+      for (let step = 0; step < 4; step += 1) button.click();
+    });
+
+    expect(width()).toBe(before * 16);
+  });
+
   it("refuses to zoom past the point where the content element stops laying out", () => {
     const clip = makeClip("clp_1", 0, 24 * 3600 * FLICKS_PER_SECOND);
     const { container } = renderTimeline(

@@ -15,7 +15,7 @@ import { mediaNameIndex } from "./Clip";
 import { ContextMenu } from "./ContextMenu";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
-import { useTimelineGestures } from "./useTimelineGestures";
+import { findClip, useTimelineGestures } from "./useTimelineGestures";
 import {
   clampZoom,
   timeToX,
@@ -84,6 +84,10 @@ export function Timeline({
   const rows = useMemo(() => tracks.map((track, index) => ({ track, index })).reverse(), [tracks]);
   const mediaNames = useMemo(() => mediaNameIndex(project.library), [project.library]);
   const menu = gestures.menu;
+  // Read at render, not when the menu opened: from Task 14 the playhead moves while the menu
+  // stands, and a clip can be gone by the time the item is clicked. An entry that decides once
+  // and then dispatches the current playhead offers an edit the core will refuse.
+  const menuClip = menu === undefined ? undefined : findClip(project, menu.clip)?.clip;
   // One viewport of slack past the end, so a clip can always be dragged beyond what exists.
   const contentWidth = timeToX(projectEnd, flicksPerPixel) + Math.max(viewport.width, 1);
 
@@ -173,9 +177,10 @@ export function Timeline({
 
       {tracks.length === 0 && <p className="v-timeline__empty">{t("empty.noTracks")}</p>}
 
-      {menu !== undefined && (
+      {menu !== undefined && menuClip !== undefined && (
         <ContextMenu
           menu={menu}
+          canSplit={playhead > menuClip.start && playhead < menuClip.start + menuClip.duration}
           onSplit={() => {
             dispatch(cmd.clipSplit(menu.clip, playhead));
             gestures.closeMenu();
@@ -240,6 +245,11 @@ function useAnchoredZoom(
   contentDuration: Time,
 ): ZoomBy {
   const pending = useRef<{ time: Time; x: number } | undefined>(undefined);
+  // React state is one value per task, but a wheel delivers ten notches into the same one and a
+  // finger drums the button faster than it re-renders. The ref carries the zoom forward inside
+  // the task so a burst compounds instead of collapsing to a single step.
+  const live = useRef(flicksPerPixel);
+  live.current = flicksPerPixel;
 
   useLayoutEffect(() => {
     const anchor = pending.current;
@@ -251,13 +261,17 @@ function useAnchoredZoom(
 
   return useCallback(
     (factor, anchorX) => {
-      const next = clampZoom(flicksPerPixel * factor, contentDuration);
-      if (next === flicksPerPixel) return;
+      const current = live.current;
+      const next = clampZoom(current * factor, contentDuration);
+      if (next === current) return;
       const element = ref.current;
       const scrollLeft = element?.scrollLeft ?? 0;
-      pending.current = { time: xToTime(scrollLeft + anchorX, flicksPerPixel), x: anchorX };
+      // First step of a burst wins the anchor: it is the only one that sees a scroll offset
+      // the layout effect has not already invalidated.
+      pending.current ??= { time: xToTime(scrollLeft + anchorX, current), x: anchorX };
+      live.current = next;
       setFlicksPerPixel(next);
     },
-    [ref, flicksPerPixel, setFlicksPerPixel, contentDuration],
+    [ref, setFlicksPerPixel, contentDuration],
   );
 }

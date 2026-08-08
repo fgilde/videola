@@ -677,6 +677,35 @@ describe("clip context menu", () => {
     expect(clips[0]?.duration).toBe(3 * SECOND);
   });
 
+  // From Task 14 the playhead moves under a standing menu. An entry that decided once and then
+  // dispatched the current playhead offered an edit the core refuses.
+  it("follows the playhead while the menu stands", () => {
+    const project = makeProject([makeTrack("trk_1", [makeClip("clp_1", 0, 10 * SECOND)])]);
+    const at = (playhead: number) => (
+      <I18nProvider>
+        <Timeline project={project} playhead={playhead} dispatch={() => {}} onSeek={() => {}} />
+      </I18nProvider>
+    );
+    const view = render(at(3 * SECOND));
+    fireEvent.contextMenu(clipElement(), { clientX: 100, clientY: 40 });
+    const split = () => screen.getByRole("menuitem", { name: "Am Playhead teilen" });
+    expect(split().hasAttribute("disabled")).toBe(false);
+
+    // What Playback.onTime does from Task 14 on: the playhead moves, the menu stays put.
+    view.rerender(at(20 * SECOND));
+
+    expect(split().hasAttribute("disabled")).toBe(true);
+  });
+
+  it("closes itself when the clip it belongs to is gone", async () => {
+    const doc = await documentWithOneClip();
+    render(<Harness doc={doc} />);
+    fireEvent.contextMenu(clipElement(), { clientX: 100, clientY: 40 });
+    act(() => screen.getByRole("menuitem", { name: "Clip löschen" }).click());
+
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it("offers no split when the playhead is outside the clip", async () => {
     const doc = await documentWithOneClip(SECOND);
     render(<Harness doc={doc} />);
