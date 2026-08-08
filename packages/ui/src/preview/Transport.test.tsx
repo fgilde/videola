@@ -143,12 +143,14 @@ describe("Transport", () => {
     expect(rig.playPause).not.toHaveBeenCalled();
   });
 
-  // The frame field counts frames of the project's rate. At 30000/1001 the thirtieth frame is
-  // the first of second one -- reading the rate as 29.97 puts it a frame short of that.
+  // Far enough out that the rational rate and a whole 30 disagree: NTSC frame 1000 is
+  // 00:00:33.10, and reading the rate as 30 makes it 00:00:33.11. Any nearer the origin the two
+  // land on the same frame and the assertion would hold for either -- which is what a first
+  // draft of this test did, and a mutation to a hard-coded 30 fps walked straight through it.
   it("shows the position in the project's own timecode", () => {
-    show({ time: 30 * frameDuration(NTSC), duration: 60 * frameDuration(NTSC) });
+    show({ time: 1000 * frameDuration(NTSC), duration: 2000 * frameDuration(NTSC) });
 
-    expect(screen.getByLabelText("Position").textContent).toBe("00:00:01.00 / 00:00:02.00");
+    expect(screen.getByLabelText("Position").textContent).toBe("00:00:33.10 / 00:01:06.20");
   });
 
   it("follows the position it is given", () => {
