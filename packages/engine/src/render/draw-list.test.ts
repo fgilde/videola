@@ -366,6 +366,18 @@ describe("the effect chain in the draw list", () => {
     expect(item.effects[0]?.values).toEqual({ amount: 1 });
   });
 
+  // `ParamValue` has six kinds and a shader uniform takes one of them. A choice string reaching
+  // uniform1f is a silent no-op; an int is a plausible-looking wrong number.
+  it("ignores a resolved value of the wrong kind", () => {
+    const wrong: EffectParamSnapshot = new Map([
+      ["eff_1", new Map([["amount", { kind: "int", value: 3n } as ParamValue]])],
+    ]);
+
+    expect(only([clip({ effects: [effect()] })], 0, wrong).effects[0]?.values).toEqual({
+      amount: 1,
+    });
+  });
+
   it("pulls a value from outside the declared range back in", () => {
     const item = only([clip({ effects: [effect()] })], 0, params([["eff_1", [["amount", 40]]]]));
 

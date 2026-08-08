@@ -192,22 +192,17 @@ function windowStart(start: Time, transition: Transition): Time {
   }
 }
 
-// A parameter of the wrong kind, or one the core never answered for, falls back to the manifest's
-// default. Reading a float out of a `ParamValue` is the only place TypeScript touches a parameter
-// at all -- the value itself, keyframed or not, was decided in the core.
+// Unpacking the `ParamValue` is the only thing TypeScript does to a parameter -- the value itself,
+// keyframed or not, was decided in the core. What is usable as a uniform is `clampParam`'s call.
 function uniforms(
   manifest: EffectManifest,
   resolved: ReadonlyMap<string, ParamValue> | undefined,
 ): Record<string, number> {
   const values: Record<string, number> = {};
   for (const param of manifest.params) {
-    values[param.key] = clampParam(param, asFloat(resolved?.get(param.key)) ?? param.default);
+    values[param.key] = clampParam(param, resolved?.get(param.key)?.value);
   }
   return values;
-}
-
-function asFloat(value: ParamValue | undefined): number | undefined {
-  return value?.kind === "float" ? value.value : undefined;
 }
 
 // ponytail: generators and compound clips have no size and are dropped. Solids and text are M3,

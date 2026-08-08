@@ -44,9 +44,10 @@ export function effectManifests(): readonly EffectManifest[] {
   return MANIFESTS;
 }
 
-// A project file may carry anything, and a parameter outside its range is the kind of thing that
-// reaches a shader as a NaN and paints the clip black.
-export function clampParam(param: EffectParam, value: number): number {
-  if (!Number.isFinite(value)) return param.default;
+// The one place that decides what a parameter is worth as a uniform. A project file may carry a
+// value outside the declared range, of a `ParamValue` kind that is not a number at all, or a NaN
+// -- and all three reach uniform1f without complaint and paint the clip black.
+export function clampParam(param: EffectParam, value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return param.default;
   return Math.min(Math.max(value, param.min), param.max);
 }

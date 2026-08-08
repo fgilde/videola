@@ -364,7 +364,12 @@ describe("Compositor effect chain", () => {
       .named("bindFramebuffer")
       .map((call) => call.args[1])
       .filter((handle) => handle !== null);
-    expect(new Set(targets).size).toBe(2);
+    // Alternating, not merely two of them: writing into the target it is reading is the bug this
+    // is about, and a chain that binds A, B, B looks just as "two targets" as A, B, A. The first
+    // two bindings belong to the targets being created, so the chain itself is the last three.
+    const chain = targets.slice(-3);
+    expect(chain[0]).toBe(chain[2]);
+    expect(chain[0]).not.toBe(chain[1]);
     expect(recording.named("drawArrays")).toHaveLength(4);
   });
 

@@ -365,15 +365,21 @@ mod tests {
     // One clip carrying one effect whose `amount` is both static and keyframed, so the two rules
     // the batch has to keep apart are present at once.
     fn host_with_effect(keys: Vec<Keyframe>) -> (DocumentHost, EffectId) {
+        host_with_params(Some(2.0), keys)
+    }
+
+    fn host_with_params(statics: Option<f32>, keys: Vec<Keyframe>) -> (DocumentHost, EffectId) {
         let mut clip = Clip::new_media(
             MediaId::from("med_x".to_string()),
             Time::ZERO,
             Time::from_seconds(4.0),
         );
         let mut effect = Effect::new("brightness");
-        effect
-            .params
-            .insert("amount".into(), ParamValue::Float(2.0));
+        if let Some(value) = statics {
+            effect
+                .params
+                .insert("amount".into(), ParamValue::Float(value));
+        }
         if !keys.is_empty() {
             effect.keyframes.insert("amount".into(), keys);
         }
@@ -422,6 +428,17 @@ mod tests {
         let params = host.effect_params_at(Time::from_seconds(1.0));
 
         assert_eq!(params[&effect]["amount"], ParamValue::Float(2.0));
+    }
+
+    // A parameter that only ever existed as a ramp: nothing in `params` names it, so a batch that
+    // walks the static entries alone answers with an empty map for an effect that is animating.
+    #[test]
+    fn a_parameter_that_is_only_keyframed_is_still_answered_for() {
+        let (host, effect) = host_with_params(None, vec![ramp(0.0, 0.0), ramp(2.0, 1.0)]);
+
+        let params = host.effect_params_at(Time::from_seconds(1.0));
+
+        assert_eq!(params[&effect]["amount"], ParamValue::Float(0.5));
     }
 
     // The crossing the renderer walks every frame: a keyframe ramp that reaches past the clip.

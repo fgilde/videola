@@ -315,6 +315,58 @@ test("a crossfade leaves the picture opaque", () => {
     shot.at(2, 2));
 });
 
+// Two passes in one chain, which is where the targets have to take turns: a pass that reads the
+// texture it writes is a feedback loop, and no single-effect check can see it.
+test("two effects in a row each do their bit", () => {
+  const twice = [
+    { id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+    { id: "eff_2", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+  ];
+  const { compositor, scene } = rig(4, 4, "#000000", [{ effects: twice }]);
+  const f = frame(4, 4, () => [32, 32, 32, 255]);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]),
+    floats([["eff_1", [["amount", 2]]], ["eff_2", [["amount", 2]]]]));
+  f.close();
+  check("a gain of two applied twice", reader(compositor.readPixels(), 4, 4)(2, 2),
+    [128, 128, 128, 255]);
+});
+
+// The intermediate target outlives the frame it was drawn for. A clip that no longer covers the
+// whole frame would otherwise be composited together with what the last frame left in there.
+test("an intermediate target does not carry the last frame over", () => {
+  const { compositor, context } = rig(8, 8, "#ff0000", [{ effects: BRIGHTNESS }]);
+  const white = frame(8, 8, () => [255, 255, 255, 255]);
+  const full = project(8, 8, "#ff0000", [{ effects: BRIGHTNESS }]);
+  const small = project(8, 8, "#ff0000", [{ effects: BRIGHTNESS, t: { scaleX: 0.5, scaleY: 0.5 } }]);
+  draw(compositor, full, 0, new Map([["clp_0", white]]), floats([["eff_1", [["amount", 1]]]]));
+  draw(compositor, small, 0, new Map([["clp_0", white]]), floats([["eff_1", [["amount", 1]]]]));
+  white.close();
+  const at = reader(compositor.readPixels(), 8, 8);
+  check("the corner is background again", at(0, 0), [255, 0, 0, 255]);
+  check("and the clip is where it belongs", at(4, 4), [255, 255, 255, 255]);
+  check("with no driver error", context.gl.getError(), 0);
+});
+
+// devicePixelRatio changes the drawing buffer without anyone calling resize. A target left at the
+// old size keeps a quarter of the picture and stretches it over the whole frame.
+test("an intermediate target follows the drawing buffer", () => {
+  const { canvas, compositor } = rig(8, 8, "#000000", [{ effects: BRIGHTNESS }]);
+  const small = frame(8, 8, () => [255, 255, 255, 255]);
+  draw(compositor, project(8, 8, "#000000", [{ effects: BRIGHTNESS }]), 0,
+    new Map([["clp_0", small]]), floats([["eff_1", [["amount", 1]]]]));
+  small.close();
+  canvas.width = 16;
+  canvas.height = 16;
+  const corners = frame(16, 16, (x, y) => (y < 8 ? (x < 8 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+    : (x < 8 ? [0, 0, 255, 255] : [255, 255, 0, 255])));
+  draw(compositor, project(16, 16, "#000000", [{ effects: BRIGHTNESS }], 16, 16), 0,
+    new Map([["clp_0", corners]]), floats([["eff_1", [["amount", 1]]]]));
+  corners.close();
+  const at = reader(compositor.readPixels(), 16, 16);
+  check("top left through the chain is red", at(4, 4), [255, 0, 0, 255]);
+  check("bottom right through the chain is yellow", at(12, 12), [255, 255, 0, 255]);
+});
+
 test("the effect chain leaves no driver error behind", () => {
   const { context, compositor, scene } = rig(4, 4, "#000000",
     [{ id: "clp_a" }, { id: "clp_b", effects: BRIGHTNESS, transitionIn: CROSSFADE }]);
