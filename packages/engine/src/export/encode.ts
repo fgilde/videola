@@ -183,6 +183,11 @@ export function* audioChunks(audio: ExportAudio, chunkFrames: number): Generator
 // Two clips of the same file share a frame cache otherwise, and decoding for the second one evicts
 // the first one's picture while the gather is still running. In a preview that costs one stale
 // frame; in a file it is written down for good.
+//
+// ponytail: and each one stays open until the run ends, so a timeline of five hundred clips holds
+// five hundred decoders and their frame budgets at once. Closing a source once its clip is behind
+// the export's position is the way out; it needs the run to know that a clip is finished rather
+// than merely absent from this one frame, or an interleaved cut reopens decoders all day.
 class SourcePool {
   #create: () => FrameSource;
   #open = new Map<string, FrameSource | undefined>();

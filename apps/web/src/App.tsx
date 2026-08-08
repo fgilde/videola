@@ -243,7 +243,15 @@ export function App(): ReactElement {
       onNew={() => window.location.reload()}
       onOpen={() => void open()}
       onImport={doc === undefined ? undefined : addTrack}
-      onExport={doc === undefined ? undefined : () => setExporting(true)}
+      onExport={
+        doc === undefined
+          ? undefined
+          : () => {
+              // A failure from the last attempt would otherwise greet the next one.
+              setExportError(undefined);
+              setExporting(true);
+            }
+      }
       onSave={doc === undefined ? undefined : save}
       onUndo={undo}
       onRedo={redo}
