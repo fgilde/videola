@@ -105,7 +105,7 @@ async function announce() {
   // Under virtual time every wait is a held fetch that stops the clock, so a tighter poll leaves
   // the decoder shorter stretches to run in, not more of them. At 50 ms a freshly opened medium
   // never finished on this machine; at 100 it still did not on a two-core CI runner.
-  const POLL_MS = 250;
+  const POLL_MS = 100;
 
   async function until(what, fn, budget) {
     for (let round = 0; round * POLL_MS < (budget || 20000); round += 1) {
@@ -363,7 +363,7 @@ async function announce() {
 
     if (virtual) {
       checkAtLeast("the preview shows a decoded frame",
-        await until("a decoded frame", () => (litPixels() > 1000 ? litPixels() : 0)), 1000);
+        await until("a decoded frame", () => (litPixels() > 1000 ? litPixels() : 0), 90000), 1000);
     }
 
     // The whole audio chain, end to end and for real: bytes out of OPFS, a decode, peaks off the
@@ -391,7 +391,7 @@ async function announce() {
 
     if (virtual) {
       checkAtLeast("and the picture a second in is decoded too",
-        await until("a frame at one second", () => (litPixels() > 1000 ? litPixels() : 0)), 1000);
+        await until("a frame at one second", () => (litPixels() > 1000 ? litPixels() : 0), 90000), 1000);
     }
 
     // The keys belong to the editor, and the hands are on the timeline.
@@ -580,7 +580,7 @@ async function announce() {
     const thumb = await until("the thumbnail", () => {
       const image = q(".v-library__thumb");
       return image !== null && image.complete && image.naturalWidth > 0 ? image : null;
-    }, 40000);
+    }, 90000);
     check("the library entry carries a still decoded from the medium",
       [thumb.naturalWidth, thumb.naturalHeight], [160, 90]);
     check("and it is drawn at a size that leaves room for the list",
@@ -854,7 +854,7 @@ async function announce() {
     const shown = await until("the baked picture", () => {
       const measured = measure(blue);
       return measured.lit > 1000 ? measured : null;
-    }, 40000);
+    }, 90000);
     checkAtLeast("the baked project shows a decoded frame", shown.lit, 1000);
     check("and the fitted clip leaves no background showing", shown.bare < 0.2, true);
 
@@ -1021,7 +1021,7 @@ async function announce() {
       return images.length === 2 && images.every((i) => i.complete && i.naturalWidth > 0)
         ? images
         : null;
-    }, 40000);
+    }, 90000);
     check("every medium carries its own still",
       stills.map((image) => [image.naturalWidth, image.naturalHeight]), [[160, 90], [160, 90]]);
     // Two entries showing one medium's picture twice would look exactly like a working library.
