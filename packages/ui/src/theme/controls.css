@@ -1,0 +1,230 @@
+/* Four weights and nothing else. A screen has one primary action, a handful of secondary ones,
+   quiet text actions, and symbols. Which one a control is, is the whole of its styling -- size,
+   colour and border follow from the rank rather than being chosen per place. */
+
+.v-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--v-space-2);
+  min-height: 32px;
+  padding: 0 var(--v-space-3);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--v-transition),
+    border-color var(--v-transition),
+    color var(--v-transition);
+  flex-shrink: 0;
+}
+
+.v-button:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+  border-color: var(--v-border-strong);
+}
+
+.v-button:active:not(:disabled) {
+  /* The press is felt rather than seen: a colour step alone reads as a hover that stuck. */
+  transform: translateY(1px);
+}
+
+.v-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Third rank: it does something, but it is not what the screen is for. No fill, no border --
+   only the label, until a pointer comes near. */
+.v-button--quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--v-text-muted);
+}
+
+.v-button--quiet:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+  border-color: transparent;
+  color: var(--v-text);
+}
+
+/* A symbol is a quiet button that is as tall as it is wide. Every one of them carries an
+   aria-label -- a control with no words is invisible to a screen reader without one. */
+.v-button--icon {
+  min-width: 32px;
+  padding: 0 var(--v-space-1);
+  background: none;
+  border-color: transparent;
+  color: var(--v-text-muted);
+}
+
+.v-button--icon:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+  border-color: transparent;
+  color: var(--v-text);
+}
+
+.v-button--icon[aria-pressed="true"] {
+  background: var(--v-accent-soft);
+  color: var(--v-accent);
+}
+
+/* One per screen, and last in the file on purpose: a primary symbol -- the play button is one --
+   has to win against the quiet fill the symbol rank sets. It is the only control that carries a
+   fill, which is what makes it findable without reading a single word. */
+.v-button--primary {
+  background: var(--v-accent);
+  color: var(--v-accent-contrast);
+  border-color: transparent;
+  font-weight: var(--v-weight-strong);
+  box-shadow: var(--v-shadow-raised);
+}
+
+.v-button--primary:hover:not(:disabled) {
+  background: var(--v-accent-hover);
+  border-color: transparent;
+  color: var(--v-accent-contrast);
+}
+
+.v-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* A finger, wherever it is: the shell sizes by layout mode, and this catches the case a viewport
+   cannot see -- a touchscreen at desk width. --v-touch-target is the contract either way. */
+@media (any-pointer: coarse) {
+  .v-button {
+    min-height: var(--v-touch-target);
+  }
+
+  .v-button--icon {
+    min-width: var(--v-touch-target);
+  }
+}
+
+/* ------------------------------------------------------------------ the two native controls */
+
+/* Left as the operating system draws it, a slider is the loudest foreign object on the screen:
+   its blue comes from the desktop theme and from no token of ours. */
+input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* ponytail: how much of the track is filled is the thumb's own shadow, clipped by the track. It is
+   the one way to show the value as a length without a script writing it into a gradient on every
+   input event -- and it is why the handle is a pill the height of the track rather than a knob
+   standing over it: whatever leaves the track is cut off. */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-bg-sunken);
+  box-shadow: inset 0 0 0 1px var(--v-border);
+  overflow: hidden;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 8px;
+  margin-top: 0;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-accent-contrast);
+  border: none;
+  box-shadow: -100vw 0 0 100vw var(--v-accent);
+}
+
+/* Firefox has a part for the filled length, so there the handle can be the knob it wants to be. */
+input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-bg-sunken);
+  box-shadow: inset 0 0 0 1px var(--v-border);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 8px;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-accent);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--v-accent);
+  border: 2px solid var(--v-bg-elevated);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow: -100vw 0 0 100vw var(--v-accent-hover);
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  background: var(--v-accent-hover);
+}
+
+input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The caret is drawn out of two gradients rather than an image, so it takes its colour from a
+   token like everything else -- a data URI cannot read a custom property. */
+select {
+  appearance: none;
+  min-height: 32px;
+  padding: 0 28px 0 var(--v-space-2);
+  background-color: var(--v-surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--v-text-muted) 50%),
+    linear-gradient(135deg, var(--v-text-muted) 50%, transparent 50%);
+  background-position:
+    right 15px center,
+    right 11px center;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  cursor: pointer;
+  transition: border-color var(--v-transition);
+}
+
+select:hover {
+  border-color: var(--v-border-strong);
+}
+
+@media (any-pointer: coarse) {
+  select {
+    min-height: var(--v-touch-target);
+  }
+}
+
+/* ------------------------------------------------------------------ the state every control has */
+
+/* Three pixels rather than two, and offset clear of the control: the ring has to be found on a
+   near-black panel and on a white one, and --v-focus is a different colour in each theme for
+   exactly that reason. */
+:focus-visible {
+  outline: 3px solid var(--v-focus);
+  outline-offset: 2px;
+}

@@ -6,16 +6,18 @@
   border-right: 1px solid var(--v-border);
 }
 
+/* Import across the top, the two ways a phone has of getting at material side by side under it.
+   Three full-width rows made the panel's own toolbar taller than two of its entries. */
 .v-library__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--v-space-2);
-  padding: var(--v-space-2) var(--v-space-3);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--v-space-1);
+  padding: var(--v-space-1);
   border-bottom: 1px solid var(--v-border);
 }
 
-.v-library__toolbar .v-button {
-  flex: 1;
+.v-library__toolbar > .v-button:first-child {
+  grid-column: 1 / -1;
 }
 
 /* The label is the button; the input inside it is what a phone hands its camera to. Hidden with
@@ -26,6 +28,10 @@
   align-items: center;
   justify-content: center;
   min-height: var(--v-touch-target);
+  /* Two of them share the width of a 240 px rail, and "Aus der Galerie" is the longest thing in
+     either language. It gets the small step of the scale rather than a horizontal scrollbar. */
+  padding: 0 var(--v-space-2);
+  font-size: var(--v-text-xs);
   white-space: nowrap;
 }
 
@@ -40,30 +46,39 @@
 .v-library__empty {
   padding: var(--v-space-4) var(--v-space-3);
   color: var(--v-text-muted);
-  font-size: 0.85rem;
+  font-size: var(--v-text-sm);
+  line-height: var(--v-leading);
 }
 
 .v-library__list {
   margin: 0;
-  padding: 0;
+  padding: var(--v-space-1);
   list-style: none;
   overflow-y: auto;
 }
 
-/* Picture beside the words, not above them: a full-width still per entry turns a library of ten
-   media into ten screens of scrolling. The first column is `auto`, so an entry without a picture
-   costs nothing for the one it does not have. */
+/* One row per medium: still, name over its facts, and one symbol to place it. The full-width
+   button under every entry is what turned a library of ten into ten screens of scrolling.
+   The first column is `auto`, so an entry without a picture costs nothing for the one it lacks. */
 .v-library__item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    "thumb name"
-    "thumb facts"
-    "actions actions";
-  align-content: start;
-  gap: var(--v-space-1) var(--v-space-2);
-  padding: var(--v-space-2) var(--v-space-3);
-  border-bottom: 1px solid var(--v-border);
+    "thumb name    actions"
+    "thumb facts   actions";
+  align-items: center;
+  gap: 0 var(--v-space-2);
+  padding: var(--v-space-1) var(--v-space-2);
+  border-radius: var(--v-radius-md);
+  transition: background var(--v-transition);
+}
+
+.v-library__item + .v-library__item {
+  margin-top: 2px;
+}
+
+.v-library__item:hover {
+  background: var(--v-surface-hover);
 }
 
 .v-library__item > .v-library__name {
@@ -86,13 +101,19 @@
   touch-action: none;
 }
 
+.v-library__item[data-missing="true"] {
+  /* The one entry that cannot be used says so with the colour the rest of the editor uses for
+     things that are wrong, not with a word buried among its facts. */
+  box-shadow: inset 3px 0 0 var(--v-danger);
+}
+
 .v-library__thumb {
   grid-area: thumb;
   display: block;
-  width: 72px;
+  width: 64px;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  background: var(--v-bg);
+  background: var(--v-bg-sunken);
   border-radius: var(--v-radius-sm);
   /* The picture is decoration next to the name it belongs to; dragging the entry must not turn
      into the browser's own image drag. */
@@ -101,6 +122,9 @@
 
 .v-library__name {
   color: var(--v-text);
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-medium);
+  line-height: var(--v-leading-tight);
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -109,10 +133,11 @@
 .v-library__facts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--v-space-2);
+  gap: 0 var(--v-space-2);
   color: var(--v-text-muted);
   font-family: var(--v-font-mono);
-  font-size: 0.72rem;
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading-tight);
 }
 
 .v-library__missing {
@@ -122,10 +147,6 @@
 
 .v-library__actions {
   display: flex;
-  gap: var(--v-space-2);
-}
-
-.v-library__actions .v-button {
-  flex: 1;
-  font-size: 0.8rem;
+  align-items: center;
+  gap: var(--v-space-1);
 }

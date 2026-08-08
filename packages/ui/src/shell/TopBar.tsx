@@ -1,6 +1,7 @@
 import { useRef, type ReactElement, type ReactNode } from "react";
 
 import { useI18n } from "../i18n/useI18n";
+import { Icon, IconButton } from "../primitives/Icon";
 import { useDismiss } from "../useDismiss";
 import { SettingsMenu } from "./SettingsMenu";
 import wordmark from "./videola-wordmark.png";
@@ -40,10 +41,12 @@ export function TopBar({ compact = false, ...actions }: TopBarProps): ReactEleme
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
     </>
   );
+  // Three ranks in three lines: the export is something the project does, the two switches are
+  // preferences, and saving is the one action the whole bar is arranged around.
   const output = (
     <>
       <Action label={t("action.export")} onClick={actions.onExport} />
-      <SettingsMenu />
+      <SettingsMenu labelled={compact} />
       <Action label={t("action.save")} onClick={actions.onSave} primary />
     </>
   );
@@ -56,8 +59,19 @@ export function TopBar({ compact = false, ...actions }: TopBarProps): ReactEleme
         {compact && output}
       </Overflow>
       <span className="v-topbar__spacer" />
-      <Action label={t("action.undo")} onClick={actions.onUndo} enabled={actions.canUndo} />
-      <Action label={t("action.redo")} onClick={actions.onRedo} enabled={actions.canRedo} />
+      <IconButton
+        icon="undo"
+        label={t("action.undo")}
+        onClick={actions.onUndo}
+        disabled={actions.canUndo !== true}
+      />
+      <IconButton
+        icon="redo"
+        label={t("action.redo")}
+        onClick={actions.onRedo}
+        disabled={actions.canRedo !== true}
+      />
+      {!compact && <span className="v-topbar__rule" aria-hidden="true" />}
       {!compact && output}
     </header>
   );
@@ -66,13 +80,10 @@ export function TopBar({ compact = false, ...actions }: TopBarProps): ReactEleme
 function Action({
   label,
   onClick,
-  enabled,
   primary = false,
 }: {
   label: string;
   onClick?: () => void;
-  /** Undo and redo are the two the caller gates on its own history rather than on a handler. */
-  enabled?: boolean;
   primary?: boolean;
 }): ReactElement {
   return (
@@ -80,7 +91,7 @@ function Action({
       type="button"
       className={primary ? "v-button v-button--primary" : "v-button"}
       onClick={onClick}
-      disabled={enabled === undefined ? onClick === undefined : enabled !== true}
+      disabled={onClick === undefined}
     >
       {label}
     </button>
@@ -100,8 +111,8 @@ function Overflow({ label, children }: { label: string; children: ReactNode }): 
 
   return (
     <details className="v-topbar__more" ref={ref}>
-      <summary className="v-button" aria-label={label}>
-        ☰
+      <summary className="v-button v-button--icon" aria-label={label}>
+        <Icon name="menu" />
       </summary>
       <div className="v-topbar__menu" onClick={close}>
         {children}

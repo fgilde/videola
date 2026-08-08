@@ -5,6 +5,7 @@ import { timeToSeconds } from "@videola/core";
 import type { MediaAsset, MediaId, Rate } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
+import { IconButton } from "../primitives/Icon";
 import type { MediaGrab } from "../timeline/geometry";
 import "./MediaLibrary.css";
 
@@ -155,6 +156,7 @@ function Entry({
       data-media-id={asset.id}
       data-missing={missing}
       data-grabbable={grabbable}
+      title={grabbable ? t("library.dragToTimeline") : undefined}
       onPointerDown={onPointerDown}
     >
       {thumbnail !== undefined && (
@@ -179,20 +181,20 @@ function Entry({
       <span className="v-library__actions">
         {/* The button stays even where the drag works. A drag is not keyboard-operable, and it
             is the only way onto the timeline -- removing it would leave the panel unusable
-            without a pointer. */}
-        <button
-          type="button"
-          className="v-button"
+            without a pointer. A symbol rather than a line of text: one per medium over the full
+            width of the panel turned a list of five into a screen of scrolling. */}
+        <IconButton
+          icon="plus"
+          label={t("library.addToTimeline")}
           disabled={missing}
-          title={grabbable ? t("library.dragToTimeline") : undefined}
           onClick={() => onAdd(asset.id)}
-        >
-          {t("library.addToTimeline")}
-        </button>
+        />
         {missing && (
-          <button type="button" className="v-button" onClick={() => onRelink(asset.id)}>
-            {t("library.relink")}
-          </button>
+          <IconButton
+            icon="link"
+            label={t("library.relink")}
+            onClick={() => onRelink(asset.id)}
+          />
         )}
       </span>
     </li>

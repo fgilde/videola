@@ -1,7 +1,14 @@
+/* The controls are part of the token layer, not a layer beside it: a button, a slider and a select
+   are the places a token becomes something a person can see. Imported here so every consumer of the
+   tokens -- the application, the browser harness -- gets the same controls without a second import
+   to remember. An @import has to come before any rule, which is why it is the first line. */
+@import "./controls.css";
+
 :root {
   --v-radius-sm: 4px;
   --v-radius-md: 8px;
   --v-radius-lg: 14px;
+  --v-radius-pill: 999px;
   --v-space-1: 4px;
   --v-space-2: 8px;
   --v-space-3: 12px;
@@ -11,6 +18,19 @@
   --v-font-mono: ui-monospace, "Cascadia Mono", "Fira Code", monospace;
   --v-touch-target: 44px;
   --v-transition: 140ms cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* Five steps and no more. Everything on screen picks one of them, so a size is a decision about
+     rank rather than a number somebody happened to type into a stylesheet. */
+  --v-text-xs: 0.6875rem;
+  --v-text-sm: 0.8125rem;
+  --v-text-md: 0.9375rem;
+  --v-text-lg: 1.0625rem;
+  --v-text-xl: 1.375rem;
+  --v-leading-tight: 1.25;
+  --v-leading: 1.5;
+  --v-weight-medium: 550;
+  --v-weight-strong: 650;
+  --v-tracking-wide: 0.07em;
 
   /* Dark is the default so the tokens are already correct before any JS runs;
      the media query and the explicit data-theme overrides below refine it. */
@@ -26,32 +46,60 @@
   --v-accent: #5b8cff;
   --v-accent-hover: #7aa2ff;
   --v-accent-contrast: #0b0d10;
+  /* The accent at reading strength, for a pressed symbol or a selected row: a tint carries state
+     without turning a quiet control into a second primary action. */
+  --v-accent-soft: rgb(91 140 255 / 20%);
   --v-danger: #ff6b6b;
   --v-success: #2ea043;
   --v-warning: #f0a030;
   --v-focus: #6bd6ff;
   --v-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  --v-shadow-raised: 0 2px 8px rgb(0 0 0 / 40%);
+
+  /* A clip says what kind of material it is before it says anything else. One fill and one edge per
+     kind; the edge doubles as the colour of the waveform drawn behind the name. */
+  --v-clip-video-bg: #27365e;
+  --v-clip-video-edge: #6b8cff;
+  --v-clip-audio-bg: #14453f;
+  --v-clip-audio-edge: #2fd6ac;
+  --v-clip-text-bg: #46331a;
+  --v-clip-text-edge: #f0a844;
+
+  /* Behind a transparent composite in the preview. Two neutrals that stay neutral in the
+     theme they belong to; a fixed pair reads as a stain on the light one. */
+  --v-checker-a: #1a1d23;
+  --v-checker-b: #23272f;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --v-bg: #f6f7f9;
+    --v-bg: #eceef3;
     --v-bg-elevated: #ffffff;
-    --v-bg-sunken: #eceef2;
-    --v-surface: #ffffff;
-    --v-surface-hover: #eef1f6;
-    --v-border: #d8dce4;
-    --v-border-strong: #b7bec9;
+    --v-bg-sunken: #dbdfe7;
+    --v-surface: #f5f7fa;
+    --v-surface-hover: #e6eaf1;
+    --v-border: #d0d5de;
+    --v-border-strong: #a8b0bd;
     --v-text: #16191f;
     --v-text-muted: #5c6470;
     --v-accent: #2f6bff;
     --v-accent-hover: #1a55e6;
     --v-accent-contrast: #ffffff;
+    --v-accent-soft: rgb(47 107 255 / 14%);
     --v-danger: #d13438;
     --v-success: #107c10;
     --v-warning: #b4690e;
-    --v-focus: #0f6cbd;
+    --v-focus: #0b5cd5;
     --v-shadow: 0 6px 18px rgb(16 22 32 / 12%);
+    --v-shadow-raised: 0 2px 8px rgb(16 22 32 / 16%);
+    --v-clip-video-bg: #dde4fb;
+    --v-clip-video-edge: #3a63e0;
+    --v-clip-audio-bg: #d5f2e9;
+    --v-clip-audio-edge: #0a9276;
+    --v-clip-text-bg: #fcecd2;
+    --v-clip-text-edge: #b3760b;
+    --v-checker-a: #dfe3ea;
+    --v-checker-b: #eef1f5;
   }
 }
 
@@ -68,29 +116,52 @@
   --v-accent: #5b8cff;
   --v-accent-hover: #7aa2ff;
   --v-accent-contrast: #0b0d10;
+  --v-accent-soft: rgb(91 140 255 / 20%);
   --v-danger: #ff6b6b;
   --v-success: #2ea043;
   --v-warning: #f0a030;
   --v-focus: #6bd6ff;
   --v-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  --v-shadow-raised: 0 2px 8px rgb(0 0 0 / 40%);
+  --v-clip-video-bg: #27365e;
+  --v-clip-video-edge: #6b8cff;
+  --v-clip-audio-bg: #14453f;
+  --v-clip-audio-edge: #2fd6ac;
+  --v-clip-text-bg: #46331a;
+  --v-clip-text-edge: #f0a844;
+
+  /* Behind a transparent composite in the preview. Two neutrals that stay neutral in the
+     theme they belong to; a fixed pair reads as a stain on the light one. */
+  --v-checker-a: #1a1d23;
+  --v-checker-b: #23272f;
 }
 
 :root[data-theme="light"] {
-  --v-bg: #f6f7f9;
+  --v-bg: #eceef3;
   --v-bg-elevated: #ffffff;
-  --v-bg-sunken: #eceef2;
-  --v-surface: #ffffff;
-  --v-surface-hover: #eef1f6;
-  --v-border: #d8dce4;
-  --v-border-strong: #b7bec9;
+  --v-bg-sunken: #dbdfe7;
+  --v-surface: #f5f7fa;
+  --v-surface-hover: #e6eaf1;
+  --v-border: #d0d5de;
+  --v-border-strong: #a8b0bd;
   --v-text: #16191f;
   --v-text-muted: #5c6470;
   --v-accent: #2f6bff;
   --v-accent-hover: #1a55e6;
   --v-accent-contrast: #ffffff;
+  --v-accent-soft: rgb(47 107 255 / 14%);
   --v-danger: #d13438;
   --v-success: #107c10;
   --v-warning: #b4690e;
-  --v-focus: #0f6cbd;
+  --v-focus: #0b5cd5;
   --v-shadow: 0 6px 18px rgb(16 22 32 / 12%);
+  --v-shadow-raised: 0 2px 8px rgb(16 22 32 / 16%);
+  --v-clip-video-bg: #dde4fb;
+  --v-clip-video-edge: #3a63e0;
+  --v-clip-audio-bg: #d5f2e9;
+  --v-clip-audio-edge: #0a9276;
+  --v-clip-text-bg: #fcecd2;
+  --v-clip-text-edge: #b3760b;
+  --v-checker-a: #dfe3ea;
+  --v-checker-b: #eef1f5;
 }

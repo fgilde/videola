@@ -8,14 +8,15 @@
 .v-topbar {
   display: flex;
   align-items: center;
-  gap: var(--v-space-3);
-  padding: var(--v-space-2) var(--v-space-4);
+  gap: var(--v-space-2);
+  padding: var(--v-space-2) var(--v-space-3);
   background: var(--v-bg-elevated);
   border-bottom: 1px solid var(--v-border);
   /* No sideways scroll. The project actions live in the overflow menu, which is what makes the
      bar fit its window instead of parking half its controls outside the frame. A browser check
      holds this to scrollWidth == clientWidth at 390 px. */
   position: relative;
+  z-index: 10;
 }
 
 .v-topbar__more > summary {
@@ -36,15 +37,15 @@
   position: absolute;
   z-index: 20;
   top: calc(100% + var(--v-space-1));
-  left: var(--v-space-4);
+  left: var(--v-space-3);
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--v-space-2);
+  gap: var(--v-space-1);
   padding: var(--v-space-2);
   background: var(--v-bg-elevated);
   border: 1px solid var(--v-border);
-  border-radius: var(--v-radius-md);
+  border-radius: var(--v-radius-lg);
   box-shadow: var(--v-shadow);
 }
 
@@ -52,18 +53,29 @@
   justify-content: flex-start;
   text-align: left;
   white-space: nowrap;
+  background: none;
+  border-color: transparent;
+}
+
+.v-topbar__menu .v-button:hover:not(:disabled, .v-button--primary) {
+  background: var(--v-surface-hover);
+  border-color: transparent;
+}
+
+.v-topbar__menu .v-button--primary {
+  background: var(--v-accent);
+  color: var(--v-accent-contrast);
 }
 
 .v-topbar__brand {
-  /* 28px plus the padding matches the 32px button height, so the brand does not
-     grow the topbar row. */
-  height: 28px;
+  /* 28px plus the padding matches the button height, so the brand does not grow the topbar row. */
+  height: 26px;
   width: auto;
   flex-shrink: 0;
   /* The wordmark carries its own near-black plate, which lands as a hard dark rectangle
      in the light theme. Repeating the plate colour as a rounded chip makes that edge
      deliberate instead of a seam. */
-  padding: 2px 6px;
+  padding: 3px 7px;
   background: #05060a;
   border-radius: var(--v-radius-md);
 }
@@ -72,32 +84,19 @@
   flex: 1;
 }
 
-.v-button {
-  min-height: 32px;
-  padding: 0 var(--v-space-3);
-  background: var(--v-surface);
-  color: var(--v-text);
-  border: 1px solid var(--v-border);
-  border-radius: var(--v-radius-md);
-  font: inherit;
-  cursor: pointer;
-  transition: background var(--v-transition);
-  flex-shrink: 0;
+/* The seam between "what this project does" and "what I prefer". Two ranks side by side with the
+   same gap between them read as one undifferentiated row of six. */
+.v-topbar__rule {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--v-space-1) var(--v-space-1);
+  background: var(--v-border);
 }
 
-.v-button:hover:not(:disabled) {
-  background: var(--v-surface-hover);
-}
-
-.v-button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.v-button--primary {
-  background: var(--v-accent);
-  color: var(--v-accent-contrast);
-  border-color: transparent;
+.v-topbar__locale {
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-strong);
+  letter-spacing: var(--v-tracking-wide);
 }
 
 .v-shell__content {
@@ -105,18 +104,15 @@
   background: var(--v-bg);
 }
 
-/* Library beside the picture, transport under it, timeline across the bottom -- the arrangement
-   every editor has. The shell places the panels by their own class names because arranging them
-   is what a shell is for; each of them only knows how to fill the box it is given. Both flexible
-   rows carry minmax(0, ...) so a canvas or a scroll container inside them can shrink; a bare 1fr
-   floors at its content and pushes the timeline off-screen. */
 /* Library left, picture in the middle, properties right, timeline across the bottom. Every column
    is sized here rather than by the panel inside it: a panel that declares its own width wins
-   against the grid, and the picture is what pays for it. */
+   against the grid, and the picture is what pays for it. Both flexible rows carry minmax(0, ...)
+   so a canvas or a scroll container inside them can shrink; a bare 1fr floors at its content and
+   pushes the timeline off-screen. */
 .v-editor {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(0, 300px);
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%) auto;
+  grid-template-columns: minmax(190px, 250px) minmax(0, 1fr) minmax(0, 300px);
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(160px, 30%) auto;
   grid-template-areas:
     "banners  banners   banners"
     "library  preview   inspector"
@@ -132,6 +128,11 @@
    to nothing, which is exactly what the tablet check catches. */
 .v-editor > .v-mixer {
   grid-area: mixer;
+  /* And a ceiling, because "its own height" grew with every track until the picture was a stamp
+     at the top of the window. Past the cap the strip scrolls inside itself. */
+  max-height: 150px;
+  background: var(--v-bg-elevated);
+  border-top: 1px solid var(--v-border);
 }
 
 .v-editor > .v-banners {
@@ -156,6 +157,26 @@
 
 .v-editor .v-timeline {
   grid-area: timeline;
+}
+
+/* One line each, at the weight the message has. */
+.v-banner {
+  margin: 0;
+  padding: var(--v-space-2) var(--v-space-4);
+  font-size: var(--v-text-sm);
+  border-bottom: 1px solid var(--v-border);
+  background: var(--v-bg-elevated);
+}
+
+.v-banner--alert {
+  color: var(--v-danger);
+}
+
+.v-banner--offer {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  color: var(--v-text);
 }
 
 /* One column on a phone: the picture stays put at the top and the panels take turns underneath,
@@ -184,6 +205,12 @@
   grid-area: panel;
 }
 
+/* Behind a tab it is the whole screen, so the desktop ceiling has nothing to do here. */
+.v-shell[data-layout="phone"] .v-editor > .v-mixer {
+  max-height: none;
+  border-top: none;
+}
+
 .v-shell[data-layout="phone"] .v-editor > .v-inspector {
   width: auto;
   border-left: none;
@@ -198,7 +225,7 @@
    happens to give it is not a width to trust. */
 .v-shell[data-layout="phone"] .v-transport__time,
 .v-shell[data-layout="tablet"] .v-transport__time {
-  font-size: 0.8rem;
+  font-size: var(--v-text-sm);
   text-align: right;
   white-space: nowrap;
 }
@@ -250,6 +277,7 @@
 .v-panels__tab {
   flex: 1;
   min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-1);
   background: none;
   color: var(--v-text-muted);
   border: none;
@@ -257,7 +285,12 @@
      the others keeps the label from shifting by two pixels when it takes over. */
   border-bottom: 2px solid transparent;
   font: inherit;
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-medium);
   cursor: pointer;
+  transition:
+    color var(--v-transition),
+    border-color var(--v-transition);
 }
 
 .v-panels__tab[aria-pressed="true"] {
@@ -265,10 +298,18 @@
   border-bottom-color: var(--v-accent);
 }
 
+/* The contract is the height a thumb needs, and only that. The extra side padding that used to
+   ride along with it made every touch button wider than its words and pushed the library's own
+   toolbar into three stacked rows. */
 .v-shell[data-layout="tablet"] .v-button,
 .v-shell[data-layout="phone"] .v-button {
   min-height: var(--v-touch-target);
-  padding: 0 var(--v-space-4);
+}
+
+.v-shell[data-layout="tablet"] .v-button--icon,
+.v-shell[data-layout="phone"] .v-button--icon {
+  min-width: var(--v-touch-target);
+  padding: 0 var(--v-space-1);
 }
 
 .v-shell[data-layout="phone"] .v-topbar__brand {

@@ -24,7 +24,7 @@
 
 .v-export__title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--v-text-lg);
 }
 
 .v-export__note {
@@ -32,7 +32,7 @@
   padding: var(--v-space-2) var(--v-space-3);
   background: var(--v-surface);
   border-radius: var(--v-radius-md);
-  font-size: 0.9rem;
+  font-size: var(--v-text-sm);
 }
 
 .v-export__row {
@@ -45,8 +45,7 @@
   border: 0;
 }
 
-.v-export__row input[type="number"],
-.v-export__row select {
+.v-export__row input[type="number"] {
   min-height: var(--v-touch-target);
   min-width: 9rem;
   padding: 0 var(--v-space-2);
@@ -55,6 +54,13 @@
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-md);
   font: inherit;
+  font-size: var(--v-text-sm);
+}
+
+/* Size only: the rest a select gets from the control layer, including the room its caret needs. */
+.v-export__row select {
+  min-height: var(--v-touch-target);
+  min-width: 9rem;
 }
 
 .v-export__row legend {

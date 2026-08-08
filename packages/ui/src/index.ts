@@ -6,6 +6,7 @@ export * from "./i18n/translate";
 export * from "./i18n/formatTimecode";
 export * from "./layout/detectLayoutMode";
 export * from "./layout/useLayoutMode";
+export * from "./primitives/Icon";
 export * from "./media/DropZone";
 export * from "./library/MediaLibrary";
 export * from "./preview/Preview";

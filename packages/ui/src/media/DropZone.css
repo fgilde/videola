@@ -12,7 +12,7 @@
   justify-content: center;
   background: rgb(11 13 16 / 72%);
   color: #e8ecf2;
-  font-size: 20px;
+  font-size: var(--v-text-lg);
   border: 3px dashed var(--v-accent);
   /* The overlay appears under the cursor that is dragging the file; catching the pointer would
      mean the drop lands on the overlay instead of on the zone that reports it. */

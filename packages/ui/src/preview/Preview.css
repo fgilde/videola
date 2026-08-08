@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: var(--v-space-3);
+  padding: var(--v-space-2);
   background: var(--v-bg-sunken);
   /* Query units below need a container that knows its own size in both axes. */
   container-type: size;
@@ -18,53 +18,64 @@
   width: min(100cqw, calc(100cqh * var(--v-preview-aspect)));
   /* The checkerboard behind a transparent composite: without it an alpha hole and a black
      background look the same, and the compositor's premultiplied output is meant to be seen. */
-  background:
-    repeating-conic-gradient(#1a1d23 0% 25%, #23272f 0% 50%) 50% / 16px 16px;
+  background: repeating-conic-gradient(
+      var(--v-checker-a) 0% 25%,
+      var(--v-checker-b) 0% 50%
+    )
+    50% / 16px 16px;
   border-radius: var(--v-radius-md);
+  /* The picture is the object on the table, not a panel of the interface. */
+  box-shadow: var(--v-shadow);
 }
 
 .v-transport {
   display: flex;
   align-items: center;
-  gap: var(--v-space-2);
+  gap: var(--v-space-1);
   padding: var(--v-space-2) var(--v-space-3);
   background: var(--v-bg-elevated);
   border-bottom: 1px solid var(--v-border);
 }
 
-/* 44 px everywhere and not only under data-layout="phone": a laptop with a touchscreen reports
-   a fine pointer and still gets tapped with a thumb. */
-.v-transport__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--v-touch-target);
-  min-height: var(--v-touch-target);
-  padding: 0 var(--v-space-2);
-  background: var(--v-surface);
-  color: var(--v-text);
-  border: 1px solid var(--v-border);
-  border-radius: var(--v-radius-md);
-  font: inherit;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+/* Bigger than a toolbar symbol everywhere, and bigger again for a finger: these five are aimed at
+   while the eyes are on the picture, not on the button. */
+.v-transport .v-button--icon {
+  min-width: 36px;
+  min-height: 36px;
 }
 
-.v-transport__button:hover:not(:disabled) {
-  background: var(--v-surface-hover);
+.v-transport .v-button--icon .v-icon {
+  width: 20px;
+  height: 20px;
 }
 
-.v-transport__button--primary {
-  background: var(--v-accent);
-  color: var(--v-accent-contrast);
-  border-color: transparent;
+/* Play is the one thing this row is for. */
+.v-transport .v-button--primary {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--v-radius-pill);
+  margin: 0 var(--v-space-1);
+}
+
+@media (any-pointer: coarse) {
+  .v-transport .v-button--icon {
+    min-width: var(--v-touch-target);
+    min-height: var(--v-touch-target);
+  }
+
+  .v-transport .v-button--primary {
+    min-width: 52px;
+    min-height: 52px;
+  }
 }
 
 .v-transport__time {
   margin-left: auto;
+  padding-left: var(--v-space-2);
   font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   color: var(--v-text);
 }
 

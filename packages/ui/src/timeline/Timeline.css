@@ -1,18 +1,29 @@
 .v-timeline {
-  --v-ruler-height: 28px;
+  --v-ruler-height: 26px;
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
-  background: var(--v-bg-sunken);
+  background: var(--v-bg-elevated);
   border-top: 1px solid var(--v-border);
 }
 
+/* Two groups: the tools, and the two questions a drag is answered by. Wrapping rather than
+   scrolling, and by group -- on a phone the mode pickers drop to a second line together. A control
+   on a second line is still a control; one that has scrolled off the right is not. */
 .v-timeline__toolbar {
   display: flex;
   align-items: center;
-  gap: var(--v-space-2);
-  padding: var(--v-space-2) var(--v-space-3);
+  flex-wrap: wrap;
+  gap: var(--v-space-1) var(--v-space-4);
+  padding: var(--v-space-2);
   border-bottom: 1px solid var(--v-border);
+}
+
+.v-timeline__tools,
+.v-timeline__modes {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
 }
 
 .v-timeline__body {
@@ -20,6 +31,7 @@
   grid-template-columns: auto 1fr;
   min-height: 0;
   overflow-y: auto;
+  background: var(--v-bg-sunken);
 }
 
 .v-timeline__headers {
@@ -43,7 +55,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   padding: 0 var(--v-space-3);
   border-bottom: 1px solid var(--v-border);
   overflow: hidden;
@@ -51,6 +63,9 @@
 
 .v-timeline__headerName {
   color: var(--v-text);
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-strong);
+  line-height: var(--v-leading-tight);
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -58,7 +73,10 @@
 
 .v-timeline__headerKind {
   color: var(--v-text-muted);
-  font-size: 0.75rem;
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading-tight);
+  text-transform: uppercase;
+  letter-spacing: var(--v-tracking-wide);
 }
 
 .v-timeline__scroll {
@@ -77,10 +95,11 @@
 .v-ruler {
   position: relative;
   height: var(--v-ruler-height);
+  background: var(--v-bg-elevated);
   border-bottom: 1px solid var(--v-border);
   color: var(--v-text-muted);
   font-family: var(--v-font-mono);
-  font-size: 0.72rem;
+  font-size: var(--v-text-xs);
   user-select: none;
   /* Scrubbing is the gesture's. */
   touch-action: none;
@@ -89,15 +108,30 @@
 .v-ruler__tick {
   position: absolute;
   top: 0;
-  padding-left: 4px;
+  padding-left: 5px;
   border-left: 1px solid var(--v-border-strong);
   line-height: var(--v-ruler-height);
   white-space: nowrap;
 }
 
+/* What a clip is made of, in colour. The row carries the pair and the clip reads it, so a clip
+   never has to be told twice and a new kind is two tokens rather than a new rule per element. */
 .v-track {
+  --v-clip-bg: var(--v-clip-video-bg);
+  --v-clip-edge: var(--v-clip-video-edge);
   position: relative;
   border-bottom: 1px solid var(--v-border);
+}
+
+.v-track[data-kind="audio"] {
+  --v-clip-bg: var(--v-clip-audio-bg);
+  --v-clip-edge: var(--v-clip-audio-edge);
+}
+
+.v-track[data-kind="text"],
+.v-track[data-kind="overlay"] {
+  --v-clip-bg: var(--v-clip-text-bg);
+  --v-clip-edge: var(--v-clip-text-edge);
 }
 
 .v-clip {
@@ -106,44 +140,59 @@
   bottom: 4px;
   box-sizing: border-box;
   min-width: 2px;
-  background: var(--v-surface);
+  padding: 0;
+  background: var(--v-clip-bg);
   /* An outline rather than a border: the trim zones are positioned against the padding box, so
      a border would leave its own width of the clip's outer edge outside the hit area. */
-  outline: 1px solid var(--v-border-strong);
+  outline: 1px solid var(--v-clip-edge);
   outline-offset: -1px;
   border: none;
-  border-radius: var(--v-radius-sm);
+  border-radius: var(--v-radius-md);
   /* Dragging a clip is the gesture's, not the browser's pan. */
   touch-action: none;
   color: var(--v-text);
   overflow: hidden;
   user-select: none;
   cursor: grab;
+  transition: box-shadow var(--v-transition);
 }
 
+.v-clip:hover {
+  outline-color: var(--v-text-muted);
+}
+
+/* A ring and a lift, not a hairline: on a row of six clips a one-pixel change of border colour is
+   not an answer to "which one am I about to delete". */
 .v-clip[data-selected="true"] {
-  outline-color: var(--v-accent);
-  box-shadow: inset 0 0 0 1px var(--v-accent);
+  outline: 2px solid var(--v-accent);
+  outline-offset: -1px;
+  box-shadow: var(--v-shadow-raised);
+  z-index: 1;
 }
 
-/* Behind the label and the trim handles, and out of the way of the pointer: the gestures read the
-   clip element and its trim zones, and an SVG child would otherwise become the event target. */
+/* The lower two thirds of the clip, not the whole of it: the name keeps a clean band at the top,
+   and the signal reads as the ground the clip is made of rather than as a stripe drawn over it.
+   Behind the label and the trim handles, and out of the way of the pointer -- the gestures read
+   the clip element and its trim zones, and an SVG child would otherwise become the event target. */
 .v-clip__wave {
   position: absolute;
-  inset: 0;
+  inset: 34% 0 0;
   width: 100%;
-  height: 100%;
-  fill: var(--v-accent);
-  opacity: 0.45;
+  fill: var(--v-clip-edge);
+  opacity: 0.35;
   pointer-events: none;
 }
 
 .v-clip__label {
   display: block;
+  position: relative;
   /* The inset lives on the label, so a clip narrower than the padding still draws its own
      width instead of being inflated to fit text it cannot show anyway. */
-  padding: 2px 4px;
-  font-size: 0.75rem;
+  padding: 3px var(--v-space-2);
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-medium);
+  line-height: var(--v-leading-tight);
+  text-align: left;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -168,28 +217,19 @@
 .v-clip__trim::after {
   content: "";
   position: absolute;
-  top: 25%;
-  bottom: 25%;
+  top: 30%;
+  bottom: 30%;
   width: 2px;
-  background: var(--v-border-strong);
+  border-radius: var(--v-radius-pill);
+  background: var(--v-clip-edge);
 }
 
 .v-clip__trim[data-edge="start"]::after {
-  left: 1px;
+  left: 2px;
 }
 
 .v-clip__trim[data-edge="end"]::after {
-  right: 1px;
-}
-
-.v-timeline__toolbar select {
-  min-height: var(--v-touch-target);
-  padding: 0 var(--v-space-2);
-  background: var(--v-surface);
-  border: 1px solid var(--v-border);
-  border-radius: var(--v-radius-sm);
-  color: var(--v-text);
-  font: inherit;
+  right: 2px;
 }
 
 /* A flag on the ruler line, wide enough to be hit by a finger without covering the clip below. */
@@ -216,6 +256,18 @@
   z-index: 3;
 }
 
+/* A head on the line, so the instant can be found without following a hairline down the screen. */
+.v-timeline__playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 10px;
+  height: 8px;
+  background: var(--v-danger);
+  border-radius: 2px 2px 5px 5px;
+}
+
 .v-timeline__snapLine {
   position: absolute;
   top: 0;
@@ -240,7 +292,7 @@
 }
 
 .v-track[data-drop-target] {
-  background: var(--v-surface-hover);
+  background: var(--v-accent-soft);
   outline: 1px solid var(--v-accent);
   outline-offset: -1px;
 }
@@ -248,17 +300,18 @@
 .v-timeline__empty {
   padding: var(--v-space-4) var(--v-space-6);
   color: var(--v-text-muted);
+  font-size: var(--v-text-sm);
 }
 
 .v-timeline__menu {
   position: fixed;
   z-index: 10;
   display: grid;
-  min-width: 180px;
+  min-width: 200px;
   padding: var(--v-space-1);
   background: var(--v-bg-elevated);
   border: 1px solid var(--v-border);
-  border-radius: var(--v-radius-md);
+  border-radius: var(--v-radius-lg);
   box-shadow: var(--v-shadow);
 }
 
@@ -267,9 +320,10 @@
   padding: 0 var(--v-space-3);
   background: none;
   border: none;
-  border-radius: var(--v-radius-sm);
+  border-radius: var(--v-radius-md);
   color: var(--v-text);
   font: inherit;
+  font-size: var(--v-text-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -280,5 +334,6 @@
 
 .v-timeline__menu button:disabled {
   color: var(--v-text-muted);
+  opacity: 0.6;
   cursor: default;
 }
