@@ -33,7 +33,7 @@ async function handle(request: ExportRequest): Promise<void> {
       [bytes.buffer],
     );
   } catch (error) {
-    post({ type: "failed", reason: reasonOf(error) });
+    post({ type: "failed", ...reasonOf(error) });
   }
 }
 
@@ -42,10 +42,11 @@ function post(message: ExportMessage, transfer: Transferable[] = []): void {
 }
 
 // The interface shows catalogue keys, and everything this package throws is one. A message from
-// the browser or from mediabunny is not translatable, so it goes to the console for whoever
-// debugs and the user is told the one thing that is true: the export failed.
-function reasonOf(error: unknown): string {
-  if (error instanceof Error && error.message.startsWith("error.")) return error.message;
+// the browser or from mediabunny is not translatable, so the user is told the one thing that is
+// true -- the export failed -- and the untranslatable text travels beside it as `detail`, for the
+// console, a bug report, or a harness on a machine nobody can attach a debugger to.
+function reasonOf(error: unknown): { reason: string; detail?: string } {
+  if (error instanceof Error && error.message.startsWith("error.")) return { reason: error.message };
   console.error(error);
-  return "error.exportFailed";
+  return { reason: "error.exportFailed", detail: String(error) };
 }

@@ -32,7 +32,7 @@ export interface ExportResult {
 export type ExportMessage =
   | { type: "progress"; done: number; total: number }
   | { type: "done"; result: ExportResult }
-  | { type: "failed"; reason: string };
+  | { type: "failed"; reason: string; detail?: string };
 
 export interface ExportInput {
   project: Project;
@@ -127,7 +127,7 @@ function exchange(
       const message = event.data;
       if (message.type === "progress") onProgress?.(message.done, message.total);
       else if (message.type === "done") resolve(message.result);
-      else reject(new Error(message.reason));
+      else reject(new Error(message.reason, { cause: message.detail }));
     };
     // A worker that dies of a syntax error or an out-of-memory kill sends no message at all, and
     // without this the export would sit at whatever percentage it had reached for ever.

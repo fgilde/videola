@@ -28,7 +28,7 @@ async function test(name, fn) {
     results.push({
       name,
       ok: false,
-      got: `THREW ${error.name}: ${error.message}`,
+      got: `THREW ${error.name}: ${error.message}${error.cause === undefined ? "" : ` (${error.cause})`}`,
       want: "no throw",
     });
   }
