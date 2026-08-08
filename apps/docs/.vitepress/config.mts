@@ -17,6 +17,7 @@ const CHAPTERS: [string, string][] = [
   ["Architecture", "architecture"],
   ["The .videola format", "videola-format"],
   ["Commands and undo", "commands-and-undo"],
+  ["Effects and transitions", "effects-and-transitions"],
   ["Building and releasing", "building-and-releasing"],
   ["Design documents", "design-documents"],
 ];
@@ -27,6 +28,7 @@ const KAPITEL: [string, string][] = [
   ["Architektur", "architecture"],
   ["Das .videola-Format", "videola-format"],
   ["Commands und Undo", "commands-and-undo"],
+  ["Effekte und Übergänge", "effects-and-transitions"],
   ["Bauen und Ausliefern", "building-and-releasing"],
   ["Design-Dokumente", "design-documents"],
 ];
