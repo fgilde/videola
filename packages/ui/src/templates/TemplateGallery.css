@@ -1,0 +1,214 @@
+.v-templates__scrim {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 55%);
+  z-index: 20;
+}
+
+.v-templates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-3);
+  width: min(52rem, calc(100vw - 2 * var(--v-space-4)));
+  max-height: calc(100dvh - 2 * var(--v-space-4));
+  overflow-y: auto;
+  padding: var(--v-space-4);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-templates--wizard {
+  width: min(30rem, calc(100vw - 2 * var(--v-space-4)));
+}
+
+.v-templates__title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.v-templates__step {
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: 0.9rem;
+}
+
+.v-templates__note {
+  margin: 0;
+  padding: var(--v-space-2) var(--v-space-3);
+  background: var(--v-surface);
+  border-radius: var(--v-radius-md);
+  color: var(--v-danger);
+  font-size: 0.9rem;
+}
+
+.v-templates__grid {
+  display: grid;
+  /* Two or three across on a desk, one on a phone, without a media query deciding where. */
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--v-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v-template {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+  padding: var(--v-space-3);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-template__outline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.v-template__lane {
+  position: relative;
+  height: 14px;
+  background: var(--v-bg);
+  border-radius: 2px;
+}
+
+.v-template__block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--v-accent);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+/* A dissolve is the overlap itself, so the incoming block only needs to read as translucent at
+   its head rather than carry a symbol nobody would recognise. */
+.v-template__block[data-dissolve] {
+  background: linear-gradient(to right, rgb(255 255 255 / 25%), var(--v-accent) 35%);
+}
+
+.v-template__name {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.v-template__blurb {
+  flex: 1;
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: 0.85rem;
+}
+
+.v-template__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-2);
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: 0.8rem;
+}
+
+.v-template__tag,
+.v-templates__tag {
+  padding: 0 var(--v-space-2);
+  background: var(--v-bg);
+  border-radius: var(--v-radius-md);
+}
+
+.v-templates__tag {
+  margin-left: var(--v-space-2);
+  font-size: 0.75rem;
+}
+
+.v-templates__row,
+.v-templates__slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.v-templates__row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.v-templates__slot {
+  padding: var(--v-space-3);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-templates__slot legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.v-templates__hint,
+.v-templates__chosen {
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: 0.85rem;
+}
+
+.v-templates__chosen {
+  color: var(--v-text);
+}
+
+.v-templates input[type="text"],
+.v-templates select {
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+}
+
+.v-templates input[type="color"] {
+  width: 4rem;
+  min-height: var(--v-touch-target);
+  padding: 0;
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+/* The label is the button; the input itself only has to stay reachable by the keyboard, which is
+   why it is moved out of sight rather than hidden with display:none. */
+.v-templates__file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.v-templates label.v-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  align-self: flex-start;
+}
+
+.v-templates__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+}
+
+.v-templates__spacer {
+  flex: 1;
+}

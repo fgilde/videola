@@ -6,6 +6,7 @@ import wordmark from "./videola-wordmark.png";
 
 export interface TopBarActions {
   onNew?: () => void;
+  onTemplates?: () => void;
   onOpen?: () => void;
   onSave?: () => void;
   onImportMedia?: () => void;
@@ -25,6 +26,9 @@ export function TopBar(actions: TopBarActions): ReactElement {
       <img className="v-topbar__brand" src={wordmark} alt={t("app.title")} />
       <button className="v-button" onClick={actions.onNew} disabled={!actions.onNew}>
         {t("action.new")}
+      </button>
+      <button className="v-button" onClick={actions.onTemplates} disabled={!actions.onTemplates}>
+        {t("action.templates")}
       </button>
       <button className="v-button" onClick={actions.onOpen} disabled={!actions.onOpen}>
         {t("action.open")}
