@@ -1,8 +1,8 @@
 # Effects and transitions
 
-**Eight effects, five transitions and a text engine.** Every colour on this page was measured against
-a real driver rather than asserted — `pnpm --filter @videola/engine test:gpu` runs 188 pixel checks
-through headless Chrome, and each claim below is one of them.
+**Ten effects, five transitions, two masks and a text engine.** Every colour on this page was
+measured against a real driver rather than asserted — `pnpm --filter @videola/engine test:gpu` runs
+258 pixel checks through headless Chrome, and each claim below is one of them.
 
 ## An effect is a manifest and a fragment shader
 
@@ -105,6 +105,7 @@ Which side of that line an effect falls on decides how it is written:
 | cross dissolve, wipe, slide | yes | a plain `mix` of the two inputs |
 | contrast | **no** | divide by `a`, work, multiply back |
 | chroma key | writes `a` | scale the whole `vec4`, colour and alpha together |
+| masks | writes `a` | scale the whole `vec4`; `m` is in [0, 1], so nothing needs clamping |
 
 Two consequences worth knowing before writing a shader:
 
@@ -140,12 +141,82 @@ layer, which is what a vignette is.
 | Blur | detail | `amount` 0–16 | separable Gaussian, spacing in frame pixels |
 | Sharpen | detail | `amount` 0–4 | unsharp mask against the four neighbours |
 | Chroma key | key | `hue` 0–360, `tolerance`, `softness` | cuts a hue out; 120 is a green screen |
+| Mask (rectangle) | key | `centerX`, `centerY`, `width`, `height`, `feather`, `invert` | keeps a rectangle, drops the rest |
+| Mask (ellipse) | key | the same six | keeps an inscribed ellipse |
 
 There is no separate monochrome effect: it would be the saturation shader with the slider nailed to
 zero.
 
 A chroma key ignores greys on purpose. A grey has no meaningful hue and the arithmetic hands back
 zero for it, so without a floor on saturation a key set to red would erase every grey in the picture.
+
+### A mask is an effect, not a field on the clip
+
+Everything a mask needs already existed for effects: parameters resolved and keyframed in the Rust
+core, a chain with intermediate targets, the clamp that keeps a project file's value usable as a
+uniform, `Project::normalize` checking it on load, the `effect.*` and `keyframe.*` commands, and an
+inspector that puts a row on screen for every parameter a manifest declares. A `clip.mask` field
+would have needed a model type, a normalize arm, its own commands and MCP tools, a batch query
+across the WASM boundary and inspector code — all to express *multiply the coverage by a shape*.
+
+Two things fall out of that choice for free. **Masks compose**: a rectangle and an ellipse in one
+chain intersect, because each scales the coverage the one before it left. And a mask is
+**keyframable and animatable** by the same commands as any other parameter, which is what makes a
+travelling reveal an ordinary edit.
+
+The cost is that a mask is measured in **frame space, after the transform** — the same place a
+vignette is measured. A clip that moves under a still mask is the reveal that buys; a mask that
+travels *with* its clip would need the chain to run in clip space. Two masks of the same shape on
+one clip are not possible either: `effect.add` treats a repeated type as a no-op, so a chain keyed
+by effect id rather than by type is what a second rectangle would want.
+
+Six parameters, all fractions of the frame so they mean the same thing at any output size:
+`centerX`/`centerY` from the top-left corner, `width`/`height` as the **full** extent rather than
+the half, `feather` straddling the edge so growing it does not move the boundary, and `invert` as a
+fade to the complement rather than a switch — the ends are the two settings anyone wants, and the
+middle is an even half.
+
+Two contracts a mask cannot get wrong, both measured:
+
+- **It scales all four channels, not just alpha.** On premultiplied colour `(rgb·a, a)` times `m` is
+  the same colour at lower coverage. The straight-alpha reflex — touch `a` alone — leaves `rgb` at
+  full brightness, and the over-operator then adds a whole white to the background instead of a
+  third of one. The pixel check reads 81 done correctly and 255 done wrong.
+- **`y` is flipped.** `v_uv` runs *up* the picture inside a pass; every measurement in the model runs
+  down it. A mask centred at 0.25 belongs in the upper quarter, and without the flip it lands in the
+  lower one. A rectangle is not symmetric about the middle row, which is exactly why this surfaced
+  here and not in the y-symmetric effects built before it.
+
+## A motion path is a keyframe track
+
+A clip can be sent along a curve rather than along two independent ramps on `x` and `y`. The track
+is called `position`, it is the one keyframe key that carries a `vec2` instead of a `float`, and it
+is written with the same `keyframe.add` an effect parameter uses — one command per point.
+
+The curve is a Catmull-Rom spline through the points, resolved in the Rust core by `transform_at`
+and handed to the renderer through the same `transformsAt` batch every other placement travels on.
+That is deliberate: an interpolation living in TypeScript would mean the export computed a different
+path from the preview.
+
+Three properties worth knowing:
+
+- **Two points are exactly the straight line between them.** The virtual point beyond each end is
+  its neighbour mirrored through it, which makes the end tangent the chord itself. Without that
+  mirror a two-point path bulges, and a path would stop being a superset of a pair of `x`/`y` tracks.
+- **A third point reshapes the segment before it.** That is the whole difference between a path and
+  a polyline, and it is what separate `x` and `y` tracks cannot express — they interpolate value
+  against time and can only ever meet at a corner.
+- **`interp` still times the travel and nothing else.** Hold, ease and the bezier handles decide how
+  fast the clip moves along the curve, never where the curve goes, so a key's interpolation keeps
+  its single meaning.
+
+A `position` track overrides `x` and `y` both. Letting the two settle it by iteration order would
+hand the answer to a `BTreeMap`'s alphabet, and where a clip stands is not a fact about spelling.
+
+`ponytail:` the parameterisation is uniform rather than centripetal, so points far apart in space
+but close in time pull the curve into an overshoot — it leans away from a coming corner before
+turning into it. Centripetal Catmull-Rom takes the same four points and divides by the chord
+lengths; that is the swap to make the day a path visibly loops past a key.
 
 ## Transitions
 
@@ -260,14 +331,18 @@ project actually carries an effect.
 
 ## What is not there yet, by name
 
-- **Masks.** Cropping gives a rectangular mask and the vignette a radial one; a shaped or tracked
-  mask still needs paths and a shader that samples one. What it no longer needs is a place to
-  animate from — a transform is keyframable and the draw list places the picture from the resolved
-  value (see [Commands and undo](./commands-and-undo.md#keyframing-a-transform)).
-- **A motion path is a keyframe track and nothing more.** `x` and `y` interpolate through the same
-  `Interp` an effect parameter uses. What is missing is an editor for the curve between two keys —
-  bezier handles are in the model and no command writes them, so a path eases the way the defaults
-  ease.
+- **Masks are rectangular and elliptical only.** A drawn or tracked mask needs a polygon in the
+  model and a shader that samples it, and tracking needs something to track. The two shapes here
+  intersect in a chain, which covers more than the count suggests, but a shape traced around a
+  subject is a different feature.
+- **A mask travels in frame space, not with its clip.** It is measured after the transform, so
+  moving the clip moves the picture under a stationary mask. A mask pinned to its layer wants the
+  chain run in clip space, which is a change to the frame graph rather than to a shader.
+- **One mask of each shape per clip.** `effect.add` treats a repeated type as a no-op, so a second
+  rectangle needs the chain keyed by effect id rather than by effect type.
+- **No editor for a motion path yet.** The core resolves the curve and the renderer draws it, but
+  the points are placed by command rather than dragged on the preview — the inspector has no
+  `vec2` row, because the effect manifest has no parameter type beyond a float.
 - **Motion blur** needs more than one moment per output frame, which means more than one decoded
   frame per output frame. That is a change to the gather, not to a shader.
 - **LUT import** needs a file import, a 3D texture and a parameter that is not a float. The manifest

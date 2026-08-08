@@ -1,8 +1,8 @@
 # Effekte und Übergänge
 
-**Acht Effekte, fünf Übergänge und eine Textmaschine.** Jede Farbe auf dieser Seite ist an einem
-echten Treiber gemessen und nicht behauptet — `pnpm --filter @videola/engine test:gpu` fährt 188
-Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
+**Zehn Effekte, fünf Übergänge, zwei Masken und eine Textmaschine.** Jede Farbe auf dieser Seite ist
+an einem echten Treiber gemessen und nicht behauptet — `pnpm --filter @videola/engine test:gpu` fährt
+258 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
 
 ## Ein Effekt ist ein Manifest und ein Fragment-Shader
 
@@ -108,6 +108,7 @@ Auf welcher Seite dieser Linie ein Effekt liegt, entscheidet, wie er geschrieben
 | Überblendung, Wischen, Schieben | ja | ein schlichtes `mix` der beiden Eingänge |
 | Kontrast | **nein** | durch `a` teilen, rechnen, zurück multiplizieren |
 | Chroma-Keying | schreibt `a` | den ganzen `vec4` skalieren, Farbe und Alpha zusammen |
+| Masken | schreibt `a` | den ganzen `vec4` skalieren; `m` liegt in [0, 1], also klemmt nichts |
 
 Zwei Folgerungen, die man kennen sollte, bevor man einen Shader schreibt:
 
@@ -145,12 +146,86 @@ Eigenschaft der Aufnahme ist und nicht der Ebene — und genau das ist eine Vign
 | Weichzeichnen | Detail | `amount` 0–16 | separabler Gauß, Abstand in Bildpixeln |
 | Schärfen | Detail | `amount` 0–4 | Unschärfemaske gegen die vier Nachbarn |
 | Chroma-Keying | Stanze | `hue` 0–360, `tolerance`, `softness` | stanzt einen Farbton aus; 120 ist Greenscreen |
+| Maske (Rechteck) | Stanze | `centerX`, `centerY`, `width`, `height`, `feather`, `invert` | behält ein Rechteck, lässt den Rest fallen |
+| Maske (Ellipse) | Stanze | dieselben sechs | behält die einbeschriebene Ellipse |
 
 Es gibt keinen eigenen Schwarzweiß-Effekt: er wäre der Sättigungs-Shader mit festgenageltem Regler.
 
 Ein Chroma-Keying übergeht Graustufen mit Absicht. Ein Grau hat keinen sinnvollen Farbton und die
 Rechnung liefert dafür Null zurück — ohne eine Untergrenze für die Sättigung würde eine auf Rot
 gestellte Stanze also jedes Grau im Bild wegradieren.
+
+### Eine Maske ist ein Effekt, kein Feld am Clip
+
+Alles, was eine Maske braucht, gab es für Effekte schon: Parameter, die der Rust-Kern auflöst und
+keyframet, eine Kette mit Zwischenzielen, das Klemmen, das einen Wert aus einer Projektdatei als
+Uniform brauchbar macht, `Project::normalize` als Ladeschranke, die Kommandos `effect.*` und
+`keyframe.*` und einen Inspektor, der für jeden Parameter eines Manifests eine Zeile zeigt. Ein Feld
+`clip.mask` hätte einen Modelltyp gebraucht, einen Arm in `normalize`, eigene Kommandos und
+MCP-Werkzeuge, eine Stapelabfrage über die WASM-Grenze und Code im Inspektor — alles nur, um
+*multipliziere die Deckung mit einer Form* auszudrücken.
+
+Zwei Dinge fallen dabei umsonst ab. **Masken setzen sich zusammen**: ein Rechteck und eine Ellipse
+in einer Kette schneiden sich, weil jede die Deckung skaliert, die die vorige übrig ließ. Und eine
+Maske ist mit denselben Kommandos **keyframebar** wie jeder andere Parameter — das macht eine
+wandernde Aufdeckung zu einem gewöhnlichen Schnitt.
+
+Der Preis: eine Maske wird im **Bildraum, nach der Transformation** gemessen, an derselben Stelle
+wie eine Vignettierung. Ein Clip, der unter einer stehenden Maske wandert, ist die Aufdeckung, die
+das einbringt; eine Maske, die *mit* ihrem Clip mitläuft, bräuchte die Kette im Clipraum. Zwei
+Masken derselben Form auf einem Clip gehen auch nicht: `effect.add` behandelt einen wiederholten Typ
+als Nichtstun, ein zweites Rechteck bräuchte also eine Kette nach Effekt-Id statt nach Typ.
+
+Sechs Parameter, alle als Anteile des Bildes, damit sie bei jeder Ausgabegröße dasselbe bedeuten:
+`centerX`/`centerY` von der linken oberen Ecke, `width`/`height` als **volle** Ausdehnung und nicht
+als halbe, `feather` mittig auf der Kante, damit ein Vergrößern die Grenze nicht verschiebt, und
+`invert` als Blende zum Gegenteil statt als Schalter — die Enden sind die zwei Einstellungen, die
+jemand will, und die Mitte ist eine glatte Hälfte.
+
+Zwei Verträge, die eine Maske nicht verfehlen darf, beide gemessen:
+
+- **Sie skaliert alle vier Kanäle, nicht nur Alpha.** Auf premultiplizierter Farbe ist `(rgb·a, a)`
+  mal `m` dieselbe Farbe bei geringerer Deckung. Der Reflex vom geraden Alpha — nur `a` anfassen —
+  lässt `rgb` auf voller Helligkeit stehen, und der Über-Operator addiert dann ein ganzes Weiß auf
+  den Hintergrund statt eines Drittels. Die Pixelprüfung liest richtig gerechnet 81 und falsch 255.
+- **`y` wird gespiegelt.** `v_uv` läuft im Durchgang *nach oben*, jede Messung im Modell nach unten.
+  Eine Maske mit Mitte 0,25 gehört ins obere Viertel und landet ohne die Spiegelung im unteren. Ein
+  Rechteck ist nicht symmetrisch zur mittleren Zeile — genau deshalb fällt das hier auf und ist bei
+  den y-symmetrischen Effekten davor nie aufgefallen.
+
+## Ein Bewegungspfad ist eine Keyframe-Spur
+
+Ein Clip kann über eine Kurve laufen statt über zwei unabhängige Rampen auf `x` und `y`. Die Spur
+heißt `position`, sie ist der eine Keyframe-Schlüssel, der ein `vec2` trägt statt eines `float`, und
+sie wird mit demselben `keyframe.add` geschrieben wie ein Effektparameter — ein Kommando je Punkt.
+
+Die Kurve ist ein Catmull-Rom-Spline durch die Punkte, aufgelöst im Rust-Kern von `transform_at` und
+an den Renderer gereicht über dieselbe Stapelabfrage `transformsAt`, auf der jede andere Platzierung
+reist. Das ist Absicht: läge die Interpolation in TypeScript, rechnete der Export einen anderen Pfad
+als die Vorschau.
+
+Drei Eigenschaften, die man kennen sollte:
+
+- **Zwei Punkte ergeben exakt die Gerade zwischen ihnen.** Der gedachte Punkt jenseits eines Endes
+  ist sein Nachbar, an ihm gespiegelt, und damit ist die Endtangente die Sehne selbst. Ohne diese
+  Spiegelung bauchte ein Pfad aus zwei Punkten aus, und ein Pfad wäre keine Obermenge eines Paares
+  von `x`/`y`-Spuren mehr.
+- **Ein dritter Punkt formt das Stück davor um.** Das ist der ganze Unterschied zwischen einem Pfad
+  und einem Streckenzug, und es ist das, was getrennte `x`- und `y`-Spuren nicht ausdrücken können —
+  sie interpolieren Wert gegen Zeit und können sich nur in einer Ecke treffen.
+- **`interp` führt weiterhin die Zeit und sonst nichts.** Halten, Weichlauf und die Bezier-Anfasser
+  entscheiden, wie schnell der Clip die Kurve entlangläuft, nie wohin die Kurve läuft. Damit behält
+  die Interpolation eines Schlüssels ihre eine Bedeutung.
+
+Eine `position`-Spur sticht `x` und `y` beide. Die beiden über die Reihenfolge entscheiden zu lassen
+hieße, die Antwort dem Alphabet einer `BTreeMap` zu überlassen, und wo ein Clip steht, ist keine
+Frage der Schreibweise.
+
+`ponytail:` die Parametrisierung ist gleichförmig statt zentripetal, also ziehen Punkte, die im Raum
+weit und in der Zeit nah beieinander liegen, die Kurve in einen Überschwinger — sie lehnt sich vor
+einer kommenden Ecke von ihr weg, bevor sie einbiegt. Zentripetales Catmull-Rom nimmt dieselben vier
+Punkte und teilt durch die Sehnenlängen; das ist der Tausch für den Tag, an dem ein Pfad sichtbar
+über einen Schlüssel hinausschleift.
 
 ## Übergänge
 
@@ -265,13 +340,20 @@ Projekt wirklich einen Effekt trägt.
 
 ## Was es noch nicht gibt, beim Namen
 
-- **Masken.** Beschnitt gibt eine rechteckige Maske und die Vignettierung eine radiale; eine
-  geformte oder mitlaufende Maske braucht noch Pfade und einen Shader, der eine abtastet. Was sie
-  nicht mehr braucht, ist ein Ort zum Animieren — eine Transformation ist keyframebar, und die
-  Zeichenliste platziert das Bild aus dem aufgelösten Wert.
-- **Ein Bewegungspfad ist eine Keyframe-Spur und sonst nichts.** `x` und `y` interpolieren über
-  dasselbe `Interp` wie ein Effektparameter. Es fehlt ein Editor für die Kurve zwischen zwei
-  Schlüsseln — Bezier-Anfasser stehen im Modell, und kein Command schreibt sie.
+- **Masken sind nur rechteckig und elliptisch.** Eine gezeichnete oder mitlaufende Maske braucht ein
+  Polygon im Modell und einen Shader, der es abtastet, und Mitlaufen braucht etwas zum Verfolgen.
+  Die zwei Formen hier schneiden sich in einer Kette, was mehr abdeckt, als die Zahl vermuten lässt
+  — aber eine um ein Motiv gezogene Form ist eine andere Funktion.
+- **Eine Maske läuft im Bildraum, nicht mit ihrem Clip.** Sie wird nach der Transformation gemessen,
+  ein bewegter Clip zieht das Bild also unter einer stehenden Maske durch. Eine an ihre Ebene
+  geheftete Maske will die Kette im Clipraum, und das ist eine Änderung am Bildgraphen, nicht an
+  einem Shader.
+- **Eine Maske je Form und Clip.** `effect.add` behandelt einen wiederholten Typ als Nichtstun, ein
+  zweites Rechteck braucht also die Kette nach Effekt-Id statt nach Effekttyp.
+- **Noch kein Editor für einen Bewegungspfad.** Der Kern löst die Kurve auf und der Renderer
+  zeichnet sie, aber die Punkte werden per Kommando gesetzt statt in der Vorschau gezogen — der
+  Inspektor hat keine `vec2`-Zeile, weil das Effektmanifest keinen Parametertyp jenseits eines
+  Floats kennt.
 - **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
   dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
 - **LUT-Import** braucht einen Dateiimport, eine 3D-Textur und einen Parameter, der kein Float ist.
