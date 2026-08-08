@@ -44,6 +44,7 @@
   "timeline.zoomOut": "Zoom out",
   "timeline.snap": "Snapping",
   "timeline.clipUnnamed": "Unnamed",
+  "timeline.clipRun": "{count} clips",
   "timeline.clipMenu": "Clip menu",
   "timeline.split": "Split at playhead",
   "timeline.deleteClip": "Delete clip",

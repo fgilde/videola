@@ -121,7 +121,7 @@ export function Timeline({
             <div
               key={track.id}
               className="v-timeline__header"
-              style={{ height: `${trackHeight(track)}px` }}
+              style={{ height: `${trackHeight(track)}px`, borderLeftColor: track.colorHex }}
             >
               <span className="v-timeline__headerName">{track.name}</span>
               <span className="v-timeline__headerKind">{t(`track.kind.${track.kind}`)}</span>

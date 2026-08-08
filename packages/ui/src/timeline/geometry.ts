@@ -59,6 +59,54 @@ export function clipsInRange(clips: readonly Clip[], range: TimeRange): Clip[] {
   return clips.filter((clip) => clip.start < range.to && clip.start + clip.duration > range.from);
 }
 
+export const MIN_CLIP_BOX_PX = 8;
+export const MIN_TRIM_ZONE_PX = 5;
+export const MIN_CLIP_LABEL_PX = 24;
+
+export interface ClipBox {
+  clip: Clip;
+  start: Time;
+  end: Time;
+  count: number;
+}
+
+// Windowing in time alone is not enough. Zoom out far enough and the window holds the whole
+// project, so an hour of one-second clips becomes an hour of DOM nodes. A run of clips that would
+// draw thinner than a few pixels cannot be told apart on screen anyway, so it draws as one box.
+// That makes the node count a function of the viewport instead of the material: every box either
+// spans at least minWidthPx or is followed by a gap that wide, so their number is bounded by the
+// visible width divided by that constant.
+export function clipBoxes(
+  clips: readonly Clip[],
+  range: TimeRange,
+  flicksPerPixel: number,
+  minWidthPx = MIN_CLIP_BOX_PX,
+): ClipBox[] {
+  const boxes: ClipBox[] = [];
+  let run: ClipBox | undefined;
+
+  for (const clip of clipsInRange(clips, range)) {
+    const end = clip.start + clip.duration;
+    if (run === undefined) {
+      run = { clip, start: clip.start, end, count: 1 };
+      continue;
+    }
+    const wideEnough = timeToX(run.end - run.start, flicksPerPixel) >= minWidthPx;
+    // A visible gap has to break the run, or one box would span an empty stretch of timeline.
+    const gapVisible = timeToX(clip.start - run.end, flicksPerPixel) >= minWidthPx;
+    if (wideEnough || gapVisible) {
+      boxes.push(run);
+      run = { clip, start: clip.start, end, count: 1 };
+      continue;
+    }
+    run.end = Math.max(run.end, end);
+    run.count += 1;
+  }
+
+  if (run !== undefined) boxes.push(run);
+  return boxes;
+}
+
 export function frameDuration(fps: Rate): Time {
   const rate = fps.numerator / fps.denominator;
   if (!Number.isFinite(rate) || rate <= 0) return FLICKS_PER_SECOND;

@@ -37,6 +37,9 @@
 }
 
 .v-timeline__header {
+  /* The track colour lives here, not on the row: a row starts at content x 0 and scrolls out of
+     sight, the header column is sticky and keeps showing it. */
+  border-left: 3px solid transparent;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -92,7 +95,6 @@
 .v-track {
   position: relative;
   border-bottom: 1px solid var(--v-border);
-  border-left: 3px solid transparent;
 }
 
 .v-clip {

@@ -44,6 +44,7 @@
   "timeline.zoomOut": "Verkleinern",
   "timeline.snap": "Einrasten",
   "timeline.clipUnnamed": "Ohne Namen",
+  "timeline.clipRun": "{count} Clips",
   "timeline.clipMenu": "Clip-Menü",
   "timeline.split": "Am Playhead teilen",
   "timeline.deleteClip": "Clip löschen",

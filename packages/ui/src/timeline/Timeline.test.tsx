@@ -220,6 +220,35 @@ describe("Timeline virtualisation", () => {
     expect(screen.getByTestId("timeline").querySelectorAll("*").length).toBeLessThan(200);
   });
 
+  // The window is measured in time, so zooming out widens it until it holds everything.
+  // Measuring only at the default zoom measures the one place where the material is sparse.
+  it("keeps the node count bounded at every zoom step, not just the default one", () => {
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
+    const timeline = screen.getByTestId("timeline");
+    const counts: number[] = [];
+
+    for (let step = 0; step < 22; step += 1) {
+      counts.push(timeline.querySelectorAll("*").length);
+      act(() => screen.getByRole("button", { name: "Verkleinern" }).click());
+    }
+
+    expect(Math.max(...counts)).toBeLessThan(400);
+    expect(document.querySelectorAll("[data-clip-id]").length).toBeGreaterThan(0);
+  });
+
+  it("stands in for a run of clips too narrow to tell apart", () => {
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
+    for (let step = 0; step < 10; step += 1) {
+      act(() => screen.getByRole("button", { name: "Verkleinern" }).click());
+    }
+
+    const runs = [...document.querySelectorAll<HTMLElement>("[data-clip-run]")];
+    expect(runs.length).toBeGreaterThan(0);
+    expect(runs.reduce((sum, run) => sum + Number(run.dataset.clipRun), 0)).toBeGreaterThan(1000);
+    // A run is not a clip: nothing on it pretends to be trimmable.
+    expect(document.querySelectorAll("[data-clip-run] [data-edge]")).toHaveLength(0);
+  });
+
   it("still reserves scroll width for the whole hour", () => {
     const { container } = renderTimeline(<Timeline project={hourLongProject()} playhead={0} dispatch={() => {}} onSeek={() => {}} />);
     const content = container.querySelector<HTMLElement>(".v-timeline__content");
