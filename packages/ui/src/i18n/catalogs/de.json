@@ -42,6 +42,7 @@
   "timeline.ruler": "Zeitskala",
   "timeline.zoomIn": "Vergrößern",
   "timeline.zoomOut": "Verkleinern",
+  "timeline.snap": "Einrasten",
   "timeline.clipUnnamed": "Ohne Namen",
   "timeline.clipMenu": "Clip-Menü",
   "timeline.split": "Am Playhead teilen",

@@ -14,10 +14,20 @@ import {
 import {
   COARSE_TRIM_ZONE_PX,
   FINE_TRIM_ZONE_PX,
+  tickStep,
   trackAt,
   xToTime,
+  type TimeRange,
   type ZoomBy,
 } from "./geometry";
+import {
+  snapCandidates,
+  snapSpan,
+  snapTime,
+  SNAP_RADIUS_PX,
+  type SnapCandidate,
+  type SnapOptions,
+} from "./snapping";
 
 const LONG_PRESS_MS = 500;
 const DRAG_THRESHOLD_PX = 3;
@@ -39,6 +49,7 @@ export interface TimelineGestures {
   trimZonePx: number;
   menu: ClipMenu | undefined;
   closeMenu(): void;
+  snapLine: Time | undefined;
 }
 
 export interface GestureConfig {
@@ -51,6 +62,8 @@ export interface GestureConfig {
   onSeek: (time: Time) => void;
   onSelect: (clip: ClipId | undefined) => void;
   zoom: ZoomBy;
+  snapEnabled: boolean;
+  range: TimeRange;
 }
 
 type Drag =
@@ -72,6 +85,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const longPress = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [trimZonePx, setTrimZonePx] = useState(COARSE_TRIM_ZONE_PX);
   const [menu, setMenu] = useState<ClipMenu>();
+  const [snapLine, setSnapLine] = useState<Time>();
 
   const cancelLongPress = useCallback(() => {
     clearTimeout(longPress.current);
@@ -121,7 +135,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       }
       if (hit.kind === "ruler") {
         drag.current = { mode: "scrub" };
-        seekTo(config, event.clientX);
+        setSnapLine(seekTo(config, event.clientX, snapOptions(config, event.altKey))?.time);
         return;
       }
 
@@ -180,7 +194,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         return;
       }
       if (active.mode === "scrub") {
-        seekTo(config, event.clientX);
+        setSnapLine(seekTo(config, event.clientX, snapOptions(config, event.altKey))?.time);
         return;
       }
 
@@ -193,11 +207,12 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         active.live = true;
       }
 
-      if (active.mode === "move") {
-        applyMove(config, active, dx, dy);
-      } else {
-        applyTrim(config, active, dx);
-      }
+      const options = snapOptions(config, event.altKey);
+      setSnapLine(
+        active.mode === "move"
+          ? applyMove(config, active, dx, dy, options)?.time
+          : applyTrim(config, active, dx, options)?.time,
+      );
     },
     [cancelLongPress],
   );
@@ -205,6 +220,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const endPointer = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       cancelLongPress();
+      setSnapLine(undefined);
       pointers.current.delete(event.pointerId);
       // Leaving the coalesce key off from here on is what closes the undo step; the next
       // pointerdown mints a fresh one.
@@ -236,6 +252,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
     trimZonePx,
     menu,
     closeMenu: useCallback(() => setMenu(undefined), []),
+    snapLine,
   };
 }
 
@@ -244,17 +261,20 @@ function applyMove(
   active: { clip: ClipId; clientY: number; start: Time; key: string },
   dx: number,
   dy: number,
-): void {
+  options: SnapOptions,
+): SnapCandidate | undefined {
   const found = findClip(config.project, active.clip);
-  if (found === undefined) return;
+  if (found === undefined) return undefined;
   // No lower clamp here: clip.move already pins the start at zero, and a second clamp in the UI
   // would be a rule that can drift away from the one the core enforces.
-  const target = active.start + xToTime(dx, config.flicksPerPixel);
+  const wanted = active.start + xToTime(dx, config.flicksPerPixel);
+  const snapped = snapSpan(wanted, found.clip.duration, candidatesFor(config, active.clip), options);
   const tracks = config.project.timeline.tracks;
   const top = config.tracksArea.current?.getBoundingClientRect().top ?? 0;
   const row = trackAt(tracks, active.clientY + dy - top);
   const toTrack = tracks[row]?.id ?? found.track;
-  attempt(() => config.dispatch(cmd.clipMove(active.clip, toTrack, target), active.key));
+  attempt(() => config.dispatch(cmd.clipMove(active.clip, toTrack, snapped.time), active.key));
+  return snapped.candidate;
 }
 
 // The trim command takes a delta, so each move dispatches the step from where the clip actually
@@ -264,12 +284,35 @@ function applyTrim(
   config: GestureConfig,
   active: { clip: ClipId; edge: TrimEdge; edgeTime: Time; key: string },
   dx: number,
-): void {
+  options: SnapOptions,
+): SnapCandidate | undefined {
   const found = findClip(config.project, active.clip);
-  if (found === undefined) return;
-  const step = active.edgeTime + xToTime(dx, config.flicksPerPixel) - edgeTime(found.clip, active.edge);
-  if (step === 0) return;
-  attempt(() => config.dispatch(cmd.clipTrim(active.clip, active.edge, step), active.key));
+  if (found === undefined) return undefined;
+  const wanted = active.edgeTime + xToTime(dx, config.flicksPerPixel);
+  const snapped = snapTime(wanted, candidatesFor(config, active.clip), options);
+  const step = snapped.time - edgeTime(found.clip, active.edge);
+  if (step !== 0) {
+    attempt(() => config.dispatch(cmd.clipTrim(active.clip, active.edge, step), active.key));
+  }
+  return snapped.candidate;
+}
+
+function candidatesFor(config: GestureConfig, exclude: ClipId): SnapCandidate[] {
+  return snapCandidates(config.project, {
+    range: config.range,
+    playhead: config.playhead,
+    exclude,
+  });
+}
+
+// A radius of zero is how snapping gets switched off -- one number instead of a second code path
+// that could disagree with the first.
+function snapOptions(config: GestureConfig, modifierHeld: boolean): SnapOptions {
+  return {
+    radiusPx: config.snapEnabled && !modifierHeld ? SNAP_RADIUS_PX : 0,
+    flicksPerPixel: config.flicksPerPixel,
+    gridStep: tickStep(config.flicksPerPixel, config.project.settings.fps),
+  };
 }
 
 // The core is the authority on what an edit may do. A rejected step during a drag means the edge
@@ -283,11 +326,19 @@ function attempt(action: () => void): void {
   }
 }
 
-function seekTo(config: GestureConfig, clientX: number): void {
+function seekTo(
+  config: GestureConfig,
+  clientX: number,
+  options: SnapOptions,
+): SnapCandidate | undefined {
   const surface = config.surface.current;
   const left = surface?.getBoundingClientRect().left ?? 0;
   const scrollLeft = surface?.scrollLeft ?? 0;
-  config.onSeek(Math.max(0, xToTime(clientX - left + scrollLeft, config.flicksPerPixel)));
+  const wanted = Math.max(0, xToTime(clientX - left + scrollLeft, config.flicksPerPixel));
+  // No playhead candidate here: the playhead is the thing being moved.
+  const snapped = snapTime(wanted, snapCandidates(config.project, { range: config.range }), options);
+  config.onSeek(snapped.time);
+  return snapped.candidate;
 }
 
 type Hit = { kind: "ruler" } | { kind: "clip"; clip: ClipId; edge?: TrimEdge };

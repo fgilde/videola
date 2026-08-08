@@ -51,9 +51,11 @@ export function Timeline({
   const tracksRef = useRef<HTMLDivElement>(null);
   const [flicksPerPixel, setFlicksPerPixel] = useState(DEFAULT_FLICKS_PER_PIXEL);
   const [selected, setSelected] = useState<ClipId>();
+  const [snapEnabled, setSnapEnabled] = useState(true);
   const viewport = useViewport(scrollRef);
   const projectEnd = useMemo(() => timelineEnd(project), [project]);
   const zoom = useAnchoredZoom(scrollRef, flicksPerPixel, setFlicksPerPixel, projectEnd);
+  const range: TimeRange = visibleRange(viewport.scrollLeft, viewport.width, flicksPerPixel);
 
   const select = useCallback(
     (clip: ClipId | undefined) => {
@@ -73,6 +75,8 @@ export function Timeline({
     onSeek,
     onSelect: select,
     zoom,
+    snapEnabled,
+    range,
   });
 
   const tracks = project.timeline.tracks;
@@ -80,7 +84,6 @@ export function Timeline({
   const rows = useMemo(() => tracks.map((track, index) => ({ track, index })).reverse(), [tracks]);
   const mediaNames = useMemo(() => mediaNameIndex(project.library), [project.library]);
   const menu = gestures.menu;
-  const range: TimeRange = visibleRange(viewport.scrollLeft, viewport.width, flicksPerPixel);
   // One viewport of slack past the end, so a clip can always be dragged beyond what exists.
   const contentWidth = timeToX(projectEnd, flicksPerPixel) + Math.max(viewport.width, 1);
 
@@ -100,6 +103,14 @@ export function Timeline({
           onClick={() => zoom(1 / ZOOM_FACTOR, viewport.width / 2)}
         >
           {t("timeline.zoomIn")}
+        </button>
+        <button
+          type="button"
+          className="v-button"
+          aria-pressed={snapEnabled}
+          onClick={() => setSnapEnabled((on) => !on)}
+        >
+          {t("timeline.snap")}
         </button>
       </div>
 
@@ -149,6 +160,13 @@ export function Timeline({
               data-testid="timeline-playhead"
               style={{ left: `${timeToX(playhead, flicksPerPixel)}px` }}
             />
+            {gestures.snapLine !== undefined && (
+              <div
+                className="v-timeline__snapLine"
+                data-testid="timeline-snapline"
+                style={{ left: `${timeToX(gestures.snapLine, flicksPerPixel)}px` }}
+              />
+            )}
           </div>
         </div>
       </div>

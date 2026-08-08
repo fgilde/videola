@@ -95,6 +95,7 @@ interface PointerStep {
   pointerType?: string;
   clientX?: number;
   clientY?: number;
+  altKey?: boolean;
 }
 
 function down(target: Element, step: PointerStep): void {
@@ -283,6 +284,122 @@ describe("timeline gestures", () => {
     up({ clientX: 500 });
 
     expect(dispatched).toEqual([]);
+  });
+});
+
+describe("snapping in a drag", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  // The neighbour sits at 5.5 s so it cannot be confused with the one second grid, which the
+  // default zoom puts at every whole second.
+  async function twoClips(): Promise<VideolaDocument> {
+    const doc = new VideolaDocument(await createWasmBackend());
+    doc.dispatch(cmd.trackAdd("video", "V1"));
+    doc.dispatch(cmd.trackAdd("video", "V2"));
+    const solid = { kind: "generator", generator: { type: "solid", color: "#ff0000" } } as const;
+    doc.dispatch(cmd.clipAdd(doc.state.timeline.tracks[0]?.id ?? "", solid, 0, 2 * SECOND));
+    doc.dispatch(cmd.clipAdd(doc.state.timeline.tracks[1]?.id ?? "", solid, 5.5 * SECOND, 2 * SECOND));
+    return doc;
+  }
+
+  function clipById(doc: VideolaDocument, index: number): { id: ClipId; start: number } {
+    const clip = doc.state.timeline.tracks[index]?.clips[0];
+    if (clip === undefined) throw new Error("clip missing");
+    return { id: clip.id, start: clip.start };
+  }
+
+  function elementFor(id: ClipId): HTMLElement {
+    const element = document.querySelector<HTMLElement>(`[data-clip-id="${id}"]`);
+    if (element === null) throw new Error("clip element missing");
+    return element;
+  }
+
+  function dragDragged(doc: VideolaDocument, toX: number, step: PointerStep = {}): void {
+    const dragged = clipById(doc, 0).id;
+    down(elementFor(dragged), { clientX: 0, clientY: 100 });
+    move({ clientX: toX, clientY: 100, ...step });
+    up({ clientX: toX, clientY: 100, ...step });
+  }
+
+  it("pulls a dragged clip onto a neighbouring clip's edge", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+
+    // 545 px is 5.45 s: five pixels short of the neighbour, forty-five past the grid line.
+    dragDragged(doc, 545);
+
+    expect(clipById(doc, 0).start).toBe(5.5 * SECOND);
+  });
+
+  it("lets the modifier key through, so an off-grid position stays reachable", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+
+    dragDragged(doc, 545, { altKey: true });
+
+    expect(clipById(doc, 0).start).toBe(5.45 * SECOND);
+  });
+
+  it("stops snapping when the toolbar switch is off", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+    act(() => screen.getByRole("button", { name: "Einrasten" }).click());
+
+    dragDragged(doc, 545);
+
+    expect(clipById(doc, 0).start).toBe(5.45 * SECOND);
+  });
+
+  it("snaps the trailing edge onto a neighbour too", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+
+    // 347 px is 3.47 s; the clip's own end then lands 3 px short of the neighbour at 5.5 s.
+    dragDragged(doc, 347);
+
+    expect(clipById(doc, 0).start).toBe(3.5 * SECOND);
+  });
+
+  it("shows the line it snapped to while the drag is running", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+    const dragged = clipById(doc, 0).id;
+
+    down(elementFor(dragged), { clientX: 0, clientY: 100 });
+    move({ clientX: 545, clientY: 100 });
+
+    expect(screen.getByTestId("timeline-snapline").style.left).toBe("550px");
+
+    up({ clientX: 545, clientY: 100 });
+    expect(screen.queryByTestId("timeline-snapline")).toBeNull();
+  });
+
+  it("snaps the playhead to a clip edge while scrubbing", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+    const ruler = document.querySelector("[data-timeline-ruler]");
+    if (ruler === null) throw new Error("ruler missing");
+
+    down(ruler, { clientX: 545 });
+    up({ clientX: 545 });
+
+    expect(screen.getByTestId("timeline-playhead").style.left).toBe("550px");
+  });
+
+  it("snaps a trimmed edge onto a neighbour", async () => {
+    const doc = await twoClips();
+    render(<Harness doc={doc} />);
+    const dragged = clipById(doc, 0).id;
+    const handle = elementFor(dragged).querySelector('[data-edge="end"]');
+    if (handle === null) throw new Error("trim handle missing");
+
+    down(handle, { clientX: 200, clientY: 100 });
+    move({ clientX: 547, clientY: 100 });
+    up({ clientX: 547, clientY: 100 });
+
+    const clip = doc.state.timeline.tracks[0]?.clips[0];
+    expect((clip?.start ?? 0) + (clip?.duration ?? 0)).toBe(5.5 * SECOND);
   });
 });
 

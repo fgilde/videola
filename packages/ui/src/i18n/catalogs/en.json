@@ -42,6 +42,7 @@
   "timeline.ruler": "Time scale",
   "timeline.zoomIn": "Zoom in",
   "timeline.zoomOut": "Zoom out",
+  "timeline.snap": "Snapping",
   "timeline.clipUnnamed": "Unnamed",
   "timeline.clipMenu": "Clip menu",
   "timeline.split": "Split at playhead",
