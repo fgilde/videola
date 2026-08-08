@@ -295,6 +295,23 @@ mod tests {
         assert!((0.0..=100.0).contains(&x), "x ran off the path, x={x}");
     }
 
+    // The exact three points the pixel harness places a quad at, pinned here because that is where
+    // the curve is decided. If this moves, the numbers in `gpu/harness.html` are stale rather than
+    // wrong -- the harness measures that they reach the screen, not what they are.
+    #[test]
+    fn the_path_the_pixel_harness_draws_resolves_to_these_points() {
+        let track = vec![at(0.0, -16.0, 0.0), at(2.0, 16.0, 0.0), at(4.0, 16.0, 64.0)];
+        assert_eq!(evaluate_path(&track, Time::ZERO), Some([-16.0, 0.0]));
+        assert_eq!(
+            evaluate_path(&track, Time::from_seconds(1.0)),
+            Some([2.0, -4.0])
+        );
+        assert_eq!(
+            evaluate_path(&track, Time::from_seconds(2.0)),
+            Some([16.0, 0.0])
+        );
+    }
+
     #[test]
     fn a_path_hits_every_key_it_is_built_from() {
         let track = vec![at(0.0, 0.0, 0.0), at(2.0, 100.0, 0.0), at(4.0, 100.0, 100.0)];

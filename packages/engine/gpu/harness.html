@@ -235,6 +235,42 @@ test("the static transform loses to the resolved one", () => {
   check("the corner is covered because the snapshot says full size", at(1, 1), [255, 255, 255, 255]);
 });
 
+// A motion path at pixels. The core resolves the curve -- `the_path_the_pixel_harness_draws_...`
+// in keyframe.rs pins these three points -- and what is measured here is that they reach the screen
+// on both axes at once. The path runs (-16,0) at 0s, (16,0) at 2s and (16,64) at 4s, so the three
+// instants below are its two opening keys and the point halfway between them in time.
+//
+// Two things a draw list can get wrong and this catches. Dropping `y` from the snapshot leaves the
+// quad on one row throughout, and taking the straight line between the outer two points puts the
+// middle one at row 28 rather than 24 -- the curve is worth four rows here, which is the whole
+// difference between a path and a pair of `x`/`y` tracks reaching the picture.
+test("a motion path carries the quad off the straight line between its keys", () => {
+  const { compositor, scene } = rig(64, 64, "#000000", [{}], 8, 8);
+  const f = frame(8, 8, () => [255, 255, 255, 255]);
+  const cornerAt = (x, y) => {
+    draw(compositor, scene, 0, new Map([["clp_0", f]]), new Map(),
+      new Map([["clp_0", transform({ x: x, y: y })]]));
+    const pixels = compositor.readPixels();
+    const at = reader(pixels, 64, 64);
+    for (let row = 0; row < 64; row += 1) {
+      for (let column = 0; column < 64; column += 1) {
+        if (at(column, row)[0] > 128) return [column, row];
+      }
+    }
+    return [-1, -1];
+  };
+  // The two keys, and the resolved point between them.
+  const start = cornerAt(-16, 0);
+  const middle = cornerAt(2, -4);
+  const end = cornerAt(16, 0);
+  f.close();
+
+  check("the quad starts left of centre", start, [12, 28], 0);
+  check("and ends right of it, on the same row", end, [44, 28], 0);
+  // Straight from one key to the other would be [28, 28]: the same row, and halfway across.
+  check("the middle of the path is neither halfway nor level", middle, [30, 24], 0);
+});
+
 test("geometry", () => {
   const { compositor, scene } = rig(16, 16, "#000000",
     [{ t: { rotation: 90, anchorX: 0, anchorY: 0, scaleX: 0.5, scaleY: 0.5 } }], 16, 16);
@@ -631,6 +667,12 @@ test("a mask is measured down the picture, the way the model measures", () => {
   const left = masked([RECT({ centerX: 0.25, width: 0.25 })], { background: "#ff0000" }).at;
   check("and x is not mirrored either", left(3, 8), [255, 255, 255, 255]);
   check("the right quarter is background", left(11, 8), [255, 0, 0, 255]);
+
+  // The ellipse needs its own asymmetric run. Every other check of it is centred, and a centred
+  // ellipse is y-symmetric -- which is precisely how the wipe's direction stayed wrong for so long.
+  const high = masked([ELLIPSE({ centerY: 0.25, height: 0.25 })], { background: "#ff0000" }).at;
+  check("an ellipse sits where its centre says", high(8, 3), [255, 255, 255, 255]);
+  check("and not in the mirror of it", high(8, 11), [255, 0, 0, 255]);
 });
 
 // The falloff, weight by weight, across the band a feather of 0.125 opens between 0.625 and 0.875
