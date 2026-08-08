@@ -68,18 +68,86 @@
   background: var(--v-bg);
 }
 
-/* Picture above, transport under it, timeline at the bottom -- the arrangement every editor
-   has, and on a phone the same one, because the preview must stay visible while the timeline
-   scrolls under it. Both flexible rows carry minmax(0, ...) so a canvas or a scroll container
-   inside them can shrink; a bare 1fr floors at its content and pushes the timeline off-screen. */
+/* Library beside the picture, transport under it, timeline across the bottom -- the arrangement
+   every editor has. The shell places the panels by their own class names because arranging them
+   is what a shell is for; each of them only knows how to fill the box it is given. Both flexible
+   rows carry minmax(0, ...) so a canvas or a scroll container inside them can shrink; a bare 1fr
+   floors at its content and pushes the timeline off-screen. */
 .v-editor {
   display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%);
+  grid-template-areas:
+    "banners banners"
+    "library preview"
+    "library transport"
+    "timeline timeline";
   height: 100%;
 }
 
+.v-editor__banners {
+  grid-area: banners;
+}
+
+.v-editor .v-library {
+  grid-area: library;
+}
+
+.v-editor .v-preview {
+  grid-area: preview;
+}
+
+.v-editor .v-transport {
+  grid-area: transport;
+}
+
+.v-editor .v-timeline {
+  grid-area: timeline;
+}
+
+/* One column on a phone: the picture stays put at the top and the panels take turns underneath,
+   because 390 px cannot hold a library and a timeline side by side without both being useless.
+   The preview row is capped rather than flexible -- a 16:9 picture in a 390 px column is 220 px
+   tall, and an even split would leave a third of the screen as empty letterbox. */
 .v-shell[data-layout="phone"] .v-editor {
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(160px, 50%);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 32vh) auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "banners"
+    "preview"
+    "transport"
+    "tabs"
+    "panel";
+}
+
+.v-shell[data-layout="phone"] .v-editor .v-library,
+.v-shell[data-layout="phone"] .v-editor .v-timeline {
+  grid-area: panel;
+}
+
+.v-panels {
+  grid-area: tabs;
+  display: flex;
+  background: var(--v-bg-elevated);
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-panels__tab {
+  flex: 1;
+  min-height: var(--v-touch-target);
+  background: none;
+  color: var(--v-text-muted);
+  border: none;
+  /* The strip under the current tab is what says which panel is showing; the transparent one on
+     the others keeps the label from shifting by two pixels when it takes over. */
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.v-panels__tab[aria-pressed="true"] {
+  color: var(--v-text);
+  border-bottom-color: var(--v-accent);
 }
 
 .v-shell[data-layout="tablet"] .v-button,
