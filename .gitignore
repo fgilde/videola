@@ -10,6 +10,7 @@ dist
 *.tsbuildinfo
 .pnpm-store
 packages/engine/gpu/bundle.js
+apps/web/browser/preview.png
 
 # Tauri
 src-tauri/target

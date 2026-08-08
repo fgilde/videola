@@ -5,12 +5,17 @@
   min-height: 0;
   padding: var(--v-space-3);
   background: var(--v-bg-sunken);
+  /* Query units below need a container that knows its own size in both axes. */
+  container-type: size;
 }
 
+/* Fit and centre without letterboxing the canvas itself: the drawing buffer is sized from the
+   element, so an element wider than the picture would hand the compositor the wrong aspect and
+   the frame would come out stretched. Taking the smaller of "as wide as the pane" and "as wide
+   as the pane is tall, times the aspect" makes the element exactly the picture. */
 .v-preview__canvas {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
+  width: min(100cqw, calc(100cqh * var(--v-preview-aspect)));
   /* The checkerboard behind a transparent composite: without it an alpha hole and a black
      background look the same, and the compositor's premultiplied output is meant to be seen. */
   background:

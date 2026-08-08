@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactElement } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
 import "./Preview.css";
@@ -60,7 +60,12 @@ export function Preview({ width, height, onCanvas, onResize }: PreviewProps): Re
         className="v-preview__canvas"
         role="img"
         aria-label={t("preview.label")}
-        style={{ aspectRatio: `${width} / ${height}` }}
+        style={
+          {
+            aspectRatio: `${width} / ${height}`,
+            "--v-preview-aspect": `${width / height}`,
+          } as CSSProperties
+        }
       />
     </div>
   );

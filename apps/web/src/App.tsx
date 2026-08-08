@@ -7,6 +7,7 @@ import {
   VideolaDocument,
   type Command,
   type LoadWarning,
+  type MediaAsset,
   type MediaId,
   type Project,
   type Time,
@@ -293,6 +294,7 @@ export function App(): ReactElement {
 function appendClip(doc: VideolaDocument, media: MediaId): void {
   const asset = doc.state.library.find((entry) => entry.id === media);
   if (asset === undefined) return;
+  adoptFormat(doc, asset);
   const kind: TrackKind = asset.kind === "audio" ? "audio" : "video";
   const track =
     doc.state.timeline.tracks.find((candidate) => candidate.kind === kind) ??
@@ -303,6 +305,25 @@ function appendClip(doc: VideolaDocument, media: MediaId): void {
   // occupy something on the timeline, and five seconds is the length every editor gives a still.
   const duration = asset.duration ?? STILL_DURATION;
   doc.dispatch(cmd.clipAdd(track.id, { kind: "media", media }, start, duration));
+}
+
+// The first medium of an untouched project decides its format, which is what every editor does
+// and what keeps a 720p clip from sitting as a small rectangle in the middle of a 1080p frame:
+// the draw list maps one source pixel to one project pixel, and there is no command yet to scale
+// a clip. Only while nothing has been imported and no track exists -- past that point the format
+// is a decision somebody made.
+function adoptFormat(doc: VideolaDocument, asset: MediaAsset): void {
+  const untouched =
+    doc.state.library.length === 1 && doc.state.timeline.tracks.length === 0;
+  if (!untouched || asset.width == null || asset.height == null || asset.fps == null) return;
+  doc.dispatch(
+    cmd.projectSetSettings({
+      ...doc.state.settings,
+      width: asset.width,
+      height: asset.height,
+      fps: asset.fps,
+    }),
+  );
 }
 
 function added(doc: VideolaDocument, kind: TrackKind, name: string): Track | undefined {
