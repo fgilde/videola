@@ -2,38 +2,63 @@
 
 # Videola
 
-Videola is a browser-based video editor. It is early, but the chain runs end to end: drop a video
-in, cut it on the timeline, play it back, and export a file a player opens.
+Videola is a browser-based video editor. The chain runs end to end: drop a video in, cut it on the
+timeline, add effects and keyframes, mix the audio, and export a file a player opens — on a desktop,
+a tablet or a phone. There is an HTTP API and an MCP server for AI agents, and templates that bake
+into ordinary editable projects.
 
-![The editor with a decoded frame in the preview](apps/docs/public/editor-preview.png)
+![The Videola editor: media library, preview with a decoded frame, properties panel, transport and timeline](apps/docs/public/editor-full.png)
 
 ## What works today
 
-- Import by drag-and-drop or file picker. Media are hashed with SHA-256 and stored in OPFS under
-  that hash before anything is dispatched, so the same file imported twice is stored once.
-- A timeline you can work on: move and trim clips across tracks, scrub, split and delete, snap to
-  clip edges and the playhead, zoom. One Pointer Events path serves mouse, pen and touch, and hit
-  areas grow to 44 px when the pointer is not a mouse. A whole drag is one undo step.
-- Playback through WebCodecs decoding and a WebGL2 compositor, with the audio clock in the lead and
-  a transport for play/pause, frame stepping and jumping to either end.
-- A Rust core (`videola-core`) with the project data model, a command bus of 26 commands, and
-  undo/redo built from JSON-Patch diffs. Time is stored as integer flicks, not float seconds.
-- The `.videola` project format: a ZIP holding a manifest, `project.json`, and media files named by
-  their SHA-256 hash.
-- WASM bindings, so a browser drives the same Rust core, behind a TypeScript facade
-  (`@videola/core`) whose model types are generated from the Rust types by ts-rs.
-- An app shell (`@videola/ui`) with a dark/light/system theme, German and English catalogues, and
-  layout detection for phone, tablet and desktop.
-- The web app opens, switches theme and language, adds a track, undoes and redoes, saves a
-  `.videola` file and reads it back.
-- Export to MP4 with H.264 and AAC, or to WebM with VP9 and Opus where the browser cannot encode
-  H.264. It runs in a worker through the same WebGL2 compositor as the preview, with progress and a
-  cancel that really stops it. See [Exporting](https://fgilde.github.io/videola/guide/exporting).
-- CI runs fmt, clippy, the Rust tests, a check that the generated TypeScript types are current, the
-  wasm build, and the web typecheck, tests and build.
-- Three browser harnesses that need no Playwright, only an installed Chrome: `test:gpu` renders real
-  pixels against ANGLE, `test:browser` in `@videola/ui` measures real layout, and the one in
-  `apps/web` drives the built application with a real video file.
+**Editing.** Import by drag-and-drop, file picker, or straight from a phone camera. Move and trim
+clips across tracks, ripple delete and ripple trim, roll, slip and slide, multi-select, group, cut,
+copy and paste, split, markers, snapping to clip edges and the playhead, zoom from a single frame to
+a whole project. One Pointer Events path serves mouse, pen and touch; hit areas grow to 44 px when
+the pointer is not a mouse, and a whole drag is one undo step.
+
+**Playback.** WebCodecs decoding into a WebGL2 compositor, the audio clock in the lead, and a
+transport for play/pause, frame stepping and jumping to either end.
+
+**Effects and transitions.** Brightness, contrast, saturation, colour temperature, vignette, blur,
+sharpen and chroma key; cross dissolve, wipe, slide, zoom and dip-to-colour. A text generator with
+styling and in/out/loop animation. Every parameter can be keyframed, and the interpolation happens
+in the Rust core so the preview and the export read the same values.
+
+**Audio.** Per-track volume, pan, mute and solo in a mixer, fades as scheduled automation rather
+than per-frame arithmetic, waveforms drawn from the buffers the graph already decoded, and EBU R128
+loudness measured against the Tech 3341 conformance cases.
+
+**Export.** MP4 with H.264 and AAC, or WebM with VP9 and Opus where the browser cannot encode
+H.264. It runs in a worker through the same compositor as the preview, with progress and a cancel
+that really stops it.
+
+**Templates.** `.videolat` is the same container as `.videola` with one extra entry, so a template
+*is* a project with questions attached. Pick one from the gallery, answer the wizard, and the result
+is an ordinary editable project. Four templates ship, none of them carrying footage.
+
+**An API and an MCP server.** `apps/server` exposes the whole command catalogue over HTTP and to AI
+agents. The catalogue is generated from the Rust enum, so a new command becomes an agent capability
+without anyone editing a list. Both transports are thin skins over one class, and not a single
+scalar is re-checked there — everything goes through the same load gate the editor uses.
+
+**The core.** `videola-core` holds the project model, a bus of 37 commands, undo and redo built from
+JSON-Patch diffs, and the `.videola` reader and writer. Time is integer flicks, never float seconds;
+frame rates stay rational to the last division. WASM bindings let the browser and the server drive
+the same crate, behind a TypeScript facade whose model types are generated by ts-rs.
+
+**Phone, tablet and desktop.** Not a second implementation — the same code, with the panels taking
+turns behind a tab bar where there is no room for them side by side.
+
+**Packaging.** A Tauri shell building Windows, Linux and macOS installers, and a Docker image that
+serves the web app as static files.
+
+## What is not there yet
+
+No masks, no motion paths, no motion blur, no LUT import. No nesting of compound clips, no magnetic
+timeline, no autosave recovery. No EQ or compressor — the DSP is native to the browser, but there is
+nowhere in the model to persist a track-level effect yet. No noise reduction, ducking or beat
+detection. FFmpeg is not bundled; the export uses the browser's own encoders.
 
 ## Build
 
@@ -55,13 +80,14 @@ pnpm test
 pnpm build
 ```
 
-Two checks need a real browser and are not part of `pnpm test`. They find Chrome on their own;
+Four checks need a real browser and are not part of `pnpm test`. They find Chrome on their own;
 `CHROME_PATH` overrides the search.
 
 ```
 pnpm --filter @videola/engine test:gpu      # the compositor against a real WebGL2 driver
 pnpm --filter @videola/engine test:export   # a real export, verified with ffprobe and ffmpeg
 pnpm --filter @videola/ui test:browser      # the timeline against real layout
+pnpm --filter videola-web test:browser     # the built application, desktop, tablet and phone
 ```
 
 `test:export` needs `ffprobe` and `ffmpeg` on the path: it hands the file it produced to a decoder
@@ -97,11 +123,8 @@ result or as `skipped`.
 | Android APK and AAB | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the job is skipped; an unsigned APK cannot be installed or shipped to Play |
 | iOS IPA | `IOS_CERTIFICATE` (base64 distribution `.p12`) and `IOS_MOBILE_PROVISION` (base64), plus `APPLE_CERTIFICATE_PASSWORD` and `APPLE_TEAM_ID` | the job is skipped; no distributable IPA exists without a certificate and a provisioning profile |
 
-An installer built today packages the editor described above: import, timeline editing, playback and
-export all work. FFmpeg is not bundled — the export runs on the browser's own encoders — and the
-Docker image only serves static files.
-
-The published `v0.1.0` release predates all of this and installs the app frame alone.
+An installer built today packages the editor described above. FFmpeg is not bundled — the export
+runs on the browser's own encoders — and the Docker image only serves static files.
 
 ## Layout
 
@@ -109,8 +132,12 @@ The published `v0.1.0` release predates all of this and installs the app frame a
 crates/videola-core       project model, command bus, undo/redo, .videola reader and writer
 crates/videola-core-wasm  wasm_bindgen wrapper around the core
 packages/core             @videola/core, a TypeScript facade over the WASM core
-packages/ui               @videola/ui, theme, catalogues, layout detection, app shell
-apps/web                  Vite app wiring the two packages together
+packages/media            import, OPFS storage, hashing, waveforms
+packages/engine           decoding, WebGL2 compositor, effects, audio graph, clock, export
+packages/ui               @videola/ui, theme, catalogues, timeline, inspector, mixer, templates
+apps/web                  Vite app wiring the packages together
+apps/server               videola-server, the HTTP API and the MCP server
+apps/docs                 the documentation site
 ```
 
 ## Licence

@@ -3,8 +3,8 @@ layout: home
 hero:
   text: A video editor built on a Rust core
   tagline: >
-    Drop a video in, cut it on the timeline, press play and watch it. Effects, keyframes and
-    export are not in the surface yet.
+    Import, cut, keyframe, mix and export — in a browser, on a desktop, a tablet or a phone.
+    With an HTTP API and an MCP server for agents.
   image:
     src: /videola-logo.webp
     alt: Videola
@@ -74,25 +74,23 @@ features:
 
 ## What works today
 
-- **Editing.** Import by drag-and-drop or file picker, move and trim clips across tracks, scrub,
-  split and delete, snap to clip edges and the playhead, zoom from frames to the whole project.
-- **Playback.** WebCodecs decoding into a WebGL2 compositor, with the audio clock in the lead and a
-  transport for play/pause, frame stepping and jumping to either end.
-- **Effects and transitions.** A brightness effect and a crossfade, resolved from keyframes in the
-  Rust core so the preview and any later export read the same values.
-- **The Rust core.** `videola-core` holds the project model, a bus of 37 commands, undo and redo
-  built from JSON-Patch diffs, and the `.videola` reader and writer.
-- **One pointer path.** Mouse, pen and touch take the same code; hit areas grow to 44 px when the
-  pointer is not a mouse.
-- **Packaging.** A Tauri shell that builds Windows, Linux and macOS installers, and a Docker image
-  that serves the web app as static files.
+- **Editing** — ripple delete and trim, roll, slip, slide, multi-selection, groups, clipboard,
+  markers, snapping and zoom, with one pointer path for mouse, pen and finger.
+- **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
+- **Effects and transitions** — eight effects, five transitions, a text generator, every parameter
+  keyframable and interpolated in the Rust core so preview and export agree.
+- **Audio** — mixer with volume, pan, mute and solo, fades as automation, waveforms, EBU R128
+  loudness checked against the Tech 3341 cases.
+- **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.
+- **Templates** — a gallery, a wizard, and a bake that leaves you with an ordinary project.
+- **An API and MCP server** — the whole command catalogue, generated from the Rust enum.
+- **Phone, tablet and desktop** — the same code, panels taking turns where there is no room.
 
 ## What is not there yet
 
-No export, so nothing can leave the application yet. No inspector, no media library, no templates.
-FFmpeg is not integrated, and the Android and iOS release jobs are skipped until signing keys are
-configured. The [HTTP API and the MCP server](/guide/api-and-mcp) do exist, but with no renderer
-behind them an agent can edit a project and save it — it cannot see a frame.
+No masks, motion paths, motion blur or LUT import. No nesting, magnetic timeline or autosave
+recovery. No EQ or compressor — the browser has the DSP, the model has nowhere to persist a
+track-level effect yet. FFmpeg is not bundled; the export uses the browser's own encoders.
 
 The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
 design are built and which are planned.
@@ -100,7 +98,7 @@ design are built and which are planned.
 ## The editor
 
 <figure class="shot">
-  <img src="/editor-preview.png" alt="The Videola editor: a decoded video frame in the preview, a transport showing 00:00:00.00 of 00:00:02.00 with the pause button active, and a clip named fixture.mp4 on track V1">
+  <img src="/editor-full.png" alt="The Videola editor: a decoded video frame in the preview, a transport showing 00:00:00.00 of 00:00:02.00 with the pause button active, and a clip named fixture.mp4 on track V1">
   <figcaption>A real frame, decoded and composited in the browser. The screenshot is taken by a test that builds the application, drives it in headless Chrome and drops a video file into it — the same run that caught a preview canvas which never grew past its intrinsic size.</figcaption>
 </figure>
 

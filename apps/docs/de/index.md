@@ -3,8 +3,8 @@ layout: home
 hero:
   text: Ein Video-Editor auf einem Rust-Kern
   tagline: >
-    Video hineinziehen, auf der Timeline schneiden, abspielen und zusehen. Effekte, Keyframes und
-    Export sind noch nicht in der Oberfläche.
+    Importieren, schneiden, keyframen, mischen und exportieren — im Browser, am Schreibtisch, auf
+    Tablet und Telefon. Mit HTTP-Schnittstelle und MCP-Server für Agenten.
   image:
     src: /videola-logo.webp
     alt: Videola
@@ -76,26 +76,25 @@ features:
 
 ## Was heute funktioniert
 
-- **Schneiden.** Import per Ziehen-und-Ablegen oder Dateiauswahl, Clips über Spuren hinweg
-  verschieben und trimmen, scrubben, teilen und löschen, an Clipkanten und Playhead einrasten,
-  vom Einzelbild bis zum ganzen Projekt zoomen.
-- **Wiedergabe.** WebCodecs-Dekodierung in einen WebGL2-Compositor, mit der Audio-Uhr als Führung
-  und einem Transport für Abspielen/Pause, Einzelbildschritte und Sprünge an beide Enden.
-- **Effekte und Übergänge.** Ein Helligkeitseffekt und eine Überblendung, aus Keyframes im
-  Rust-Kern aufgelöst — Vorschau und ein späterer Export lesen dieselben Werte.
-- **Der Rust-Kern.** `videola-core` hält Datenmodell, einen Bus aus 26 Commands, Rückgängig und
-  Wiederholen aus JSON-Patch-Differenzen sowie das Lesen und Schreiben von `.videola`.
-- **Ein Zeigerpfad.** Maus, Stift und Finger nehmen denselben Code; Trefferflächen wachsen auf
-  44 px, sobald der Zeiger keine Maus ist.
-- **Auslieferung.** Eine Tauri-Hülle, die Installer für Windows, Linux und macOS baut, und ein
-  Docker-Image, das die Web-App als statische Dateien ausliefert.
+- **Schneiden** — Ripple-Löschen und -Trimmen, Roll, Slip, Slide, Mehrfachauswahl, Gruppen,
+  Zwischenablage, Marker, Einrasten und Zoom, mit einem Zeigerpfad für Maus, Stift und Finger.
+- **Wiedergabe** — WebCodecs in einen WebGL2-Compositor, die Audio-Uhr führt, bildgenauer Transport.
+- **Effekte und Übergänge** — acht Effekte, fünf Übergänge, ein Textgenerator, jeder Parameter
+  keyframebar und im Rust-Kern interpoliert, damit Vorschau und Export dasselbe rechnen.
+- **Ton** — Mischpult mit Lautstärke, Panorama, Stumm und Solo, Fades als Automation, Waveforms,
+  EBU-R128-Lautheit gegen die Tech-3341-Fälle geprüft.
+- **Export** — MP4 oder WebM in einem Worker, mit Fortschritt und einem Abbruch, der wirklich stoppt.
+- **Vorlagen** — Galerie, Assistent, und ein Backen, das ein ganz normales Projekt hinterlässt.
+- **Schnittstelle und MCP-Server** — der ganze Command-Katalog, aus dem Rust-Enum generiert.
+- **Telefon, Tablet und Schreibtisch** — derselbe Code, die Bereiche wechseln sich ab, wo der Platz
+  nicht für alle reicht.
 
 ## Was noch fehlt
 
-Kein Export, es kann also noch nichts die Anwendung verlassen. Kein Inspector, keine
-Medienbibliothek, keine Vorlagen. FFmpeg ist nicht eingebunden, es gibt keine REST-Schnittstelle
-und keinen MCP-Endpunkt, und die Release-Jobs für Android und iOS werden übersprungen, solange
-keine Signaturschlüssel hinterlegt sind.
+Keine Masken, Bewegungspfade, kein Motion-Blur, kein LUT-Import. Kein Nesting, keine
+Magnetic-Timeline, keine Autosave-Wiederherstellung. Kein EQ und kein Kompressor — der Browser hat
+die DSP, aber das Modell hat noch keinen Ort, an dem ein Spureffekt stehen könnte. FFmpeg ist nicht
+eingebunden; der Export nutzt die Encoder des Browsers.
 
 Das [Architektur-Kapitel](/de/guide/architecture) hält Entscheidung für Entscheidung fest, welche
 Teile des Entwurfs gebaut und welche geplant sind.
@@ -103,7 +102,7 @@ Teile des Entwurfs gebaut und welche geplant sind.
 ## Der Editor
 
 <figure class="shot">
-  <img src="/editor-preview.png" alt="Der Videola-Editor: ein dekodiertes Videobild in der Vorschau, ein Transport mit 00:00:00.00 von 00:00:02.00 und aktivem Pause-Knopf, und ein Clip namens fixture.mp4 auf Spur V1">
+  <img src="/editor-full.png" alt="Der Videola-Editor: ein dekodiertes Videobild in der Vorschau, ein Transport mit 00:00:00.00 von 00:00:02.00 und aktivem Pause-Knopf, und ein Clip namens fixture.mp4 auf Spur V1">
   <figcaption>Ein echtes Bild, im Browser dekodiert und komponiert. Der Screenshot stammt aus einem Test, der die Anwendung baut, sie in headless Chrome fährt und eine Videodatei hineinzieht — derselbe Lauf, der eine Vorschau-Canvas gefunden hat, die nie über ihre Ausgangsgröße hinauswuchs.</figcaption>
 </figure>
 

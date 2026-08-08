@@ -73,6 +73,9 @@ interface ShellError {
 }
 
 const MEDIA_ACCEPT = "video/*,audio/*";
+
+// Stamped into every .videola this build writes.
+const APP_VERSION = "0.2.0";
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 
@@ -310,7 +313,7 @@ export function App(): ReactElement {
       const media = await mediaForProject(project);
       const bytes = doc.save(
         {
-          appVersion: "0.1.0",
+          appVersion: APP_VERSION,
           created: now,
           modified: now,
           locale: navigator.language,
@@ -550,7 +553,7 @@ export function App(): ReactElement {
       const now = new Date().toISOString();
       const bytes = doc.saveAsTemplate(
         {
-          appVersion: "0.1.0",
+          appVersion: APP_VERSION,
           created: now,
           modified: now,
           locale: navigator.language,
