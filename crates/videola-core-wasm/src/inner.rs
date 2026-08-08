@@ -10,7 +10,7 @@ use videola_core::format::{
 };
 use videola_core::model::{
     ClipId, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project, ProjectSettings,
-    Time,
+    Time, Transform,
 };
 use videola_core::template::{SlotAnswer, Template};
 use videola_core::{CoreError, DispatchResult, Document, Result};
@@ -96,15 +96,37 @@ impl DocumentHost {
     // caller that has the effect needs no clip to look one up. Disabled effects are in as well --
     // the inspector shows their values and the renderer skips them, and deciding that here would
     // give the two consumers different data.
+    //
+    // A track's chain and the project's mastering chain have no clip window to fall outside of, so
+    // they are always in. That is what lets an equaliser sweep its cutoff from a keyframe track
+    // without anything below this line learning a second way to resolve a parameter.
     pub fn effect_params_at(&self, at: Time) -> BTreeMap<EffectId, BTreeMap<String, ParamValue>> {
+        let tracks = &self.project().timeline.tracks;
+        let on_clips = tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .filter(|clip| clip.contains(at))
+            .flat_map(|clip| &clip.effects);
+        let on_tracks = tracks.iter().flat_map(|track| &track.effects);
+        on_clips
+            .chain(on_tracks)
+            .chain(&self.project().master.effects)
+            .map(|effect| (effect.id.clone(), resolved_params(effect, at)))
+            .collect()
+    }
+
+    // The third batch, and the one the picture is placed by: a clip's geometry as it stands at
+    // this instant, keyframes already resolved. Every clip the moment touches is in, keyframed or
+    // not, so the draw list has one rule instead of a fallback -- and so a clip that stops being
+    // animated does not quietly change which side of the boundary decides where it sits.
+    pub fn transforms_at(&self, at: Time) -> BTreeMap<ClipId, Transform> {
         self.project()
             .timeline
             .tracks
             .iter()
             .flat_map(|track| &track.clips)
             .filter(|clip| clip.contains(at))
-            .flat_map(|clip| &clip.effects)
-            .map(|effect| (effect.id.clone(), resolved_params(effect, at)))
+            .map(|clip| (clip.id.clone(), clip.transform_at(at)))
             .collect()
     }
 
@@ -488,6 +510,74 @@ mod tests {
             .effect_params_at(Time::from_seconds(3.999))
             .contains_key(&effect));
         assert!(host.effect_params_at(Time::from_seconds(4.0)).is_empty());
+    }
+
+    // A chain on a track and one on the project answer at every moment, including moments no clip
+    // covers -- a mastering limiter does not stop existing between two cuts.
+    #[test]
+    fn track_and_project_chains_are_answered_for_outside_every_clip() {
+        let (mut host, _) = host_with_effect(Vec::new());
+        let track = host.project().timeline.tracks[0].id.clone();
+        host.dispatch(Dispatch::new(Command::EffectAdd {
+            target: videola_core::command::EffectTarget::Track { track },
+            effect_type: "eq".into(),
+        }))
+        .unwrap();
+        host.dispatch(Dispatch::new(Command::EffectAdd {
+            target: videola_core::command::EffectTarget::Project,
+            effect_type: "limiter".into(),
+        }))
+        .unwrap();
+        let on_track = host.project().timeline.tracks[0].effects[0].id.clone();
+        let on_project = host.project().master.effects[0].id.clone();
+
+        let past_the_clip = host.effect_params_at(Time::from_seconds(9.0));
+
+        assert!(past_the_clip.contains_key(&on_track));
+        assert!(past_the_clip.contains_key(&on_project));
+    }
+
+    #[test]
+    fn transforms_come_out_resolved_at_the_moment_asked_for() {
+        let (mut host, _) = host_with_effect(Vec::new());
+        let clip = host.project().timeline.tracks[0].clips[0].id.clone();
+        for (seconds, value) in [(0.0, 0.0), (2.0, 100.0)] {
+            host.dispatch(Dispatch::new(Command::KeyframeAdd {
+                target: videola_core::command::EffectTarget::Clip { clip: clip.clone() },
+                effect_type: None,
+                key: "x".into(),
+                time: Time::from_seconds(seconds),
+                value: ParamValue::Float(value),
+                interp: videola_core::model::Interp::Linear,
+            }))
+            .unwrap();
+        }
+
+        assert_eq!(host.transforms_at(Time::from_seconds(1.0))[&clip].x, 50.0);
+        assert_eq!(host.transforms_at(Time::from_seconds(3.0))[&clip].x, 100.0);
+    }
+
+    // The same window `effect_params_at` keeps: outside the clip there is no geometry to report,
+    // however far a ramp would carry on.
+    #[test]
+    fn a_clip_the_moment_does_not_touch_has_no_transform_in_the_batch() {
+        let (host, _) = host_with_effect(Vec::new());
+
+        assert_eq!(host.transforms_at(Time::from_seconds(3.999)).len(), 1);
+        assert!(host.transforms_at(Time::from_seconds(4.0)).is_empty());
+    }
+
+    // Without keyframes the batch still answers, with the static transform -- the draw list must
+    // never have to decide for itself which of the two to read.
+    #[test]
+    fn an_unanimated_clip_is_still_in_the_batch() {
+        let (host, _) = host_with_effect(Vec::new());
+        let clip = &host.project().timeline.tracks[0].clips[0];
+
+        assert_eq!(
+            host.transforms_at(Time::from_seconds(1.0))[&clip.id],
+            clip.transform
+        );
     }
 
     fn options() -> SaveOptions {

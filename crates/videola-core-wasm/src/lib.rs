@@ -106,6 +106,14 @@ impl WasmDocument {
         )?)
     }
 
+    // A `Map` keyed by clip id, like `sourceTimesAt`; the transforms themselves are structs and
+    // cross as plain objects either way.
+    #[wasm_bindgen(js_name = transformsAt)]
+    pub fn transforms_at(&self, at: JsValue) -> std::result::Result<JsValue, JsError> {
+        let at: Time = serde_wasm_bindgen::from_value(at)?;
+        Ok(serde_wasm_bindgen::to_value(&self.host.transforms_at(at))?)
+    }
+
     #[wasm_bindgen(js_name = historyLabels)]
     pub fn history_labels(&self) -> std::result::Result<JsValue, JsError> {
         to_js_value(&self.host.history_labels())
