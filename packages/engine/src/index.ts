@@ -7,6 +7,7 @@ export { AudioSource } from "./decode/audio-source";
 export { probe, rationalizeFps, readChunks } from "./decode/demuxer";
 export type { AudioTrackInfo, MediaInfo, TrackId, VideoTrackInfo } from "./decode/demuxer";
 export { DEFAULT_FRAME_BUDGET_BYTES, FrameCache } from "./decode/frame-cache";
+export { thumbnail, THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH } from "./decode/thumbnail";
 export { clampParam, effect, effectManifests } from "./effects/registry";
 export type { EffectManifest, EffectParam } from "./effects/registry";
 export { GeneratorFrames, paintGenerator, paintsGenerator } from "./generate/generator";

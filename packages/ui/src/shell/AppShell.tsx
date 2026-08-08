@@ -37,7 +37,7 @@ function Frame({
 
   return (
     <div className="v-shell" data-layout={layout} data-testid="app-shell">
-      <TopBar {...actions} />
+      <TopBar {...actions} compact={layout === "phone"} />
       <main className="v-shell__content">{children}</main>
     </div>
   );

@@ -15,6 +15,8 @@ export interface TrackProps {
   waveforms?: ReadonlyMap<string, Peaks>;
   selected: ReadonlySet<ClipId>;
   trimZonePx: number;
+  /** A medium is being carried over this track and would land here. */
+  dropTarget?: boolean;
   onSelect: (clip: ClipId) => void;
 }
 
@@ -27,6 +29,7 @@ export function Track({
   waveforms,
   selected,
   trimZonePx,
+  dropTarget = false,
   onSelect,
 }: TrackProps): ReactElement {
   return (
@@ -34,6 +37,7 @@ export function Track({
       className="v-track"
       data-track-id={track.id}
       data-track-index={index}
+      data-drop-target={dropTarget || undefined}
       style={{ height: `${trackHeight(track)}px` }}
     >
       {clipBoxes(track.clips, range, flicksPerPixel).map((box) => (

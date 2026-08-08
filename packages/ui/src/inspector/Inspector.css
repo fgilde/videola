@@ -1,5 +1,8 @@
+/* The shell decides how wide this column is and the panel fills what it is given. A width declared
+   here beat the grid on a tablet and pushed the sliders past the right edge of the window. */
 .v-inspector {
-  width: 300px;
+  width: 100%;
+  min-width: 0;
   overflow-y: auto;
   padding: var(--v-space-3);
   background: var(--v-bg-elevated);

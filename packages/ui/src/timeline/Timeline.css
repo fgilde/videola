@@ -226,6 +226,25 @@
   z-index: 3;
 }
 
+/* Where a medium carried out of the library would land. Wider than the snap line and in the accent
+   colour, because it answers a question the user is asking right now. */
+.v-timeline__dropLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--v-accent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.v-track[data-drop-target] {
+  background: var(--v-surface-hover);
+  outline: 1px solid var(--v-accent);
+  outline-offset: -1px;
+}
+
 .v-timeline__empty {
   padding: var(--v-space-4) var(--v-space-6);
   color: var(--v-text-muted);

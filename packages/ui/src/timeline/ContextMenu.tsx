@@ -1,4 +1,6 @@
-import { useEffect, useRef, type ReactElement } from "react";
+import { useRef, type ReactElement } from "react";
+
+import { useDismiss } from "../useDismiss";
 
 export interface MenuItem {
   /** Catalogue key, and the React key of the row. */
@@ -42,22 +44,4 @@ export function ContextMenu({ x, y, label, items, onClose }: ContextMenuProps): 
       ))}
     </div>
   );
-}
-
-function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void): void {
-  useEffect(() => {
-    const onPointerDown = (event: Event) => {
-      if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
-      onClose();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [ref, onClose]);
 }

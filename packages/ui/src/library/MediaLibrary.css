@@ -8,12 +8,33 @@
 
 .v-library__toolbar {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-2);
   padding: var(--v-space-2) var(--v-space-3);
   border-bottom: 1px solid var(--v-border);
 }
 
 .v-library__toolbar .v-button {
   flex: 1;
+}
+
+/* The label is the button; the input inside it is what a phone hands its camera to. Hidden with
+   width and opacity rather than display:none, because a hidden input cannot be activated by the
+   label in every browser. */
+.v-library__capture {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--v-touch-target);
+  white-space: nowrap;
+}
+
+.v-library__capture input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .v-library__empty {
@@ -29,11 +50,53 @@
   overflow-y: auto;
 }
 
+/* Picture beside the words, not above them: a full-width still per entry turns a library of ten
+   media into ten screens of scrolling. The first column is `auto`, so an entry without a picture
+   costs nothing for the one it does not have. */
 .v-library__item {
   display: grid;
-  gap: var(--v-space-1);
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "thumb name"
+    "thumb facts"
+    "actions actions";
+  align-content: start;
+  gap: var(--v-space-1) var(--v-space-2);
   padding: var(--v-space-2) var(--v-space-3);
   border-bottom: 1px solid var(--v-border);
+}
+
+.v-library__item > .v-library__name {
+  grid-area: name;
+}
+
+.v-library__item > .v-library__facts {
+  grid-area: facts;
+}
+
+.v-library__item > .v-library__actions {
+  grid-area: actions;
+}
+
+.v-library__item[data-grabbable="true"] {
+  cursor: grab;
+  /* The browser must not take the gesture for panning, or a drag onto the timeline scrolls the
+     library instead. The list still scrolls -- pointerdown on it only becomes a drag once the
+     timeline sees the pointer travel. */
+  touch-action: none;
+}
+
+.v-library__thumb {
+  grid-area: thumb;
+  display: block;
+  width: 72px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--v-bg);
+  border-radius: var(--v-radius-sm);
+  /* The picture is decoration next to the name it belongs to; dragging the entry must not turn
+     into the browser's own image drag. */
+  user-select: none;
 }
 
 .v-library__name {

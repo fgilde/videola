@@ -2,11 +2,26 @@ import {
   FLICKS_PER_SECOND,
   frameDuration,
   type Clip,
+  type MediaId,
   type Project,
   type Rate,
   type Time,
   type Track,
+  type TrackId,
 } from "@videola/core";
+
+/**
+ * A medium the library has under a pointer that has not been let go of yet. The id is all of it:
+ * where the pointer started does not matter, because a drop is judged by where it ends.
+ */
+export type MediaGrab = MediaId;
+
+/** Where a grabbed medium would land if the pointer were released now. */
+export interface MediaDrop {
+  media: MediaId;
+  track: TrackId;
+  at: Time;
+}
 
 // The ruler and the transport must step by the same amount playback does, so the definition
 // lives in the core next to the other time arithmetic and is only re-exported here.

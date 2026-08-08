@@ -12,9 +12,46 @@
   padding: var(--v-space-2) var(--v-space-4);
   background: var(--v-bg-elevated);
   border-bottom: 1px solid var(--v-border);
-  /* Eight controls do not fit a phone width even squashed. Scrolling keeps every one
-     of them reachable instead of clipping or wrapping into an unreadable topbar. */
-  overflow-x: auto;
+  /* No sideways scroll. The project actions live in the overflow menu, which is what makes the
+     bar fit its window instead of parking half its controls outside the frame. A browser check
+     holds this to scrollWidth == clientWidth at 390 px. */
+  position: relative;
+}
+
+.v-topbar__more > summary {
+  /* A summary is a list-item box by default, and the marker sits inside the button. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--v-touch-target);
+  list-style: none;
+}
+
+.v-topbar__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Out of the bar's flow, or the widest item in the menu would set the width of the bar itself. */
+.v-topbar__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--v-space-1));
+  left: var(--v-space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  box-shadow: var(--v-shadow);
+}
+
+.v-topbar__menu .v-button {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .v-topbar__brand {
@@ -73,19 +110,28 @@
    is what a shell is for; each of them only knows how to fill the box it is given. Both flexible
    rows carry minmax(0, ...) so a canvas or a scroll container inside them can shrink; a bare 1fr
    floors at its content and pushes the timeline off-screen. */
-/* Library left, picture in the middle, inspector right, timeline across the bottom. The inspector
-   column is `auto`, so while no clip is selected and it holds no controls it costs the picture
-   nothing. */
+/* Library left, picture in the middle, properties right, timeline across the bottom. Every column
+   is sized here rather than by the panel inside it: a panel that declares its own width wins
+   against the grid, and the picture is what pays for it. */
 .v-editor {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%);
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(0, 300px);
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%) auto;
   grid-template-areas:
     "banners  banners   banners"
     "library  preview   inspector"
     "library  transport inspector"
-    "timeline timeline  timeline";
+    "timeline timeline  timeline"
+    "mixer    mixer     mixer";
   height: 100%;
+}
+
+/* The mixer is a strip along the bottom rather than a column: it is per track, so it wants the
+   same width the timeline has, and its height is its own -- an `auto` row keeps it out of the
+   picture's way. Without an area of its own it landed in an implicit row and squeezed the preview
+   to nothing, which is exactly what the tablet check catches. */
+.v-editor > .v-mixer {
+  grid-area: mixer;
 }
 
 .v-editor > .v-banners {
@@ -115,41 +161,78 @@
 /* One column on a phone: the picture stays put at the top and the panels take turns underneath,
    because 390 px cannot hold a library and a timeline side by side without both being useless.
    The preview row is capped rather than flexible -- a 16:9 picture in a 390 px column is 220 px
-   tall, and an even split would leave a third of the screen as empty letterbox. The inspector
-   sits between the transport and the tabs, capped, and is empty until a clip is selected. */
+   tall, and an even split would leave a third of the screen as empty letterbox.
+
+   The properties panel is one of the three that take turns, not a strip above them. Between the
+   transport and the tabs it had a third of the screen at its own 35vh cap and still could not show
+   an effect, which left the phone able to play a project but not to change one. */
 .v-shell[data-layout="phone"] .v-editor {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 32vh) auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 32vh) auto auto minmax(0, 1fr);
   grid-template-areas:
     "banners"
     "preview"
     "transport"
-    "inspector"
     "tabs"
     "panel";
 }
 
-.v-shell[data-layout="phone"] .v-editor > .v-inspector {
-  max-height: 35vh;
-  width: auto;
-  border-left: none;
-  border-top: 1px solid var(--v-border);
-}
-
 .v-shell[data-layout="phone"] .v-editor .v-library,
-.v-shell[data-layout="phone"] .v-editor .v-timeline {
+.v-shell[data-layout="phone"] .v-editor .v-timeline,
+.v-shell[data-layout="phone"] .v-editor > .v-mixer,
+.v-shell[data-layout="phone"] .v-editor > .v-inspector {
   grid-area: panel;
 }
 
-/* Five 44 px buttons and two timecodes do not fit 390 px on one line, and the position wrapping
-   away from its own duration left a lone slash. Stacked on purpose instead. */
-.v-shell[data-layout="phone"] .v-transport__time {
-  font-size: 0.8rem;
-  text-align: right;
+.v-shell[data-layout="phone"] .v-editor > .v-inspector {
+  width: auto;
+  border-left: none;
+  overflow-y: auto;
 }
 
-.v-shell[data-layout="phone"] .v-transport__duration {
+/* Five 44 px buttons and two timecodes do not fit on one line beside a picture, and the position
+   wrapping away from its own duration left a lone slash. Stacked on purpose instead.
+
+   Tablet as well as phone: at 834 px the properties column takes what it needs and the transport
+   is left with about 500 px, where the two timecodes collapsed to "00 / 00". A width the layout
+   happens to give it is not a width to trust. */
+.v-shell[data-layout="phone"] .v-transport__time,
+.v-shell[data-layout="tablet"] .v-transport__time {
+  font-size: 0.8rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.v-shell[data-layout="phone"] .v-transport__duration,
+.v-shell[data-layout="tablet"] .v-transport__duration {
   display: block;
+}
+
+/* Two columns on a tablet, not three. At 834 px a library, a picture and a properties panel side
+   by side leave the middle about 330 px, which is narrower than the transport itself -- the
+   timecode was cut off mid-digit. A portrait tablet is short of width and long on height, so the
+   properties panel goes under the picture instead of beside it.
+
+   The library and the timeline stay on screen together, and that is deliberate: it is the one
+   thing a phone cannot offer, and it is what makes a drag from the one to the other possible. */
+.v-shell[data-layout="tablet"] .v-editor {
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  /* The picture takes the slack and the properties panel gets a share it scrolls inside. The
+     other way round -- 1fr on the properties row -- collapsed the preview to nothing, because a
+     canvas has no height of its own to hold the row open with. */
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 22vh) minmax(180px, 26%) auto;
+  grid-template-areas:
+    "banners  banners"
+    "library  preview"
+    "library  transport"
+    "library  inspector"
+    "timeline timeline"
+    "mixer    mixer";
+}
+
+.v-shell[data-layout="tablet"] .v-editor > .v-inspector {
+  border-left: none;
+  border-top: 1px solid var(--v-border);
 }
 
 /* 140 px of track names is more than a third of a phone. The names are two short lines. */

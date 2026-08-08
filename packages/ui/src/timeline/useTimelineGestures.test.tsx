@@ -751,4 +751,23 @@ describe("clip context menu", () => {
     });
     expect(screen.queryByRole("menu")).toBeNull();
   });
+
+  // Found by a counter-check: taking the outside-press listener out of useDismiss left all 125
+  // tests green. Escape was covered and the other half of the same hook was not -- and it is the
+  // half a finger uses, because a phone has no Escape key.
+  it("closes when the press lands outside it", async () => {
+    await openByLongPress(await documentWithOneClip());
+    act(() => {
+      fireEvent.pointerDown(document.body);
+    });
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("stays open while the press lands inside it", async () => {
+    await openByLongPress(await documentWithOneClip());
+    act(() => {
+      fireEvent.pointerDown(screen.getByRole("menu"));
+    });
+    expect(screen.queryByRole("menu")).not.toBeNull();
+  });
 });
