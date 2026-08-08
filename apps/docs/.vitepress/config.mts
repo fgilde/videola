@@ -3,19 +3,15 @@ import { defineConfig, type DefaultTheme } from "vitepress";
 const REPO = "https://github.com/fgilde/videola";
 
 // The footer links the owner asked for. `message` and `copyright` are rendered as HTML, so the
-// anchors live here rather than needing a theme slot. The Audiola mark is inlined rather than
-// pulled from audiola.de, because a remote favicon would make every page load reach a third party.
-const AUDIOLA_ICON =
-  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor" ' +
-  'style="vertical-align:-2px;margin-right:.35em">' +
-  '<path d="M6 2.5v7.2a2.3 2.3 0 1 0 1.4 2.1V5.4l5.1-1.2v4.3a2.3 2.3 0 1 0 1.4 2.1V1l-7.9 1.5Z"/></svg>';
+// anchors live here rather than needing a theme slot. Both marks are served from public/ rather
+// than from their own sites, so a page load never reaches a third party.
+const GILDE_ICON = '<img src="/videola/gilde-icon.webp" alt="" width="16" height="16">';
 
 const link = (href: string, text: string) =>
   `<a href="${href}" target="_blank" rel="noreferrer">${text}</a>`;
 
 const footerMessage = (licence: string) =>
-  `${licence} · ${link("https://www.gilde.org", "www.gilde.org")} · ` +
-  link("https://www.audiola.de", `${AUDIOLA_ICON}www.audiola.de`);
+  `${licence} · ${link("https://www.gilde.org", `${GILDE_ICON}www.gilde.org`)}`;
 
 const COPYRIGHT = `Copyright © 2026 ${link("https://florian.gilde.org", "Florian Gilde")}`;
 
