@@ -37,10 +37,19 @@ that really stops it.
 *is* a project with questions attached. Pick one from the gallery, answer the wizard, and the result
 is an ordinary editable project. Four templates ship, none of them carrying footage.
 
-**An API and an MCP server.** `apps/server` exposes the whole command catalogue over HTTP and to AI
-agents. The catalogue is generated from the Rust enum, so a new command becomes an agent capability
-without anyone editing a list. Both transports are thin skins over one class, and not a single
-scalar is re-checked there — everything goes through the same load gate the editor uses.
+**Compound clips.** Fold a selection into one clip and the picture does not change — proven against
+the whole frame buffer at tolerance zero, the draw list at sixteen instants, and the audio render
+sample for sample. Autosave keeps the project state in OPFS and offers it back after a crash.
+
+**An API, an MCP server and a CLI.** `apps/server` exposes the whole command catalogue over HTTP,
+to AI agents and on the command line. The catalogue is generated from the Rust enum, so a new
+command becomes an agent capability without anyone editing a list. All three transports are thin
+skins over one class, and not a single scalar is re-checked there — everything goes through the
+same load gate the editor uses.
+
+**Agents can see their work.** `project_getFrame` renders a still at any instant and
+`project_getAudioPeaks` returns the mixed waveform. The still comes out of the same wasm core, draw
+list and WebGL2 compositor the editor draws with, so it cannot show something the editor would not.
 
 **The core.** `videola-core` holds the project model, a bus of 37 commands, undo and redo built from
 JSON-Patch diffs, and the `.videola` reader and writer. Time is integer flicks, never float seconds;
@@ -56,10 +65,13 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No masks, no motion paths, no motion blur, no LUT import. No nesting of compound clips, no magnetic
-timeline, no autosave recovery. No EQ or compressor — the DSP is native to the browser, but there is
-nowhere in the model to persist a track-level effect yet. No noise reduction, ducking or beat
-detection. FFmpeg is not bundled; the export uses the browser's own encoders.
+No masks, no motion paths, no motion blur, no LUT import. No EQ or compressor: the model now holds
+track and project effect chains, but nothing renders or sounds them yet. No noise reduction, ducking
+or beat detection. A compound clip is flattened rather than isolated, so opacity, effects and blend
+apply per nested clip instead of once over the composed picture. The magnetic timeline is
+deliberately absent — the useful half is ripple delete and trim, and the rest would change the
+model's overlap rule that transitions, layering and roll/slide all depend on. FFmpeg is not bundled;
+the export uses the browser's own encoders.
 
 ## Build
 

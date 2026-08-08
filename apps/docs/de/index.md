@@ -78,23 +78,28 @@ features:
 
 - **Schneiden** — Ripple-Löschen und -Trimmen, Roll, Slip, Slide, Mehrfachauswahl, Gruppen,
   Zwischenablage, Marker, Einrasten und Zoom, mit einem Zeigerpfad für Maus, Stift und Finger.
+- **Verschachtelte Clips** — eine Auswahl zu einem Clip zusammenfassen; dass das Bild sich dabei
+  nicht ändert, ist nachgewiesen.
 - **Wiedergabe** — WebCodecs in einen WebGL2-Compositor, die Audio-Uhr führt, bildgenauer Transport.
-- **Effekte und Übergänge** — acht Effekte, fünf Übergänge, ein Textgenerator, jeder Parameter
-  keyframebar und im Rust-Kern interpoliert, damit Vorschau und Export dasselbe rechnen.
+- **Effekte und Übergänge** — acht Effekte, fünf Übergänge, ein Textgenerator; jeder Parameter
+  keyframebar, auch Position, Skalierung und Drehung eines Clips, alles im Rust-Kern aufgelöst,
+  damit Vorschau und Export dasselbe rechnen.
 - **Ton** — Mischpult mit Lautstärke, Panorama, Stumm und Solo, Fades als Automation, Waveforms,
   EBU-R128-Lautheit gegen die Tech-3341-Fälle geprüft.
 - **Export** — MP4 oder WebM in einem Worker, mit Fortschritt und einem Abbruch, der wirklich stoppt.
 - **Vorlagen** — Galerie, Assistent, und ein Backen, das ein ganz normales Projekt hinterlässt.
-- **Schnittstelle und MCP-Server** — der ganze Command-Katalog, aus dem Rust-Enum generiert.
-- **Telefon, Tablet und Schreibtisch** — derselbe Code, die Bereiche wechseln sich ab, wo der Platz
-  nicht für alle reicht.
+- **Schnittstelle, MCP-Server und CLI** — der ganze Command-Katalog, aus dem Rust-Enum generiert,
+  dazu Standbilder und Tonspitzen, damit ein Agent sehen kann, was er gerade getan hat.
+- **Selbst hosten** — ein Node-Prozess liefert Editor, Schnittstelle, MCP und CLI.
+- **Telefon, Tablet und Schreibtisch** — derselbe Code, die Bereiche wechseln sich ab.
 
 ## Was noch fehlt
 
-Keine Masken, Bewegungspfade, kein Motion-Blur, kein LUT-Import. Kein Nesting, keine
-Magnetic-Timeline, keine Autosave-Wiederherstellung. Kein EQ und kein Kompressor — der Browser hat
-die DSP, aber das Modell hat noch keinen Ort, an dem ein Spureffekt stehen könnte. FFmpeg ist nicht
-eingebunden; der Export nutzt die Encoder des Browsers.
+Keine Masken, Bewegungspfade, kein Motion-Blur, kein LUT-Import. Kein EQ und kein Kompressor: das
+Modell hält jetzt Effektketten für Spuren und Projekt, aber noch nichts zeichnet oder klingt sie.
+Ein verschachtelter Clip wird flachgelegt statt isoliert. Die Magnetic-Timeline fehlt bewusst, und
+das [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der
+Export nutzt die Encoder des Browsers.
 
 Das [Architektur-Kapitel](/de/guide/architecture) hält Entscheidung für Entscheidung fest, welche
 Teile des Entwurfs gebaut und welche geplant sind.

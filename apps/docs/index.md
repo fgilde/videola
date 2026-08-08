@@ -76,21 +76,27 @@ features:
 
 - **Editing** — ripple delete and trim, roll, slip, slide, multi-selection, groups, clipboard,
   markers, snapping and zoom, with one pointer path for mouse, pen and finger.
+- **Compound clips** — fold a selection into one clip; the picture is proven not to change.
 - **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
-- **Effects and transitions** — eight effects, five transitions, a text generator, every parameter
-  keyframable and interpolated in the Rust core so preview and export agree.
+- **Effects and transitions** — eight effects, five transitions, a text generator; every parameter
+  keyframable, including a clip's position, scale and rotation, all resolved in the Rust core so
+  the preview and the export read the same values.
 - **Audio** — mixer with volume, pan, mute and solo, fades as automation, waveforms, EBU R128
   loudness checked against the Tech 3341 cases.
 - **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.
 - **Templates** — a gallery, a wizard, and a bake that leaves you with an ordinary project.
-- **An API and MCP server** — the whole command catalogue, generated from the Rust enum.
+- **An API, an MCP server and a CLI** — the whole command catalogue, generated from the Rust enum,
+  plus stills and audio peaks so an agent can look at what it just did.
+- **Self-hosting** — one Node process serving the editor, the API, MCP and the CLI.
 - **Phone, tablet and desktop** — the same code, panels taking turns where there is no room.
 
 ## What is not there yet
 
-No masks, motion paths, motion blur or LUT import. No nesting, magnetic timeline or autosave
-recovery. No EQ or compressor — the browser has the DSP, the model has nowhere to persist a
-track-level effect yet. FFmpeg is not bundled; the export uses the browser's own encoders.
+No masks, motion paths, motion blur or LUT import. No EQ or compressor: the model now holds track
+and project effect chains, but nothing renders or sounds them yet. A compound clip is flattened
+rather than isolated. The magnetic timeline is deliberately absent, and the
+[editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the browser's
+own encoders.
 
 The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
 design are built and which are planned.

@@ -91,7 +91,7 @@ const MEDIA_ACCEPT = "video/*,audio/*";
 const AUTOSAVE_MS = 30_000;
 
 // Stamped into every .videola this build writes.
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.3.0";
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 
