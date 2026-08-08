@@ -9,8 +9,8 @@ use videola_core::format::{
     reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
 };
 use videola_core::model::{
-    Clip, ClipId, ClipSource, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project,
-    ProjectSettings, Time, Transform, MAX_COMPOUND_DEPTH,
+    Clip, ClipId, ClipSource, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue,
+    Project, ProjectSettings, Time, Transform, MAX_COMPOUND_DEPTH,
 };
 use videola_core::template::{SlotAnswer, Template};
 use videola_core::{CoreError, DispatchResult, Document, Result};
@@ -516,7 +516,12 @@ mod tests {
 
         let mut at = Time::ZERO;
         for expected in before {
-            assert_eq!(host.source_times_at(at), expected, "at {}s", at.as_seconds());
+            assert_eq!(
+                host.source_times_at(at),
+                expected,
+                "at {}s",
+                at.as_seconds()
+            );
             at = at + Time::from_seconds(1.0 / 30.0);
         }
     }

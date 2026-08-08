@@ -20,7 +20,12 @@ fn doc_with_tracks(count: usize) -> Document {
 }
 
 #[allow(clippy::unwrap_used)]
-fn add_clip(doc: &mut Document, track: usize, start_s: f64, dur_s: f64) -> videola_core::model::ClipId {
+fn add_clip(
+    doc: &mut Document,
+    track: usize,
+    start_s: f64,
+    dur_s: f64,
+) -> videola_core::model::ClipId {
     let track = doc.project().timeline.tracks[track].id.clone();
     doc.dispatch(Dispatch::new(Command::ClipAdd {
         track: track.clone(),
@@ -156,7 +161,11 @@ fn nesting_across_tracks_keeps_the_stacking_order() {
     .unwrap();
 
     let tracks = &doc.project().timeline.tracks;
-    assert_eq!(tracks[0].clips.len(), 1, "the compound lands on the lowest track");
+    assert_eq!(
+        tracks[0].clips.len(),
+        1,
+        "the compound lands on the lowest track"
+    );
     assert!(tracks[1].clips.is_empty());
     let nested = compound_of(&tracks[0].clips[0]);
     assert_eq!(nested.tracks.len(), 2);
@@ -212,7 +221,10 @@ fn an_unknown_clip_leaves_the_timeline_untouched() {
 
     assert!(doc
         .dispatch(Dispatch::new(Command::ClipNest {
-            clips: vec![clip, videola_core::model::ClipId::from("clp_nope".to_string())],
+            clips: vec![
+                clip,
+                videola_core::model::ClipId::from("clp_nope".to_string())
+            ],
         }))
         .is_err());
     assert_eq!(doc.project(), &before);
@@ -301,7 +313,11 @@ fn a_stored_transition_on_a_compound_clip_fails_to_load() {
     ));
     let mut timeline = Timeline::default();
     timeline.tracks.push(inner);
-    let mut compound = Clip::new_media(MediaId::from(String::new()), Time::ZERO, Time::from_seconds(1.0));
+    let mut compound = Clip::new_media(
+        MediaId::from(String::new()),
+        Time::ZERO,
+        Time::from_seconds(1.0),
+    );
     compound.source = ClipSource::Compound {
         timeline: Box::new(timeline),
     };
