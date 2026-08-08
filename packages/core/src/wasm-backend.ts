@@ -7,7 +7,17 @@ import type {
   MediaBytes,
   SaveOptions,
 } from "./backend";
-import type { Dispatch, DispatchResult, LoadWarning, MediaKind, Project, Time } from "./generated";
+import type {
+  Dispatch,
+  DispatchResult,
+  LoadWarning,
+  MediaKind,
+  Project,
+  ProjectSettings,
+  SlotAnswer,
+  Template,
+  Time,
+} from "./generated";
 
 let ready: Promise<unknown> | undefined;
 
@@ -23,7 +33,33 @@ async function ensureReady(): Promise<void> {
 
 export async function createWasmBackend(bytes?: Uint8Array): Promise<DocumentBackend> {
   await ensureReady();
-  const handle = bytes === undefined ? new WasmDocument() : WasmDocument.open(bytes);
+  return wrap(bytes === undefined ? new WasmDocument() : WasmDocument.open(bytes));
+}
+
+/// The templates the application ships with. Manifest and project together, because the gallery
+/// draws its preview from the very timeline the template will build.
+export async function builtinTemplates(): Promise<Template[]> {
+  await ensureReady();
+  return WasmDocument.builtinTemplates() as Template[];
+}
+
+export async function readTemplateFile(bytes: Uint8Array): Promise<Template> {
+  await ensureReady();
+  return WasmDocument.readTemplate(bytes) as Template;
+}
+
+// A baked template is an ordinary document: same backend interface, same commands, same undo. The
+// caller cannot tell it apart from an opened file, and that is the whole point of Bake-to-Project.
+export async function createTemplateBackend(
+  template: Template,
+  answers: Readonly<Record<string, SlotAnswer>>,
+  settings?: ProjectSettings,
+): Promise<DocumentBackend> {
+  await ensureReady();
+  return wrap(WasmDocument.fromTemplate(template, answers, settings ?? null));
+}
+
+function wrap(handle: WasmDocument): DocumentBackend {
   return {
     state: () => handle.state() as Project,
     sourceTimesAt: (at: Time) => handle.sourceTimesAt(at) as ReadonlyMap<string, Time>,
@@ -37,6 +73,8 @@ export async function createWasmBackend(bytes?: Uint8Array): Promise<DocumentBac
     // the declared type to what the implementation already guarantees.
     save: (options: SaveOptions, media: MediaBytes) =>
       handle.save(options, media) as Uint8Array<ArrayBuffer>,
+    saveAsTemplate: (options: SaveOptions, id: string) =>
+      handle.saveAsTemplate(options, id) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
     warnings: () => handle.warnings() as LoadWarning[],
