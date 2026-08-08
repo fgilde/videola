@@ -206,6 +206,7 @@
   "error.templateSaveFailed": "Dieses Projekt liess sich nicht als Vorlage speichern.",
   "error.templateShortMedia": "Diese Datei ist zu kurz fuer den Platzhalter.",
   "mixer.label": "Mischpult",
+  "mixer.master": "Master",
   "mixer.volume": "Lautstärke {name}",
   "mixer.pan": "Panorama {name}",
   "mixer.mute": "Stumm {name}",

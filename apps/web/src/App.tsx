@@ -24,6 +24,7 @@ import {
   type TrackKind,
 } from "@videola/core";
 import {
+  audioEffectManifests,
   AudioGraph,
   AudioSource,
   effectManifests,
@@ -727,8 +728,12 @@ export function App(): ReactElement {
                   project={project}
                   loudness={loudness}
                   measuring={measuring}
+                  playhead={playhead}
+                  effects={audioEffectManifests()}
+                  effectParamsAt={doc?.effectParamsAt}
                   dispatch={edit}
                   onMeasure={measure}
+                  onSeek={seek}
                 />
               )}
               {(layout !== "phone" || panel === "timeline") && (

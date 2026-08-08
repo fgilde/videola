@@ -206,6 +206,7 @@
   "error.templateSaveFailed": "This project could not be saved as a template.",
   "error.templateShortMedia": "This file is too short for the placeholder.",
   "mixer.label": "Mixer",
+  "mixer.master": "Master",
   "mixer.volume": "Volume {name}",
   "mixer.pan": "Pan {name}",
   "mixer.mute": "Mute {name}",

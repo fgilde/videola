@@ -149,6 +149,22 @@ export function keyframeAt(track: readonly Keyframe[], at: Time): Keyframe | und
   return track.find((entry) => entry.time === at);
 }
 
+/**
+ * What a row is allowed to show for a resolved parameter. The same rule `clampParam` applies in the
+ * engine before a value becomes a uniform or a filter frequency, so a row reports what is actually
+ * drawn and heard. Repeated from the engine rather than imported because @videola/ui does not depend
+ * on it -- and a slider reading 9 while the filter runs at 4 would be a lie about the one thing these
+ * rows exist to display. A `ParamValue` of a kind that is not a number arrives from a hand-authored
+ * project, which is why the type check is not dead code.
+ */
+export function shownValue(
+  param: { default: number; min: number; max: number },
+  value: unknown,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return param.default;
+  return Math.min(Math.max(value, param.min), param.max);
+}
+
 // The core keeps every track sorted by time on every write, so the nearest one on a side is the
 // first respectively the last of those beyond the playhead.
 function neighbour(track: readonly Keyframe[], at: Time, direction: 1 | -1): Keyframe | undefined {

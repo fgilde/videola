@@ -17,10 +17,37 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 140px;
+  /* Wide enough for a slider, its readout and the keyframe arrows to share one row. */
+  min-width: 200px;
   padding: 8px;
   background: var(--v-surface);
   border-radius: var(--v-radius-sm);
+}
+
+/* Set apart because everything to its left ends up in it, and grabbing the wrong fader on the way
+   out is the one mistake a mixer should make hard. */
+.v-mixer__strip--master {
+  border: 1px solid var(--v-border-strong);
+}
+
+.v-mixer__chain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.v-mixer__effect {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--v-border-strong);
+}
+
+.v-mixer__effectName {
+  margin: 0;
+  font-size: 0.75rem;
+  opacity: 0.8;
 }
 
 .v-mixer__name {

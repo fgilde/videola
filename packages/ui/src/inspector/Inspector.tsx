@@ -22,7 +22,7 @@ import {
 
 import { useI18n, type Locale } from "../i18n/useI18n";
 import { findClip } from "../timeline/useTimelineGestures";
-import { keyframeAt, ParamRow } from "./ParamRow";
+import { keyframeAt, ParamRow, shownValue } from "./ParamRow";
 import "./Inspector.css";
 
 /**
@@ -424,12 +424,4 @@ function float(value: number): ParamValue {
   return { kind: "float", value };
 }
 
-// The same rule `clampParam` applies before a value becomes a uniform, so the row reports what
-// the picture is actually drawn with. Repeated rather than imported because @videola/ui does not
-// depend on @videola/engine -- and a row that showed 9 while the shader ran at 4 would be a lie
-// about the very thing the inspector exists to display. A `ParamValue` of a kind that is not a
-// number reaches here from a hand-authored project, which is why the type check is not dead.
-function shown(param: EffectParamDescriptor, value: unknown): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return param.default;
-  return Math.min(Math.max(value, param.min), param.max);
-}
+const shown = shownValue;

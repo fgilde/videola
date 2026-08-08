@@ -122,7 +122,7 @@ function project(clips: Clip[], library: MediaAsset[] = [asset(MEDIA)]): Project
           pan: 0,
           clips,
           effects: [],
-        } as Track,
+        } as unknown as Track,
       ],
     },
     master: { volume: 1, effects: [] },
