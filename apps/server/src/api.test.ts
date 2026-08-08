@@ -326,3 +326,30 @@ describe("a still of a moment", () => {
     await expect(api.frames(id, [0], 12.5)).rejects.toMatchObject({ code: "badWidth" });
   });
 });
+
+describe("the shape of the sound", () => {
+  it("refuses a range that does not run forwards", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.audioPeaks(id, secondsToTime(2), secondsToTime(1))).rejects.toMatchObject({
+      code: "badRange",
+    });
+    await expect(api.audioPeaks(id, 0, 0)).rejects.toMatchObject({ code: "badRange" });
+  });
+
+  it("refuses a range longer than it renders, rather than rendering for minutes", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.audioPeaks(id, 0, secondsToTime(601))).rejects.toMatchObject({
+      code: "rangeTooLong",
+    });
+  });
+
+  it("refuses a bucket count that is not a whole number", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.audioPeaks(id, 0, secondsToTime(1), 8.5)).rejects.toMatchObject({
+      code: "badBuckets",
+    });
+  });
+});

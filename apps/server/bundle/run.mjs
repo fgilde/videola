@@ -244,6 +244,38 @@ async function checkPeaks(call) {
   );
 }
 
+// A page that finishes without producing pictures is the failure this whole feature exists to avoid:
+// an agent shown nothing and told it worked. The stub below is the shortest renderer that lies, and
+// the server has to catch it out.
+const LYING_RENDERER = `
+const base = new URL(".", import.meta.url);
+await fetch(new URL("job", base));
+await fetch(new URL("done", base), { method: "POST", body: JSON.stringify({ ok: true }) });
+`;
+
+async function checkShortAnswer() {
+  process.stdout.write("a renderer that answers short\n");
+  const stub = join(root, "lying-renderer.js");
+  await writeFile(stub, LYING_RENDERER);
+  const client = new Client({ name: "bundle-check", version: "0" });
+  await client.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [join(dist, "mcp.mjs")],
+      env: { ...process.env, VIDEOLA_STORAGE_ROOT: root, VIDEOLA_RENDERER: stub },
+    }),
+  );
+  try {
+    const call = (name, args) => client.callTool({ name, arguments: args });
+    const project = await paintProject(call);
+    const answer = await call("project_getFrame", { project, at: [0], width: 32 });
+    check("is a failure, not an empty success", answer.isError === true);
+    check("and says how many pictures went missing", `${answer.content[0].text}`.includes("got 0"));
+  } finally {
+    await client.close();
+  }
+}
+
 async function checkMcpBundle() {
   process.stdout.write("dist/mcp.mjs over stdio\n");
   const client = new Client({ name: "bundle-check", version: "0" });
@@ -383,6 +415,7 @@ async function checkServeBundle() {
 
 try {
   await checkMcpBundle();
+  await checkShortAnswer();
   await checkServeBundle();
 } finally {
   await rm(root, { recursive: true, force: true });
