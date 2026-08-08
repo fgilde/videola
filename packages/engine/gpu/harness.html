@@ -58,8 +58,8 @@ function overPage(canvas, pageColor, x, y) {
 
 // The resolved parameters come from the Rust core in the running application; here they are
 // handed in, because what these checks are about is the pixel the value produces.
-function draw(compositor, scene, at, frames, params) {
-  compositor.render(scene, at, frames, params ?? new Map());
+function draw(compositor, scene, at, frames, params, transforms) {
+  compositor.render(scene, at, frames, params ?? new Map(), transforms ?? new Map());
 }
 
 function floats(entries) {
@@ -198,6 +198,41 @@ test("dispose is final", () => {
   context.gl.readPixels(0, 0, 4, 4, context.gl.RGBA, context.gl.UNSIGNED_BYTE, raw);
   check("the drawing buffer is untouched after dispose", reader(raw, 4, 4)(2, 2), [0, 0, 255, 255]);
   check("and the compositor reads nothing back", compositor.readPixels().length, 0);
+});
+
+// A keyframed transform, at real pixels. The core resolves the ramp; here the three values it
+// would hand over are handed over, and what is checked is that the picture actually stands
+// somewhere else each time. A draw list reading `clip.transform` instead paints the same frame
+// three times, which is precisely the bug this proves is gone.
+test("a moving transform reaches the pixels", () => {
+  const { compositor, scene } = rig(16, 16, "#000000", [{}], 8, 8);
+  const f = frame(8, 8, () => [255, 255, 255, 255]);
+  // x runs in project pixels from the centre; the 8x8 source sits in the middle of a 16x16 frame,
+  // so a shift of 4 moves its left edge from column 4 to column 8.
+  const leftEdgeAt = (x) => {
+    draw(compositor, scene, 0, new Map([["clp_0", f]]), new Map(),
+      new Map([["clp_0", transform({ x: x })]]));
+    const at = reader(compositor.readPixels(), 16, 16);
+    for (let column = 0; column < 16; column += 1) if (at(column, 8)[0] > 128) return column;
+    return -1;
+  };
+  const march = [leftEdgeAt(0), leftEdgeAt(2), leftEdgeAt(4)];
+  f.close();
+  check("the quad marches with the resolved transform", march, [4, 6, 8], 0);
+});
+
+// The other half of the same claim: a clip whose static transform says one thing and whose
+// resolved transform says another must be drawn where the resolved one puts it.
+test("the static transform loses to the resolved one", () => {
+  const { compositor, scene } = rig(16, 16, "#000000", [{ t: { scaleX: 0.25, scaleY: 0.25 } }],
+    16, 16);
+  const f = frame(16, 16, () => [255, 255, 255, 255]);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]), new Map(),
+    new Map([["clp_0", transform()]]));
+  f.close();
+  const at = reader(compositor.readPixels(), 16, 16);
+  // At a quarter scale the corner would be background; resolved to full size it is the picture.
+  check("the corner is covered because the snapshot says full size", at(1, 1), [255, 255, 255, 255]);
 });
 
 test("geometry", () => {
@@ -724,7 +759,7 @@ function generated(generator, over) {
   const frames = new R.GeneratorFrames();
   const at = spec.at || 0;
   const pictures = frames.pictures(scene, new Set(["clp_0"]));
-  compositor.render(scene, at, pictures, new Map());
+  compositor.render(scene, at, pictures, new Map(), new Map());
   const pixels = compositor.readPixels();
   frames.close();
   return { canvas, frames, scene, compositor, at: reader(pixels, size, size) };
@@ -872,7 +907,8 @@ test("a generator's picture survives a second frame", () => {
   const compositor = new R.Compositor(context);
   const frames = new R.GeneratorFrames();
   const shot = (at) => {
-    compositor.render(scene, at, frames.pictures(scene, new Set(["clp_0"])), new Map());
+    compositor.render(scene, at, frames.pictures(scene, new Set(["clp_0"])), new Map(),
+      new Map());
     return reader(compositor.readPixels(), 32, 32)(16, 16);
   };
   check("the first frame is the solid", shot(0), [0, 0, 255, 255]);
@@ -1048,6 +1084,7 @@ function playbackOver(canvas, source, times) {
       { bufferFor: () => Promise.reject(new Error("no audio in this check")) }),
     sourceTimes: times,
     effectParams: () => new Map(),
+    transforms: () => new Map(),
     createFrameSource: () => source,
   });
 }

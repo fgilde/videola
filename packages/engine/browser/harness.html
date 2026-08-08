@@ -201,6 +201,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       options: options(),
       createWorker: worker,
       onProgress: (done, total) => seen.push([done, total]),
@@ -258,6 +259,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       options: options({ width: WIDTH / 2, height: HEIGHT / 2 }),
       createWorker: worker,
     });
@@ -301,6 +303,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       options: options(),
       createWorker: worker,
     });
@@ -316,6 +319,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       options: options(),
       createWorker: worker,
       onProgress: (done) => {
@@ -334,6 +338,7 @@ async function main() {
       project: doc.state,
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
       options: options({ range: { from: 0, to: 0 } }),
       createWorker: worker,
     });

@@ -231,6 +231,37 @@ describe("drawList geometry", () => {
     expect(ry).toBeCloseTo((-2 * 1920) / 1080);
   });
 
+  // The whole point of the batch: `clip.transform` is the value at rest, and once a field is on
+  // the clock the geometry has to come from the resolved snapshot instead. Reading the static one
+  // here is exactly the bug that left the keyframe switch off every transform row.
+  it("places a clip by the resolved transform rather than by the static one", () => {
+    const still = clip({ transform: transform({ x: 0 }) });
+    const scene = project([track("trk_1", [still])]);
+    const moved = list(scene, 0, new Map(), new Map([["clp_1", transform({ x: 960 })]]));
+
+    const [item] = moved.items;
+    if (item === undefined) throw new Error("expected one item");
+    expect(corner(item, 0.5, 0.5)[0]).toBeCloseTo(1);
+    // Without the snapshot the same project stays where the static transform puts it.
+    expect(corner(only([still]), 0.5, 0.5)[0]).toBeCloseTo(0);
+  });
+
+  // Every field the snapshot carries has to win, not just the ones the matrix reads first: crop
+  // also decides the sampled rectangle, and opacity can drop the clip out of the list entirely.
+  it("takes crop and opacity from the snapshot too", () => {
+    const scene = project([track("trk_1", [clip()])]);
+    const cropped = list(
+      scene,
+      0,
+      new Map(),
+      new Map([["clp_1", transform({ crop: { left: 0.25, top: 0, right: 0, bottom: 0 } })]]),
+    );
+    expect(cropped.items[0]?.uv).toEqual([0.25, 0, 0.75, 1]);
+
+    const faded = list(scene, 0, new Map(), new Map([["clp_1", transform({ opacity: 0 })]]));
+    expect(faded.items).toEqual([]);
+  });
+
   it("cuts crop out of the geometry and out of the sampled rectangle alike", () => {
     const item = only([
       clip({ transform: transform({ crop: { left: 0.25, top: 0, right: 0, bottom: 0.5 } }) }),

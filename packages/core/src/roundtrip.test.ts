@@ -220,3 +220,108 @@ describe("source times through the real WASM backend", () => {
     expect(Number.isInteger(at)).toBe(true);
   });
 });
+
+// The join `Clip::keyframes` never had: until now the field existed, could be written, saved and
+// reloaded, and nothing in the repository ever evaluated it. These go through the real core.
+describe("keyframed transforms across the boundary", () => {
+  async function clipWithMotion(): Promise<{ doc: VideolaDocument; clip: Clip }> {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
+    const clip = clipOn(doc, 0);
+    doc.dispatch(cmd.keyframeAdd(on.clip(clip.id), null, "x", 0, { kind: "float", value: 0 }));
+    doc.dispatch(
+      cmd.keyframeAdd(on.clip(clip.id), null, "x", 2 * SECOND, { kind: "float", value: 100 }),
+    );
+    return { doc, clip };
+  }
+
+  it("interpolates a transform field on the way across", async () => {
+    const { doc, clip } = await clipWithMotion();
+    const xAt = (at: number): number | undefined => doc.transformsAt(at).get(clip.id)?.x;
+
+    expect(xAt(0)).toBe(0);
+    expect(xAt(SECOND)).toBe(50);
+    expect(xAt(3 * SECOND)).toBe(100);
+    // Past the clip there is no geometry to report, however far the ramp would carry on.
+    expect(doc.transformsAt(4 * SECOND).size).toBe(0);
+  });
+
+  // The static transform is what the field is worth when nothing is on the clock, and the batch
+  // must keep answering with it -- otherwise the draw list would need a rule of its own.
+  it("answers with the static transform for a clip that is not animated", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const clip = clipOn(doc, 0);
+
+    expect(doc.transformsAt(SECOND).get(clip.id)).toEqual(clip.transform);
+  });
+
+  // A name no transform carries is refused rather than stored: a keyframe the picture cannot read
+  // is exactly the state this work exists to end.
+  it("refuses a transform field the renderer would never read", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const clip = clipOn(doc, 0);
+
+    expect(() =>
+      doc.dispatch(cmd.keyframeAdd(on.clip(clip.id), null, "wobble", 0, { kind: "float", value: 1 })),
+    ).toThrow();
+    expect(clipOn(doc, 0).keyframes).toEqual({});
+  });
+
+  it("collapses a drag over a keyframed transform into one undo step", async () => {
+    const { doc, clip } = await clipWithMotion();
+    const before = clipOn(doc, 0).keyframes;
+
+    for (let step = 0; step < 50; step += 1) {
+      doc.dispatch(
+        cmd.keyframeAdd(on.clip(clip.id), null, "x", SECOND, { kind: "float", value: step }),
+        "kf:x",
+      );
+    }
+    doc.undo();
+
+    expect(clipOn(doc, 0).keyframes).toEqual(before);
+  });
+});
+
+// The other half of the model that had no address: chains on a track and on the project, and the
+// one fader the whole mix passes through.
+describe("effects beyond a clip, across the boundary", () => {
+  it("puts an effect on a track and on the project and resolves both at every moment", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const track = trackId(doc, 0);
+
+    doc.dispatch(cmd.effectAdd(on.track(track), "eq"));
+    doc.dispatch(cmd.effectSetParam(on.track(track), "eq", "gain", { kind: "float", value: 3 }));
+    doc.dispatch(cmd.effectAdd(on.project, "limiter"));
+    doc.dispatch(
+      cmd.keyframeAdd(on.project, "limiter", "ceiling", 0, { kind: "float", value: 0 }),
+    );
+    doc.dispatch(
+      cmd.keyframeAdd(on.project, "limiter", "ceiling", 2 * SECOND, { kind: "float", value: 1 }),
+    );
+
+    const onTrack = doc.state.timeline.tracks[0]!.effects[0]!;
+    const onProject = doc.state.master.effects[0]!;
+    // Well past the only clip: a bus and a mastering chain do not stop existing between two cuts.
+    const params = doc.effectParamsAt(9 * SECOND);
+
+    expect(params.get(onTrack.id)?.get("gain")).toEqual({ kind: "float", value: 3 });
+    expect(doc.effectParamsAt(SECOND).get(onProject.id)?.get("ceiling")).toEqual({
+      kind: "float",
+      value: 0.5,
+    });
+  });
+
+  it("moves the master fader and clamps what a slider can produce", async () => {
+    const doc = await timeline();
+
+    doc.dispatch(cmd.projectSetMasterVolume(0.3));
+    expect(doc.state.master.volume).toBeCloseTo(0.3);
+
+    doc.dispatch(cmd.projectSetMasterVolume(99));
+    expect(doc.state.master.volume).toBe(4);
+  });
+});
