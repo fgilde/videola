@@ -213,9 +213,12 @@ export class Api {
   // same draw list the editor draws. What the server owns is how big the answer may get.
   async frames(id: string, times: readonly number[], width?: number): Promise<Uint8Array[]> {
     const settings = this.state(id).settings;
+    // Both before the archive is built: a rejected argument must not cost a caller the whole
+    // project written out to bytes first.
     const size = fit(settings.width, settings.height, width);
+    const at = instants(times);
     try {
-      return await renderStills({ archive: this.archive(id), times: instants(times), ...size });
+      return await renderStills({ archive: this.archive(id), times: at, ...size });
     } catch (error) {
       if (error instanceof RenderError) {
         throw new ApiError(RENDER_STATUS[error.code], error.code, error.message);

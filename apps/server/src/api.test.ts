@@ -267,3 +267,40 @@ describe("undo and redo", () => {
     expect(api.state(id).timeline.tracks).toHaveLength(1);
   });
 });
+
+// Every one of these has to be refused before a browser is started, because the alternative to a
+// refusal is a picture that says nothing about what was asked for.
+describe("a still of a moment", () => {
+  it("is unknown for an unknown project", async () => {
+    await expect(api.frames("prj_nope", [0])).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("refuses a request that names no instant", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.frames(id, [])).rejects.toMatchObject({ status: 400, code: "noTimes" });
+  });
+
+  it("refuses more instants than it will render", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.frames(id, Array.from({ length: 9 }, () => 0))).rejects.toMatchObject({
+      code: "tooManyFrames",
+    });
+  });
+
+  it("refuses a time that is not a whole number of flicks", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.frames(id, [secondsToTime(1) + 0.5])).rejects.toMatchObject({
+      code: "badTime",
+    });
+    await expect(api.frames(id, [-1])).rejects.toMatchObject({ code: "badTime" });
+  });
+
+  it("refuses a width that is not a whole number of pixels", async () => {
+    const id = await projectWithTrack();
+
+    await expect(api.frames(id, [0], 12.5)).rejects.toMatchObject({ code: "badWidth" });
+  });
+});

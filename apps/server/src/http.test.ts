@@ -296,3 +296,19 @@ describe("the body cap", () => {
     expect(response.status).toBe(201);
   });
 });
+
+describe("a still over HTTP", () => {
+  beforeEach(() => start());
+
+  it("insists on an instant and refuses one that is not a whole number", async () => {
+    const id = await newProject();
+
+    expect((await json(`/api/projects/${id}/frame`)).status).toBe(400);
+    expect((await json(`/api/projects/${id}/frame?at=half`)).status).toBe(400);
+    expect((await json(`/api/projects/${id}/frame?at=0&width=1.5`)).status).toBe(400);
+  });
+
+  it("is unknown for an unknown project before it renders anything", async () => {
+    expect((await json("/api/projects/prj_nope/frame?at=0")).status).toBe(404);
+  });
+});

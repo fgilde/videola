@@ -414,6 +414,27 @@ describe("failures an agent has to read", () => {
     expect(rejected.text).toContain("trk_nope");
   });
 
+  it("reports a time that is not a whole number of flicks instead of rounding it", async () => {
+    const created = parse((await call("project_create")).text);
+
+    const refused = await call("project_getFrame", { project: created.id, at: [0.5] });
+
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("flicks");
+  });
+
+  it("refuses more instants than it renders rather than rendering some of them", async () => {
+    const created = parse((await call("project_create")).text);
+
+    const refused = await call("project_getFrame", {
+      project: created.id,
+      at: Array.from({ length: 9 }, () => 0),
+    });
+
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("8");
+  });
+
   it("reports an unknown tool by name", async () => {
     const missing = await call("clip_teleport", {});
 
