@@ -520,6 +520,11 @@ fn every_command_undoes_to_the_exact_prior_state() {
         |Fixture { neighbour, .. }| Command::ClipUngroup {
             clip: neighbour.clone(),
         },
+        |Fixture {
+             clip, neighbour, ..
+         }| Command::ClipNest {
+            clips: vec![clip.clone(), neighbour.clone()],
+        },
         |_| Command::MarkerAdd {
             time: Time::from_seconds(1.0),
             label: "chapter".into(),

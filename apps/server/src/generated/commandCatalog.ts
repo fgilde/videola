@@ -117,6 +117,11 @@ export const COMMAND_CATALOG: readonly CommandSchema[] = [
     schema: {"$defs":{"ClipId":{"description":"Id of the form `clp_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"Dissolve the group this clip belongs to, for every clip in it.","properties":{"clip":{"$ref":"#/$defs/ClipId"},"type":{"const":"clip.ungroup","type":"string"}},"required":["type","clip"],"type":"object"},
   },
   {
+    command: "clip.nest",
+    description: "Fold clips into one compound clip covering the span they occupied. The compound lands on\nthe lowest track any of them was on and holds their own timeline inside it.",
+    schema: {"$defs":{"ClipId":{"description":"Id of the form `clp_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"Fold clips into one compound clip covering the span they occupied. The compound lands on\nthe lowest track any of them was on and holds their own timeline inside it.","properties":{"clips":{"items":{"$ref":"#/$defs/ClipId"},"type":"array"},"type":{"const":"clip.nest","type":"string"}},"required":["type","clips"],"type":"object"},
+  },
+  {
     command: "clip.setSpeed",
     description: "Set playback rate and direction. `rate` is a factor in (0, 100]; 1 is unchanged.",
     schema: {"$defs":{"ClipId":{"description":"Id of the form `clp_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"Set playback rate and direction. `rate` is a factor in (0, 100]; 1 is unchanged.","properties":{"clip":{"$ref":"#/$defs/ClipId"},"preservePitch":{"type":"boolean"},"rate":{"format":"float","type":"number"},"reverse":{"type":"boolean"},"type":{"const":"clip.setSpeed","type":"string"}},"required":["type","clip","rate","reverse","preservePitch"],"type":"object"},

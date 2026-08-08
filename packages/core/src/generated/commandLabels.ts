@@ -21,6 +21,7 @@ export const COMMAND_LABELS = [
   "cmd.clip.paste",
   "cmd.clip.group",
   "cmd.clip.ungroup",
+  "cmd.clip.nest",
   "cmd.clip.setSpeed",
   "cmd.clip.setVolume",
   "cmd.clip.setTransform",
