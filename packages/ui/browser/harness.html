@@ -539,19 +539,37 @@ test("inspector labels are wired to their inputs", function () {
 // and an opacity between 0 and 1 was 950 px wide on a tablet, with its readout a hand's width
 // away from the handle. The panel here is deliberately wider than any column the shell hands out.
 test("a labelled control stops growing with the panel", function () {
-  panel.style.width = "900px";
+  // 520 px on purpose. Wider than the cap and too narrow for a second column, so the cap is the
+  // only thing holding the row -- at 900 the columns bound it and taking the cap away changes
+  // nothing, which is how this check first passed while proving none of its own claim.
+  panel.style.width = "520px";
   try {
     drawInspector("desktop");
     const row = inPanel(".v-param").getBoundingClientRect();
     checkAtMost("a parameter row is bounded whatever room it is given", Math.round(row.width), 420);
     // Bounded, not collapsed: the same row still has to be worth aiming at.
     checkAtLeast("and still wide enough to aim along", Math.round(row.width), 240);
-    // Two columns out of the width instead of one column and a wasteland beside it.
-    const rows = allInPanel(".v-param").map(function (node) {
+    // Read off one group: an effect card is a box of its own and indents its rows, so counting
+    // left edges across the whole panel counts the padding rather than the columns.
+    check("one column at this width, so the cap is what is being read",
+      new Set(allInPanel(".v-inspector__group:first-of-type .v-param").map(function (node) {
+        return Math.round(node.getBoundingClientRect().left);
+      })).size, 1);
+  } finally {
+    panel.style.width = "360px";
+  }
+});
+
+// The other half of the same question: where there is room for two columns, the panel uses it
+// rather than leaving a wasteland beside one column of controls.
+test("a wide panel lays the rows out in columns", function () {
+  panel.style.width = "900px";
+  try {
+    drawInspector("desktop");
+    const tops = allInPanel(".v-inspector__group:first-of-type .v-param").map(function (node) {
       return Math.round(node.getBoundingClientRect().top);
     });
-    checkAtLeast("a wide panel lays the rows out in columns",
-      rows.length - new Set(rows).size, 1);
+    checkAtLeast("rows share a line instead of stacking", tops.length - new Set(tops).size, 1);
   } finally {
     panel.style.width = "360px";
   }
