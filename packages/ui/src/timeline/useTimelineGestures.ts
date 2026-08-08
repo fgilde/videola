@@ -86,8 +86,8 @@ interface Held {
 }
 
 type Drag =
-  | { mode: "move"; pointerId: number; clip: ClipId; track: TrackId; clientX: number; clientY: number; start: Time; held: Held[]; key: string; live: boolean }
-  | { mode: "trim"; pointerId: number; clip: ClipId; edge: TrimEdge; clientX: number; clientY: number; edgeTime: Time; duration: Time; key: string; live: boolean }
+  | { mode: "move"; pointerId: number; clip: ClipId; track: TrackId; clientX: number; clientY: number; start: Time; held: Held[]; key: string; live: boolean; additive: boolean }
+  | { mode: "trim"; pointerId: number; clip: ClipId; edge: TrimEdge; clientX: number; clientY: number; edgeTime: Time; duration: Time; key: string; live: boolean; additive: boolean }
   | { mode: "scrub"; pointerId: number }
   | { mode: "pinch" ; distance: number; flicksPerPixel: number };
 
@@ -195,6 +195,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
               held: heldClips(config.project, selection),
               key: `timeline-${(gestureSequence += 1)}`,
               live: false,
+              additive,
             }
           : {
               mode: "trim",
@@ -207,6 +208,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
               duration: found.clip.duration,
               key: `timeline-${(gestureSequence += 1)}`,
               live: false,
+              additive,
             };
     },
     [cancelLongPress, openMenu],
@@ -282,8 +284,9 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       if (active.pointerId !== event.pointerId) return;
       if (revert) revertDrag(latest.current, active);
       // A press that never became a drag was a click, and a click narrows a multiple selection to
-      // the clip it landed on -- the press itself had to keep the rest, to be able to drag it.
-      else if (active.mode !== "scrub" && !active.live) {
+      // the clip it landed on -- the press itself had to keep the rest, to be able to drag it. A
+      // modifier click is the one that just widened the selection, so it is exempt.
+      else if (active.mode !== "scrub" && !active.live && !active.additive) {
         latest.current.onSelect(active.clip, { collapse: true });
       }
       drag.current = undefined;

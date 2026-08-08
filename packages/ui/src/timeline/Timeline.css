@@ -184,9 +184,8 @@
 .v-timeline__marker {
   position: absolute;
   top: 0;
-  width: 10px;
-  height: 14px;
-  margin-left: -1px;
+  width: 12px;
+  height: 18px;
   padding: 0;
   border: none;
   border-radius: 2px 2px 2px 0;

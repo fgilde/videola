@@ -194,6 +194,20 @@ describe("multi selection", () => {
     expect(clipElements().map((clip) => clip.dataset.selected)).toEqual(["true", "false"]);
   });
 
+  // Found in the browser harness, where a click is a press *and* a release: the narrowing on
+  // release undid the widening the modifier press had just made.
+  it("keeps a clip added by a modifier click once the button comes up", async () => {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+
+    down(clipAt(0), 100);
+    up(100);
+    down(clipAt(1), 300, { ctrlKey: true });
+    up(300);
+
+    expect(clipElements().map((clip) => clip.dataset.selected)).toEqual(["true", "true"]);
+  });
+
   it("replaces the selection on a plain click", async () => {
     const doc = await documentWithClips(2);
     render(<Harness doc={doc} />);
