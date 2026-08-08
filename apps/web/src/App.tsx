@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from "rea
 
 import { cmd, createWasmBackend, VideolaDocument, type LoadWarning, type Project } from "@videola/core";
 import { mediaForProject } from "@videola/media";
-import { AppShell, useI18n } from "@videola/ui";
+import { AppShell, Timeline, useI18n } from "@videola/ui";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed";
 
@@ -142,6 +142,7 @@ export function App(): ReactElement {
       <ErrorBanner error={error} />
       <WarningBanner warnings={warnings} />
       <Status project={project} />
+      {project !== undefined && <Timeline project={project} playhead={0} />}
     </AppShell>
   );
 }

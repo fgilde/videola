@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@videola/core": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -18,7 +19,6 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@videola/core": "workspace:*",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

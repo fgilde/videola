@@ -35,13 +35,12 @@ interface Size {
 //   anchor          fraction of the uncropped source, so cropping does not move the pivot
 //   crop            fraction cut off each side
 export function drawList(project: Project, at: Time): DrawList {
-  const library = new Map(project.library.map((entry) => [entry.id, entry]));
   const frame = { width: project.settings.width, height: project.settings.height };
   const items: DrawItem[] = [];
   for (const track of project.timeline.tracks) {
     if (!paints(track)) continue;
     for (const clip of track.clips) {
-      const item = drawItem(clip, at, library, frame);
+      const item = drawItem(clip, at, project.library, frame);
       if (item !== undefined) items.push(item);
     }
   }
@@ -59,13 +58,16 @@ const MAX = 0x8008;
 
 const OVER: BlendState = { equation: FUNC_ADD, src: ONE, dst: ONE_MINUS_SRC_ALPHA };
 
+// Colour only. The alpha channel is composited as a plain over-operator in `Compositor.#draw`,
+// where it is the same for every mode -- `subtract` here would otherwise reach 1 - 1 = 0 and cut
+// a transparent hole through the picture.
+//
 // The source arrives premultiplied from the fragment shader, which is what makes `src: ONE` the
 // over-operator and keeps a half-transparent edge from being mixed towards the background twice.
 //
 // ponytail: overlay and difference are not expressible as a fixed-function blend and fall back to
-// normal; MIN and MAX ignore the factors entirely, so darken and lighten also touch the alpha
-// channel. Both need the destination as a texture, which means one more render target and a
-// blend pass in GLSL -- the same machinery the effect chain of Task 16 introduces.
+// normal. They need the destination as a texture, which means one more render target and a blend
+// pass in GLSL -- the same machinery the effect chain of Task 16 introduces.
 export function blendState(mode: BlendMode): BlendState {
   switch (mode) {
     case "multiply":
@@ -96,7 +98,7 @@ function paints(track: Track): boolean {
 function drawItem(
   clip: Clip,
   at: Time,
-  library: ReadonlyMap<string, MediaAsset>,
+  library: readonly MediaAsset[],
   frame: Size,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
@@ -117,15 +119,24 @@ function drawItem(
 
 // ponytail: generators and compound clips have no size and are dropped. Solids and text are M3,
 // and a compound clip needs its own pass over a nested timeline.
-function sourceSize(clip: Clip, library: ReadonlyMap<string, MediaAsset>): Size | undefined {
+function sourceSize(clip: Clip, library: readonly MediaAsset[]): Size | undefined {
   if (clip.source.kind !== "media") return undefined;
-  const asset = library.get(clip.source.media);
+  const media = clip.source.media;
+  // A scan beats an index here: a handful of clips are visible at a time, and building a map of
+  // the whole library on every frame costs more than it saves.
+  const asset = library.find((entry) => entry.id === media);
   if (asset?.width == null || asset.height == null) return undefined;
   return { width: asset.width, height: asset.height };
 }
 
 // The texture's first row is the frame's top row, and the unit quad runs top-down as well, so the
 // sampled rectangle needs no flip -- the flip to clipspace happens once, in the matrix below.
+//
+// ponytail: the cut runs along a texel boundary, and LINEAR filtering reaches half a texel past
+// it, so the first column of a cropped clip carries a trace of what was cut away. Insetting the
+// rectangle by half a texel would fix it -- `sourceSize` knows the size it would need -- at the
+// price of scaling every cropped clip by a sub-pixel amount. Which artefact is worse is a
+// question for pixels on a screen, so it waits for the browser tests.
 function croppedRect(transform: Transform): [number, number, number, number] {
   const { left, top, right, bottom } = transform.crop;
   return [left, top, 1 - left - right, 1 - top - bottom];
@@ -165,6 +176,9 @@ function quadMatrix(
 
 const HEX = /^#(?<digits>[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
+// Comes out premultiplied, like everything else that reaches the drawing buffer: an eight digit
+// background is written as straight alpha and would otherwise be composited far too bright.
+//
 // ponytail: the channels are taken as they are written, so blending happens in the non-linear
 // sRGB space the textures arrive in. That is what canvas 2D and every preview window does; light
 // adds up correctly only with sRGB texture formats and an sRGB draw buffer, which is a change of
@@ -175,5 +189,6 @@ function parseColor(hex: string): [number, number, number, number] {
   const wide = digits.length === 3 ? [...digits].map((digit) => digit + digit).join("") : digits;
   const channel = (index: number): number =>
     Number.parseInt(wide.slice(index * 2, index * 2 + 2), 16) / 255;
-  return [channel(0), channel(1), channel(2), wide.length === 8 ? channel(3) : 1];
+  const alpha = wide.length === 8 ? channel(3) : 1;
+  return [channel(0) * alpha, channel(1) * alpha, channel(2) * alpha, alpha];
 }

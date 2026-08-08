@@ -6,5 +6,7 @@ export * from "./i18n/translate";
 export * from "./i18n/formatTimecode";
 export * from "./layout/detectLayoutMode";
 export * from "./layout/useLayoutMode";
+export * from "./timeline/Timeline";
+export * from "./timeline/geometry";
 export * from "./shell/AppShell";
 export * from "./shell/TopBar";

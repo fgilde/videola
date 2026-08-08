@@ -27,11 +27,15 @@ export function recordingGl(overrides: Record<string, unknown> = {}): Recording 
     getUniformLocation: (_program: unknown, name: string) => name,
     getParameter: () => 4096,
     canvas: { width: 0, height: 0 },
-    ...overrides,
+    drawingBufferWidth: 640,
+    drawingBufferHeight: 360,
   };
   const gl = new Proxy({} as Record<string | symbol, unknown>, {
     get(_target, key) {
       if (typeof key !== "string") return undefined;
+      // Read through on every access rather than from a merged copy, so a test can hand in a
+      // getter for a value that changes while the subject is running.
+      if (key in overrides) return overrides[key];
       if (key in answers) return answers[key];
       if (/^[A-Z][A-Z0-9_]*$/.test(key)) return token(tokens, key);
       return (...args: unknown[]) => {

@@ -232,6 +232,17 @@ describe("drawList output state", () => {
     expect(drawList(project([], 1920, 1080, "#3366CC"), 0).background).toEqual([0.2, 0.4, 0.8, 1]);
   });
 
+  // The clear colour lands in a premultiplied drawing buffer, so a translucent background has to
+  // arrive premultiplied too, or the page composites it far too bright.
+  it("premultiplies a background that carries alpha", () => {
+    expect(drawList(project([], 1920, 1080, "#80808080"), 0).background).toEqual([
+      (128 / 255) * (128 / 255),
+      (128 / 255) * (128 / 255),
+      (128 / 255) * (128 / 255),
+      128 / 255,
+    ]);
+  });
+
   it("falls back to opaque black for a background it cannot read", () => {
     expect(drawList(project([], 1920, 1080, "transparent"), 0).background).toEqual([0, 0, 0, 1]);
   });

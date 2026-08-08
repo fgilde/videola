@@ -1,0 +1,228 @@
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { FLICKS_PER_SECOND, type Clip, type Project, type Track } from "@videola/core";
+
+import { I18nProvider } from "../i18n/I18nProvider";
+import { MAX_ELEMENT_WIDTH_PX } from "./geometry";
+import { Timeline } from "./Timeline";
+
+const VIEWPORT_WIDTH = 900;
+
+export function makeProject(tracks: Track[] = [], library: Project["library"] = []): Project {
+  return {
+    schemaVersion: 1,
+    meta: { id: "prj_1", title: "", tags: [] },
+    settings: {
+      width: 1920,
+      height: 1080,
+      fps: { numerator: 30, denominator: 1 },
+      sampleRate: 48000,
+      colorSpace: "srgb",
+      background: "#000000",
+    },
+    library,
+    timeline: { tracks },
+    markers: [],
+    master: { volume: 1, effects: [] },
+  } as unknown as Project;
+}
+
+export function makeTrack(id: string, clips: Clip[] = [], overrides: Partial<Track> = {}): Track {
+  return {
+    id,
+    kind: "video",
+    name: id,
+    colorHex: "#5b8cff",
+    height: 72,
+    locked: false,
+    hidden: false,
+    muted: false,
+    solo: false,
+    volume: 1,
+    pan: 0,
+    clips,
+    effects: [],
+    ...overrides,
+  } as unknown as Track;
+}
+
+export function makeClip(id: string, start: number, duration: number, overrides: Partial<Clip> = {}): Clip {
+  return {
+    id,
+    source: { kind: "generator", generator: { type: "solid", color: "#000000" } },
+    start,
+    duration,
+    inPoint: 0,
+    speed: { rate: 1, reverse: false, preservePitch: true },
+    transform: {},
+    blend: "normal",
+    fades: { inDuration: 0, outDuration: 0 },
+    volume: 1,
+    pan: 0,
+    effects: [],
+    keyframes: {},
+    ...overrides,
+  } as unknown as Clip;
+}
+
+// jsdom does no layout, so both of these read 0 forever and the visible window would always be
+// empty - which would make every virtualisation assertion below pass without proving anything.
+export function stubViewport(width = VIEWPORT_WIDTH): { scrollLeft: number } {
+  const scroll = { scrollLeft: 0 };
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get: () => width,
+  });
+  Object.defineProperty(HTMLElement.prototype, "scrollLeft", {
+    configurable: true,
+    get: () => scroll.scrollLeft,
+    set: (next: number) => {
+      scroll.scrollLeft = next;
+    },
+  });
+  return scroll;
+}
+
+export function restoreViewport(): void {
+  Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  Reflect.deleteProperty(HTMLElement.prototype, "scrollLeft");
+}
+
+export function renderTimeline(ui: React.ReactElement): ReturnType<typeof render> {
+  return render(<I18nProvider>{ui}</I18nProvider>);
+}
+
+describe("Timeline", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  it("draws tracks[0] at the bottom, matching the order the compositor blends in", () => {
+    const project = makeProject([makeTrack("trk_bottom"), makeTrack("trk_top")]);
+    renderTimeline(<Timeline project={project} playhead={0} />);
+
+    const rows = [...document.querySelectorAll<HTMLElement>("[data-track-index]")];
+    expect(rows.map((row) => row.dataset.trackIndex)).toEqual(["1", "0"]);
+  });
+
+  it("labels a clip with its media name when the clip carries none", () => {
+    const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND, {
+      source: { kind: "media", media: "med_a" },
+    } as Partial<Clip>);
+    const project = makeProject(
+      [makeTrack("trk_1", [clip])],
+      [{ id: "med_a", originalName: "beach.mp4" }] as Project["library"],
+    );
+    renderTimeline(<Timeline project={project} playhead={0} />);
+
+    expect(screen.getByText("beach.mp4")).toBeTruthy();
+  });
+
+  it("falls back to a catalogue string, never to a raw identifier", () => {
+    const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND, {
+      source: { kind: "media", media: "med_gone" },
+    } as Partial<Clip>);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />);
+
+    expect(screen.getByText("Ohne Namen")).toBeTruthy();
+  });
+
+  it("places the playhead at its pixel position", () => {
+    const project = makeProject([makeTrack("trk_1")]);
+    renderTimeline(<Timeline project={project} playhead={2 * FLICKS_PER_SECOND} />);
+
+    // The default zoom is 100 px per second.
+    expect(screen.getByTestId("timeline-playhead").style.left).toBe("200px");
+  });
+
+  it("writes the ruler in timecode of the project frame rate", () => {
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1")])} playhead={0} />);
+    expect(screen.getByText("00:00:01.00")).toBeTruthy();
+  });
+
+  it("halves the flicks per pixel when zooming in, so a clip draws twice as wide", () => {
+    const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />);
+    const width = () => document.querySelector<HTMLElement>("[data-clip-id]")?.style.width;
+
+    expect(width()).toBe("100px");
+    act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
+    expect(width()).toBe("200px");
+    act(() => screen.getByRole("button", { name: "Verkleinern" }).click());
+    expect(width()).toBe("100px");
+  });
+
+  // Without the anchor the timeline jumps away from whatever the user was pointing at, which
+  // makes zooming into a specific edit unusable.
+  it("keeps the time under the zoom anchor where it was", () => {
+    const scroll = stubViewport();
+    const clip = makeClip("clp_1", 0, 60 * FLICKS_PER_SECOND);
+    renderTimeline(<Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />);
+
+    // The anchor is the viewport centre, 450 px in, at 100 px per second: 4.5 s.
+    act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
+
+    expect(scroll.scrollLeft).toBe(450);
+    expect(screen.getByTestId("timeline-playhead").style.left).toBe("0px");
+  });
+
+  it("refuses to zoom past the point where the content element stops laying out", () => {
+    const clip = makeClip("clp_1", 0, 24 * 3600 * FLICKS_PER_SECOND);
+    const { container } = renderTimeline(
+      <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} />,
+    );
+    for (let step = 0; step < 40; step += 1) {
+      act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
+    }
+    const content = container.querySelector<HTMLElement>(".v-timeline__content");
+    expect(Number.parseFloat(content?.style.width ?? "0")).toBeLessThanOrEqual(
+      MAX_ELEMENT_WIDTH_PX + VIEWPORT_WIDTH,
+    );
+  });
+
+  it("shows the empty hint when the project has no tracks", () => {
+    renderTimeline(<Timeline project={makeProject()} playhead={0} />);
+    expect(screen.getByText(/Noch keine Spuren/)).toBeTruthy();
+  });
+});
+
+describe("Timeline virtualisation", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  // One hour of one-second clips. Without virtualisation this is 3600 clip nodes plus a ruler
+  // tick every second; the DOM node count is the only thing that proves the window is real.
+  function hourLongProject(): Project {
+    const clips = Array.from({ length: 3600 }, (_, index) =>
+      makeClip(`clp_${index}`, index * FLICKS_PER_SECOND, FLICKS_PER_SECOND),
+    );
+    return makeProject([makeTrack("trk_1", clips)]);
+  }
+
+  it("renders only the clips inside the visible window", () => {
+    const project = hourLongProject();
+    expect(project.timeline.tracks[0]?.clips).toHaveLength(3600);
+
+    renderTimeline(<Timeline project={project} playhead={0} />);
+
+    const drawn = document.querySelectorAll("[data-clip-id]").length;
+    expect(drawn).toBeGreaterThan(0);
+    expect(drawn).toBeLessThan(40);
+  });
+
+  it("keeps the ruler windowed too", () => {
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} />);
+    expect(document.querySelectorAll("[data-tick]").length).toBeLessThan(40);
+  });
+
+  it("keeps the whole timeline subtree small enough to be a real DOM", () => {
+    renderTimeline(<Timeline project={hourLongProject()} playhead={0} />);
+    expect(screen.getByTestId("timeline").querySelectorAll("*").length).toBeLessThan(200);
+  });
+
+  it("still reserves scroll width for the whole hour", () => {
+    const { container } = renderTimeline(<Timeline project={hourLongProject()} playhead={0} />);
+    const content = container.querySelector<HTMLElement>(".v-timeline__content");
+    expect(Number.parseFloat(content?.style.width ?? "0")).toBeGreaterThan(360_000);
+  });
+});
