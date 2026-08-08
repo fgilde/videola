@@ -4,6 +4,8 @@ import { chromaKey } from "./chroma-key";
 import { contrast } from "./contrast";
 import { crossfade } from "./crossfade";
 import { dip } from "./dip";
+import { maskEllipse } from "./mask-ellipse";
+import { maskRect } from "./mask-rect";
 import { saturation } from "./saturation";
 import { sharpen } from "./sharpen";
 import { slide } from "./slide";
@@ -73,6 +75,14 @@ const MANIFESTS: readonly EffectManifest[] = [
   blur,
   sharpen,
   chromaKey,
+  // Two masks rather than one with a shape parameter: the manifest has no notion of a choice, and
+  // a rectangle and an ellipse share four of six parameters but not a line of their falloff. In a
+  // chain they intersect, because each multiplies the coverage the one before it left.
+  //
+  // ponytail: `effect.add` treats a repeated type as a no-op, so a clip carries at most one of each
+  // shape. Two rectangles want the chain keyed by effect id rather than by type.
+  maskRect,
+  maskEllipse,
   crossfade,
   wipe,
   slide,

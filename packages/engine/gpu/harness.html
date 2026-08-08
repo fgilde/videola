@@ -584,6 +584,157 @@ test("a vignette darkens the picture rather than dissolving it", () => {
     [8, 8, 8, 255], 2);
 });
 
+// A mask is geometry at pixels, so it needs more than `through` gives: several shapes in one chain,
+// every parameter defaulted so a check names only what it is about, and the option of rendering
+// twice. The frame is 16x16 throughout, which puts a default mask -- half the frame, centred -- on
+// columns and rows 4..11, with 3 and 12 just outside it.
+function masked(shapes, over) {
+  const spec = over || {};
+  const size = spec.size || 16;
+  const effects = shapes.map((shape, index) => ({ id: "eff_" + index, effectType: shape.type,
+    enabled: true, params: {}, keyframes: {} }));
+  const { canvas, compositor, scene } = rig(size, size, spec.background || "#000000",
+    [{ effects }], size, size);
+  const f = frame(size, size, spec.pixel || (() => [255, 255, 255, 255]));
+  const values = floats(shapes.map((shape, index) => ["eff_" + index, Object.entries(
+    Object.assign({ centerX: 0.5, centerY: 0.5, width: 0.5, height: 0.5, feather: 0, invert: 0 },
+      shape.values || {}))]));
+  const paint = () => draw(compositor, scene, 0, new Map([["clp_0", f]]), values);
+  paint();
+  if (spec.twice) paint();
+  f.close();
+  return { canvas, at: reader(compositor.readPixels(), size, size) };
+}
+
+const RECT = (values) => ({ type: "mask-rect", values: values });
+const ELLIPSE = (values) => ({ type: "mask-ellipse", values: values });
+
+// Over a coloured background, because that is what tells a mask from a dimmer: where the coverage
+// has been taken away the background is what remains, and where it has not the clip is opaque.
+test("a rectangular mask keeps its inside and gives up its outside", () => {
+  const shot = masked([RECT()], { background: "#ff0000" }).at;
+  check("the middle is the clip", shot(8, 8), [255, 255, 255, 255]);
+  check("just inside the edge is still the clip", shot(4, 4), [255, 255, 255, 255]);
+  check("just outside it is the background", shot(12, 12), [255, 0, 0, 255]);
+  check("and the corner of the frame is background", shot(0, 0), [255, 0, 0, 255]);
+});
+
+// The y contract, and the one check here that could not pass by accident. `v_uv` runs UP inside a
+// pass while every measurement in the model runs down the picture, so a mask in the upper quarter
+// lands in the lower one if the flip is dropped -- rows 2..5 against rows 10..13 is exactly that
+// mirror. Every y-symmetric effect built before this hid the same mistake.
+test("a mask is measured down the picture, the way the model measures", () => {
+  const upper = masked([RECT({ centerY: 0.25, height: 0.25 })], { background: "#ff0000" }).at;
+  check("the upper quarter is the clip", upper(8, 3), [255, 255, 255, 255]);
+  check("the lower quarter is not", upper(8, 11), [255, 0, 0, 255]);
+
+  const left = masked([RECT({ centerX: 0.25, width: 0.25 })], { background: "#ff0000" }).at;
+  check("and x is not mirrored either", left(3, 8), [255, 255, 255, 255]);
+  check("the right quarter is background", left(11, 8), [255, 0, 0, 255]);
+});
+
+// The falloff, weight by weight, across the band a feather of 0.125 opens between 0.625 and 0.875
+// of the frame. Pinning the whole ramp rather than its ends makes this a measurement of the curve
+// instead of a restatement of "there is an edge somewhere".
+test("a feathered edge is a measured ramp, not a step", () => {
+  const soft = masked([RECT({ feather: 0.125 })]).at;
+  check("still whole just inside the band", soft(9, 8), [255, 255, 255, 255]);
+  check("one pixel into it", soft(10, 8)[0], 244, 2);
+  check("two", soft(11, 8)[0], 174, 2);
+  check("three", soft(12, 8)[0], 81, 2);
+  check("four", soft(13, 8)[0], 11, 2);
+  check("and past the band there is nothing left", soft(14, 8), [0, 0, 0, 255]);
+  // The ramp is centred on the boundary rather than beginning or ending at it: these two pixels
+  // straddle it symmetrically, so whatever the curve does between them they add up to a whole one.
+  check("the band sits on the edge it softens", soft(11, 8)[0] + soft(12, 8)[0], 255, 2);
+});
+
+test("no feather is a hard edge", () => {
+  const hard = masked([RECT()]).at;
+  check("the last column inside is whole", hard(11, 8), [255, 255, 255, 255]);
+  check("and the first one outside is gone", hard(12, 8), [0, 0, 0, 255]);
+});
+
+// What "premultiplied" costs if it is got wrong, measured. The chain carries premultiplied colour,
+// so a mask scales all four channels; a shader that touched alpha alone -- the straight-alpha
+// reflex -- leaves rgb at full white, and the over-operator then adds a whole white to the
+// background instead of a third of one. That reads 255 here rather than 81.
+test("a mask takes coverage away rather than brightness", () => {
+  const shot = masked([RECT({ feather: 0.125 })], { background: "#ff0000" }).at;
+  check("a third-covered pixel is two thirds background", shot(12, 8), [255, 81, 81, 255], 2);
+  check("and a whole one is the clip alone", shot(8, 8), [255, 255, 255, 255]);
+});
+
+// Inversion has to be the complement at every point of the falloff rather than a swap of its two
+// ends, so this measures the sum across the soft band, where a shader that inverted before
+// feathering would drift.
+test("inverting a mask is exactly its opposite", () => {
+  const plain = masked([RECT({ feather: 0.125 })]).at;
+  const flipped = masked([RECT({ feather: 0.125, invert: 1 })]).at;
+  for (const x of [8, 10, 11, 12, 13, 15]) {
+    check("column " + x + " and its inverse make a whole",
+      plain(x, 8)[0] + flipped(x, 8)[0], 255, 2);
+  }
+  check("the middle is gone when inverted", flipped(8, 8), [0, 0, 0, 255]);
+  check("and the outside has come back", flipped(15, 8), [255, 255, 255, 255]);
+});
+
+// What tells an ellipse from a rectangle at all: the corner of the shared bounding box. A pixel
+// inside the box but outside the inscribed ellipse must survive the one and not the other --
+// without this, an ellipse manifest pointing at the rectangle's shader passes every other check.
+test("an ellipse is not its bounding box", () => {
+  const round = masked([ELLIPSE()], { background: "#ff0000" }).at;
+  const square = masked([RECT()], { background: "#ff0000" }).at;
+  check("the box keeps its corner", square(11, 11), [255, 255, 255, 255]);
+  check("the ellipse does not", round(11, 11), [255, 0, 0, 255]);
+  check("but keeps the same reach along an axis", round(11, 8), [255, 255, 255, 255]);
+  check("and its middle", round(8, 8), [255, 255, 255, 255]);
+});
+
+// The reason a mask is an effect: two of them in one chain intersect for free, because each scales
+// the coverage the one before it left. Nothing was written to make this happen.
+test("two masks in one chain intersect", () => {
+  const both = masked([RECT(), ELLIPSE()], { background: "#ff0000" }).at;
+  check("inside both is the clip", both(8, 8), [255, 255, 255, 255]);
+  check("inside the box but outside the ellipse is gone", both(11, 11), [255, 0, 0, 255]);
+  check("and outside both is gone", both(14, 14), [255, 0, 0, 255]);
+});
+
+// An intermediate target that is not cleared holds the previous frame, and a mask is where that
+// shows: most of the target is transparent, so a stale frame reappears exactly where the mask cut
+// something away. One render can never see it.
+test("a mask draws the same picture on the second frame", () => {
+  const once = masked([RECT({ centerX: 0.3, centerY: 0.3 })], { background: "#ff0000" }).at;
+  const twice = masked([RECT({ centerX: 0.3, centerY: 0.3 })],
+    { background: "#ff0000", twice: true }).at;
+  for (const spot of [[4, 4], [8, 8], [12, 12], [2, 10]]) {
+    check("(" + spot[0] + "," + spot[1] + ") is unchanged by a repeat",
+      twice(spot[0], spot[1]), once(spot[0], spot[1]));
+  }
+});
+
+// A mask that eats a hole through the alpha channel of the picture is the page shining through the
+// preview. The clip's own coverage may go; what is underneath has to close over the gap.
+test("a masked clip leaves the picture opaque", () => {
+  const shot = masked([RECT({ feather: 0.2 })], { background: "#804020" });
+  for (const spot of [[8, 8], [12, 8], [15, 15]]) {
+    const buffer = shot.at(spot[0], spot[1]);
+    check("(" + spot[0] + "," + spot[1] + ") stays opaque", buffer[3], 255);
+    check("(" + spot[0] + "," + spot[1] + ") lets no page through",
+      overPage(shot.canvas, "#ff00ff", spot[0], spot[1]), buffer);
+  }
+});
+
+// A mask on a clip that is already half transparent. The two coverages multiply, which on
+// premultiplied colour is the same plain scale applied twice.
+test("a mask multiplies the coverage a clip already had", () => {
+  const shot = masked([RECT({ feather: 0.125 })],
+    { background: "#ff0000", pixel: function () { return [255, 255, 255, 128]; } }).at;
+  check("wholly inside, the clip's own half", shot(8, 8), [255, 128, 128, 255], 2);
+  // 0.316 of a half is 0.158 of a white over red.
+  check("and a third-covered pixel is a sixth of one", shot(12, 8), [255, 40, 40, 255], 3);
+});
+
 // A single bright column, blurred. The horizontal sweep spreads it and the vertical one cannot,
 // because a full-height column is already uniform down the frame -- so these numbers are the
 // horizontal sweep on its own, weight by weight.
