@@ -611,6 +611,27 @@ describe("a compound clip in the draw list", () => {
     expect(ids(list(moved, 14 * SECOND))).toEqual([]);
   });
 
+  // The head of a reversed clip maps one flick past the end of the range it consumes, and inside a
+  // compound that is an instant the nested timeline does not have -- without the clamp the first
+  // frame of a reversed compound is empty.
+  it("plays its own timeline backwards when it is itself reversed", () => {
+    const backwards = project([
+      track("trk_1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: 4 * SECOND,
+            speed: { rate: 1, reverse: true, preservePitch: true },
+          },
+          [track("trk_in", inner)],
+        ),
+      ]),
+    ]);
+    expect(ids(list(backwards, 0))).toEqual(["clp_b"]);
+    expect(ids(list(backwards, 3 * SECOND))).toEqual(["clp_a"]);
+  });
+
   // Trimming the compound cuts what is inside it, because the head it no longer covers is source
   // material it no longer consumes.
   it("hides what its own in point and duration no longer reach", () => {

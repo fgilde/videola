@@ -848,6 +848,56 @@ describe("a compound clip in the audio graph", () => {
     expect(at(out, 1.5)).toBeCloseTo(0, 2);
   });
 
+  // The trim inside a compound moves the nested clip's in point, and the fake source above cannot
+  // see that: it shapes its buffer across whatever range it is handed, so every range comes back
+  // looking the same. This one reports the absolute source position instead, which is the only way
+  // a cut taken off the wrong end shows up as a different sound.
+  function positionSignal(ctx: BaseAudioContext, span: Time): AudioBufferSource {
+    return {
+      async bufferFor(_hash: string, from: Time, to: Time): Promise<AudioBuffer> {
+        const frames = Math.round(timeToSeconds(to - from) * SAMPLE_RATE);
+        const buffer = ctx.createBuffer(2, frames, SAMPLE_RATE);
+        const data = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) data[i] = (from + ((to - from) * i) / frames) / span;
+        buffer.copyToChannel(data, 0);
+        buffer.copyToChannel(data, 1);
+        return buffer;
+      },
+    };
+  }
+
+  function trimmedCompound(over: Partial<Clip>): Project {
+    return project([
+      track("A1", [
+        compound({ id: "clp_group", start: 0, duration: SECOND, inPoint: SECOND }, [
+          track("A_in", [clip({ start: 0, duration: 2 * SECOND, ...over })]),
+        ]),
+      ]),
+    ]);
+  }
+
+  it("reads the second half of a nested clip when its own in point sits there", async () => {
+    const ctx = context(1);
+    const out = await render(ctx, positionSignal(ctx, 2 * SECOND), trimmedCompound({}));
+
+    expect(at(out, 0.05)).toBeCloseTo(0.5, 1);
+    expect(at(out, 0.95)).toBeCloseTo(1, 1);
+  });
+
+  // A reversed clip pays a trim out of the other end of its source range, so the same window over
+  // it reads the *first* half -- backwards.
+  it("takes the cut off the other end when the nested clip is reversed", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      positionSignal(ctx, 2 * SECOND),
+      trimmedCompound({ speed: { rate: 1, reverse: true, preservePitch: true } }),
+    );
+
+    expect(at(out, 0.05)).toBeCloseTo(0.5, 1);
+    expect(at(out, 0.95)).toBeCloseTo(0, 1);
+  });
+
   it("counts a nested clip as something to export a sound track for", () => {
     const nested = project([
       track("A1", [

@@ -523,6 +523,34 @@ mod tests {
         assert_eq!(params[&effect]["amount"], ParamValue::Float(0.5));
     }
 
+    // The head of a reversed clip maps one flick past the end of the range it consumes. For a
+    // decoder that is a read past end of media; inside a compound it is an instant the nested
+    // timeline does not have, so the first frame of a reversed compound comes back empty.
+    #[test]
+    fn a_reversed_compound_reads_its_last_nested_clip_first() {
+        let (mut host, clips) = host_with_overlapping_clips();
+        host.dispatch(Dispatch::new(Command::ClipNest {
+            clips: clips.clone(),
+        }))
+        .unwrap();
+        let compound = host.project().timeline.tracks[0].clips[0].id.clone();
+        host.dispatch(Dispatch::new(Command::ClipSetSpeed {
+            clip: compound,
+            rate: 1.0,
+            reverse: true,
+            preserve_pitch: true,
+        }))
+        .unwrap();
+
+        let head = host.source_times_at(Time::ZERO);
+
+        assert!(
+            head.contains_key(&clips[1]),
+            "the last nested clip has to answer at the head of a reversed compound"
+        );
+        assert!(!head.contains_key(&clips[0]));
+    }
+
     // A depth the loader refuses is a depth the walk must never be handed, and a walk without the
     // cap is a stack overflow a project file can trigger.
     #[test]
