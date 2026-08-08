@@ -13,6 +13,9 @@
 <script>
 const SECOND = 705600000;
 const results = [];
+// Which pointer the runner pinned for this pass. Everything in here holds for both except the
+// sizes of the controls, and those are the whole reason there are two passes.
+const POINTER = new URLSearchParams(location.search).get("pointer") || "fine";
 
 function check(name, got, want) {
   results.push({ name, ok: JSON.stringify(got) === JSON.stringify(want), got, want });
@@ -474,8 +477,21 @@ function allInPanel(selector) { return Array.from(panel.querySelectorAll(selecto
 
 test("inspector touch targets", function () {
   drawInspector("desktop");
-  const fine = inPanel(".v-param__key").getBoundingClientRect();
-  checkAtMost("a mouse gets a compact keyframe switch", Math.round(fine.height), 32);
+  const switchBox = inPanel(".v-param__key").getBoundingClientRect();
+  const sliderBox = inPanel(".v-param__slider").getBoundingClientRect();
+  if (POINTER === "fine") {
+    checkAtMost("a mouse gets a compact keyframe switch", Math.round(switchBox.height), 32);
+    checkAtMost("and a slider that is a line rather than a band",
+      Math.round(sliderBox.height), 24);
+  } else {
+    // At desk width the layout mode says "desktop" and decides nothing about pointers, so the
+    // media query is all that stands between a finger and a 20 px slider. It stood for nothing
+    // for a while: `.v-param__slider` alone loses to `input[type="range"]`, which is an attribute
+    // selector and therefore the same weight as a class plus an element.
+    checkAtLeast("a finger at desk width gets the whole slider to aim at",
+      Math.round(sliderBox.height), 44);
+    checkAtLeast("and a keyframe switch it can hit", Math.round(switchBox.height), 44);
+  }
 
   drawInspector("phone");
   const keys = allInPanel(".v-param__key").map(function (node) {
@@ -517,6 +533,42 @@ test("inspector labels are wired to their inputs", function () {
     sliders.filter(function (input) { return input.labels.length === 1; }).length, sliders.length);
   check("and the effect parameter is named from the manifest, not from its key",
     inPanel(".v-inspector__effect input[type=range]").labels[0].textContent, "Stärke");
+});
+
+// A slider is read as a fraction of its own travel, so past a point more pixels buy nothing --
+// and an opacity between 0 and 1 was 950 px wide on a tablet, with its readout a hand's width
+// away from the handle. The panel here is deliberately wider than any column the shell hands out.
+test("a labelled control stops growing with the panel", function () {
+  panel.style.width = "900px";
+  try {
+    drawInspector("desktop");
+    const row = inPanel(".v-param").getBoundingClientRect();
+    checkAtMost("a parameter row is bounded whatever room it is given", Math.round(row.width), 420);
+    // Bounded, not collapsed: the same row still has to be worth aiming at.
+    checkAtLeast("and still wide enough to aim along", Math.round(row.width), 240);
+    // Two columns out of the width instead of one column and a wasteland beside it.
+    const rows = allInPanel(".v-param").map(function (node) {
+      return Math.round(node.getBoundingClientRect().top);
+    });
+    checkAtLeast("a wide panel lays the rows out in columns",
+      rows.length - new Set(rows).size, 1);
+  } finally {
+    panel.style.width = "360px";
+  }
+});
+
+// The one control the operating system still drew itself. Read off the computed style rather than
+// off a pixel: "auto" is what a bar nobody has taken over reports.
+test("the scroll bars come from the tokens", function () {
+  drawInspector("desktop");
+  const style = getComputedStyle(inPanel(".v-inspector") || panel.firstElementChild);
+  check("a scrolling pane is told how wide its bar is", style.scrollbarWidth, "thin");
+  check("and what colour, out of a token",
+    style.scrollbarColor.includes(
+      getComputedStyle(document.documentElement).getPropertyValue("--v-border-strong").trim(),
+    ) || style.scrollbarColor.startsWith("rgb"),
+    true);
+  check("which is not the browser's own answer", style.scrollbarColor === "auto", false);
 });
 
 document.getElementById("out").textContent = JSON.stringify(results);

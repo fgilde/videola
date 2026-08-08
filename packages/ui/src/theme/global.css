@@ -14,15 +14,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Every pane in the editor scrolls, and left alone each one draws the operating system's bar --
-   the same foreign object the sliders were before they were taken over, and visible for the same
-   reason. Two standard properties rather than the -webkit-scrollbar pseudo-elements: they read
-   tokens, they work in both themes, and they are what Firefox understands as well. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--v-border-strong) transparent;
-}
-
 @media (prefers-reduced-motion: reduce) {
   * {
     /* Not "transition: none": a zero-length transition still fires

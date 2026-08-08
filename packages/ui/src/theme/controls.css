@@ -221,6 +221,18 @@ select:hover {
   }
 }
 
+/* The third native control, and the one nobody chooses to place: every pane in the editor scrolls,
+   and left alone each one draws the operating system's bar -- the same foreign object the sliders
+   were before they were taken over, and visible for the same reason. Two standard properties
+   rather than the -webkit-scrollbar pseudo-elements: they read tokens, they work in both themes,
+   and they are what Firefox understands as well. It belongs beside the other two takeovers rather
+   than in the global sheet, because the global sheet arrives with the ThemeProvider and a bar is
+   drawn wherever the tokens are.  */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--v-border-strong) transparent;
+}
+
 /* ------------------------------------------------------------------ the state every control has */
 
 /* Three pixels rather than two, and offset clear of the control: the ring has to be found on a

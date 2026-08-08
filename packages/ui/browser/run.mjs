@@ -35,7 +35,16 @@ function chrome() {
 
 // --virtual-time-budget alone does not make requestAnimationFrame fire under --dump-dom, so the
 // harness must never wait for a frame. Everything below is synchronous on purpose.
-function runHarness() {
+//
+// Twice, with the pointer pinned each way. This machine answers the pointer question differently
+// from one run to the next -- a laptop with a touchscreen is a real configuration -- so a check
+// that claims "a mouse" has to say so rather than hope for it. And the coarse half is not a
+// nicety: the rule that gives a slider a 44 px hit area at desk width sat dead behind a
+// specificity mistake for as long as no run asked a coarse pointer what it got.
+// 1 is a fine pointer in Blink's enum and 2 is a coarse one.
+const POINTERS = { fine: 1, coarse: 2 };
+
+function runHarness(pointer) {
   const dom = execFileSync(
     chrome(),
     [
@@ -43,14 +52,10 @@ function runHarness() {
       "--disable-gpu",
       "--window-size=1200,900",
       "--force-device-scale-factor=1",
-      // The inspector sizes its controls from `any-pointer`, and this machine answers that
-      // question differently from one run to the next -- a touchscreen at desktop width is a real
-      // configuration, but a check that claims "a mouse" has to say so rather than hope for it.
-      // 1 is a fine pointer in Blink's enum.
-      "--blink-settings=availablePointerTypes=1,primaryPointerType=1",
+      `--blink-settings=availablePointerTypes=${POINTERS[pointer]},primaryPointerType=${POINTERS[pointer]}`,
       "--virtual-time-budget=20000",
       "--dump-dom",
-      `file:///${join(here, "harness.html").replaceAll("\\", "/")}`,
+      `file:///${join(here, "harness.html").replaceAll("\\", "/")}?pointer=${pointer}`,
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
@@ -84,7 +89,7 @@ await esbuild.build({
 });
 
 try {
-  const results = runHarness();
+  const results = [...runHarness("fine"), ...runHarness("coarse")];
   const failed = results.filter((result) => !result.ok);
   for (const result of failed) {
     console.error(
