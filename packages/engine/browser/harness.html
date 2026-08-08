@@ -37,12 +37,19 @@ const HEIGHT = 120;
 const FPS = { numerator: 30, denominator: 1 };
 const SECOND = 705_600_000;
 const OUTPUT_FRAMES = 30;
+const HALF = 705_600_000 / 2;
+const CUT_AT = 15;
 const TONE_HERTZ = 440;
 
 // Distinguishable after a lossy encode and back, and far apart from one end of the clip to the
 // other, so a frame written out of order or dropped altogether cannot pass for its neighbour.
 function colourAt(index) {
   return [20 + index * 7, 128, 240 - index * 7];
+}
+
+// The cut restarts the source, so the second half repeats the first half's pictures.
+function expectedAt(index) {
+  return colourAt(index < CUT_AT ? index : index - CUT_AT);
 }
 
 function canvasOf(width, height) {
@@ -102,7 +109,12 @@ async function buildProject() {
   doc.dispatch(R.cmd.trackAdd("video", "V1"));
   doc.dispatch(R.cmd.trackAdd("audio", "A1"));
   const tracks = doc.state.timeline.tracks;
-  doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, 0, SECOND));
+  // Two clips, cut halfway: the second one starts its own medium over again. A run that composes
+  // every frame at the same instant, or that dates a frame from where its source reads rather than
+  // from where it sits, cannot tell one clip from the other on an unbroken timeline -- and both of
+  // those survived a mutation until this cut existed.
+  doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, 0, HALF));
+  doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, HALF, HALF));
   doc.dispatch(R.cmd.clipAdd(tracks[1].id, { kind: "media", media: audio }, 0, SECOND));
   return doc;
 }
@@ -212,19 +224,13 @@ async function main() {
       Array.from({ length: OUTPUT_FRAMES }, (_, index) => Math.round((index * 1000) / 30)),
       1,
     );
-    check("the first picture is the source's first", frames[0].pixel, colourAt(0), 12);
     check(
-      "the last picture is the source's last",
-      frames[OUTPUT_FRAMES - 1].pixel,
-      colourAt(OUTPUT_FRAMES - 1),
+      "every picture is the one that clip reads at that instant",
+      frames.map((frame) => frame.pixel),
+      Array.from({ length: OUTPUT_FRAMES }, (_, index) => expectedAt(index)),
       12,
     );
-    check(
-      "and the ones between are in order",
-      [frames[10].pixel, frames[20].pixel],
-      [colourAt(10), colourAt(20)],
-      12,
-    );
+    check("and the cut really restarts the source", frames[CUT_AT].pixel, colourAt(0), 12);
     check("the sound is in there too", hasAudio, true);
   });
 
