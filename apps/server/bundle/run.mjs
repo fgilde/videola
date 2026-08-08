@@ -4,7 +4,7 @@
 //
 // Run after `pnpm --filter videola-server build`.
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -175,6 +175,73 @@ async function checkFrames(call) {
 
   const refused = await call("project_getFrame", { project, at: [-1] });
   check("a time that is not a time is refused", refused.isError === true);
+
+  const huge = await call("project_getFrame", { project, at: [0], width: 100000 });
+  const clamped = decodePng(Buffer.from(huge.content[0].data, "base64"));
+  checkEq("an absurd width is clamped, not obeyed", [clamped.width, clamped.height], [1920, 1080]);
+}
+
+// Sixteen bit PCM, written by hand, because what this proves is that sound the server never saw
+// before travels from a file on disk through the import into the mixed answer.
+function wav(sampleRate, frames, amplitudeAt) {
+  const data = Buffer.alloc(frames * 4);
+  for (let frame = 0; frame < frames; frame += 1) {
+    const value = Math.round(amplitudeAt(frame / sampleRate) * 32000);
+    data.writeInt16LE(value, frame * 4);
+    data.writeInt16LE(value, frame * 4 + 2);
+  }
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write("WAVEfmt ", 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(2, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 4, 28);
+  header.writeUInt16LE(4, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
+
+async function checkPeaks(call) {
+  // Loud for the first half of the second, silent for the second half. An answer that is all zeros
+  // fails the loud half; one that is frozen at any single level fails the other.
+  const tone = wav(48000, 48000, (t) => (t < 0.5 ? 0.8 * Math.sin(2 * Math.PI * 440 * t) : 0));
+  await writeFile(join(root, "tone.wav"), tone);
+
+  const project = JSON.parse((await call("project_create", {})).content[0].text).id;
+  const imported = await call("media_importFile", { project, path: "tone.wav" });
+  check("imports a sound file from the storage root", imported.isError !== true);
+  const media = JSON.parse(imported.content[0].text).mediaId;
+  await call("track_add", { project, kind: "audio", name: "A1" });
+  const state = JSON.parse((await call("project_get", { project })).content[0].text);
+  await call("clip_add", {
+    project,
+    track: state.timeline.tracks[0].id,
+    source: { kind: "media", media },
+    start: 0,
+    duration: SECOND,
+  });
+
+  const answer = await call("project_getAudioPeaks", { project, from: 0, to: SECOND, buckets: 8 });
+  check("get_audio_peaks answers at all", answer.isError !== true);
+  if (answer.isError === true) {
+    process.stdout.write(`       ${answer.content[0].text}\n`);
+    return;
+  }
+  const { min, max } = JSON.parse(answer.content[0].text);
+  checkEq("with one value per bucket", [min.length, max.length], [8, 8]);
+  check(
+    "loud where the tone plays",
+    max.slice(0, 4).every((value) => value > 0.4) && min.slice(0, 4).every((value) => value < -0.4),
+  );
+  check(
+    "and silent where it has stopped",
+    max.slice(4).every((value) => Math.abs(value) < 0.02),
+  );
 }
 
 async function checkMcpBundle() {
@@ -212,7 +279,9 @@ async function checkMcpBundle() {
   check("saves an archive", saved.isError !== true);
 
   check("has the one tool that shows a picture", tools.some((t) => t.name === "project_getFrame"));
-  await checkFrames((name, args) => client.callTool({ name, arguments: args }));
+  const call = (name, args) => client.callTool({ name, arguments: args });
+  await checkFrames(call);
+  await checkPeaks(call);
 
   await client.close();
 }

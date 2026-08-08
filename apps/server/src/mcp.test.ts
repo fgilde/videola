@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { cmd, secondsToTime } from "@videola/core";
+import { NTSC_FIXTURE, tinyMp4 } from "@videola/engine/src/decode/fixture-mp4";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Api } from "./api";
@@ -60,9 +61,13 @@ function referencesIn(value: unknown): string[] {
   );
 }
 
-const MEDIA_BYTES = Buffer.from("pretend this is an mp4");
+// Two real, probeable files that differ: the import describes what it reads, so bytes no
+// demuxer can read never reach the library.
+const MEDIA_BYTES = Buffer.from(await tinyMp4().arrayBuffer());
 const MEDIA_ID = `med_${createHash("sha256").update(MEDIA_BYTES).digest("hex")}`;
-const OTHER_BYTES = Buffer.from("a second pretend mp4");
+const OTHER_BYTES = Buffer.from(
+  await tinyMp4({ ...NTSC_FIXTURE, sampleCount: 20 }).arrayBuffer(),
+);
 const OTHER_MEDIA_ID = `med_${createHash("sha256").update(OTHER_BYTES).digest("hex")}`;
 
 interface Fixture {

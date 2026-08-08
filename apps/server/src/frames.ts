@@ -24,11 +24,31 @@ export class RenderError extends Error {
   }
 }
 
+// What the page is asked to do, and how many answers it owes. The archive travels beside it rather
+// than inside it, because it is the one part that is bytes rather than JSON.
+interface BrowserJob {
+  readonly archive: Uint8Array;
+  readonly parts: number;
+  readonly request: unknown;
+}
+
 export interface StillJob {
   readonly archive: Uint8Array;
   readonly times: readonly number[];
   readonly width: number;
   readonly height: number;
+}
+
+export interface PeaksJob {
+  readonly archive: Uint8Array;
+  readonly from: number;
+  readonly to: number;
+  readonly buckets: number;
+}
+
+export interface AudioPeaks {
+  readonly min: number[];
+  readonly max: number[];
 }
 
 const CHROME_CANDIDATES = [
@@ -87,7 +107,7 @@ function requireRenderer(): string {
 
 interface Page {
   readonly url: string;
-  readonly stills: Uint8Array[];
+  readonly parts: Uint8Array[];
   readonly finished: Promise<void>;
   close(): void;
 }
@@ -95,9 +115,9 @@ interface Page {
 // Everything the page needs, behind a path nobody can guess: the archive carries the whole project
 // including its media, and anything else on this machine could otherwise read it out of a loopback
 // port while a frame renders.
-async function serve(job: StillJob, bundle: string): Promise<Page> {
+async function serve(job: BrowserJob, bundle: string): Promise<Page> {
   const nonce = randomBytes(16).toString("hex");
-  const stills: Uint8Array[] = [];
+  const parts: Uint8Array[] = [];
   let settle: (reason: RenderError | undefined) => void = () => undefined;
   const reported = new Promise<RenderError | undefined>((resolve) => {
     settle = resolve;
@@ -116,7 +136,7 @@ async function serve(job: StillJob, bundle: string): Promise<Page> {
     const name = path.slice(nonce.length + 2);
     if (request.method === "POST") {
       const body = await collect(request);
-      if (name === "still") stills.push(body);
+      if (name === "part") parts.push(body);
       else settle(doneReason(body));
       response.writeHead(204).end();
       return;
@@ -125,8 +145,7 @@ async function serve(job: StillJob, bundle: string): Promise<Page> {
     if (name === "bundle.js") return reply(response, "text/javascript", await readFile(bundle));
     if (name.endsWith(".wasm")) return reply(response, "application/wasm", await readFile(wasmPath()));
     if (name === "job") {
-      const body = JSON.stringify({ times: job.times, width: job.width, height: job.height });
-      return reply(response, "application/json", Buffer.from(body));
+      return reply(response, "application/json", Buffer.from(JSON.stringify(job.request)));
     }
     if (name === "archive") return reply(response, "application/zip", Buffer.from(job.archive));
     response.writeHead(404).end();
@@ -136,7 +155,7 @@ async function serve(job: StillJob, bundle: string): Promise<Page> {
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${port}/${nonce}/`,
-    stills,
+    parts,
     finished: reported.then((error) => {
       if (error !== undefined) throw error;
     }),
@@ -194,7 +213,7 @@ function stop(browser: ChildProcess): void {
 // needs a lifecycle for the browser that a request-scoped renderer does not have. A profile per
 // call rather than a shared one because a second Chrome on the same one hands its URL to the first
 // and exits, and two frames may well be asked for at once.
-export async function renderStills(job: StillJob): Promise<Uint8Array[]> {
+async function drive(job: BrowserJob): Promise<Uint8Array[]> {
   const bundle = requireRenderer();
   const chrome = chromePath();
   const profile = await mkdtemp(join(tmpdir(), "videola-render-"));
@@ -203,27 +222,40 @@ export async function renderStills(job: StillJob): Promise<Uint8Array[]> {
   try {
     browser = spawn(
       chrome,
-      [
-        "--headless",
-        "--disable-gpu",
-        "--no-first-run",
-        `--user-data-dir=${profile}`,
-        page.url,
-      ],
+      ["--headless", "--disable-gpu", "--no-first-run", `--user-data-dir=${profile}`, page.url],
       { stdio: "ignore" },
     );
     await Promise.race([page.finished, expire(RENDER_TIMEOUT_MS)]);
-    if (page.stills.length !== job.times.length) {
+    // A page that says it succeeded and answered short is not a success. Without this the caller
+    // would hand out however many pictures happened to arrive as though they were all of them.
+    if (page.parts.length !== job.parts) {
       throw new RenderError(
         "renderFailed",
-        `asked for ${job.times.length} pictures and got ${page.stills.length}`,
+        `asked the renderer for ${job.parts} answers and got ${page.parts.length}`,
       );
     }
-    return page.stills;
+    return page.parts;
   } finally {
     if (browser !== undefined) stop(browser);
     page.close();
     await rm(profile, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+export async function renderStills(job: StillJob): Promise<Uint8Array[]> {
+  const { archive, ...request } = job;
+  return drive({ archive, parts: job.times.length, request: { kind: "stills", ...request } });
+}
+
+// The same page, the same project, the same audio graph the export renders through -- the numbers
+// an agent reads here are the ones the file will carry.
+export async function measurePeaks(job: PeaksJob): Promise<AudioPeaks> {
+  const { archive, ...request } = job;
+  const [part] = await drive({ archive, parts: 1, request: { kind: "peaks", ...request } });
+  try {
+    return JSON.parse(Buffer.from(part ?? new Uint8Array()).toString("utf8")) as AudioPeaks;
+  } catch {
+    throw new RenderError("renderFailed", "the renderer answered with something unreadable");
   }
 }
 

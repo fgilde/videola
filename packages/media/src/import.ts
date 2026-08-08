@@ -35,15 +35,34 @@ export async function importFile(
 ): Promise<MediaId> {
   const kind = mediaKind(file.type);
   const probed = await probe(file);
-  validateProbe(kind, probed);
   const hash = await contentHash(file);
+  const asset = describeMedia(file, kind, probed, hash);
   // Bytes into OPFS first, dispatch second, never the reverse: a core that knows a medium whose
   // bytes are absent still looks fine until the next save, where the .videola writer has a
   // library entry it cannot back and the whole project fails to write.
   if (!(await hasMedia(hash))) await putMedia(hash, file);
-  const asset = describeAsset(file, kind, probed, hash);
   doc.dispatch(cmd.mediaImport(asset));
   return asset.id;
+}
+
+export interface NamedBytes {
+  name: string;
+  type: string;
+  size: number;
+}
+
+// What a library entry for a file is, the checks included. Every host that imports media has to
+// arrive at the same entry: one that stores its bytes somewhere other than OPFS still owes the
+// timeline the width, the duration and the channel count, because an entry without them is a clip
+// that draws nothing and plays nothing.
+export function describeMedia(
+  file: NamedBytes,
+  kind: MediaKind,
+  probed: MediaProbe,
+  hash: string,
+): MediaAsset {
+  validateProbe(kind, probed);
+  return describeAsset(file, kind, probed, hash);
 }
 
 // The bounds the core enforces inside `media.import` (videola-core/src/model/project.rs:
@@ -95,7 +114,7 @@ function requireInteger(value: number, min: number, max: number, what: string): 
 }
 
 function describeAsset(
-  file: File,
+  file: NamedBytes,
   kind: MediaKind,
   probed: MediaProbe,
   hash: string,

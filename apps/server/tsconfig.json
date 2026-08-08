@@ -1,5 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "lib": ["ES2023"], "types": ["node"] },
-  "include": ["src"]
+  // The server is Node, but two of the things it owns are not: the page it drives in a browser
+  // lives under `renderer`, and probing a file reaches the same demuxer the browser uses.
+  "compilerOptions": { "noEmit": true, "lib": ["ES2023", "DOM", "DOM.Iterable"], "types": ["node"] },
+  "include": ["src", "renderer"]
 }

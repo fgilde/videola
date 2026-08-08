@@ -3,7 +3,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import { effectManifests } from "@videola/engine/src/effects/registry";
 
-import { Api, APP_VERSION, DEFAULT_FRAME_WIDTH } from "./api";
+import { Api, APP_VERSION, DEFAULT_FRAME_WIDTH, DEFAULT_PEAK_BUCKETS } from "./api";
 import { COMMAND_CATALOG } from "./generated/commandCatalog";
 
 type Arguments = Record<string, unknown>;
@@ -190,6 +190,34 @@ function extraEntries(api: Api): Entry[] {
     },
     {
       tool: {
+        name: "project_getAudioPeaks",
+        description:
+          "The shape of the sound over a range: two extremes per bucket, from -1 to 1, of the " +
+          "whole timeline mixed and levelled the way the export renders it. Use it to see that a " +
+          "voice-over sits where it was put, that a gap is silent, or that nothing is clipping.",
+        inputSchema: object(
+          {
+            project: handleField(),
+            from: { type: "integer", description: "Start of the range in flicks." },
+            to: { type: "integer", description: "End of the range in flicks." },
+            buckets: {
+              type: "integer",
+              description: `How many values to reduce the range to, default ${DEFAULT_PEAK_BUCKETS}.`,
+            },
+          },
+          ["project", "from", "to"],
+        ),
+      },
+      run: (args) =>
+        api.audioPeaks(
+          handle(args["project"]),
+          requiredInteger(args, "from"),
+          requiredInteger(args, "to"),
+          optionalInteger(args["buckets"], "buckets"),
+        ),
+    },
+    {
+      tool: {
         name: "project_validate",
         description:
           "Consistency findings the command layer cannot refuse on its own: overlapping clips, " +
@@ -318,6 +346,12 @@ function optionalInteger(value: unknown, what = "width"): number | undefined {
   if (typeof value !== "number" || !Number.isInteger(value)) {
     throw new Error(`${what} must be an integer`);
   }
+  return value;
+}
+
+function requiredInteger(args: Arguments, key: string): number {
+  const value = optionalInteger(args[key], key);
+  if (value === undefined) throw new Error(`${key} is required`);
   return value;
 }
 

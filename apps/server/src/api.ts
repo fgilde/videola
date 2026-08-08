@@ -1,12 +1,14 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 
 import { mediaKind } from "@videola/core";
+import { probe } from "@videola/engine/src/decode/demuxer";
+import { describeMedia } from "@videola/media";
 import type { Command, DispatchResult, LoadWarning, Project } from "@videola/core";
 import type { DocumentBackend } from "@videola/core";
 
-import { RenderError, renderStills, type RenderCode } from "./frames";
+import { measurePeaks, RenderError, renderStills, type AudioPeaks, type RenderCode } from "./frames";
 import { describeProject, validateProject, type Finding } from "./inspect";
 import { PathOutsideRoot, Storage, writeAtomic } from "./paths";
 import { openBackend } from "./wasm";
@@ -163,10 +165,22 @@ export class Api {
     return this.importBytes(id, basename(given), mime ?? mimeFor(given), bytes);
   }
 
-  importBytes(id: string, name: string, mime: string, bytes: Uint8Array): string {
+  // Two steps, in this order, because the core's `media.import` lets the first import of an id win:
+  // the described entry has to be in the library before `importMedia` adds its own, which knows
+  // only the name and the size. Without the description a clip of this medium has no dimensions and
+  // no channel count, and the timeline then draws nothing and plays nothing — silently.
+  async importBytes(id: string, name: string, mime: string, bytes: Uint8Array): Promise<string> {
     const session = this.#session(id);
+    const file = { name, type: mime, size: bytes.length };
     try {
-      const { id: mediaId } = session.backend.importMedia(name, mime, mediaKind(mime), bytes);
+      const kind = mediaKind(mime);
+      const hash = createHash("sha256").update(bytes).digest("hex");
+      // Not a copy: the demuxer wants a Blob, and nothing that reaches here is backed by a
+      // SharedArrayBuffer, which is the only case the wider type stands for.
+      const source = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mime });
+      const asset = describeMedia(file, kind, await probe(source), hash);
+      session.backend.dispatch({ command: { type: "media.import", asset } });
+      const { id: mediaId } = session.backend.importMedia(name, mime, kind, bytes);
       session.revision += 1;
       return mediaId;
     } catch (error) {
@@ -217,8 +231,24 @@ export class Api {
     // project written out to bytes first.
     const size = fit(settings.width, settings.height, width);
     const at = instants(times);
+    return this.#rendered(() => renderStills({ archive: this.archive(id), times: at, ...size }));
+  }
+
+  // What a still is for the picture, this is for the sound: the mixed, levelled result of the whole
+  // timeline over a range, reduced to two extremes per bucket. An agent cannot listen, but it can
+  // see that a voice-over sits where it was put and that nothing clips.
+  async audioPeaks(id: string, from: number, to: number, buckets?: number): Promise<AudioPeaks> {
+    this.#session(id);
+    const range = span(from, to);
+    const count = bucketCount(buckets);
+    return this.#rendered(() =>
+      measurePeaks({ archive: this.archive(id), ...range, buckets: count }),
+    );
+  }
+
+  async #rendered<T>(run: () => Promise<T>): Promise<T> {
     try {
-      return await renderStills({ archive: this.archive(id), times: at, ...size });
+      return await run();
     } catch (error) {
       if (error instanceof RenderError) {
         throw new ApiError(RENDER_STATUS[error.code], error.code, error.message);
@@ -343,6 +373,31 @@ function instants(times: readonly number[]): number[] {
     }
     return at;
   });
+}
+
+// Enough buckets to see where a phrase sits, few enough that an answer stays readable. The range
+// is capped because the sound is rendered offline in full before a single peak is computed: ten
+// minutes is already a wait, an hour would be a hang.
+export const DEFAULT_PEAK_BUCKETS = 64;
+const MAX_PEAK_BUCKETS = 512;
+const MAX_PEAK_SPAN = 10 * 60 * 705_600_000;
+
+function bucketCount(buckets?: number): number {
+  if (buckets !== undefined && !Number.isSafeInteger(buckets)) {
+    throw new ApiError(400, "badBuckets", "buckets must be a whole number");
+  }
+  return Math.min(MAX_PEAK_BUCKETS, Math.max(1, buckets ?? DEFAULT_PEAK_BUCKETS));
+}
+
+function span(from: number, to: number): { from: number; to: number } {
+  if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0) {
+    throw new ApiError(400, "badTime", "from and to are whole numbers of flicks");
+  }
+  if (to <= from) throw new ApiError(400, "badRange", "to must lie after from");
+  if (to - from > MAX_PEAK_SPAN) {
+    throw new ApiError(400, "rangeTooLong", `at most ${MAX_PEAK_SPAN} flicks of sound per call`);
+  }
+  return { from, to };
 }
 
 function hasChange(result: DispatchResult): boolean {

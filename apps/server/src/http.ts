@@ -116,6 +116,15 @@ async function route(
     const [png] = await api.frames(id, [flicksParam(url, "at")], numberParam(url, "width"));
     return { status: 200, body: undefined, bytes: png, contentType: "image/png" };
   }
+  if (action === "peaks" && method === "GET") {
+    const peaks = await api.audioPeaks(
+      id,
+      flicksParam(url, "from"),
+      flicksParam(url, "to"),
+      numberParam(url, "buckets"),
+    );
+    return { status: 200, body: peaks };
+  }
   if (action === "media" && method === "POST") {
     return { status: 201, body: { mediaId: await importMedia(api, id, request, url, maxBodyBytes) } };
   }

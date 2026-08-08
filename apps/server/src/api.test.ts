@@ -4,10 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { cmd, secondsToTime } from "@videola/core";
+import { tinyMp4 } from "@videola/engine/src/decode/fixture-mp4";
 import type { Command } from "@videola/core";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Api, ApiError } from "./api";
+
+// A real, probeable file: the import describes what it reads, so bytes that no demuxer can
+// read are refused before they ever reach the library.
+const MP4 = Buffer.from(await tinyMp4().arrayBuffer());
 
 let root = "";
 let api: Api;
@@ -149,7 +154,7 @@ describe("applying commands", () => {
 });
 
 describe("media", () => {
-  const bytes = Buffer.from("pretend this is an mp4");
+  const bytes = MP4;
   const expectedId = `med_${createHash("sha256").update(bytes).digest("hex")}`;
 
   it("imports a file from the storage root under its content hash", async () => {
@@ -184,21 +189,38 @@ describe("media", () => {
     await writeFile(join(root, "clip.unknown"), bytes);
     const { id } = await api.create();
 
-    await expect(api.importPath(id, "clip.unknown", "audio/wav")).resolves.toBe(expectedId);
-    expect(api.state(id).library[0]?.kind).toBe("audio");
+    await expect(api.importPath(id, "clip.unknown", "video/mp4")).resolves.toBe(expectedId);
+    expect(api.state(id).library[0]?.kind).toBe("video");
+  });
+
+  // Without this the library entry carries a name and a size and nothing else, and every clip of
+  // that medium is dropped from the draw list for want of a size -- silently.
+  it("describes what it imported, so a clip of it can be drawn and heard", async () => {
+    await writeFile(join(root, "clip.mp4"), bytes);
+    const { id } = await api.create();
+
+    await api.importPath(id, "clip.mp4");
+
+    expect(api.state(id).library[0]).toMatchObject({
+      width: 320,
+      height: 176,
+      fps: { numerator: 30000, denominator: 1001 },
+      duration: secondsToTime(1.001),
+    });
   });
 
   it("refuses a mime the core has no kind for", async () => {
     const { id } = await api.create();
 
-    expect(() => api.importBytes(id, "x.bin", "application/octet-stream", bytes)).toThrow(ApiError);
+    await expect(
+      api.importBytes(id, "x.bin", "application/octet-stream", bytes),
+    ).rejects.toThrow(ApiError);
   });
 });
 
 describe("saving and reopening", () => {
   it("writes an archive that reopens with its media and timeline intact", async () => {
-    const bytes = Buffer.from("pretend this is an mp4");
-    await writeFile(join(root, "clip.mp4"), bytes);
+    await writeFile(join(root, "clip.mp4"), MP4);
     const id = await projectWithTrack();
     const mediaId = await api.importPath(id, "clip.mp4");
     api.apply(id, [
