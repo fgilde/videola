@@ -50,11 +50,32 @@
   overflow-y: auto;
 }
 
+/* Picture beside the words, not above them: a full-width still per entry turns a library of ten
+   media into ten screens of scrolling. The first column is `auto`, so an entry without a picture
+   costs nothing for the one it does not have. */
 .v-library__item {
   display: grid;
-  gap: var(--v-space-1);
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "thumb name"
+    "thumb facts"
+    "actions actions";
+  align-content: start;
+  gap: var(--v-space-1) var(--v-space-2);
   padding: var(--v-space-2) var(--v-space-3);
   border-bottom: 1px solid var(--v-border);
+}
+
+.v-library__item > .v-library__name {
+  grid-area: name;
+}
+
+.v-library__item > .v-library__facts {
+  grid-area: facts;
+}
+
+.v-library__item > .v-library__actions {
+  grid-area: actions;
 }
 
 .v-library__item[data-grabbable="true"] {
@@ -66,8 +87,9 @@
 }
 
 .v-library__thumb {
+  grid-area: thumb;
   display: block;
-  width: 100%;
+  width: 72px;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   background: var(--v-bg);

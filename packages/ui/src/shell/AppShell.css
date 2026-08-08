@@ -110,12 +110,12 @@
    is what a shell is for; each of them only knows how to fill the box it is given. Both flexible
    rows carry minmax(0, ...) so a canvas or a scroll container inside them can shrink; a bare 1fr
    floors at its content and pushes the timeline off-screen. */
-/* Library left, picture in the middle, inspector right, timeline across the bottom. The inspector
-   column is `auto`, so while no clip is selected and it holds no controls it costs the picture
-   nothing. */
+/* Library left, picture in the middle, properties right, timeline across the bottom. Every column
+   is sized here rather than by the panel inside it: a panel that declares its own width wins
+   against the grid, and the picture is what pays for it. */
 .v-editor {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(0, 300px);
   grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%);
   grid-template-areas:
     "banners  banners   banners"
@@ -180,15 +180,51 @@
   overflow-y: auto;
 }
 
-/* Five 44 px buttons and two timecodes do not fit 390 px on one line, and the position wrapping
-   away from its own duration left a lone slash. Stacked on purpose instead. */
-.v-shell[data-layout="phone"] .v-transport__time {
+/* Five 44 px buttons and two timecodes do not fit on one line beside a picture, and the position
+   wrapping away from its own duration left a lone slash. Stacked on purpose instead.
+
+   Tablet as well as phone: at 834 px the properties column takes what it needs and the transport
+   is left with about 500 px, where the two timecodes collapsed to "00 / 00". A width the layout
+   happens to give it is not a width to trust. */
+.v-shell[data-layout="phone"] .v-transport__time,
+.v-shell[data-layout="tablet"] .v-transport__time {
   font-size: 0.8rem;
   text-align: right;
+  white-space: nowrap;
+  /* The timecode keeps its own width and the buttons give way, which they can: they carry a
+     min-width of 44 px and stop there. Shrinking the text instead cut off its last two digits. */
+  flex-shrink: 0;
 }
 
-.v-shell[data-layout="phone"] .v-transport__duration {
+.v-shell[data-layout="phone"] .v-transport__duration,
+.v-shell[data-layout="tablet"] .v-transport__duration {
   display: block;
+}
+
+/* Two columns on a tablet, not three. At 834 px a library, a picture and a properties panel side
+   by side leave the middle about 330 px, which is narrower than the transport itself -- the
+   timecode was cut off mid-digit. A portrait tablet is short of width and long on height, so the
+   properties panel goes under the picture instead of beside it.
+
+   The library and the timeline stay on screen together, and that is deliberate: it is the one
+   thing a phone cannot offer, and it is what makes a drag from the one to the other possible. */
+.v-shell[data-layout="tablet"] .v-editor {
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  /* The picture takes the slack and the properties panel gets a share it scrolls inside. The
+     other way round -- 1fr on the properties row -- collapsed the preview to nothing, because a
+     canvas has no height of its own to hold the row open with. */
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 30vh) minmax(180px, 28%);
+  grid-template-areas:
+    "banners  banners"
+    "library  preview"
+    "library  transport"
+    "library  inspector"
+    "timeline timeline";
+}
+
+.v-shell[data-layout="tablet"] .v-editor > .v-inspector {
+  border-left: none;
+  border-top: 1px solid var(--v-border);
 }
 
 /* 140 px of track names is more than a third of a phone. The names are two short lines. */

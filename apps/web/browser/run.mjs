@@ -14,6 +14,8 @@ const shot = join(here, "preview.png");
 const templateShot = join(here, "templates.png");
 const phoneShot = join(here, "phone.png");
 const phoneLibraryShot = join(here, "phone-library.png");
+const phoneInspectorShot = join(here, "phone-inspector.png");
+const tabletShot = join(here, "tablet.png");
 // Outside the repository: Chrome keeps the directory locked for a moment after it exits, and a
 // half-deleted profile in a working tree is worse than one in the temp directory.
 const profiles = join(tmpdir(), `videola-harness-${process.pid}`);
@@ -24,6 +26,10 @@ const DEVTOOLS_PORT = PORT + 1;
 // and would have proven nothing about a phone. The device metrics override is the only way to
 // ask for the viewport the layout is meant for -- and it brings the retina scale with it.
 const PHONE = { width: 390, height: 844, deviceScaleFactor: 2, mobile: true };
+// An iPad in portrait: wide enough for the library and the timeline to be on screen together,
+// which is what makes a drag between them possible, and narrow enough to be a tablet rather than
+// a desktop. Same reason as the phone for going through the override rather than --window-size.
+const TABLET = { width: 834, height: 1112, deviceScaleFactor: 2, mobile: true };
 
 const CHROME_CANDIDATES = [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -91,6 +97,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url === "/fixture.mp4") return send(res, readFileSync(join(here, "fixture.mp4")), TYPES[".mp4"]);
+  if (url === "/second.mp4") return send(res, readFileSync(join(here, "second.mp4")), TYPES[".mp4"]);
   if (url === "/driver.js") return send(res, readFileSync(join(here, "driver.js")), TYPES[".js"]);
   const path = join(dist, url === "/" ? "index.html" : decodeURIComponent(url));
   if (!existsSync(path) || statSync(path).isDirectory()) {
@@ -198,16 +205,20 @@ async function pageTarget(deadline) {
 
 // Wall clock, so the frame clock runs and playback really ticks -- and because layout under
 // --virtual-time-budget lags behind the DOM: a dragged clip's inline style says it moved while
-// its rect still says it did not, and every claim in the phone run is about a rect.
-async function drivePhone(budgetMs) {
+// its rect still says it did not, and every claim in these runs is about a rect.
+//
+// The viewport comes from the device metrics override and not from --window-size, which Chrome on
+// Windows refuses to take below 500 CSS pixels: it clips the screenshot instead of scaling it, so
+// a run asking for a phone would measure a small tablet and look entirely convincing doing it.
+async function driveTouch(metrics, query, budgetMs, what) {
   const child = launch("about:blank", [
-    "--window-size=900,900",
+    "--window-size=1200,1200",
     `--remote-debugging-port=${DEVTOOLS_PORT}`,
   ]);
   try {
     const page = await pageTarget(Date.now() + 30_000);
     const devtools = await connect(page.webSocketDebuggerUrl);
-    await devtools.send("Emulation.setDeviceMetricsOverride", PHONE);
+    await devtools.send("Emulation.setDeviceMetricsOverride", metrics);
     // Without this the editor still reports a fine pointer, and the timeline would hand a finger
     // the four-pixel trim zone it keeps for a mouse.
     await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
@@ -215,8 +226,8 @@ async function drivePhone(budgetMs) {
       const png = await devtools.send("Page.captureScreenshot", { format: "png" });
       writeFileSync(join(here, `${name}.png`), Buffer.from(png.data, "base64"));
     };
-    const results = reported(budgetMs, "the phone");
-    await devtools.send("Page.navigate", { url: `http://localhost:${PORT}/?phone=1` });
+    const results = reported(budgetMs, what);
+    await devtools.send("Page.navigate", { url: `http://localhost:${PORT}/?${query}` });
     const out = await results;
     devtools.close();
     return out;
@@ -247,8 +258,12 @@ try {
     [...desktop, "--virtual-time-budget=300000", `--screenshot=${templateShot}`],
     300_000,
   );
-  const pocket = await drivePhone(180_000);
-  const results = [...live, ...drawn, ...baked, ...pocket];
+  const pocket = await driveTouch(PHONE, "phone=1", 180_000, "the phone");
+  // The mode that had a layout rule and no run behind it. It is also the only viewport where a
+  // drag from the library onto a track can be driven with a finger, because it is the only one
+  // where both panels are on screen at the same time.
+  const slate = await driveTouch(TABLET, "tablet=1", 180_000, "the tablet");
+  const results = [...live, ...drawn, ...baked, ...pocket, ...slate];
   for (const result of results.filter((entry) => !entry.ok)) {
     console.error(
       `FAIL ${result.name}\n  got  ${JSON.stringify(result.got)}\n  want ${JSON.stringify(result.want)}`,
@@ -256,7 +271,7 @@ try {
   }
   const failed = results.filter((entry) => !entry.ok).length;
   console.log(`${results.length - failed}/${results.length} application checks passed`);
-  for (const path of [shot, templateShot, phoneShot, phoneLibraryShot]) {
+  for (const path of [shot, templateShot, phoneShot, phoneLibraryShot, phoneInspectorShot, tabletShot]) {
     console.log(`screenshot: ${path}`);
   }
   process.exitCode = failed === 0 ? 0 : 1;

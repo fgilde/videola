@@ -29,6 +29,10 @@
   // is whether a baked template can be *seen*, which means reading the drawing buffer, which means
   // the virtual clock.
   const templates = location.search.includes("templates");
+  // The tablet is the only viewport where the library and the timeline are on screen together, so
+  // it is the only one where a drag between them can be driven at all -- and it had no run of its
+  // own until now, only a layout rule nobody had ever seen.
+  const tablet = location.search.includes("tablet");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -70,6 +74,16 @@
   const all = (selector) => Array.from(document.querySelectorAll(selector));
   const button = (label) => document.querySelector('button[aria-label="' + label + '"]');
   const labelled = (text) => all("button").find((node) => node.textContent.trim() === text);
+  // The project actions moved behind the topbar's overflow disclosure. A <summary> carries no
+  // button role, so it cannot be looked up as one -- and a person has to open it before reaching
+  // anything inside, which is exactly what this does.
+  const openMenu = () => {
+    const menu = q(".v-topbar__more");
+    if (menu !== null) menu.open = true;
+    return menu;
+  };
+  const inMenu = (text) =>
+    all(".v-topbar__menu button").find((node) => node.textContent.trim() === text);
   const position = () => q('[aria-label="Position"]').textContent.slice(0, 11);
   const banner = () =>
     [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent).join(" | ");
@@ -369,15 +383,48 @@
     const tabs = () => [...document.querySelectorAll(".v-panels__tab")];
 
     check("a 390 px viewport is a phone", q('[data-testid="app-shell"]').dataset.layout, "phone");
-    check("both panels are one tap away", tabs().map((tab) => tab.textContent), [
+    check("every panel is one tap away", tabs().map((tab) => tab.textContent), [
       "Medien",
       "Zeitleiste",
+      "Eigenschaften",
     ]);
     checkAtLeast(
       "and a tab is tall enough for a thumb",
       Math.min(...tabs().map((tab) => tab.getBoundingClientRect().height)),
       44,
     );
+
+    // The check that was missing while the topbar ran off the right edge. A bar that scrolls
+    // sideways has more content than box; one that fits has exactly as much.
+    const topbar = q(".v-topbar");
+    check("the topbar fits its window instead of running off the right edge",
+      [topbar.scrollWidth, topbar.getBoundingClientRect().right <= innerWidth],
+      [topbar.clientWidth, true]);
+    check("nothing on the page scrolls sideways",
+      document.documentElement.scrollWidth <= innerWidth, true);
+    // Every control on the bar, measured rather than counted: three of them, each a thumb wide.
+    const barControls = [...document.querySelectorAll(".v-topbar > button, .v-topbar > details > summary")];
+    check("the bar carries the overflow toggle, undo and redo",
+      barControls.map((node) => node.getAttribute("aria-label") ?? node.textContent),
+      ["Weitere Aktionen", "Rückgängig", "Wiederholen"]);
+    checkAtLeast("each of them a thumb wide",
+      Math.min(...barControls.map((node) => node.getBoundingClientRect().width)), 44);
+
+    // Reachable, not merely present: the menu opens and the actions inside it are real buttons
+    // with room to hit, all of it inside a 390 px window.
+    openMenu();
+    const menu = q(".v-topbar__menu");
+    check("the menu holds every action the bar gave up",
+      [...menu.querySelectorAll("button")].map((node) => node.getAttribute("aria-label") ?? node.textContent),
+      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren", "Spur hinzufügen",
+       "Exportieren", "Deutsch / English", "Hell", "Speichern"]);
+    check("and the open menu stays inside the window",
+      menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
+      true);
+    checkAtLeast("with rows a thumb can hit",
+      Math.min(...[...menu.querySelectorAll("button")].map((n) => n.getBoundingClientRect().height)),
+      44);
+    q(".v-topbar__more").open = false;
     check("the timeline is what the editor opens on", q('[data-testid="library"]'), null);
     check(
       "the editor fits the window, and the picture and the panel get all of it",
@@ -439,6 +486,32 @@
       ["fixture.mp4", "00:00:02.00", "640 × 360"].every((part) => entry.includes(part)),
       true,
     );
+
+    // A picture, and one that came out of the file rather than out of the stylesheet. An <img>
+    // that failed to load reports naturalWidth 0, so a broken or absent still cannot pass here.
+    const thumb = await until("the thumbnail", () => {
+      const image = q(".v-library__thumb");
+      return image !== null && image.complete && image.naturalWidth > 0 ? image : null;
+    }, 40000);
+    check("the library entry carries a still decoded from the medium",
+      [thumb.naturalWidth, thumb.naturalHeight], [160, 90]);
+    check("and it is drawn at a size that leaves room for the list",
+      thumb.getBoundingClientRect().width <= 120, true);
+    // Not a uniform tile: a still that is one flat colour is what a placeholder would look like.
+    checkAtLeast("the still is a frame and not a flat rectangle", spread(thumb), 40);
+
+    // The native picker is the only way to a phone camera, and `capture` is the attribute that
+    // asks for it. What the camera then does is outside anything headless can answer.
+    const capture = q('.v-library__capture input[capture]');
+    check("recording goes through a native capture input",
+      capture === null ? null : [capture.accept, capture.getAttribute("capture")],
+      ["video/*", "environment"]);
+    const gallery = [...all(".v-library__capture input")].find((i) => !i.hasAttribute("capture"));
+    check("and the gallery through the same input without it",
+      gallery === undefined ? null : [gallery.accept, gallery.multiple], ["video/*", true]);
+    checkAtLeast("both a thumb tall",
+      Math.min(...all(".v-library__capture").map((n) => n.getBoundingClientRect().height)), 44);
+
     await photograph("phone-library");
 
     labelled("Auf die Zeitleiste").click();
@@ -449,6 +522,34 @@
       2,
     );
     check("placing it raised nothing", banner(), "");
+
+    // The point of the third tab. Effects, keyframes and transitions were unreachable on a phone
+    // while the properties panel sat squeezed between the transport and the tab bar.
+    finger("pointerdown", q("[data-clip-id]"), 0, 0);
+    finger("pointerup", q("[data-clip-id]"), 0, 0);
+    labelled("Eigenschaften").click();
+    const inspector = await until("the properties panel", () => q('[data-testid="inspector"]'));
+    check("choosing properties puts the timeline away", q('[data-testid="timeline"]'), null);
+    check("the picture is still above it", box(".v-preview").bottom <= box(".v-panels").top, true);
+
+    const add = await until("the brightness button", () => labelled("Helligkeit hinzufügen"));
+    checkAtLeast("adding an effect is a thumb-sized target",
+      add.getBoundingClientRect().height, 44);
+    add.click();
+    const slider = await until("the parameter row",
+      () => q('.v-inspector__effect input[type="range"]'));
+    check("a phone can put an effect on a clip and see its parameter",
+      slider.labels[0].textContent, "Staerke");
+    check("and the keyframe switch is there too",
+      button("Keyframe für Staerke am Playhead") !== null, true);
+    check("the panel fits the window", inspector.getBoundingClientRect().right <= innerWidth, true);
+    check("putting an effect on a clip raised nothing", banner(), "");
+    await photograph("phone-inspector");
+
+    labelled("Rückgängig").click();
+    await sleep(200);
+    labelled("Zeitleiste").click();
+    await until("the timeline again", () => q('[data-testid="timeline"]'));
 
     button("Abspielen").click();
     await until("the transport to report playing", () => button("Anhalten") !== null, 8000);
@@ -503,6 +604,42 @@
     return { lit, bare: total === 0 ? 1 : bare / total };
   }
 
+  // How far apart the lightest and darkest pixel of an image are. A placeholder, a black frame or
+  // a failed decode drawn as one flat colour all come out near zero; a picture does not.
+  function spread(image) {
+    const data = pixelsOf(image);
+    let low = 255;
+    let high = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const value = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      if (value < low) low = value;
+      if (value > high) high = value;
+    }
+    return high - low;
+  }
+
+  function pixelsOf(image) {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    canvas.getContext("2d").drawImage(image, 0, 0);
+    return canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+  }
+
+  // Mean absolute difference between two stills of the same size. Two entries showing the same
+  // medium's picture come out at zero.
+  function apart(a, b) {
+    const left = pixelsOf(a);
+    const right = pixelsOf(b);
+    if (left.length !== right.length) return 255;
+    let sum = 0;
+    for (let i = 0; i < left.length; i += 4) {
+      sum += Math.abs(left[i] - right[i]) + Math.abs(left[i + 1] - right[i + 1]) +
+        Math.abs(left[i + 2] - right[i + 2]);
+    }
+    return sum / (left.length / 4) / 3;
+  }
+
   function centrePixel() {
     const canvas = q("canvas");
     const gl = canvas.getContext("webgl2");
@@ -524,7 +661,10 @@
   // FileList can be handed to an input there.
   async function runTemplates() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
-    labelled("Aus Vorlage").click();
+    openMenu();
+    check("the project actions are in the overflow menu, not on the bar",
+      inMenu("Aus Vorlage") !== undefined, true);
+    inMenu("Aus Vorlage").click();
     const gallery = await until("the gallery", () => q('[data-testid="template-gallery"]'));
 
     const cards = [...gallery.querySelectorAll("[data-template-id]")];
@@ -656,6 +796,148 @@
     await until("the picture again", () => measure(blue).lit > 1000, 20000);
   }
 
+  // A tablet: both panels at once, a finger for everything, and the one gesture a phone cannot
+  // have -- carrying a medium out of the library and dropping it on a track.
+  async function runTablet() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    const box = (selector) => q(selector).getBoundingClientRect();
+
+    check("an 834 px touch viewport is a tablet",
+      q('[data-testid="app-shell"]').dataset.layout, "tablet");
+    check("the library and the timeline are on screen together",
+      [q('[data-testid="library"]') !== null, q('[data-testid="timeline"]') !== null], [true, true]);
+    check("there is no tab bar, because nothing takes turns", q(".v-panels"), null);
+    // Present is not the same as visible. A canvas has no height of its own, so a grid row that
+    // does not hand it one leaves it in the document at nought pixels tall -- which is what the
+    // first tablet layout did while every other check here still passed.
+    checkAtLeast("the picture has real room, not a collapsed row",
+      box(".v-preview__canvas").height, 200);
+    check("and it sits above the transport, which sits above the timeline",
+      box(".v-preview").bottom <= box(".v-transport").top + 1 &&
+        box(".v-transport").bottom <= box(".v-timeline").top + 1,
+      true);
+    check("everything is inside the window",
+      [".v-preview", ".v-transport", ".v-timeline", '[data-testid="library"]',
+       '[data-testid="inspector"]'].every((s) => box(s).right <= innerWidth && box(s).left >= 0),
+      true);
+
+    const topbar = q(".v-topbar");
+    check("the topbar fits its window", topbar.scrollWidth, topbar.clientWidth);
+    check("nothing on the page scrolls sideways",
+      document.documentElement.scrollWidth <= innerWidth, true);
+    // A tablet is a finger device, so the same 44 px rule applies as on the phone -- and unlike
+    // the phone this was never measured anywhere.
+    const controls = [...document.querySelectorAll(".v-topbar > button, .v-topbar > details > summary")];
+    checkAtLeast("every control on the bar is a thumb wide",
+      Math.min(...controls.map((node) => node.getBoundingClientRect().height)), 44);
+
+    await dropFixture();
+    check("the import raised nothing", banner(), "");
+    // The timecode had collapsed to "00 / 00" here: the properties column takes what its widest
+    // slider asks for and the transport was left with the remainder. Read as text rather than as
+    // a width, because a clipped element still reports the width it wanted.
+    check("the transport still says the whole time",
+      /^\d\d:\d\d:\d\d\.\d\d$/.test(position()), true);
+    // The box it was actually given against the box its text needs. scrollWidth against
+    // clientWidth does not answer this: a flex item squeezed below its content reports both the
+    // same and hands the overflow to whatever clips it further up.
+    const time = q(".v-transport__time");
+    checkAtLeast("and it is given the width its digits need",
+      time.getBoundingClientRect().width - time.scrollWidth, -1);
+    const transport = q(".v-transport");
+    check("so the transport does not overflow its column",
+      transport.scrollWidth <= transport.clientWidth, true);
+    check("one medium, one track, one clip",
+      [all("[data-media-id]").length, all(".v-timeline__header").length, all("[data-clip-id]").length],
+      [1, 1, 1]);
+
+    // A second medium, and a different file rather than the same one twice: two entries carrying
+    // one medium's picture would look exactly like a working library.
+    await dropSecond();
+    check("a second medium joins the library, and lands behind the first one",
+      [all("[data-media-id]").length, all(".v-timeline__header").length, all("[data-clip-id]").length],
+      [2, 1, 2]);
+    check("the second import raised nothing", banner(), "");
+
+    // A second video track to drop onto. tracks[0] is the lower one, so this one draws above it.
+    openMenu();
+    inMenu("Spur hinzufügen").click();
+    await until("the second track", () => all(".v-timeline__header").length === 2);
+    check("nothing moved onto it by itself",
+      [...all(".v-track")].map((row) => row.querySelectorAll("[data-clip-id]").length), [0, 2]);
+
+    // The drag itself, with a finger. The library entry announces the grab, the timeline judges
+    // it, and one command comes out of it -- which is why the undo below is a single step.
+    const entry = all("[data-media-id]")[1];
+    const from = entry.getBoundingClientRect();
+    // Rows are drawn top first and tracks[0] is the bottom one, so the upper row is the new track.
+    const target = all(".v-track")[0].getBoundingClientRect();
+    const dropX = target.left + 150;
+    const dropY = target.top + target.height / 2;
+
+    finger("pointerdown", entry, from.left + 30, from.top + 20);
+    // The timeline listens on the window, and it can only start doing so after React has
+    // committed the grab. A finger is never this fast; a script is.
+    await sleep(100);
+    finger("pointermove", document.body, from.left + 60, from.top + 20);
+    finger("pointermove", document.body, dropX, dropY);
+    await sleep(100);
+    check("the track under the finger says it would take the drop",
+      q('.v-track[data-drop-target]') === all(".v-track")[0], true);
+    check("and a line says where it would land", q('[data-testid="timeline-dropline"]') !== null, true);
+
+    finger("pointerup", document.body, dropX, dropY);
+    await until("the dropped clip", () => all("[data-clip-id]").length === 3);
+    check("dragging raised nothing", banner(), "");
+    check("the marks are gone once the finger is up",
+      [q('.v-track[data-drop-target]'), q('[data-testid="timeline-dropline"]')], [null, null]);
+
+    check("the clip landed on the track it was dropped on, and only there",
+      [...all(".v-track")].map((row) => row.querySelectorAll("[data-clip-id]").length), [1, 2]);
+    const landed = all(".v-track")[0].querySelector("[data-clip-id]");
+    // Where the finger let go, not at the end of the track: an appended clip would sit at 0 or
+    // behind whatever is already there, and both are far from here.
+    checkNear("and it starts where the finger let go",
+      landed.getBoundingClientRect().left, dropX, 6);
+
+    labelled("Rückgängig").click();
+    await sleep(200);
+    check("the whole drag is one step back", all("[data-clip-id]").length, 2);
+    labelled("Wiederholen").click();
+    await until("the clip again", () => all("[data-clip-id]").length === 3);
+
+    // Both stills, both out of their own file, and visibly not the same picture -- which is what
+    // says the library is showing each medium rather than one of them twice.
+    const stills = await until("both thumbnails", () => {
+      const images = all(".v-library__thumb");
+      return images.length === 2 && images.every((i) => i.complete && i.naturalWidth > 0)
+        ? images
+        : null;
+    }, 40000);
+    check("every medium carries its own still",
+      stills.map((image) => [image.naturalWidth, image.naturalHeight]), [[160, 90], [160, 90]]);
+    // Two entries showing one medium's picture twice would look exactly like a working library.
+    checkAtLeast("and the two are different pictures", apart(stills[0], stills[1]), 8);
+
+    // A tap on a clip and the properties are right there; a tablet has room for the panel, so
+    // unlike the phone there is nothing to switch to.
+    finger("pointerdown", q("[data-clip-id]"), 0, 0);
+    finger("pointerup", q("[data-clip-id]"), 0, 0);
+    const add = await until("the brightness button", () => labelled("Helligkeit hinzufügen"));
+    checkAtLeast("with a thumb-sized target to add an effect",
+      add.getBoundingClientRect().height, 44);
+    check("the properties panel is beside the picture, not behind a tab",
+      box('[data-testid="inspector"]').right <= innerWidth, true);
+
+    button("Abspielen").click();
+    await until("the transport to report playing", () => button("Anhalten") !== null, 8000);
+    const standing = position();
+    await sleep(1000);
+    check("the playhead moves while a tablet plays", position() !== standing, true);
+    check("nothing was reported along the way", banner(), "");
+    await photograph("tablet");
+  }
+
   const card = (id) => q(`[data-template-id="${id}"]`);
   const fileInput = (slot) => q(`[data-slot-id="${slot}"] input[type="file"]`);
 
@@ -667,7 +949,17 @@
     return until("a clip on the timeline", () => q("[data-clip-id]"));
   }
 
-  (templates ? runTemplates() : phone ? runPhone() : run())
+  // A second, different file. Different bytes, so a different hash and a genuinely second entry --
+  // the same file under another name would be one medium, which is what the template run proves.
+  async function dropSecond() {
+    const bytes = await (await fetch("/second.mp4")).blob();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], "second.mp4", { type: "video/mp4" }));
+    drag("drop", q(".v-dropzone"), transfer);
+    return until("the second library entry", () => all("[data-media-id]").length === 2);
+  }
+
+  (templates ? runTemplates() : phone ? runPhone() : tablet ? runTablet() : run())
     .catch((error) => {
       results.push({ name: "the run itself", ok: false, got: String(error), want: "no throw" });
     })
