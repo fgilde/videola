@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
 
-import { AudioGraph } from "./graph";
+import { AudioGraph, hasAudibleClips } from "./graph";
 import type { AudioBufferSource } from "./graph";
 
 const SAMPLE_RATE = 48_000;
@@ -518,5 +518,76 @@ describe("AudioGraph, repeated prepares", () => {
     graph.startAt(ctx.currentTime, 0);
 
     expect(at(await drain(ctx), 0.1)).toBeCloseTo(1, 2);
+  });
+});
+
+// A reversed clip used to be dropped from the graph entirely, so the picture ran backwards over
+// silence. The signal is a ramp, which makes the direction of travel readable in a single sample.
+const ramp = (ctx: BaseAudioContext): AudioBufferSource => signal(ctx, (progress) => progress);
+
+describe("AudioGraph, reversed clips", () => {
+  it("plays a reversed clip backwards through its range", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      ramp(ctx),
+      project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]),
+    );
+
+    expect(at(out, 0.25)).toBeCloseTo(0.75, 2);
+    expect(at(out, 0.75)).toBeCloseTo(0.25, 2);
+  });
+
+  // The two axes the review found crossing nowhere: direction and entry offset.
+  it("enters a reversed clip in the middle at the position the timeline says", async () => {
+    const ctx = context(0.5);
+    const out = await render(ctx, ramp(ctx), project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]), {
+      projectTime: SECOND / 2,
+      contextTime: 0,
+    });
+
+    expect(at(out, 0)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.25)).toBeCloseTo(0.25, 2);
+  });
+
+  it("counts a reversed clip's source from its out point at a rate other than one", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      ramp(ctx),
+      project([track("A1", [clip({ speed: { rate: 2, reverse: true, preservePitch: true } })])]),
+    );
+
+    expect(at(out, 0.25)).toBeCloseTo(0.75, 2);
+    expect(at(out, 0.75)).toBeCloseTo(0.25, 2);
+  });
+
+  it("fades a reversed clip in over the head it actually plays", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({
+            speed: { rate: 1, reverse: true, preservePitch: true },
+            fades: { inDuration: SECOND / 2, outDuration: 0 },
+          }),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.25)).toBeCloseTo(0.5, 2);
+    expect(at(out, 0.75)).toBeCloseTo(1, 2);
+  });
+
+  // Export shares this predicate with the graph, so a reversed clip that the graph now schedules
+  // must not be one the export leaves out of its audio track.
+  it("counts a reversed clip as audible", () => {
+    expect(
+      hasAudibleClips(
+        project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]),
+      ),
+    ).toBe(true);
   });
 });

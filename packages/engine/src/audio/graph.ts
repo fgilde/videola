@@ -90,17 +90,38 @@ export class AudioGraph {
   // per pointer movement. Splitting a clip reuses neither half, which is right -- their ranges
   // differ. The map is the same session-long hold the note above already describes.
   async #load(hash: string, clip: Clip): Promise<AudioBuffer | undefined> {
-    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}`;
+    const reverse = clip.speed.reverse;
+    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}|${reverse}`;
     const cached = this.#buffers.get(key);
     if (cached !== undefined) return cached;
     try {
-      const buffer = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+      const decoded = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
+      const buffer = reverse ? this.#reversed(decoded) : decoded;
       this.#buffers.set(key, buffer);
       return buffer;
     } catch (error) {
       console.error(error);
       return undefined;
     }
+  }
+
+  // An AudioBufferSourceNode has no negative playback rate, so a reversed clip plays a reversed
+  // copy of its own range. The offset arithmetic in `#schedule` needs no branch for it: a timeline
+  // position `p` into the clip consumes `p * rate` seconds of source counted back from the out
+  // point, and that is the same `p * rate` counted forward from the start of the reversed copy.
+  #reversed(buffer: AudioBuffer): AudioBuffer {
+    const out = this.#ctx.createBuffer(
+      buffer.numberOfChannels,
+      buffer.length,
+      buffer.sampleRate,
+    );
+    const plane = new Float32Array(buffer.length);
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      buffer.copyFromChannel(plane, channel);
+      plane.reverse();
+      out.copyToChannel(plane, channel);
+    }
+    return out;
   }
 
   // Mute and solo land here rather than on the clip gains, so a track that is silenced mid-fade
@@ -204,11 +225,8 @@ function valueAt(points: readonly Point[], when: number): number {
   return points[points.length - 1]!.value;
 }
 
-// ponytail: a reversed clip stays silent -- an AudioBufferSourceNode has no negative playback
-// rate, so there is nothing to schedule. The way out is reversing the sample data once in
-// `prepare` and inverting the offset, which costs one buffer copy per reversed clip.
 function audibleHash(clip: Clip, library: ReadonlyMap<string, MediaAsset>): string | undefined {
-  if (clip.source.kind !== "media" || clip.speed.reverse) return undefined;
+  if (clip.source.kind !== "media") return undefined;
   const asset = library.get(clip.source.media);
   // The track's kind says nothing about sound: a video track carries clips whose medium has an
   // audio stream, and an audio track can hold a video file someone dropped on it. The library
