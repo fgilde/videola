@@ -42,6 +42,7 @@
   "cmd.clip.paste": "Clip eingefügt",
   "cmd.clip.group": "Clips gruppiert",
   "cmd.clip.ungroup": "Gruppe aufgelöst",
+  "cmd.clip.nest": "Clips verschachtelt",
   "cmd.clip.setSpeed": "Geschwindigkeit geändert",
   "cmd.clip.setVolume": "Clip-Lautstärke geändert",
   "cmd.clip.setTransform": "Transformation geändert",

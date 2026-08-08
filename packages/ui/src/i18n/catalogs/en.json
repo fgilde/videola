@@ -42,6 +42,7 @@
   "cmd.clip.paste": "Clip pasted",
   "cmd.clip.group": "Clips grouped",
   "cmd.clip.ungroup": "Group dissolved",
+  "cmd.clip.nest": "Clips nested",
   "cmd.clip.setSpeed": "Speed changed",
   "cmd.clip.setVolume": "Clip volume changed",
   "cmd.clip.setTransform": "Transform changed",

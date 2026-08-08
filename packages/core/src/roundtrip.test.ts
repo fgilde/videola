@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { cmd, FLICKS_PER_SECOND } from "./commands";
+import { cmd, FLICKS_PER_SECOND, MAX_COMPOUND_DEPTH, readableSourceTimeAt } from "./commands";
 import { VideolaDocument } from "./document";
 import type { Clip } from "./generated";
 import { createWasmBackend } from "./wasm-backend";
@@ -218,5 +218,64 @@ describe("source times through the real WASM backend", () => {
 
     expect(at).toBe(333_667);
     expect(Number.isInteger(at)).toBe(true);
+  });
+});
+
+// Two implementations of one mapping: `Clip::source_time_at` in Rust, `sourceTimeAt` in
+// commands.ts. The draw list needs the TypeScript one because the instant inside a nested timeline
+// decides which clips are on screen, which is the question the batch query is being asked -- so the
+// two cannot be replaced by each other and have to be pinned against each other instead. A
+// disagreement of a single flick puts a clip in the draw list that no frame will ever arrive for.
+describe("the source-time mapping on both sides of the boundary", () => {
+  const shapes: [string, number, boolean][] = [
+    ["plain", 1, false],
+    ["double speed", 2, false],
+    ["half speed", 0.5, false],
+    ["reversed", 1, true],
+    ["reversed at 2.5x", 2.5, true],
+    ["an awkward rate", 1.0 / 3.0, false],
+  ];
+
+  for (const [name, rate, reverse] of shapes) {
+    it(`agrees flick for flick on ${name}`, async () => {
+      const doc = await timeline();
+      doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, SECOND, 3 * SECOND));
+      doc.dispatch(cmd.clipSetSpeed(clipOn(doc, 0).id, rate, reverse));
+      const clip = clipOn(doc, 0);
+
+      for (let at = 0; at < 5 * SECOND; at += 333_667) {
+        expect(readableSourceTimeAt(clip, at)).toBe(doc.sourceTimesAt(at).get(clip.id));
+      }
+    });
+  }
+});
+
+describe("nesting through the real WASM backend", () => {
+  it("leaves every source time where it was", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 3 * SECOND, 2 * SECOND));
+    const before: ReadonlyMap<string, number>[] = [];
+    for (let at = 0; at < 6 * SECOND; at += SECOND / 8) before.push(doc.sourceTimesAt(at));
+
+    doc.dispatch(cmd.clipNest(doc.state.timeline.tracks[0]!.clips.map((entry) => entry.id)));
+
+    let index = 0;
+    for (let at = 0; at < 6 * SECOND; at += SECOND / 8) {
+      expect(doc.sourceTimesAt(at)).toEqual(before[index]!);
+      index += 1;
+    }
+  });
+
+  // The cap the walk uses is the loader's, so what the core accepts is what the renderer can
+  // reach. Nesting one level past it is refused rather than stored and then silently not drawn.
+  it("refuses to nest past the depth the loader accepts", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    for (let level = 0; level < MAX_COMPOUND_DEPTH; level += 1) {
+      doc.dispatch(cmd.clipNest([clipOn(doc, 0).id]));
+    }
+
+    expect(() => doc.dispatch(cmd.clipNest([clipOn(doc, 0).id]))).toThrow();
   });
 });

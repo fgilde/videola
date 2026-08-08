@@ -11,6 +11,7 @@ import type {
 } from "@videola/core";
 
 import { Clock } from "./clock";
+import { leafClips } from "./nesting";
 import type { ClockSource } from "./clock";
 import { VideoSource } from "./decode/video-source";
 import { GeneratorFrames } from "./generate/generator";
@@ -299,15 +300,14 @@ export class Playback {
 
 // Built once per load, because the alternative is walking the timeline for every frame. Which
 // media have a picture is not decided here: the draw list drops a clip whose asset has no size,
-// so a hash for an audio-only medium is never asked for.
+// so a hash for an audio-only medium is never asked for. Nested clips are in, keyed by their own
+// id -- the draw list names them that way and this is what it looks their frames up with.
 export function clipHashes(project: Project): Map<string, string> {
   const hashes = new Map<string, string>();
-  for (const track of project.timeline.tracks) {
-    for (const clip of track.clips) {
-      if (clip.source.kind !== "media") continue;
-      const hash = mediaHash(clip.source.media);
-      if (hash !== undefined) hashes.set(clip.id, hash);
-    }
+  for (const clip of leafClips(project)) {
+    if (clip.source.kind !== "media") continue;
+    const hash = mediaHash(clip.source.media);
+    if (hash !== undefined) hashes.set(clip.id, hash);
   }
   return hashes;
 }

@@ -33,6 +33,37 @@ export function frameDuration(fps: Rate): Time {
   return Math.round(FLICKS_PER_SECOND / rate);
 }
 
+// The one limit on how deep compound clips may go, mirrored from `MAX_COMPOUND_DEPTH` in the core.
+// A recursive walk without it is a stack overflow a project file can trigger; the number itself is
+// the loader's, so what loads is what draws. roundtrip.test.ts checks the two agree by behaviour.
+export const MAX_COMPOUND_DEPTH = 8;
+
+// `Clip::consumed_source` and `Clip::source_time_at` in TypeScript. The draw list needs them
+// because a nested timeline has to be walked at the instant *inside* it, and that instant cannot
+// come out of a batch query: which clips are on screen is what the batch is being asked about.
+//
+// Always project time towards the source, never the other way round -- and always the same
+// rounding as the core, which the differential test in packages/core/src/roundtrip.test.ts pins
+// against the real Rust build rather than against a second reading of this file.
+export function consumedSource(clip: Clip): Time {
+  return Math.round(clip.duration * clip.speed.rate);
+}
+
+export function sourceTimeAt(clip: Clip, at: Time): Time | undefined {
+  if (at < clip.start || at >= clip.start + clip.duration) return undefined;
+  const offset = Math.round((at - clip.start) * clip.speed.rate);
+  return clip.speed.reverse ? clip.inPoint + consumedSource(clip) - offset : clip.inPoint + offset;
+}
+
+// What may be handed on: the head of a reversed clip maps one flick past the end of the range it
+// consumes, which is a moment neither a decoder nor a nested timeline has.
+export function readableSourceTimeAt(clip: Clip, at: Time): Time | undefined {
+  const source = sourceTimeAt(clip, at);
+  if (source === undefined) return undefined;
+  const last = Math.max(clip.inPoint + consumedSource(clip) - 1, clip.inPoint);
+  return Math.min(Math.max(source, clip.inPoint), last);
+}
+
 export const cmd = {
   projectSetSettings: (settings: ProjectSettings) => ({ type: "project.setSettings", settings }),
   projectSetTitle: (title: string) => ({ type: "project.setTitle", title }),
@@ -110,6 +141,7 @@ export const cmd = {
   }),
   clipGroup: (clips: readonly string[]) => ({ type: "clip.group", clips: [...clips] }),
   clipUngroup: (clip: string) => ({ type: "clip.ungroup", clip }),
+  clipNest: (clips: readonly string[]) => ({ type: "clip.nest", clips: [...clips] }),
   clipSetSpeed: (clip: string, rate: number, reverse: boolean, preservePitch = true) => ({
     type: "clip.setSpeed",
     clip,

@@ -4,6 +4,7 @@ import { mediaHash, peaks } from "@videola/media";
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
 import type { Peaks } from "@videola/media";
 
+import { audibleClips } from "../nesting";
 import { integratedLufs } from "./loudness";
 
 export interface AudioBufferSource {
@@ -47,13 +48,13 @@ export class AudioGraph {
     const generation = this.#generation;
     const library = new Map(project.library.map((asset) => [asset.id, asset]));
     const voices: Voice[] = [];
-    for (const track of project.timeline.tracks) {
-      for (const clip of track.clips) {
-        const hash = audibleHash(clip, library);
-        if (hash === undefined) continue;
-        const buffer = await this.#load(hash, clip);
-        if (buffer !== undefined) voices.push({ clip, track, buffer });
-      }
+    // Nested clips arrive already folded into the outer timeline's coordinates, so nothing below
+    // this line knows about compound clips.
+    for (const { clip, track } of audibleClips(project)) {
+      const hash = audibleHash(clip, library);
+      if (hash === undefined) continue;
+      const buffer = await this.#load(hash, clip);
+      if (buffer !== undefined) voices.push({ clip, track, buffer });
     }
     // Two edits in quick succession leave two prepares in flight, and decoding times decide
     // nothing about which project state is current. Whoever started last owns the graph.
@@ -283,9 +284,7 @@ function audibleHash(clip: Clip, library: ReadonlyMap<string, MediaAsset>): stri
 // graph refuses to schedule, or leave one out that it would have.
 export function hasAudibleClips(project: Project): boolean {
   const library = new Map(project.library.map((asset) => [asset.id, asset]));
-  return project.timeline.tracks.some((track) =>
-    track.clips.some((clip) => audibleHash(clip, library) !== undefined),
-  );
+  return audibleClips(project).some(({ clip }) => audibleHash(clip, library) !== undefined);
 }
 
 function outPoint(clip: Clip): Time {

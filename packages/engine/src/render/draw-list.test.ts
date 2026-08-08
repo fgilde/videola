@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_COMPOUND_DEPTH } from "@videola/core";
+
 import type {
   Clip,
   Effect,
@@ -565,5 +567,127 @@ describe("a separable effect in the draw list", () => {
     expect(only(clips, 0, params([["eff_1", [["amount", 2]]]])).effects).toEqual([
       { effect: "contrast", values: { amount: 2 } },
     ]);
+  });
+});
+
+// The claim `clip.nest` makes, checked on the value the compositor executes: folding clips into a
+// compound changes where they are written down and nothing about what is drawn. The comparison is
+// against the draw list of the same clips *before* nesting -- checking that a compound "produced
+// some items" would pass with the picture upside down.
+function compound(over: Record<string, unknown>, tracks: Track[]): Clip {
+  return clip({ source: { kind: "compound", timeline: { tracks } }, ...over });
+}
+
+describe("a compound clip in the draw list", () => {
+  const inner = [
+    clip({ id: "clp_a", start: 0, duration: 2 * SECOND }),
+    clip({ id: "clp_b", start: 2 * SECOND, duration: 2 * SECOND, blend: "screen" }),
+  ];
+  const flat = project([track("trk_1", inner)]);
+  const nested = project([
+    track("trk_1", [
+      compound({ id: "clp_group", start: 0, duration: 4 * SECOND }, [track("trk_in", inner)]),
+    ]),
+  ]);
+
+  it("draws exactly what the same clips drew before they were folded", () => {
+    for (let at = 0; at < 4 * SECOND; at += SECOND / 4) {
+      expect(list(nested, at)).toEqual(list(flat, at));
+    }
+  });
+
+  // A compound placed later reads its own timeline from the beginning: project time towards the
+  // source, which is what keeps a nested sequence from following the outer playhead.
+  it("shows its own timeline from the instant it has reached, not from the project's", () => {
+    const moved = project([
+      track("trk_1", [
+        compound({ id: "clp_group", start: 10 * SECOND, duration: 4 * SECOND }, [
+          track("trk_in", inner),
+        ]),
+      ]),
+    ]);
+    expect(ids(list(moved, 11 * SECOND))).toEqual(["clp_a"]);
+    expect(ids(list(moved, 13 * SECOND))).toEqual(["clp_b"]);
+    expect(ids(list(moved, 14 * SECOND))).toEqual([]);
+  });
+
+  // Trimming the compound cuts what is inside it, because the head it no longer covers is source
+  // material it no longer consumes.
+  it("hides what its own in point and duration no longer reach", () => {
+    const trimmed = project([
+      track("trk_1", [
+        compound({ id: "clp_group", start: 0, duration: 2 * SECOND, inPoint: 2 * SECOND }, [
+          track("trk_in", inner),
+        ]),
+      ]),
+    ]);
+    expect(ids(list(trimmed, 0))).toEqual(["clp_b"]);
+  });
+
+  it("places a nested clip where the compound's own transform puts it", () => {
+    const shifted = project([
+      track("trk_1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: 4 * SECOND,
+            transform: transform({ scaleX: 0.5, scaleY: 0.5 }),
+          },
+          [track("trk_in", [inner[0]!])],
+        ),
+      ]),
+    ]);
+    const item = list(shifted, 0).items[0]!;
+    // Half the frame, centred: the top-left corner of a full-frame clip lands halfway out.
+    expect(corner(item, 0, 0)).toEqual([-0.5, 0.5]);
+    expect(corner(item, 1, 1)).toEqual([0.5, -0.5]);
+  });
+
+  it("multiplies its opacity into the clips inside it", () => {
+    const dimmed = project([
+      track("trk_1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: 4 * SECOND,
+            transform: transform({ opacity: 0.5 }),
+          },
+          [track("trk_in", [clip({ id: "clp_a", transform: transform({ opacity: 0.5 }) })])],
+        ),
+      ]),
+    ]);
+    expect(list(dimmed, 0).items[0]?.opacity).toBe(0.25);
+  });
+
+  // The chain runs the clip's own effects first and the group's over the result, which is the
+  // order a frame graph would apply them in.
+  it("runs its own effects after those of the clip inside it", () => {
+    const chained = project([
+      track("trk_1", [
+        compound({ id: "clp_group", effects: [effect({ id: "eff_group", effectType: "contrast" })] }, [
+          track("trk_in", [clip({ id: "clp_a", effects: [effect({ id: "eff_clip", effectType: "brightness" })] })]),
+        ]),
+      ]),
+    ]);
+    const resolved = params([
+      ["eff_clip", [["amount", 1]]],
+      ["eff_group", [["amount", 2]]],
+    ]);
+    expect(list(chained, 0, resolved).items[0]?.effects.map((pass) => pass.effect)).toEqual([
+      "brightness",
+      "contrast",
+    ]);
+  });
+
+  it("stops at the nesting depth the loader accepts", () => {
+    let deep = clip({ id: "clp_leaf", start: 0, duration: SECOND });
+    for (let level = 0; level <= MAX_COMPOUND_DEPTH + 1; level += 1) {
+      deep = compound({ id: `clp_${level}`, start: 0, duration: SECOND }, [
+        track(`trk_${level}`, [deep]),
+      ]);
+    }
+    expect(ids(list(project([track("trk_1", [deep])]), 0))).toEqual([]);
   });
 });

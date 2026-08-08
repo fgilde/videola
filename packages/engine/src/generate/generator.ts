@@ -1,3 +1,4 @@
+import { leafClips } from "../nesting";
 import { paintText } from "./text";
 
 import type { Clip, Generator, Project } from "@videola/core";
@@ -155,12 +156,11 @@ export class GeneratorFrames {
   }
 }
 
+// The visible set comes from the draw list, which names a nested clip by its own id, so this has to
+// reach into compound clips as well. It needs no instant of its own: a generator paints the same
+// picture at every moment it is on screen, and whether it is on screen was decided already.
 function generatorClips(project: Project, visible: ReadonlySet<string>): Clip[] {
-  const found: Clip[] = [];
-  for (const track of project.timeline.tracks) {
-    for (const clip of track.clips) {
-      if (visible.has(clip.id) && clip.source.kind === "generator") found.push(clip);
-    }
-  }
-  return found;
+  return leafClips(project).filter(
+    (clip) => visible.has(clip.id) && clip.source.kind === "generator",
+  );
 }

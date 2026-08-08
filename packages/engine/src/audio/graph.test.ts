@@ -732,3 +732,129 @@ describe("measureLoudness", () => {
     expect(faded).toBeLessThan(flat);
   });
 });
+
+// A nested clip has to be heard, and heard in the same place. The comparison is against the render
+// of the same clips before they were folded, sample for sample -- "the compound produced a voice"
+// would pass with the sound an octave off.
+function compound(over: Partial<Clip>, tracks: Track[]): Clip {
+  return clip({ source: { kind: "compound", timeline: { tracks } }, ...over } as Partial<Clip>);
+}
+
+describe("a compound clip in the audio graph", () => {
+  const inner = [
+    clip({ id: "clp_a", start: 0, duration: SECOND, volume: 0.5 }),
+    clip({ id: "clp_b", start: SECOND, duration: SECOND, fades: { inDuration: SECOND / 2, outDuration: 0 } }),
+  ];
+
+  it("sounds exactly like the same clips before they were folded", async () => {
+    const flatCtx = context(2);
+    const flat = await render(flatCtx, dc(flatCtx), project([track("A1", inner)]));
+    const nestedCtx = context(2);
+    const nested = await render(
+      nestedCtx,
+      dc(nestedCtx),
+      project([
+        track("A1", [compound({ id: "clp_group", start: 0, duration: 2 * SECOND }, [track("A_in", inner)])]),
+      ]),
+    );
+
+    expect(Array.from(nested)).toEqual(Array.from(flat));
+  });
+
+  it("multiplies its own gain into what is inside it", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          compound({ id: "clp_group", start: 0, duration: SECOND, volume: 0.5 }, [
+            track("A_in", [clip({ volume: 0.5 })]),
+          ]),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.5)).toBeCloseTo(0.25, 2);
+  });
+
+  // Not "there is still sound": a compound at double speed has to be *through* its material in
+  // half the time, which is what a fold that ignored the rate would get wrong.
+  it("plays what is inside it at its own rate", async () => {
+    const ctx = context(2);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          compound(
+            {
+              id: "clp_group",
+              start: 0,
+              duration: SECOND,
+              speed: { rate: 2, reverse: false, preservePitch: true },
+            },
+            [track("A_in", [clip({ start: 0, duration: 2 * SECOND })])],
+          ),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.5)).toBeCloseTo(1, 2);
+    expect(at(out, 1.5)).toBeCloseTo(0, 2);
+  });
+
+  it("plays what is inside it backwards when it is itself reversed", async () => {
+    const ctx = context(2);
+    const out = await render(
+      ctx,
+      ramp(ctx),
+      project([
+        track("A1", [
+          compound(
+            {
+              id: "clp_group",
+              start: 0,
+              duration: 2 * SECOND,
+              speed: { rate: 1, reverse: true, preservePitch: true },
+            },
+            [track("A_in", [clip({ start: 0, duration: 2 * SECOND })])],
+          ),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.1)).toBeGreaterThan(0.9);
+    expect(at(out, 1.9)).toBeLessThan(0.1);
+  });
+
+  // The compound's own range decides how much of its timeline is heard: material past its out
+  // point is material it does not consume.
+  it("does not let a nested clip sound past its own end", async () => {
+    const ctx = context(2);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          compound({ id: "clp_group", start: 0, duration: SECOND }, [
+            track("A_in", [clip({ start: 0, duration: 2 * SECOND })]),
+          ]),
+        ]),
+      ]),
+    );
+
+    expect(at(out, 0.5)).toBeCloseTo(1, 2);
+    expect(at(out, 1.5)).toBeCloseTo(0, 2);
+  });
+
+  it("counts a nested clip as something to export a sound track for", () => {
+    const nested = project([
+      track("A1", [
+        compound({ id: "clp_group", start: 0, duration: SECOND }, [track("A_in", [clip()])]),
+      ]),
+    ]);
+
+    expect(hasAudibleClips(nested)).toBe(true);
+  });
+});
