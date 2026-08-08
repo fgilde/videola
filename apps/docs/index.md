@@ -90,8 +90,9 @@ features:
 ## What is not there yet
 
 No export, so nothing can leave the application yet. No inspector, no media library, no templates.
-FFmpeg is not integrated, there is no REST API and no MCP endpoint, and the Android and iOS release
-jobs are skipped until signing keys are configured.
+FFmpeg is not integrated, and the Android and iOS release jobs are skipped until signing keys are
+configured. The [HTTP API and the MCP server](/guide/api-and-mcp) do exist, but with no renderer
+behind them an agent can edit a project and save it — it cannot see a frame.
 
 The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
 design are built and which are planned.

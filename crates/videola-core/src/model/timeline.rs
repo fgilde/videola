@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
@@ -6,7 +7,7 @@ use super::clip::Clip;
 use super::effect::Effect;
 use super::{ClipId, MarkerId, Time, TrackId};
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Timeline {
     pub tracks: Vec<Track>,
@@ -22,7 +23,7 @@ impl Timeline {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TrackKind {
     Video,
@@ -32,7 +33,7 @@ pub enum TrackKind {
     Adjustment,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: TrackId,
@@ -87,7 +88,7 @@ fn default_color(kind: TrackKind) -> &'static str {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Marker {
     pub id: MarkerId,

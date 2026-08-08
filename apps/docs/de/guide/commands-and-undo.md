@@ -7,8 +7,8 @@ Drahtformat und der Ablauf im Detail. Diese Seite fasst es zusammen.
 :::
 
 Jede Bearbeitung ist ein serialisierbarer Command. Es gibt keinen Pfad, der das Projekt direkt
-verändert — daraus fallen Undo und später eine REST-API und ein MCP-Server aus einem Mechanismus statt
-aus drei.
+verändert — daraus fallen Undo, die HTTP-API und der MCP-Server aus einem Mechanismus statt aus drei.
+Die beiden nach außen gerichteten stehen in [Die API und der MCP-Server](/de/guide/api-and-mcp).
 
 ## Die sechsundzwanzig Commands
 

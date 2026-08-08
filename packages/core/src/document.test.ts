@@ -47,6 +47,7 @@ function fakeBackend(): DocumentBackend {
     // the backend's result.
     undo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: true, canRedo: true })),
     redo: vi.fn(() => ({ patch: [], label: "cmd.track.add", canUndo: true, canRedo: false })),
+    rollback: vi.fn(),
     save: vi.fn(() => new Uint8Array([1, 2, 3])),
     importMedia: vi.fn(() => ({
       id: "med_abc",

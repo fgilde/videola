@@ -86,5 +86,6 @@ installiert den Workspace und baut die Web-App, und die letzte Stufe kopiert `ap
 inhaltsgehashte JavaScript und CSS als unveränderlich, hält `index.html` uncached und fällt für
 unbekannte Pfade auf `index.html` zurück.
 
-Das Image liefert ausschließlich statische Dateien aus. Eine API, ein MCP-Endpunkt und ein
-Render-Worker bräuchten `videola-server`, das nicht Teil des Workspace ist.
+Das Image liefert ausschließlich statische Dateien aus. HTTP-API und MCP-Server sind ein eigener
+Prozess, `apps/server` — siehe [Die API und der MCP-Server](/de/guide/api-and-mcp). Ein Render-Worker
+bräuchte FFmpeg und einen Compositor; beides gibt es noch nicht.

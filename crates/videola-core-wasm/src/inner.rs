@@ -105,6 +105,10 @@ impl DocumentHost {
         self.document.redo()
     }
 
+    pub fn rollback(&mut self) -> Result<()> {
+        self.document.rollback()
+    }
+
     pub fn import_media(
         &mut self,
         original_name: String,

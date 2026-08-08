@@ -92,6 +92,10 @@ impl WasmDocument {
         to_js_value(&result)
     }
 
+    pub fn rollback(&mut self) -> std::result::Result<(), JsError> {
+        self.host.rollback().map_err(to_js)
+    }
+
     #[wasm_bindgen(js_name = importMedia)]
     pub fn import_media(
         &mut self,

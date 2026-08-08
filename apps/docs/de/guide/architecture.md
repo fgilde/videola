@@ -95,7 +95,8 @@ zwei Eingängen und einem `progress`-Parameter, kein zweites Subsystem.
 | Export nach MP4/WebM über WebCodecs in einem Worker | gebaut |
 | Geteilte WGSL-Quellen, WebGPU- und `wgpu`-Compositor | geplant |
 | FFmpeg, natives Rendern, Server-Rendern | geplant |
-| REST-API, MCP-Server, generierter Command-Katalog | geplant |
+| HTTP-API, MCP-Server, generierter Command-Katalog | gebaut, auf dem WASM-Kern — siehe [Die API und der MCP-Server](/de/guide/api-and-mcp) |
+| Einzelbild- und Peak-Werkzeuge für Agenten, Rendern über die API | geplant |
 | Template-Modus (`.videolat`, Galerie, Wizard) | geplant |
 
 Die ursprüngliche Begründung steht auf Deutsch in der

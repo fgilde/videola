@@ -201,5 +201,6 @@ it. Transitions fall out of the same mechanism: a transition is an effect with t
 | Export to MP4/WebM through WebCodecs in a worker | built |
 | Shared WGSL sources, WebGPU and `wgpu` compositors | planned |
 | FFmpeg, native rendering, server rendering | planned |
-| REST API, MCP server, generated command catalogue | planned |
+| HTTP API, MCP server, generated command catalogue | built, on the WASM core — see [The API and the MCP server](/guide/api-and-mcp) |
+| Frame and audio-peak tools for agents, rendering over the API | planned |
 | Template mode (`.videolat`, gallery, wizard) | planned |

@@ -112,6 +112,17 @@ impl Document {
         self.result(patch, label)
     }
 
+    // Undo that leaves no trace, for a caller applying commands as one atomic unit (the batch
+    // endpoint of the API). Plain `undo` parks the reverted entry on the redo stack, where a
+    // later `redo` would reapply the half of a rejected batch that did land. What a rollback
+    // cannot restore is a redo stack that existed before the batch — the batch's own first
+    // successful dispatch already cleared that, as any dispatch does.
+    pub fn rollback(&mut self) -> Result<()> {
+        self.undo()?;
+        self.history.clear_redo();
+        Ok(())
+    }
+
     fn coalesce_into_last(&mut self, before: &Value, after: &Value) -> Result<()> {
         let Some(inverse) = self.history.last_inverse().cloned() else {
             return Ok(());
