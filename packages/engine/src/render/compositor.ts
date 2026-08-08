@@ -1,7 +1,9 @@
+import { effect } from "../effects/registry";
 import { blendState, drawList } from "./draw-list";
 import { compileProgram, setUniforms } from "./program";
+import { RenderTarget } from "./target";
 
-import type { Project, Time } from "@videola/core";
+import type { EffectParamSnapshot, Project, Time } from "@videola/core";
 import type { GlContext } from "./context";
 import type { DrawItem } from "./draw-list";
 
@@ -20,6 +22,9 @@ void main() {
 // The texture holds straight alpha, the blend state expects premultiplied, and the multiplication
 // happens here rather than on upload: a straight source through ONE_MINUS_SRC_ALPHA mixes the
 // edge of a clip towards the background twice, which is the grey seam around every overlay.
+//
+// This is also where the effect chain gets its input, which is why everything downstream of this
+// shader -- every pass, every intermediate target -- carries premultiplied alpha.
 const FRAGMENT_SOURCE = `#version 300 es
 precision highp float;
 in vec2 v_uv;
@@ -31,6 +36,32 @@ void main() {
   vec4 texel = texture(u_source, v_uv);
   float alpha = texel.a * u_opacity;
   color = vec4(texel.rgb * alpha, alpha);
+}
+`;
+
+// The same unit quad, stretched over the whole target: what every pass of the effect chain draws.
+const SCREEN_VERTEX_SOURCE = `#version 300 es
+in vec2 a_quad;
+out vec2 v_uv;
+
+void main() {
+  v_uv = a_quad;
+  gl_Position = vec4(a_quad * 2.0 - 1.0, 0.0, 1.0);
+}
+`;
+
+// Closes the chain: opacity is applied here, after the effects and before the blend, which is the
+// order the frame graph prescribes. A plain scale of all four channels is what opacity means on
+// premultiplied colour.
+const COMPOSITE_SOURCE = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+uniform sampler2D u_source;
+uniform float u_opacity;
+out vec4 color;
+
+void main() {
+  color = texture(u_source, v_uv) * u_opacity;
 }
 `;
 
@@ -49,19 +80,25 @@ function uploadable(frame: VideoFrame, maxTextureSize: number): boolean {
   return frame.codedWidth <= maxTextureSize && frame.codedHeight <= maxTextureSize;
 }
 
-interface Resources {
+interface Pipeline {
   program: WebGLProgram;
-  buffer: WebGLBuffer;
+  // One per program rather than one shared: a vertex array remembers the attribute *index* it was
+  // set up for, and two programs need not put `a_quad` in the same one.
   vao: WebGLVertexArrayObject;
 }
 
-// Walks the draw list and nothing else. It never decides which clips are visible and never asks
-// for a frame.
+interface Resources {
+  buffer: WebGLBuffer;
+  clip: Pipeline;
+}
+
+// Walks the draw list and nothing else. It never decides which clips are visible, never asks for a
+// frame, and never works out a parameter value -- all three arrive decided.
 //
 // The contract on `frames`: every frame must stay open for the duration of the call. The
 // FrameCache owns them and is free to close one at any time, and an upload from a closed frame
 // fails as an INVALID_OPERATION that nothing throws on -- the texture then keeps the previous
-// frame, or, if it never had one, samples as opaque black over everything below it. `#draw`
+// frame, or, if it never had one, samples as opaque black over everything below it. `#drawQuad`
 // therefore checks each frame before uploading. That check is the last line of defence, not the
 // contract: a caller that lets frames die mid-render gets the previous picture for that clip, and
 // nothing at all if there was no previous one.
@@ -73,6 +110,10 @@ export class Compositor {
   #gl: WebGL2RenderingContext;
   #maxTextureSize: number;
   #textures = new Map<string, WebGLTexture>();
+  #effects = new Map<string, Pipeline>();
+  #screen: Pipeline | undefined;
+  #chain: RenderTarget[] = [];
+  #mirror: WebGLTexture | undefined;
   #resources: Resources | undefined;
   #disposed = false;
   #unsubscribe: () => void;
@@ -83,10 +124,16 @@ export class Compositor {
     this.#unsubscribe = context.onLost(() => this.#forget());
   }
 
-  render(project: Project, at: Time, frames: ReadonlyMap<string, VideoFrame>): void {
+  render(
+    project: Project,
+    at: Time,
+    frames: ReadonlyMap<string, VideoFrame>,
+    params: EffectParamSnapshot,
+  ): void {
     if (this.#disposed || this.#gl.isContextLost()) return;
-    const list = drawList(project, at);
-    const program = this.#begin(list.background);
+    const list = drawList(project, at, params);
+    const resources = this.#resources ?? this.#build();
+    this.#begin(list.background);
     for (const item of list.items) {
       const frame = frames.get(item.clip);
       const fresh = frame !== undefined && uploadable(frame, this.#maxTextureSize);
@@ -95,7 +142,12 @@ export class Compositor {
       // one tick -- and a clip that never had a frame is still left out, because its texture would
       // sample as opaque black.
       if (!fresh && !this.#textures.has(item.clip)) continue;
-      this.#draw(program, item, fresh ? frame : undefined);
+      const source = fresh ? frame : undefined;
+      if (item.effects.length === 0 && item.mix === undefined) {
+        this.#composite(resources, item, source);
+      } else {
+        this.#chained(resources, item, source);
+      }
     }
     this.#release(new Set(list.items.map((item) => item.clip)));
   }
@@ -126,43 +178,123 @@ export class Compositor {
     const gl = this.#gl;
     for (const texture of this.#textures.values()) gl.deleteTexture(texture);
     this.#textures.clear();
+    for (const target of this.#chain) target.dispose();
+    for (const pipeline of this.#effects.values()) this.#discard(pipeline);
+    if (this.#mirror !== undefined) gl.deleteTexture(this.#mirror);
+    this.#chain = [];
+    this.#effects.clear();
+    this.#mirror = undefined;
+    if (this.#screen !== undefined) this.#discard(this.#screen);
+    this.#screen = undefined;
     if (this.#resources !== undefined) {
-      gl.deleteProgram(this.#resources.program);
+      this.#discard(this.#resources.clip);
       gl.deleteBuffer(this.#resources.buffer);
-      gl.deleteVertexArray(this.#resources.vao);
       this.#resources = undefined;
     }
     this.#unsubscribe();
   }
 
-  #begin(background: readonly [number, number, number, number]): WebGLProgram {
+  #begin(background: readonly [number, number, number, number]): void {
     const gl = this.#gl;
-    const resources = this.#resources ?? this.#build();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     // Asked for per frame: a devicePixelRatio change resizes the canvas without anyone calling
     // resize, and a remembered size would leave the viewport on part of the buffer.
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(background[0], background[1], background[2], background[3]);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.enable(gl.BLEND);
-    gl.useProgram(resources.program);
-    gl.bindVertexArray(resources.vao);
-    return resources.program;
   }
 
-  #draw(program: WebGLProgram, item: DrawItem, frame: VideoFrame | undefined): void {
+  // No effects and no transition: straight onto the picture, which is every clip in a project
+  // nobody has touched yet and the path worth keeping cheap.
+  #composite(resources: Resources, item: DrawItem, frame: VideoFrame | undefined): void {
+    this.#blend(item);
+    this.#drawQuad(resources, item, frame, item.opacity);
+  }
+
+  // The frame graph for one clip: source texture, effect chain into an intermediate target, then
+  // opacity and blend onto the picture -- or, while a transition runs, a mix with the picture the
+  // frame already holds.
+  #chained(resources: Resources, item: DrawItem, frame: VideoFrame | undefined): void {
     const gl = this.#gl;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.#texture(item.clip));
-    if (frame !== undefined) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    const [first, second] = this.#targets();
+    gl.disable(gl.BLEND);
+    first.bind(width, height);
+    this.#drawQuad(resources, item, frame, 1);
+
+    let source = first;
+    let spare = second;
+    for (const pass of item.effects) {
+      spare.bind(width, height);
+      this.#pass(this.#pipeline(pass.effect), source.texture, undefined, pass.values);
+      [source, spare] = [spare, source];
     }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, width, height);
+    const mix = item.mix;
+    if (mix === undefined) {
+      this.#blend(item);
+      const screen = this.#screenPass(resources.buffer);
+      this.#pass(screen, source.texture, undefined, { opacity: item.opacity });
+      return;
+    }
+    // The transition's second input is what is already on the screen, so it has to be copied off
+    // it: a pass cannot sample the buffer it draws into. Blending stays off -- the mix already
+    // carries the picture underneath, and blending it over that picture would count it twice.
+    this.#pass(this.#pipeline(mix.effect), source.texture, this.#copy(), mix.values);
+  }
+
+  #pass(
+    pipeline: Pipeline,
+    source: WebGLTexture,
+    second: WebGLTexture | undefined,
+    values: Readonly<Record<string, number>>,
+  ): void {
+    const gl = this.#gl;
+    gl.useProgram(pipeline.program);
+    gl.bindVertexArray(pipeline.vao);
+    if (second !== undefined) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, second);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    setUniforms(gl, pipeline.program, prefixed(values));
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  #blend(item: DrawItem): void {
+    const gl = this.#gl;
     const blend = blendState(item.blend);
+    gl.enable(gl.BLEND);
     // The alpha channel is always a plain over-operator, whatever the colours do. Letting the
     // colour equation touch alpha lets subtract compute 1 - 1 = 0, and a transparent hole in a
     // premultiplied canvas is the page shining through the picture.
     gl.blendEquationSeparate(blend.equation, FUNC_ADD);
     gl.blendFuncSeparate(blend.src, blend.dst, ONE, ONE_MINUS_SRC_ALPHA);
-    setUniforms(gl, program, { u_matrix: item.matrix, u_uv: item.uv, u_opacity: item.opacity });
+  }
+
+  #drawQuad(
+    resources: Resources,
+    item: DrawItem,
+    frame: VideoFrame | undefined,
+    opacity: number,
+  ): void {
+    const gl = this.#gl;
+    gl.useProgram(resources.clip.program);
+    gl.bindVertexArray(resources.clip.vao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.#texture(item.clip));
+    if (frame !== undefined) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+    }
+    setUniforms(gl, resources.clip.program, {
+      u_matrix: item.matrix,
+      u_uv: item.uv,
+      u_opacity: opacity,
+    });
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -191,6 +323,58 @@ export class Compositor {
     }
   }
 
+  // ponytail: two full-size targets for as long as any clip carries an effect, and they stay
+  // allocated until the context goes. At 1080p that is sixteen megabytes; a pool that hands them
+  // back when no clip needs one is what a timeline full of effects would want.
+  #targets(): [RenderTarget, RenderTarget] {
+    if (this.#chain.length === 0) {
+      this.#chain = [new RenderTarget(this.#gl), new RenderTarget(this.#gl)];
+    }
+    return [this.#chain[0]!, this.#chain[1]!];
+  }
+
+  #copy(): WebGLTexture {
+    const gl = this.#gl;
+    this.#mirror ??= gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.#mirror);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // Reallocating with the copy rather than sizing it separately: the drawing buffer is the only
+    // size this can ever be, and asking for it twice is how the two drift apart.
+    gl.copyTexImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      0,
+      0,
+      gl.drawingBufferWidth,
+      gl.drawingBufferHeight,
+      0,
+    );
+    return this.#mirror;
+  }
+
+  #pipeline(type: string): Pipeline {
+    const existing = this.#effects.get(type);
+    if (existing !== undefined) return existing;
+    const manifest = effect(type);
+    // The draw list only ever names an effect the registry answered for, so this is a broken
+    // build rather than a broken project.
+    if (manifest === undefined) throw new Error(`no such effect: ${type}`);
+    const buffer = (this.#resources ?? this.#build()).buffer;
+    const pipeline = this.#link(
+      buffer,
+      SCREEN_VERTEX_SOURCE,
+      manifest.fragmentSource,
+      manifest.inputs,
+    );
+    this.#effects.set(type, pipeline);
+    return pipeline;
+  }
+
   #build(): Resources {
     const gl = this.#gl;
     // The frame arrives as BT.709 with a limited range far more often than not. Converting it in
@@ -201,27 +385,63 @@ export class Compositor {
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     // The unit quad runs top-down and so does the texture, so nothing needs flipping here.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    const program = compileProgram(gl, VERTEX_SOURCE, FRAGMENT_SOURCE);
-    gl.useProgram(program);
-    // The sampler is the one uniform that never changes, so it is bound once and stays out of the
-    // per-frame uniform path, where every value is a float.
-    gl.uniform1i(gl.getUniformLocation(program, "u_source"), 0);
     const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD, gl.STATIC_DRAW);
+    this.#resources = { buffer, clip: this.#link(buffer, VERTEX_SOURCE, FRAGMENT_SOURCE, 1) };
+    return this.#resources;
+  }
+
+  // Built on first use like the effect programs themselves: a project without a single effect
+  // never runs a pass and has no business compiling a shader for one.
+  #screenPass(buffer: WebGLBuffer): Pipeline {
+    this.#screen ??= this.#link(buffer, SCREEN_VERTEX_SOURCE, COMPOSITE_SOURCE, 1);
+    return this.#screen;
+  }
+
+  // The samplers are the uniforms that never change, so they are bound once here and stay out of
+  // the per-frame path, where every value is a float.
+  #link(
+    buffer: WebGLBuffer,
+    vertexSource: string,
+    fragmentSource: string,
+    inputs: number,
+  ): Pipeline {
+    const gl = this.#gl;
+    const program = compileProgram(gl, vertexSource, fragmentSource);
+    gl.useProgram(program);
+    gl.uniform1i(gl.getUniformLocation(program, "u_source"), 0);
+    if (inputs === 2) gl.uniform1i(gl.getUniformLocation(program, "u_second"), 1);
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, QUAD, gl.STATIC_DRAW);
     const quad = gl.getAttribLocation(program, "a_quad");
     gl.enableVertexAttribArray(quad);
     gl.vertexAttribPointer(quad, 2, gl.FLOAT, false, 0, 0);
-    this.#resources = { program, buffer, vao };
-    return this.#resources;
+    return { program, vao };
+  }
+
+  #discard(pipeline: Pipeline): void {
+    this.#gl.deleteProgram(pipeline.program);
+    this.#gl.deleteVertexArray(pipeline.vao);
   }
 
   // Everything the driver held is gone with the context, so the handles are dropped rather than
   // deleted -- deleting them would address objects of whatever context comes next.
   #forget(): void {
     this.#textures.clear();
+    this.#effects.clear();
+    this.#chain = [];
+    this.#mirror = undefined;
+    this.#screen = undefined;
     this.#resources = undefined;
   }
+}
+
+// The shader names its uniforms `u_<key>`, and that prefix is the whole convention between a
+// manifest's parameter list and its GLSL.
+function prefixed(values: Readonly<Record<string, number>>): Record<string, number> {
+  const uniforms: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) uniforms[`u_${key}`] = value;
+  return uniforms;
 }

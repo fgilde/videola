@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import type { Clip, MediaAsset, Project, Track, Transform } from "@videola/core";
+import type {
+  Clip,
+  EffectParamSnapshot,
+  MediaAsset,
+  Project,
+  Track,
+  Transform,
+} from "@videola/core";
 
 import { drawList } from "./draw-list";
+import type { DrawList } from "./draw-list";
+
+// The resolved parameter batch is empty unless a case supplies its own -- most of these projects
+// have no effect on any clip.
+function list(project: Project, at: number, params: EffectParamSnapshot = new Map()): DrawList {
+  return drawList(project, at, params);
+}
 
 const SECOND = 705_600_000;
 const VIDEO = `med_${"a".repeat(64)}`;
@@ -36,7 +50,7 @@ function project(tracks: Track[], background = "#000000"): Project {
 }
 
 const ids = (tracks: Track[], at: number): string[] =>
-  drawList(project(tracks), at).items.map((item) => item.clip);
+  list(project(tracks), at).items.map((item) => item.clip);
 
 describe("drawList edges", () => {
   it("never shows a clip of duration zero", () => {
@@ -69,12 +83,12 @@ describe("drawList edges", () => {
 
   it("passes an opacity above one straight through without clamping", () => {
     const loud = clip({ transform: transform({ opacity: 4 }) });
-    expect(drawList(project([track("t", [loud])]), 0).items[0]?.opacity).toBe(4);
+    expect(list(project([track("t", [loud])]), 0).items[0]?.opacity).toBe(4);
   });
 
   it("passes a negative crop straight through as a uv outside the texture", () => {
     const bleed = clip({ transform: transform({ crop: { left: -0.5, top: 0, right: 0, bottom: 0 } }) });
-    expect(drawList(project([track("t", [bleed])]), 0).items[0]?.uv).toEqual([-0.5, 0, 1.5, 1]);
+    expect(list(project([track("t", [bleed])]), 0).items[0]?.uv).toEqual([-0.5, 0, 1.5, 1]);
   });
 
   it("emits a draw call for a clip scaled to zero area", () => {
@@ -85,12 +99,12 @@ describe("drawList edges", () => {
   it("takes the first library entry when two share an id", () => {
     const p = project([track("t", [clip()])]);
     (p.library as MediaAsset[]).push({ id: VIDEO, width: 100, height: 100 } as MediaAsset);
-    const m = drawList(p, 0).items[0]?.matrix ?? [];
+    const m = list(p, 0).items[0]?.matrix ?? [];
     expect((m[0] ?? 0) * 1920 * 0.5).toBeCloseTo(1920);
   });
 
   it("reads an eight digit background and premultiplies it", () => {
     const grey = (128 / 255) * (128 / 255);
-    expect(drawList(project([], "#80808080"), 0).background).toEqual([grey, grey, grey, 128 / 255]);
+    expect(list(project([], "#80808080"), 0).background).toEqual([grey, grey, grey, 128 / 255]);
   });
 });

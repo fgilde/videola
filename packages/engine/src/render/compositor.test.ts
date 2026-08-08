@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Project } from "@videola/core";
+import type { EffectParamSnapshot, Project } from "@videola/core";
 
 import { Compositor } from "./compositor";
 import { createContext } from "./context";
@@ -13,6 +13,8 @@ interface Spot {
   id: string;
   opacity?: number;
   blend?: string;
+  effects?: unknown[];
+  transitionIn?: unknown;
 }
 
 // Only the fields the draw list reads. What it makes of them is settled in draw-list.test.ts;
@@ -32,6 +34,8 @@ function project(tracks: Spot[][]): Project {
           start: 0,
           duration: 1000,
           blend: spot.blend ?? "normal",
+          effects: spot.effects ?? [],
+          transitionIn: spot.transitionIn,
           transform: {
             x: 0,
             y: 0,
@@ -82,6 +86,18 @@ function attached(overrides: Record<string, unknown> = {}): {
   return { compositor: new Compositor(createContext(canvas)), recording, canvas };
 }
 
+// Most cases here are about clips with no effect at all, where the resolved parameters are an
+// empty map. The ones that do carry an effect hand their own in.
+function render(
+  compositor: Compositor,
+  scene: Project,
+  at: number,
+  frames: ReadonlyMap<string, VideoFrame>,
+  params: EffectParamSnapshot = new Map(),
+): void {
+  compositor.render(scene, at, frames, params);
+}
+
 const uploads = (recording: Recording): unknown[] =>
   recording.named("texImage2D").map((call) => call.args[5]);
 
@@ -89,7 +105,7 @@ describe("Compositor", () => {
   it("draws one quad per visible clip, lower track first", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_lower", opacity: 0.25 }], [{ id: "clp_upper", opacity: 0.5 }]]);
-    compositor.render(scene, 0, framesFor("clp_lower", "clp_upper"));
+    render(compositor, scene, 0, framesFor("clp_lower", "clp_upper"));
     expect(recording.named("drawArrays")).toHaveLength(2);
     expect(recording.named("uniform1f").map((call) => call.args[1])).toEqual([0.25, 0.5]);
     expect(new Set(recording.named("bindTexture").map((call) => call.args[1])).size).toBe(2);
@@ -98,13 +114,13 @@ describe("Compositor", () => {
   it("hands the frame straight to the driver without looking at it", () => {
     const { compositor, recording } = attached();
     const frames = framesFor("clp_1");
-    compositor.render(project([[{ id: "clp_1" }]]), 0, frames);
+    render(compositor, project([[{ id: "clp_1" }]]), 0, frames);
     expect(uploads(recording)[0]).toBe(frames.get("clp_1"));
   });
 
   it("skips a clip whose frame has not arrived rather than drawing a hole", () => {
     const { compositor, recording } = attached();
-    compositor.render(project([[{ id: "clp_1" }, { id: "clp_2" }]]), 0, framesFor("clp_2"));
+    render(compositor, project([[{ id: "clp_1" }, { id: "clp_2" }]]), 0, framesFor("clp_2"));
     expect(recording.named("drawArrays")).toHaveLength(1);
     expect(uploads(recording)).toHaveLength(1);
   });
@@ -114,9 +130,9 @@ describe("Compositor", () => {
   it("redraws a clip from its own texture when the next frame is late", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);
-    compositor.render(scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
 
-    compositor.render(scene, 0, new Map());
+    render(compositor, scene, 0, new Map());
 
     expect(recording.named("drawArrays")).toHaveLength(2);
     expect(uploads(recording)).toHaveLength(1);
@@ -126,8 +142,8 @@ describe("Compositor", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);
 
-    compositor.render(scene, 0, new Map([["clp_1", opaqueFrame({ format: null })]]));
-    compositor.render(scene, 0, new Map());
+    render(compositor, scene, 0, new Map([["clp_1", opaqueFrame({ format: null })]]));
+    render(compositor, scene, 0, new Map());
 
     expect(recording.named("drawArrays")).toHaveLength(0);
     expect(recording.named("createTexture")).toHaveLength(0);
@@ -136,29 +152,29 @@ describe("Compositor", () => {
   it("keeps a clip's texture across renders and releases it once the clip is gone", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);
-    compositor.render(scene, 0, framesFor("clp_1"));
-    compositor.render(scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
     expect(recording.named("createTexture")).toHaveLength(1);
     expect(recording.named("deleteTexture")).toHaveLength(0);
-    compositor.render(project([[{ id: "clp_2" }]]), 0, framesFor("clp_2"));
+    render(compositor, project([[{ id: "clp_2" }]]), 0, framesFor("clp_2"));
     expect(recording.named("deleteTexture")).toHaveLength(1);
   });
 
   it("builds its program once and reuses it", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);
-    compositor.render(scene, 0, framesFor("clp_1"));
-    compositor.render(scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
     expect(recording.named("createProgram")).toHaveLength(1);
   });
 
   it("gives up on a lost context instead of drawing into dead handles", () => {
     const lost = { current: false };
     const { compositor, recording, canvas } = attached({ isContextLost: () => lost.current });
-    compositor.render(project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
+    render(compositor, project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
     lost.current = true;
     canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
-    compositor.render(project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
+    render(compositor, project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
     expect(recording.named("drawArrays")).toHaveLength(1);
     // The handles died with the context; deleting them would be a GL error on a foreign object.
     expect(recording.named("deleteTexture")).toHaveLength(0);
@@ -167,12 +183,12 @@ describe("Compositor", () => {
   it("rebuilds everything once the context is back", () => {
     const lost = { current: false };
     const { compositor, recording, canvas } = attached({ isContextLost: () => lost.current });
-    compositor.render(project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
+    render(compositor, project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
     lost.current = true;
     canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
     lost.current = false;
     canvas.dispatchEvent(new Event("webglcontextrestored"));
-    compositor.render(project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
+    render(compositor, project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
     expect(recording.named("createProgram")).toHaveLength(2);
     expect(recording.named("createTexture")).toHaveLength(2);
     expect(recording.named("drawArrays")).toHaveLength(2);
@@ -180,7 +196,7 @@ describe("Compositor", () => {
 
   it("releases every handle it owns on dispose", () => {
     const { compositor, recording } = attached();
-    compositor.render(project([[{ id: "clp_1" }, { id: "clp_2" }]]), 0, framesFor("clp_1", "clp_2"));
+    render(compositor, project([[{ id: "clp_1" }, { id: "clp_2" }]]), 0, framesFor("clp_1", "clp_2"));
     compositor.dispose();
     expect(recording.named("deleteTexture")).toHaveLength(2);
     expect(recording.named("deleteProgram")).toHaveLength(1);
@@ -209,7 +225,7 @@ describe("Compositor", () => {
     });
     buffer.width = 320;
     buffer.height = 180;
-    compositor.render(project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
+    render(compositor, project([[{ id: "clp_1" }]]), 0, framesFor("clp_1"));
     expect(recording.named("viewport")[0]?.args).toEqual([0, 0, 320, 180]);
   });
 
@@ -219,7 +235,7 @@ describe("Compositor", () => {
   it("leaves a clip out rather than uploading a frame that is already closed", () => {
     const { compositor, recording } = attached();
     const frames = new Map([["clp_1", opaqueFrame({ format: null })]]);
-    compositor.render(project([[{ id: "clp_1" }]]), 0, frames);
+    render(compositor, project([[{ id: "clp_1" }]]), 0, frames);
     expect(recording.named("texImage2D")).toHaveLength(0);
     expect(recording.named("drawArrays")).toHaveLength(0);
   });
@@ -227,7 +243,7 @@ describe("Compositor", () => {
   it("leaves out a frame the driver cannot hold, instead of a black rectangle", () => {
     const { compositor, recording } = attached({ getParameter: () => 4096 });
     const frames = new Map([["clp_1", opaqueFrame({ codedWidth: 7680, codedHeight: 4320 })]]);
-    compositor.render(project([[{ id: "clp_1" }]]), 0, frames);
+    render(compositor, project([[{ id: "clp_1" }]]), 0, frames);
     expect(recording.named("texImage2D")).toHaveLength(0);
     expect(recording.named("drawArrays")).toHaveLength(0);
   });
@@ -237,7 +253,7 @@ describe("Compositor", () => {
   it("composites the alpha channel as a plain over-operator whatever the colours do", () => {
     for (const blend of ["normal", "multiply", "screen", "add", "subtract", "lighten", "darken"]) {
       const { compositor, recording } = attached();
-      compositor.render(project([[{ id: "clp_1", blend }]]), 0, framesFor("clp_1"));
+      render(compositor, project([[{ id: "clp_1", blend }]]), 0, framesFor("clp_1"));
       expect(recording.named("blendFuncSeparate")[0]?.args.slice(2)).toEqual([1, 0x0303]);
       expect(recording.named("blendEquationSeparate")[0]?.args[1]).toBe(0x8006);
     }
@@ -248,9 +264,9 @@ describe("Compositor", () => {
   it("stays disposed", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);
-    compositor.render(scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
     compositor.dispose();
-    compositor.render(scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
     compositor.dispose();
     expect(recording.named("createProgram")).toHaveLength(1);
     expect(recording.named("drawArrays")).toHaveLength(1);
@@ -262,9 +278,9 @@ describe("Compositor", () => {
   it("keeps the texture of a clip that is still in the picture but had no frame this tick", () => {
     const { compositor, recording } = attached();
     const scene = project([[{ id: "clp_1" }]]);
-    compositor.render(scene, 0, framesFor("clp_1"));
-    compositor.render(scene, 0, new Map());
-    compositor.render(scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, framesFor("clp_1"));
+    render(compositor, scene, 0, new Map());
+    render(compositor, scene, 0, framesFor("clp_1"));
     expect(recording.named("deleteTexture")).toHaveLength(0);
     expect(recording.named("createTexture")).toHaveLength(1);
   });

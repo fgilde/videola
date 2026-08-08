@@ -1,9 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import type { Clip, MediaAsset, Project, Track, Transform } from "@videola/core";
+import type {
+  Clip,
+  Effect,
+  EffectParamSnapshot,
+  MediaAsset,
+  ParamValue,
+  Project,
+  Track,
+  Transform,
+  Transition,
+} from "@videola/core";
 
 import { blendState, drawList } from "./draw-list";
-import type { DrawItem } from "./draw-list";
+import type { DrawItem, DrawList } from "./draw-list";
+
+// The resolved parameter batch is empty unless a case supplies its own -- most of these projects
+// have no effect on any clip.
+function list(project: Project, at: number, params: EffectParamSnapshot = new Map()): DrawList {
+  return drawList(project, at, params);
+}
 
 const SECOND = 705_600_000;
 const VIDEO = `med_${"a".repeat(64)}`;
@@ -25,7 +41,9 @@ function transform(over: Partial<Transform> = {}): Transform {
   };
 }
 
-function clip(over: Partial<Clip> = {}): Clip {
+// Not `Partial<Clip>`: `Clip` carries the index signature that keeps unknown fields alive, and
+// a `Transition` does not fit through it.
+function clip(over: Record<string, unknown> = {}): Clip {
   return {
     id: "clp_1",
     source: { kind: "media", media: VIDEO },
@@ -113,7 +131,7 @@ describe("drawList visibility", () => {
       clip({ id: "clp_now", start: SECOND, duration: SECOND }),
       clip({ id: "clp_after", start: 2 * SECOND, duration: SECOND }),
     ];
-    expect(ids(drawList(project([track("trk_1", clips)]), SECOND + 1))).toEqual(["clp_now"]);
+    expect(ids(list(project([track("trk_1", clips)]), SECOND + 1))).toEqual(["clp_now"]);
   });
 
   it("treats a clip as half-open, so the cut between two clips shows exactly one", () => {
@@ -121,45 +139,45 @@ describe("drawList visibility", () => {
       clip({ id: "clp_a", start: 0, duration: SECOND }),
       clip({ id: "clp_b", start: SECOND, duration: SECOND }),
     ];
-    expect(ids(drawList(project([track("trk_1", clips)]), SECOND))).toEqual(["clp_b"]);
+    expect(ids(list(project([track("trk_1", clips)]), SECOND))).toEqual(["clp_b"]);
   });
 
   it("draws the tracks in array order, so index zero is the bottom of the stack", () => {
     const lower = track("trk_lower", [clip({ id: "clp_lower" })]);
     const upper = track("trk_upper", [clip({ id: "clp_upper" })]);
-    expect(ids(drawList(project([lower, upper]), 0))).toEqual(["clp_lower", "clp_upper"]);
+    expect(ids(list(project([lower, upper]), 0))).toEqual(["clp_lower", "clp_upper"]);
   });
 
   it("skips a hidden track", () => {
     const hidden = track("trk_1", [clip()], { hidden: true });
-    expect(ids(drawList(project([hidden]), 0))).toEqual([]);
+    expect(ids(list(project([hidden]), 0))).toEqual([]);
   });
 
   it("skips an audio track even when its clip points at a video medium", () => {
     const audio = track("trk_1", [clip()], { kind: "audio" });
-    expect(ids(drawList(project([audio]), 0))).toEqual([]);
+    expect(ids(list(project([audio]), 0))).toEqual([]);
   });
 
   it("skips a clip whose medium has no picture", () => {
     const silent = clip({ source: { kind: "media", media: SOUND } });
-    expect(ids(drawList(project([track("trk_1", [silent])]), 0))).toEqual([]);
+    expect(ids(list(project([track("trk_1", [silent])]), 0))).toEqual([]);
   });
 
   it("skips a fully transparent clip instead of drawing a no-op", () => {
     const invisible = clip({ transform: transform({ opacity: 0 }) });
-    expect(ids(drawList(project([track("trk_1", [invisible])]), 0))).toEqual([]);
+    expect(ids(list(project([track("trk_1", [invisible])]), 0))).toEqual([]);
   });
 
   it("skips a clip that is cropped down to nothing", () => {
     const gone = clip({ transform: transform({ crop: { left: 0.6, top: 0, right: 0.5, bottom: 0 } }) });
-    expect(ids(drawList(project([track("trk_1", [gone])]), 0))).toEqual([]);
+    expect(ids(list(project([track("trk_1", [gone])]), 0))).toEqual([]);
   });
 });
 
 describe("drawList geometry", () => {
   const only = (clips: Clip[], width = 1920, height = 1080): DrawItem => {
-    const list = drawList(project([track("trk_1", clips)], width, height), 0);
-    const [item] = list.items;
+    const drawn = list(project([track("trk_1", clips)], width, height), 0);
+    const [item] = drawn.items;
     if (item === undefined) throw new Error("expected one item");
     return item;
   };
@@ -221,7 +239,7 @@ describe("drawList geometry", () => {
 
 describe("drawList output state", () => {
   it("carries opacity and blend mode through untouched", () => {
-    const item = drawList(
+    const item = list(
       project([track("trk_1", [clip({ blend: "screen", transform: transform({ opacity: 0.25 }) })])]),
       0,
     ).items[0];
@@ -229,13 +247,13 @@ describe("drawList output state", () => {
   });
 
   it("reads the background out of the project settings", () => {
-    expect(drawList(project([], 1920, 1080, "#3366CC"), 0).background).toEqual([0.2, 0.4, 0.8, 1]);
+    expect(list(project([], 1920, 1080, "#3366CC"), 0).background).toEqual([0.2, 0.4, 0.8, 1]);
   });
 
   // The clear colour lands in a premultiplied drawing buffer, so a translucent background has to
   // arrive premultiplied too, or the page composites it far too bright.
   it("premultiplies a background that carries alpha", () => {
-    expect(drawList(project([], 1920, 1080, "#80808080"), 0).background).toEqual([
+    expect(list(project([], 1920, 1080, "#80808080"), 0).background).toEqual([
       (128 / 255) * (128 / 255),
       (128 / 255) * (128 / 255),
       (128 / 255) * (128 / 255),
@@ -244,7 +262,7 @@ describe("drawList output state", () => {
   });
 
   it("falls back to opaque black for a background it cannot read", () => {
-    expect(drawList(project([], 1920, 1080, "transparent"), 0).background).toEqual([0, 0, 0, 1]);
+    expect(list(project([], 1920, 1080, "transparent"), 0).background).toEqual([0, 0, 0, 1]);
   });
 });
 
@@ -290,5 +308,152 @@ describe("blendState", () => {
   it("falls back to normal for the modes fixed-function blending cannot express", () => {
     expect(blendState("overlay")).toEqual(blendState("normal"));
     expect(blendState("difference")).toEqual(blendState("normal"));
+  });
+});
+
+function effect(over: Record<string, unknown> = {}): Effect {
+  return {
+    id: "eff_1",
+    effectType: "brightness",
+    enabled: true,
+    params: {},
+    keyframes: {},
+    ...over,
+  } as Effect;
+}
+
+function params(entries: [string, [string, number][]][]): EffectParamSnapshot {
+  return new Map(
+    entries.map(([id, values]) => [
+      id,
+      new Map(values.map(([key, value]) => [key, { kind: "float", value } as ParamValue])),
+    ]),
+  );
+}
+
+function only(clips: Clip[], at: number, resolved: EffectParamSnapshot = new Map()): DrawItem {
+  const [item] = list(project([track("trk_1", clips)]), at, resolved).items;
+  if (item === undefined) throw new Error("expected one item");
+  return item;
+}
+
+describe("the effect chain in the draw list", () => {
+  it("takes the value the core resolved and not the one written on the effect", () => {
+    const authored = effect({ params: { amount: { kind: "float", value: 0.25 } } });
+    const item = only([clip({ effects: [authored] })], 0, params([["eff_1", [["amount", 3]]]]));
+
+    expect(item.effects).toEqual([{ effect: "brightness", values: { amount: 3 } }]);
+  });
+
+  // Where a keyframe track meets a clip boundary: the batch answers for the clip at 0.9 s and has
+  // nothing to say a tenth of a second later, and the item is gone rather than stuck on its last
+  // value -- because the clip is gone.
+  it("follows the resolved value from moment to moment", () => {
+    const clips = [clip({ effects: [effect()] })];
+
+    expect(only(clips, 0, params([["eff_1", [["amount", 0]]]])).effects[0]?.values).toEqual({
+      amount: 0,
+    });
+    expect(
+      only(clips, 0.9 * SECOND, params([["eff_1", [["amount", 2]]]])).effects[0]?.values,
+    ).toEqual({ amount: 2 });
+    expect(list(project([track("trk_1", clips)]), SECOND, new Map()).items).toEqual([]);
+  });
+
+  it("falls back to the manifest default when the core answered for nothing", () => {
+    const item = only([clip({ effects: [effect()] })], 0);
+
+    expect(item.effects[0]?.values).toEqual({ amount: 1 });
+  });
+
+  it("pulls a value from outside the declared range back in", () => {
+    const item = only([clip({ effects: [effect()] })], 0, params([["eff_1", [["amount", 40]]]]));
+
+    expect(item.effects[0]?.values.amount).toBe(4);
+  });
+
+  it("leaves out a disabled effect and one whose type it does not know", () => {
+    const clips = [
+      clip({
+        effects: [
+          effect({ id: "eff_off", enabled: false }),
+          effect({ id: "eff_future", effectType: "bokeh-2030" }),
+          effect({ id: "eff_1" }),
+        ],
+      }),
+    ];
+
+    expect(only(clips, 0).effects.map((pass) => pass.effect)).toEqual(["brightness"]);
+  });
+
+  // A transition takes two inputs and cannot run as a link in a one-input chain; letting it
+  // through would leave `u_second` bound to whatever the last pass happened to leave there.
+  it("refuses to run a two-input effect as a clip effect", () => {
+    const clips = [clip({ effects: [effect({ effectType: "crossfade" })] })];
+
+    expect(only(clips, 0).effects).toEqual([]);
+  });
+});
+
+function transition(over: Partial<Transition> = {}): Transition {
+  return {
+    transitionType: "crossfade",
+    duration: SECOND / 2,
+    alignment: "in",
+    params: {},
+    ...over,
+  } as Transition;
+}
+
+describe("a transition in the draw list", () => {
+  it("runs from nothing to everything across its own window", () => {
+    const clips = [clip({ transitionIn: transition() })];
+
+    // Progress zero contributes nothing at all, so the clip is left out entirely.
+    expect(list(project([track("trk_1", clips)]), 0, new Map()).items).toEqual([]);
+    expect(only(clips, SECOND / 8).mix?.values.progress).toBeCloseTo(0.25);
+    expect(only(clips, SECOND / 4).mix?.values.progress).toBeCloseTo(0.5);
+  });
+
+  // Past its window the clip is composited the ordinary way. A mix at full progress would paint
+  // the whole frame, including where the clip is transparent, and wipe out what is under it.
+  it("stops being a mix once the window is behind the moment", () => {
+    const clips = [clip({ transitionIn: transition() })];
+
+    expect(only(clips, SECOND / 2).mix).toBeUndefined();
+    expect(only(clips, 0.9 * SECOND).mix).toBeUndefined();
+  });
+
+  // The two axes the compositor cannot keep apart: a half-opaque clip halfway through its
+  // transition is a quarter mixed, not half and then half again.
+  it("carries the clip's opacity in the same progress", () => {
+    const clips = [
+      clip({ transform: transform({ opacity: 0.5 }), transitionIn: transition() }),
+    ];
+
+    expect(only(clips, SECOND / 4).mix?.values.progress).toBeCloseTo(0.25);
+  });
+
+  it("ignores a transition type it does not know and one with no duration", () => {
+    expect(only([clip({ transitionIn: transition({ transitionType: "wipe" }) })], 0).mix)
+      .toBeUndefined();
+    expect(only([clip({ transitionIn: transition({ duration: 0 }) })], 0).mix).toBeUndefined();
+  });
+
+  // A centred transition reaches back before the clip starts, where nothing is drawn, so the half
+  // that is visible starts halfway through. Documented rather than desirable: it needs handles.
+  it("starts a centred transition halfway through", () => {
+    const clips = [clip({ transitionIn: transition({ alignment: "center" }) })];
+
+    expect(only(clips, 0).mix?.values.progress).toBeCloseTo(0.5);
+  });
+
+  it("still runs the clip's own effects underneath the transition", () => {
+    const clips = [clip({ effects: [effect()], transitionIn: transition() })];
+
+    const item = only(clips, SECOND / 4, params([["eff_1", [["amount", 2]]]]));
+
+    expect(item.effects).toEqual([{ effect: "brightness", values: { amount: 2 } }]);
+    expect(item.mix?.effect).toBe("crossfade");
   });
 });

@@ -35,12 +35,13 @@ export type SourceTimes = (at: Time) => ReadonlyMap<string, Time>;
 // parameter it can answer for — interpolated where keyframes exist. Batched for the same reason
 // as `SourceTimes`, and carrying the same rule: the interpolation stays in the core, so the
 // preview and the export cannot arrive at different numbers for the same frame.
-export type EffectParams = (at: Time) => ReadonlyMap<string, ReadonlyMap<string, ParamValue>>;
+export type EffectParamSnapshot = ReadonlyMap<string, ReadonlyMap<string, ParamValue>>;
+export type EffectParams = (at: Time) => EffectParamSnapshot;
 
 export interface DocumentBackend {
   state(): Project;
   sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
-  effectParamsAt(at: Time): ReadonlyMap<string, ReadonlyMap<string, ParamValue>>;
+  effectParamsAt(at: Time): EffectParamSnapshot;
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
