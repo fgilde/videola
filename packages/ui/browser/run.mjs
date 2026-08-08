@@ -43,6 +43,11 @@ function runHarness() {
       "--disable-gpu",
       "--window-size=1200,900",
       "--force-device-scale-factor=1",
+      // The inspector sizes its controls from `any-pointer`, and this machine answers that
+      // question differently from one run to the next -- a touchscreen at desktop width is a real
+      // configuration, but a check that claims "a mouse" has to say so rather than hope for it.
+      // 1 is a fine pointer in Blink's enum.
+      "--blink-settings=availablePointerTypes=1,primaryPointerType=1",
       "--virtual-time-budget=20000",
       "--dump-dom",
       `file:///${join(here, "harness.html").replaceAll("\\", "/")}`,

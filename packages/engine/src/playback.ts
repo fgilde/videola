@@ -91,7 +91,8 @@ export class Playback {
 
   attach(canvas: HTMLCanvasElement | OffscreenCanvas): void {
     this.#detach();
-    this.#context = createContext(canvas);
+    // Readable: the preview is the one surface anything asks for a pixel back from.
+    this.#context = createContext(canvas, { readable: true });
     this.#compositor = new Compositor(this.#context);
   }
 

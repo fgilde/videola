@@ -128,7 +128,11 @@ localStorage.setItem("videola.locale", "de");
   // Read back through the very context the application draws into. Only meaningful while the
   // frame clock is stopped; once the page compositor has taken the buffer it is gone.
   function litPixels() {
-    const canvas = q("canvas");
+    // The preview by name, not "the first canvas on the page": since the library draws thumbnails
+    // there is more than one, and which comes first depends on when a decode finishes. The check
+    // then measured a 2D thumbnail, got no WebGL2 context out of it, and waited for a picture that
+    // was on screen the whole time.
+    const canvas = q(".v-preview__canvas");
     const gl = canvas.getContext("webgl2");
     if (gl === null) return -1;
     const pixels = new Uint8Array(canvas.width * canvas.height * 4);
@@ -143,7 +147,7 @@ localStorage.setItem("videola.locale", "de");
   // Mean channel value over the whole picture. `litPixels` counts, this weighs -- and a gain on
   // a clip is a change in weight long before it is a change in count.
   function luma() {
-    const canvas = q("canvas");
+    const canvas = q(".v-preview__canvas");
     const gl = canvas.getContext("webgl2");
     if (gl === null) return -1;
     const pixels = new Uint8Array(canvas.width * canvas.height * 4);
@@ -284,7 +288,7 @@ localStorage.setItem("videola.locale", "de");
   async function run() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
     check("nothing is wrong before anything happened", banner(), "");
-    check("WebGL2 is up behind the preview", q("canvas").getContext("webgl2") !== null, true);
+    check("WebGL2 is up behind the preview", q(".v-preview__canvas").getContext("webgl2") !== null, true);
 
     const bytes = await (await fetch("/fixture.mp4")).blob();
     const transfer = new DataTransfer();
@@ -624,7 +628,7 @@ localStorage.setItem("videola.locale", "de");
   // still the bare background. The second one is what a brightness-based count cannot answer --
   // a dark shot is dark whether it was fitted or not, but background is background.
   function measure(background) {
-    const canvas = q("canvas");
+    const canvas = q(".v-preview__canvas");
     const gl = canvas.getContext("webgl2");
     const pixels = new Uint8Array(canvas.width * canvas.height * 4);
     gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -679,7 +683,7 @@ localStorage.setItem("videola.locale", "de");
   }
 
   function centrePixel() {
-    const canvas = q("canvas");
+    const canvas = q(".v-preview__canvas");
     const gl = canvas.getContext("webgl2");
     const pixel = new Uint8Array(4);
     gl.readPixels(

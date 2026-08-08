@@ -15,6 +15,10 @@ const MAX_TEXTURE_SIZE = 0x0d33;
 const ATTRIBUTES: WebGLContextAttributes = {
   alpha: true,
   premultipliedAlpha: true,
+  // Off by default: the browser is free to hand the buffer to the page compositor and clear it,
+  // which is one copy per frame cheaper. The preview turns it on, because anything that wants to
+  // read a pixel back -- a harness, a bug report, a still -- otherwise reads zeros from a picture
+  // that is plainly on screen.
   preserveDrawingBuffer: false,
   antialias: false,
   depth: false,
@@ -22,8 +26,12 @@ const ATTRIBUTES: WebGLContextAttributes = {
   powerPreference: "high-performance",
 };
 
-export function createContext(canvas: HTMLCanvasElement | OffscreenCanvas): GlContext {
-  const gl = canvas.getContext("webgl2", ATTRIBUTES) as WebGL2RenderingContext | null;
+export function createContext(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  options: { readable?: boolean } = {},
+): GlContext {
+  const attributes = { ...ATTRIBUTES, preserveDrawingBuffer: options.readable === true };
+  const gl = canvas.getContext("webgl2", attributes) as WebGL2RenderingContext | null;
   if (gl === null) throw new Error("error.webglUnavailable");
   const target = canvas as unknown as EventTarget;
   const lost = new Set<() => void>();

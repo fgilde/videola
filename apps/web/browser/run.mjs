@@ -125,7 +125,9 @@ function launch(url, extra) {
   return execFile(chrome(), [
     "--headless",
     "--disable-gpu",
-    "--enable-unsafe-swiftshader",
+    // Not `--enable-unsafe-swiftshader`: under it `VideoEncoder.isConfigSupported` never settles,
+    // and the export asks it before deciding whether it can write sound. WebGL2 works under
+    // `--disable-gpu` alone -- the compositor harness passes all of its pixel checks there too.
     "--no-sandbox",
     "--autoplay-policy=no-user-gesture-required",
     "--force-device-scale-factor=1",
