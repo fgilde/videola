@@ -1,6 +1,6 @@
 use videola_core::command::{Command, Dispatch, TrimEdge};
 use videola_core::model::{
-    Clip, ClipSource, Generator, MediaId, ParamValue, Time, Timeline, Track, TrackKind,
+    Clip, ClipSource, Generator, MediaId, ParamValue, Time, Timeline, Track, TrackKind, Transition,
 };
 use videola_core::Document;
 
@@ -643,4 +643,149 @@ fn adding_a_gradient_clip_with_a_legitimate_angle_still_works() {
     }))
     .unwrap();
     assert_eq!(doc.project().timeline.tracks[0].clips.len(), 1);
+}
+
+#[allow(clippy::unwrap_used)]
+fn clip_id(doc: &Document) -> videola_core::model::ClipId {
+    doc.project().timeline.tracks[0].clips[0].id.clone()
+}
+
+// Without this command a 640x360 clip sits as a small rectangle in a 1080p frame: the draw list
+// maps one source pixel onto one project pixel, and nothing could ever say otherwise.
+#[test]
+fn setting_a_transform_scales_a_clip_to_fill_the_frame() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = clip_id(&doc);
+    let mut transform = doc.project().timeline.tracks[0].clips[0].transform.clone();
+    transform.scale_x = 3.0;
+    transform.scale_y = 3.0;
+    transform.crop.left = 0.1;
+
+    doc.dispatch(Dispatch::new(Command::ClipSetTransform {
+        clip,
+        transform: transform.clone(),
+    }))
+    .unwrap();
+
+    assert_eq!(
+        doc.project().timeline.tracks[0].clips[0].transform,
+        transform
+    );
+}
+
+#[test]
+fn a_non_finite_transform_is_rejected_and_would_not_load_either() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = clip_id(&doc);
+    let command: Command = serde_json::from_value(serde_json::json!({
+        "type": "clip.setTransform",
+        "clip": clip.as_str(),
+        "transform": {
+            "x": 0.0, "y": 0.0, "scaleX": 1e300, "scaleY": 1.0, "rotation": 0.0,
+            "anchorX": 0.5, "anchorY": 0.5, "opacity": 1.0,
+            "crop": { "left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0 },
+        },
+    }))
+    .unwrap();
+    assert!(doc.dispatch(Dispatch::new(command)).is_err());
+
+    let mut json = serde_json::to_value(doc.project()).unwrap();
+    json["timeline"]["tracks"][0]["clips"][0]["transform"]["scaleX"] = serde_json::json!(1e300);
+    let project: videola_core::model::Project = serde_json::from_value(json).unwrap();
+    assert!(Document::from_project(project).is_err());
+}
+
+#[test]
+fn undoing_a_transform_restores_the_previous_one() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = clip_id(&doc);
+    let before = doc.project().timeline.tracks[0].clips[0].transform.clone();
+    let mut transform = before.clone();
+    transform.rotation = 90.0;
+
+    doc.dispatch(Dispatch::new(Command::ClipSetTransform { clip, transform }))
+        .unwrap();
+    doc.undo().unwrap();
+
+    assert_eq!(doc.project().timeline.tracks[0].clips[0].transform, before);
+}
+
+#[test]
+fn a_transition_is_set_on_the_incoming_edge_and_cleared_by_null() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = clip_id(&doc);
+    let transition = Transition::new("crossfade", Time::from_seconds(1.0));
+
+    doc.dispatch(Dispatch::new(Command::ClipSetTransition {
+        clip: clip.clone(),
+        transition: Some(transition.clone()),
+    }))
+    .unwrap();
+    let placed = &doc.project().timeline.tracks[0].clips[0];
+    assert_eq!(placed.transition_in.as_ref(), Some(&transition));
+    assert!(placed.transition_out.is_none());
+
+    doc.dispatch(Dispatch::new(Command::ClipSetTransition {
+        clip,
+        transition: None,
+    }))
+    .unwrap();
+    assert!(doc.project().timeline.tracks[0].clips[0]
+        .transition_in
+        .is_none());
+}
+
+#[test]
+fn a_negative_transition_duration_is_rejected() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = clip_id(&doc);
+    let mut transition = Transition::new("crossfade", Time::from_flicks(-1));
+    transition.alignment = videola_core::model::TransitionAlignment::In;
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipSetTransition {
+            clip,
+            transition: Some(transition),
+        }))
+        .is_err());
+}
+
+#[test]
+fn a_non_finite_transition_param_is_rejected_and_would_not_load_either() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = clip_id(&doc);
+    let command: Command = serde_json::from_value(serde_json::json!({
+        "type": "clip.setTransition",
+        "clip": clip.as_str(),
+        "transition": {
+            "transitionType": "crossfade",
+            "duration": 705_600_000,
+            "alignment": "in",
+            "params": { "softness": { "kind": "float", "value": 1e300 } },
+        },
+    }))
+    .unwrap();
+    assert!(doc.dispatch(Dispatch::new(command)).is_err());
+
+    doc.dispatch(Dispatch::new(Command::ClipSetTransition {
+        clip,
+        transition: Some(Transition::new("crossfade", Time::from_seconds(1.0))),
+    }))
+    .unwrap();
+    let mut json = serde_json::to_value(doc.project()).unwrap();
+    json["timeline"]["tracks"][0]["clips"][0]["transitionIn"]["params"] =
+        serde_json::json!({ "softness": { "kind": "float", "value": 1e300 } });
+    let project: videola_core::model::Project = serde_json::from_value(json).unwrap();
+    assert!(Document::from_project(project).is_err());
+}
+
+#[test]
+fn a_transition_on_a_clip_that_is_not_there_is_rejected() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipSetTransition {
+            clip: videola_core::model::ClipId::from("clp_nope".to_string()),
+            transition: Some(Transition::new("crossfade", Time::from_seconds(1.0))),
+        }))
+        .is_err());
 }

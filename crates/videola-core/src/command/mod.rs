@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::model::{
-    ClipId, ClipSource, MediaAsset, MediaId, ParamValue, Project, ProjectSettings, Time, TrackId,
-    TrackKind,
+    ClipId, ClipSource, Interp, MediaAsset, MediaId, ParamValue, Project, ProjectSettings, Time,
+    TrackId, TrackKind, Transform, Transition,
 };
 use crate::Result;
 
@@ -79,6 +79,15 @@ pub enum Command {
     },
     #[serde(rename = "clip.setVolume")]
     ClipSetVolume { clip: ClipId, volume: f32 },
+    #[serde(rename = "clip.setTransform")]
+    ClipSetTransform { clip: ClipId, transform: Transform },
+    // A transition belongs to the incoming edge of a clip — the only edge the compositor reads
+    // (see `mixPass` in draw-list.ts). `null` clears it, so one command adds, retimes and removes.
+    #[serde(rename = "clip.setTransition")]
+    ClipSetTransition {
+        clip: ClipId,
+        transition: Option<Transition>,
+    },
 
     #[serde(rename = "effect.add")]
     EffectAdd { clip: ClipId, effect_type: String },
@@ -88,6 +97,42 @@ pub enum Command {
         effect_type: String,
         key: String,
         value: ParamValue,
+    },
+
+    // Keyframes address an effect parameter by `effectType`, the same way `effect.setParam` does.
+    // `keyframe.add` is an upsert: sending it repeatedly under one coalesce key is what turns a
+    // slider drag over a keyframed parameter into a single undo step.
+    #[serde(rename = "keyframe.add")]
+    KeyframeAdd {
+        clip: ClipId,
+        effect_type: String,
+        key: String,
+        time: Time,
+        value: ParamValue,
+        interp: Interp,
+    },
+    #[serde(rename = "keyframe.remove")]
+    KeyframeRemove {
+        clip: ClipId,
+        effect_type: String,
+        key: String,
+        time: Time,
+    },
+    #[serde(rename = "keyframe.move")]
+    KeyframeMove {
+        clip: ClipId,
+        effect_type: String,
+        key: String,
+        from: Time,
+        to: Time,
+    },
+    #[serde(rename = "keyframe.setInterp")]
+    KeyframeSetInterp {
+        clip: ClipId,
+        effect_type: String,
+        key: String,
+        time: Time,
+        interp: Interp,
     },
 
     #[serde(rename = "media.import")]
@@ -146,6 +191,12 @@ impl Command {
                 preserve_pitch,
             } => clip::set_speed(target, clip, *rate, *reverse, *preserve_pitch),
             Self::ClipSetVolume { clip, volume } => clip::set_volume(target, clip, *volume),
+            Self::ClipSetTransform { clip, transform } => {
+                clip::set_transform(target, clip, transform)
+            }
+            Self::ClipSetTransition { clip, transition } => {
+                clip::set_transition(target, clip, transition.as_ref())
+            }
             Self::EffectAdd { clip, effect_type } => clip::add_effect(target, clip, effect_type),
             Self::EffectSetParam {
                 clip,
@@ -153,6 +204,42 @@ impl Command {
                 key,
                 value,
             } => clip::set_effect_param(target, clip, effect_type, key, value.clone()),
+            Self::KeyframeAdd {
+                clip,
+                effect_type,
+                key,
+                time,
+                value,
+                interp,
+            } => clip::add_keyframe(
+                target,
+                clip,
+                effect_type,
+                key,
+                *time,
+                value.clone(),
+                *interp,
+            ),
+            Self::KeyframeRemove {
+                clip,
+                effect_type,
+                key,
+                time,
+            } => clip::remove_keyframe(target, clip, effect_type, key, *time),
+            Self::KeyframeMove {
+                clip,
+                effect_type,
+                key,
+                from,
+                to,
+            } => clip::move_keyframe(target, clip, effect_type, key, *from, *to),
+            Self::KeyframeSetInterp {
+                clip,
+                effect_type,
+                key,
+                time,
+                interp,
+            } => clip::set_keyframe_interp(target, clip, effect_type, key, *time, *interp),
             Self::MediaImport { asset } => project::import_media(target, asset),
             Self::MediaRemove { media } => project::remove_media(target, media),
         }
@@ -176,8 +263,14 @@ impl Command {
             Self::ClipSplit { .. } => LABEL_CLIP_SPLIT,
             Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
+            Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
+            Self::ClipSetTransition { .. } => LABEL_CLIP_SET_TRANSITION,
             Self::EffectAdd { .. } => LABEL_EFFECT_ADD,
             Self::EffectSetParam { .. } => LABEL_EFFECT_SET_PARAM,
+            Self::KeyframeAdd { .. } => LABEL_KEYFRAME_ADD,
+            Self::KeyframeRemove { .. } => LABEL_KEYFRAME_REMOVE,
+            Self::KeyframeMove { .. } => LABEL_KEYFRAME_MOVE,
+            Self::KeyframeSetInterp { .. } => LABEL_KEYFRAME_SET_INTERP,
             Self::MediaImport { .. } => LABEL_MEDIA_IMPORT,
             Self::MediaRemove { .. } => LABEL_MEDIA_REMOVE,
         }
@@ -200,12 +293,18 @@ pub const LABEL_CLIP_TRIM: &str = "cmd.clip.trim";
 pub const LABEL_CLIP_SPLIT: &str = "cmd.clip.split";
 pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
+pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
+pub const LABEL_CLIP_SET_TRANSITION: &str = "cmd.clip.setTransition";
 pub const LABEL_EFFECT_ADD: &str = "cmd.effect.add";
 pub const LABEL_EFFECT_SET_PARAM: &str = "cmd.effect.setParam";
+pub const LABEL_KEYFRAME_ADD: &str = "cmd.keyframe.add";
+pub const LABEL_KEYFRAME_REMOVE: &str = "cmd.keyframe.remove";
+pub const LABEL_KEYFRAME_MOVE: &str = "cmd.keyframe.move";
+pub const LABEL_KEYFRAME_SET_INTERP: &str = "cmd.keyframe.setInterp";
 pub const LABEL_MEDIA_IMPORT: &str = "cmd.media.import";
 pub const LABEL_MEDIA_REMOVE: &str = "cmd.media.remove";
 
-pub const ALL_COMMAND_LABELS: [&str; 20] = [
+pub const ALL_COMMAND_LABELS: [&str; 26] = [
     LABEL_PROJECT_SET_SETTINGS,
     LABEL_PROJECT_SET_TITLE,
     LABEL_TRACK_ADD,
@@ -222,8 +321,14 @@ pub const ALL_COMMAND_LABELS: [&str; 20] = [
     LABEL_CLIP_SPLIT,
     LABEL_CLIP_SET_SPEED,
     LABEL_CLIP_SET_VOLUME,
+    LABEL_CLIP_SET_TRANSFORM,
+    LABEL_CLIP_SET_TRANSITION,
     LABEL_EFFECT_ADD,
     LABEL_EFFECT_SET_PARAM,
+    LABEL_KEYFRAME_ADD,
+    LABEL_KEYFRAME_REMOVE,
+    LABEL_KEYFRAME_MOVE,
+    LABEL_KEYFRAME_SET_INTERP,
     LABEL_MEDIA_IMPORT,
     LABEL_MEDIA_REMOVE,
 ];

@@ -1,7 +1,7 @@
 use videola_core::command::{Command, Dispatch, TrimEdge, ALL_COMMAND_LABELS};
 use videola_core::model::{
-    ClipId, ClipSource, Generator, MediaAsset, MediaId, MediaKind, ParamValue, Project,
-    ProjectSettings, Time, TrackId, TrackKind,
+    ClipId, ClipSource, Generator, Interp, MediaAsset, MediaId, MediaKind, ParamValue, Project,
+    ProjectSettings, Time, TrackId, TrackKind, Transform, Transition,
 };
 use videola_core::Document;
 
@@ -220,6 +220,15 @@ fn undo_coverage_fixture() -> (Document, TrackId, TrackId, ClipId, MediaId) {
         effect_type: "brightness".into(),
     }))
     .unwrap();
+    doc.dispatch(Dispatch::new(Command::KeyframeAdd {
+        clip: clip.clone(),
+        effect_type: "brightness".into(),
+        key: "amount".into(),
+        time: Time::from_seconds(0.5),
+        value: ParamValue::Float(0.25),
+        interp: Interp::Linear,
+    }))
+    .unwrap();
 
     let media = MediaId::from_bytes(b"undo coverage fixture medium");
     doc.dispatch(Dispatch::new(Command::MediaImport {
@@ -330,6 +339,45 @@ fn every_command_undoes_to_the_exact_prior_state() {
             effect_type: "brightness".into(),
             key: "amount".into(),
             value: ParamValue::Float(0.5),
+        },
+        |_, _, clip, _| Command::ClipSetTransform {
+            clip: clip.clone(),
+            transform: Transform {
+                scale_x: 3.0,
+                ..Transform::default()
+            },
+        },
+        |_, _, clip, _| Command::ClipSetTransition {
+            clip: clip.clone(),
+            transition: Some(Transition::new("crossfade", Time::from_seconds(0.5))),
+        },
+        |_, _, clip, _| Command::KeyframeAdd {
+            clip: clip.clone(),
+            effect_type: "brightness".into(),
+            key: "amount".into(),
+            time: Time::from_seconds(1.0),
+            value: ParamValue::Float(0.75),
+            interp: Interp::Ease,
+        },
+        |_, _, clip, _| Command::KeyframeRemove {
+            clip: clip.clone(),
+            effect_type: "brightness".into(),
+            key: "amount".into(),
+            time: Time::from_seconds(0.5),
+        },
+        |_, _, clip, _| Command::KeyframeMove {
+            clip: clip.clone(),
+            effect_type: "brightness".into(),
+            key: "amount".into(),
+            from: Time::from_seconds(0.5),
+            to: Time::from_seconds(1.5),
+        },
+        |_, _, clip, _| Command::KeyframeSetInterp {
+            clip: clip.clone(),
+            effect_type: "brightness".into(),
+            key: "amount".into(),
+            time: Time::from_seconds(0.5),
+            interp: Interp::Hold,
         },
         |_, _, _, _| Command::MediaImport {
             asset: MediaAsset::new(

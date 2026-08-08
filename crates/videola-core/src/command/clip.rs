@@ -1,5 +1,9 @@
 use super::{bounded, find_clip_mut, finite, TrimEdge, MAX_VOLUME};
-use crate::model::{Clip, ClipId, ClipSource, Effect, MediaId, ParamValue, Project, Time, TrackId};
+use crate::model::keyframe::sort_track;
+use crate::model::{
+    Clip, ClipId, ClipSource, Effect, Interp, Keyframe, MediaId, ParamValue, Project, Time,
+    TrackId, Transform, Transition,
+};
 use crate::{CoreError, Result};
 
 pub(super) fn add(
@@ -173,6 +177,30 @@ pub(super) fn set_volume(target: &mut Project, clip: &ClipId, volume: f32) -> Re
     Ok(())
 }
 
+pub(super) fn set_transform(
+    target: &mut Project,
+    clip: &ClipId,
+    transform: &Transform,
+) -> Result<()> {
+    crate::model::project::transform_finite(transform)?;
+    let (track, index) = find_clip_mut(target, clip)?;
+    track.clips[index].transform = transform.clone();
+    Ok(())
+}
+
+pub(super) fn set_transition(
+    target: &mut Project,
+    clip: &ClipId,
+    transition: Option<&Transition>,
+) -> Result<()> {
+    if let Some(transition) = transition {
+        crate::model::project::transition_bounded(transition)?;
+    }
+    let (track, index) = find_clip_mut(target, clip)?;
+    track.clips[index].transition_in = transition.cloned();
+    Ok(())
+}
+
 pub(super) fn add_effect(target: &mut Project, clip: &ClipId, effect_type: &str) -> Result<()> {
     let (track, index) = find_clip_mut(target, clip)?;
     let effects = &mut track.clips[index].effects;
@@ -194,14 +222,124 @@ pub(super) fn set_effect_param(
     value: ParamValue,
 ) -> Result<()> {
     crate::model::project::param_value_finite(&value)?;
+    let effect = find_effect_mut(target, clip, effect_type)?;
+    effect.params.insert(key.to_string(), value);
+    Ok(())
+}
+
+// Replaces the keyframe already sitting at `time` rather than adding a second one there: two keys
+// at the same instant have no defined order, and the upsert is what lets a slider drag over a
+// keyframed parameter repeat this command under one coalesce key.
+pub(super) fn add_keyframe(
+    target: &mut Project,
+    clip: &ClipId,
+    effect_type: &str,
+    key: &str,
+    time: Time,
+    value: ParamValue,
+    interp: Interp,
+) -> Result<()> {
+    let keyframe = Keyframe {
+        time,
+        value,
+        interp,
+        handle_in: None,
+        handle_out: None,
+    };
+    crate::model::project::keyframe_bounded(&keyframe)?;
+    let effect = find_effect_mut(target, clip, effect_type)?;
+    let track = effect.keyframes.entry(key.to_string()).or_default();
+    match track.iter_mut().find(|existing| existing.time == time) {
+        Some(existing) => *existing = keyframe,
+        None => {
+            track.push(keyframe);
+            sort_track(track);
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn remove_keyframe(
+    target: &mut Project,
+    clip: &ClipId,
+    effect_type: &str,
+    key: &str,
+    time: Time,
+) -> Result<()> {
+    let effect = find_effect_mut(target, clip, effect_type)?;
+    let track = keyframe_track_mut(effect, key)?;
+    let index = position_at(track, time)?;
+    track.remove(index);
+    // An empty track would still read as "keyframed" in the JSON while `param_at` has already
+    // fallen back to the static value — the last removal takes the parameter back off the clock.
+    if track.is_empty() {
+        effect.keyframes.remove(key);
+    }
+    Ok(())
+}
+
+pub(super) fn move_keyframe(
+    target: &mut Project,
+    clip: &ClipId,
+    effect_type: &str,
+    key: &str,
+    from: Time,
+    to: Time,
+) -> Result<()> {
+    bounded(to)?;
+    let effect = find_effect_mut(target, clip, effect_type)?;
+    let track = keyframe_track_mut(effect, key)?;
+    let index = position_at(track, from)?;
+    if from != to && track.iter().any(|keyframe| keyframe.time == to) {
+        return Err(CoreError::InvalidArgument(
+            "a keyframe already sits at that time".into(),
+        ));
+    }
+    track[index].time = to;
+    sort_track(track);
+    Ok(())
+}
+
+pub(super) fn set_keyframe_interp(
+    target: &mut Project,
+    clip: &ClipId,
+    effect_type: &str,
+    key: &str,
+    time: Time,
+    interp: Interp,
+) -> Result<()> {
+    let effect = find_effect_mut(target, clip, effect_type)?;
+    let track = keyframe_track_mut(effect, key)?;
+    let index = position_at(track, time)?;
+    track[index].interp = interp;
+    Ok(())
+}
+
+fn find_effect_mut<'p>(
+    target: &'p mut Project,
+    clip: &ClipId,
+    effect_type: &str,
+) -> Result<&'p mut Effect> {
     let (track, index) = find_clip_mut(target, clip)?;
-    let effect = track.clips[index]
+    track.clips[index]
         .effects
         .iter_mut()
         .find(|effect| effect.effect_type == effect_type)
-        .ok_or_else(|| CoreError::InvalidArgument(format!("effect not on clip: {effect_type}")))?;
-    effect.params.insert(key.to_string(), value);
-    Ok(())
+        .ok_or_else(|| CoreError::InvalidArgument(format!("effect not on clip: {effect_type}")))
+}
+
+fn keyframe_track_mut<'e>(effect: &'e mut Effect, key: &str) -> Result<&'e mut Vec<Keyframe>> {
+    effect
+        .keyframes
+        .get_mut(key)
+        .ok_or_else(|| CoreError::InvalidArgument(format!("parameter is not keyframed: {key}")))
+}
+
+fn position_at(track: &[Keyframe], time: Time) -> Result<usize> {
+    track
+        .iter()
+        .position(|keyframe| keyframe.time == time)
+        .ok_or_else(|| CoreError::InvalidArgument("no keyframe at that time".into()))
 }
 
 fn sort_clips(track: &mut crate::model::Track) {

@@ -1,10 +1,12 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use ts_rs::TS;
 
-use super::clip::{Clip, ClipSource, Generator};
+use super::clip::{Clip, ClipSource, Generator, Transform};
 use super::effect::{Effect, Transition};
-use super::keyframe::sort_track;
+use super::keyframe::{sort_track, Keyframe};
 use super::media::MediaAsset;
 use super::param::ParamValue;
 use super::timeline::{Marker, Timeline, Track};
@@ -119,13 +121,7 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     clip_scalars_finite(clip)?;
     normalize_transition(&clip.transition_in)?;
     normalize_transition(&clip.transition_out)?;
-    for keyframes in clip.keyframes.values_mut() {
-        sort_track(keyframes);
-        for keyframe in keyframes.iter() {
-            bounded(keyframe.time)?;
-            param_value_finite(&keyframe.value)?;
-        }
-    }
+    normalize_keyframes(&mut clip.keyframes)?;
     match &mut clip.source {
         ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
         ClipSource::Generator {
@@ -160,7 +156,11 @@ pub(crate) fn param_value_finite(value: &ParamValue) -> Result<()> {
 fn clip_scalars_finite(clip: &Clip) -> Result<()> {
     finite(clip.volume)?;
     finite(clip.pan)?;
-    let transform = &clip.transform;
+    transform_finite(&clip.transform)
+}
+
+// Shared with `command::clip::set_transform`, which takes a whole `Transform` off the wire.
+pub(crate) fn transform_finite(transform: &Transform) -> Result<()> {
     for value in [
         transform.x,
         transform.y,
@@ -182,9 +182,17 @@ fn clip_scalars_finite(clip: &Clip) -> Result<()> {
 
 fn normalize_transition(transition: &Option<Transition>) -> Result<()> {
     match transition {
-        Some(transition) => bounded(transition.duration),
+        Some(transition) => transition_bounded(transition),
         None => Ok(()),
     }
+}
+
+// Shared with `command::clip::set_transition`, which takes a whole `Transition` off the wire.
+// `params` are unread by the M1 renderer but still cross into JS, where a non-finite float
+// becomes `null` without anything raising.
+pub(crate) fn transition_bounded(transition: &Transition) -> Result<()> {
+    bounded(transition.duration)?;
+    transition.params.values().try_for_each(param_value_finite)
 }
 
 fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
@@ -192,13 +200,31 @@ fn normalize_effects(effects: &mut [Effect]) -> Result<()> {
         for value in effect.params.values() {
             param_value_finite(value)?;
         }
-        for keyframes in effect.keyframes.values_mut() {
-            sort_track(keyframes);
-            for keyframe in keyframes.iter() {
-                bounded(keyframe.time)?;
-                param_value_finite(&keyframe.value)?;
-            }
-        }
+        normalize_keyframes(&mut effect.keyframes)?;
+    }
+    Ok(())
+}
+
+fn normalize_keyframes(tracks: &mut BTreeMap<String, Vec<Keyframe>>) -> Result<()> {
+    for keyframes in tracks.values_mut() {
+        sort_track(keyframes);
+        keyframes.iter().try_for_each(keyframe_bounded)?;
+    }
+    Ok(())
+}
+
+// Shared with every `keyframe.*` command, so a keyframe one route accepts is never one the other
+// route would refuse to load back. The handles are the reason this is a function rather than two
+// lines: `Interp::Bezier` feeds them into `cubic_bezier_y_at`, and a NaN there propagates through
+// `lerp` into the interpolated value — the same non-finite-into-JS hole `finite` closes elsewhere.
+pub(crate) fn keyframe_bounded(keyframe: &Keyframe) -> Result<()> {
+    bounded(keyframe.time)?;
+    param_value_finite(&keyframe.value)?;
+    for handle in [keyframe.handle_in, keyframe.handle_out]
+        .into_iter()
+        .flatten()
+    {
+        handle.iter().try_for_each(|c| finite(*c).map(|_| ()))?;
     }
     Ok(())
 }
