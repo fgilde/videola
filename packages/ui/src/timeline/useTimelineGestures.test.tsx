@@ -96,10 +96,11 @@ interface PointerStep {
   clientX?: number;
   clientY?: number;
   altKey?: boolean;
+  button?: number;
 }
 
 function down(target: Element, step: PointerStep): void {
-  fireEvent.pointerDown(target, { pointerId: 1, pointerType: "mouse", clientY: 40, ...step });
+  fireEvent.pointerDown(target, { pointerId: 1, pointerType: "mouse", clientY: 40, button: 0, ...step });
 }
 
 function move(step: PointerStep): void {
@@ -191,6 +192,50 @@ describe("timeline gestures", () => {
     expect(onlyClip(doc.state).start).toBe(1 * SECOND);
     doc.undo();
     expect(onlyClip(doc.state).start).toBe(0);
+  });
+
+  it("leaves the timeline alone for every button but the primary one", async () => {
+    const doc = await documentWithOneClip();
+    const dispatched: Command[] = [];
+    render(<Harness doc={doc} onDispatch={(command) => dispatched.push(command)} />);
+
+    down(clipElement(), { clientX: 0, button: 2 });
+    move({ clientX: 300 });
+    up({ clientX: 300 });
+
+    expect(dispatched).toEqual([]);
+    expect(onlyClip(doc.state).start).toBe(0);
+  });
+
+  // The browser cancels the pointer when it takes a gesture over. Committing the half of a drag
+  // the user never finished is an edit they did not make.
+  it("puts a clip back where it started when the browser cancels the drag", async () => {
+    const doc = await documentWithOneClip();
+    render(<Harness doc={doc} />);
+
+    down(clipElement(), { clientX: 0 });
+    for (let step = 1; step <= 20; step += 1) move({ clientX: step * 10 });
+    expect(onlyClip(doc.state).start).toBe(2 * SECOND);
+
+    fireEvent.pointerCancel(surface(), { pointerId: 1, pointerType: "touch", clientX: 200, clientY: 40 });
+
+    expect(onlyClip(doc.state).start).toBe(0);
+  });
+
+  it("puts a trimmed edge back when the browser cancels the drag", async () => {
+    const doc = await documentWithOneClip();
+    render(<Harness doc={doc} />);
+    const before = onlyClip(doc.state).duration;
+    const endHandle = clipElement().querySelector('[data-edge="end"]');
+    if (endHandle === null) throw new Error("trim handle missing");
+
+    down(endHandle, { clientX: 1000 });
+    move({ clientX: 800 });
+    expect(onlyClip(doc.state).duration).not.toBe(before);
+
+    fireEvent.pointerCancel(surface(), { pointerId: 1, pointerType: "touch", clientX: 800, clientY: 40 });
+
+    expect(onlyClip(doc.state).duration).toBe(before);
   });
 
   it("never drags a clip before the start of the timeline", async () => {
@@ -491,15 +536,34 @@ describe("pinch and wheel zoom", () => {
     expect(clipWidth()).toBe(5 * PX_PER_SECOND);
   });
 
-  it("does not drag a clip while two pointers are down", async () => {
+  // A palm landing next to the finger that is dragging is not a request to zoom, and it must
+  // not end the drag either -- the gesture used to die there and stay dead.
+  it("keeps a running drag alive through a stray second contact", async () => {
     const doc = await documentWithOneClip();
     render(<Harness doc={doc} />);
 
     down(clipElement(), { clientX: 100 });
     fireEvent.pointerDown(surface(), { pointerId: 2, pointerType: "touch", clientX: 400, clientY: 40 });
+    fireEvent.pointerUp(surface(), { pointerId: 2, pointerType: "touch", clientX: 400, clientY: 40 });
     move({ clientX: 300 });
+    up({ clientX: 300 });
 
-    expect(onlyClip(doc.state).start).toBe(0);
+    expect(onlyClip(doc.state).start).toBe(2 * SECOND);
+  });
+
+  it("carries a pinch through the lifting of a third pointer", async () => {
+    const doc = await documentWithOneClip();
+    render(<Harness doc={doc} />);
+    const width = () => Number.parseFloat(clipElement().style.width);
+    const before = width();
+
+    fireEvent.pointerDown(surface(), { pointerId: 1, pointerType: "touch", clientX: 200, clientY: 40 });
+    fireEvent.pointerDown(surface(), { pointerId: 2, pointerType: "touch", clientX: 400, clientY: 40 });
+    fireEvent.pointerDown(surface(), { pointerId: 3, pointerType: "touch", clientX: 500, clientY: 40 });
+    fireEvent.pointerUp(surface(), { pointerId: 3, pointerType: "touch", clientX: 500, clientY: 40 });
+    fireEvent.pointerMove(surface(), { pointerId: 2, pointerType: "touch", clientX: 600, clientY: 40 });
+
+    expect(width()).toBeGreaterThan(before);
   });
 
   // A trackpad pinch never arrives as two pointers; the browser turns it into ctrl+wheel.

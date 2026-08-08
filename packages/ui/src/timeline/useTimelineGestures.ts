@@ -67,10 +67,10 @@ export interface GestureConfig {
 }
 
 type Drag =
-  | { mode: "move"; clip: ClipId; clientX: number; clientY: number; start: Time; key: string; live: boolean }
-  | { mode: "trim"; clip: ClipId; edge: TrimEdge; clientX: number; clientY: number; edgeTime: Time; key: string; live: boolean }
-  | { mode: "scrub" }
-  | { mode: "pinch"; distance: number; flicksPerPixel: number };
+  | { mode: "move"; pointerId: number; clip: ClipId; track: TrackId; clientX: number; clientY: number; start: Time; key: string; live: boolean }
+  | { mode: "trim"; pointerId: number; clip: ClipId; edge: TrimEdge; clientX: number; clientY: number; edgeTime: Time; key: string; live: boolean }
+  | { mode: "scrub"; pointerId: number }
+  | { mode: "pinch" ; distance: number; flicksPerPixel: number };
 
 let gestureSequence = 0;
 
@@ -111,6 +111,9 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const onPointerDown = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       const config = latest.current;
+      // Only the primary button edits. Without this the right button starts a move drag and the
+      // context menu opens on top of the edit it just made.
+      if (event.button !== 0) return;
       notePointerType(event.pointerType, setTrimZonePx);
       // A press left over from an earlier pointerdown would fire into this gesture and cancel
       // its drag half a second in; only one press timer may ever be pending.
@@ -118,8 +121,10 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
       setMenu(undefined);
 
-      if (pointers.current.size === 2) {
-        cancelLongPress();
+      if (pointers.current.size >= 2) {
+        // A stray second contact during a drag must not end it -- on a phone that is a palm,
+        // not a request to zoom. Only a gesture that is not already moving something pinches.
+        if (drag.current?.mode === "move" || drag.current?.mode === "trim") return;
         drag.current = {
           mode: "pinch",
           distance: pointerDistance(pointers.current),
@@ -127,7 +132,6 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         };
         return;
       }
-      if (pointers.current.size > 2) return;
 
       capture(event);
       const hit = hitTest(event.target);
@@ -137,7 +141,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         return;
       }
       if (hit.kind === "ruler") {
-        drag.current = { mode: "scrub" };
+        drag.current = { mode: "scrub", pointerId: event.pointerId };
         setSnapLine(seekTo(config, event.clientX, snapOptions(config, event.altKey))?.time);
         return;
       }
@@ -154,7 +158,9 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         hit.edge === undefined
           ? {
               mode: "move",
+              pointerId: event.pointerId,
               clip: hit.clip,
+              track: found.track,
               clientX: event.clientX,
               clientY: event.clientY,
               start: found.clip.start,
@@ -163,6 +169,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
             }
           : {
               mode: "trim",
+              pointerId: event.pointerId,
               clip: hit.clip,
               edge: hit.edge,
               clientX: event.clientX,
@@ -220,17 +227,46 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
     [cancelLongPress],
   );
 
-  const endPointer = useCallback(
-    (event: PointerEvent<HTMLElement>) => {
+  // Leaving the coalesce key off from here on is what closes the undo step; the next
+  // pointerdown mints a fresh one.
+  const releasePointer = useCallback(
+    (event: PointerEvent<HTMLElement>, revert: boolean) => {
       cancelLongPress();
-      setSnapLine(undefined);
       pointers.current.delete(event.pointerId);
-      // Leaving the coalesce key off from here on is what closes the undo step; the next
-      // pointerdown mints a fresh one.
-      if (pointers.current.size === 0) drag.current = undefined;
-      else if (drag.current?.mode === "pinch") drag.current = undefined;
+      const active = drag.current;
+      if (active === undefined) return;
+
+      if (active.mode === "pinch") {
+        // Lifting one of three fingers leaves a pinch that can still run; re-seeding from the
+        // remaining pair continues it instead of ending the gesture under the user's hands.
+        drag.current =
+          pointers.current.size >= 2
+            ? {
+                mode: "pinch",
+                distance: pointerDistance(pointers.current),
+                flicksPerPixel: latest.current.flicksPerPixel,
+              }
+            : undefined;
+        return;
+      }
+      if (active.pointerId !== event.pointerId) return;
+      if (revert) revertDrag(latest.current, active);
+      drag.current = undefined;
+      setSnapLine(undefined);
     },
     [cancelLongPress],
+  );
+
+  const onPointerUp = useCallback(
+    (event: PointerEvent<HTMLElement>) => releasePointer(event, false),
+    [releasePointer],
+  );
+
+  // The browser cancels a pointer when it takes the gesture over -- a phone doing that mid-drag
+  // is ordinary, and committing half a drag the user never finished is an edit they did not make.
+  const onPointerCancel = useCallback(
+    (event: PointerEvent<HTMLElement>) => releasePointer(event, true),
+    [releasePointer],
   );
 
   const onContextMenu = useCallback(
@@ -249,8 +285,8 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   return {
     onPointerDown,
     onPointerMove,
-    onPointerUp: endPointer,
-    onPointerCancel: endPointer,
+    onPointerUp,
+    onPointerCancel,
     onContextMenu,
     trimZonePx,
     menu,
@@ -298,6 +334,25 @@ function applyTrim(
     attempt(() => config.dispatch(cmd.clipTrim(active.clip, active.edge, step), active.key));
   }
   return snapped.candidate;
+}
+
+// ponytail: the restore rides the gesture's own coalesce key, so the whole drag collapses into
+// one history entry with an empty patch -- an undo step that does nothing. Dropping the entry
+// outright needs a history.drop(key) in the core, which does not exist.
+function revertDrag(config: GestureConfig, active: Drag): void {
+  if (active.mode === "move") {
+    if (!active.live) return;
+    const command = cmd.clipMove(active.clip, active.track, active.start);
+    attempt(() => config.dispatch(command, active.key));
+    return;
+  }
+  if (active.mode !== "trim" || !active.live) return;
+  const found = findClip(config.project, active.clip);
+  if (found === undefined) return;
+  const step = active.edgeTime - edgeTime(found.clip, active.edge);
+  if (step === 0) return;
+  const command = cmd.clipTrim(active.clip, active.edge, step);
+  attempt(() => config.dispatch(command, active.key));
 }
 
 function candidatesFor(config: GestureConfig, exclude: ClipId): SnapCandidate[] {
