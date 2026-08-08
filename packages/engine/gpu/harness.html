@@ -435,6 +435,15 @@ test("saturation leaves a half-transparent clip half transparent", () => {
     through("saturation", { amount: 0 }, [255, 0, 0, 128]).at(2, 2), [27, 27, 27, 255]);
 });
 
+// Where a clamp to alpha is the only thing that clamps. Pushing an *opaque* channel past 1 costs
+// nothing to get wrong -- the RGBA8 target clamps it on the way in -- so an over-saturated opaque
+// pixel proves nothing about the clamp. Over alpha and under 1 is the gap the hardware leaves, and
+// without the clamp this half-transparent red comes back at 229 instead of 128.
+test("saturation past one cannot push a channel past its own alpha", () => {
+  check("a half-transparent red pushed hard",
+    through("saturation", { amount: 2 }, [255, 0, 0, 128]).at(2, 2), [128, 0, 0, 255]);
+});
+
 test("a desaturated clip still honours its blend mode", () => {
   check("grey added onto a red background",
     through("saturation", { amount: 0 }, [200, 100, 100, 255],
@@ -447,9 +456,14 @@ test("colour temperature trades red against blue", () => {
   check("cold", through("temperature", { amount: -0.5 }, grey).at(2, 2), [64, 128, 192, 255]);
   check("neutral is the picture it was given",
     through("temperature", { amount: 0 }, grey).at(2, 2), grey);
-  // Red would land at 1.57 without the clamp, which is not a premultiplied colour at all.
-  check("a channel pushed past its own alpha stops there",
+  // Red lands at 1.57 here, and the RGBA8 target would have clamped that on its own -- so this says
+  // the effect runs, not that it clamps.
+  check("a channel driven past one comes back at one",
     through("temperature", { amount: 1 }, [200, 200, 200, 255]).at(2, 2), [255, 200, 0, 255]);
+  // Past alpha but under one is the gap the hardware leaves open, and the only place the clamp is the
+  // thing being measured: without it this comes back at 201 rather than 128.
+  check("and a channel driven past its own alpha stops at that",
+    through("temperature", { amount: 1 }, [200, 200, 200, 128]).at(2, 2), [128, 100, 0, 255]);
 });
 
 test("a vignette darkens the corners and not the middle", () => {
@@ -459,6 +473,16 @@ test("a vignette darkens the corners and not the middle", () => {
   check("the corner is nearly gone", strong.at(0, 0), [8, 8, 8, 255], 2);
   check("and at strength zero the corner is untouched too",
     through("vignette", { amount: 0, size: 0.6 }, white, { size: 16 }).at(0, 0), white);
+});
+
+// Over an opaque background a vignette that eats alpha as well as colour is indistinguishable from
+// one that does not -- both come back at 8. Over a coloured one it is the difference between a dark
+// corner and a corner that has become a window: 8 against 255.
+test("a vignette darkens the picture rather than dissolving it", () => {
+  const over = { size: 16, background: "#ff0000" };
+  const shot = through("vignette", { amount: 1, size: 0.6 }, [255, 255, 255, 255], over);
+  check("the darkened corner is dark, not the background showing through", shot.at(0, 0),
+    [8, 8, 8, 255], 2);
 });
 
 // A single bright column, blurred. The horizontal sweep spreads it and the vertical one cannot,
@@ -597,6 +621,14 @@ test("a wipe uncovers the incoming clip without moving it", () => {
   const half = crossing("wipe", 500, Object.assign({ params: { softness: 0 } }, SPLIT));
   check("the uncovered side shows the incoming clip where it belongs", half.at(4, 8), GREEN);
   check("the covered side still shows the outgoing one where it belongs", half.at(12, 8), YELLOW);
+});
+
+// A soft edge has width, so it has to travel further than the frame is wide or its trailing side never
+// leaves: a band of the outgoing clip would sit at the far edge for the whole of the wipe. Invisible
+// at softness zero, which is what every other wipe check here uses.
+test("a soft wipe carries its trailing edge off the frame", () => {
+  const late = crossing("wipe", 900, { params: { softness: 0.2 } });
+  check("the far edge is mostly the incoming clip by then", late.at(15, 8), [106, 0, 149, 255], 4);
 });
 
 test("a wipe at ninety degrees comes down the frame", () => {
@@ -850,6 +882,50 @@ test("a generator's picture survives a second frame", () => {
     frames.pictures(scene, new Set(["clp_0"])).get("clp_0"));
   check("and no driver error", context.gl.getError(), 0);
   frames.close();
+});
+
+// The other half of caching by what was painted: an edit has to reach the screen. Keyed by the clip
+// alone, a title would keep the words it was created with for as long as it stayed visible.
+test("an edited title is painted again", () => {
+  const scene = project(32, 32, "#ff0000", []);
+  const generator = { type: "text", content: "III", style: { color: "#ffffff", fontSize: 0.5 } };
+  scene.timeline.tracks[0] = { id: "trk_0", kind: "video", hidden: false, clips: [{
+    id: "clp_0", source: { kind: "generator", generator }, start: 0, duration: 1000,
+    blend: "normal", effects: [], transform: transform() }] };
+  const frames = new R.GeneratorFrames();
+  const before = frames.pictures(scene, new Set(["clp_0"])).get("clp_0");
+  generator.content = "IIIIIIII";
+  const after = frames.pictures(scene, new Set(["clp_0"])).get("clp_0");
+  check("a different picture came back", before === after, false);
+  check("and the one it replaced was closed", before.format, null);
+  frames.close();
+});
+
+// Wrapping, measured as the height of the block rather than as a line count: a title that ignores its
+// own width is one long line, and one long line is one line tall.
+function tallness(shot, size) {
+  let top = size;
+  let bottom = -1;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (shot.at(x, y)[1] <= 40) continue;
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+  }
+  return bottom - top;
+}
+
+test("a title wraps to the width its style allows", () => {
+  const style = { color: "#ffffff", fontSize: 0.16, maxWidth: 0.9 };
+  const wide = generated({ type: "text", content: "IIII IIII IIII", style });
+  const narrow = generated({ type: "text", content: "IIII IIII IIII",
+    style: Object.assign({}, style, { maxWidth: 0.25 }) });
+  check("the narrow one is taller than the wide one",
+    tallness(narrow, 32) > tallness(wide, 32) + 4, true);
+  check("and a hard break breaks even inside the width",
+    tallness(generated({ type: "text", content: "IIII\nIIII", style }), 32) >
+      tallness(generated({ type: "text", content: "IIII IIII", style }), 32) + 4, true);
 });
 
 // A clip that has left the screen keeps a full-frame picture alive otherwise, and one scrub through a
