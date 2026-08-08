@@ -4,6 +4,7 @@ pub mod error;
 pub mod format;
 pub mod history;
 pub mod model;
+pub mod template;
 
 pub use command::{Command, Dispatch};
 pub use document::{DispatchResult, Document};

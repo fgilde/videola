@@ -25,6 +25,10 @@
   // and jsdom computes no boxes at all. It runs on the virtual clock so the picture survives to
   // be read back and photographed.
   const phone = location.search.includes("phone");
+  // The template run is its own script for the same reason the phone run is: what it has to answer
+  // is whether a baked template can be *seen*, which means reading the drawing buffer, which means
+  // the virtual clock.
+  const templates = location.search.includes("templates");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -455,6 +459,206 @@
     await photograph("phone");
   }
 
+  // A controlled React input does not notice `input.value = x`: React remembers the value it wrote
+  // last and treats an identical one as no change. Going through the prototype's own setter is what
+  // makes the assignment visible to it.
+  function setValue(element, value) {
+    const prototype =
+      element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value").set.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // The one way a real browser lets a script hand a file to <input type="file">: assigning a
+  // FileList built by a DataTransfer. That is exactly why the wizard uses a native input and not a
+  // scripted picker.
+  async function chooseFile(input, name) {
+    const bytes = await (await fetch("/fixture.mp4")).blob();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], name, { type: "video/mp4" }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // Two counts out of one read: how much of the frame carries a picture, and how much of it is
+  // still the bare background. The second one is what a brightness-based count cannot answer --
+  // a dark shot is dark whether it was fitted or not, but background is background.
+  function measure(background) {
+    const canvas = q("canvas");
+    const gl = canvas.getContext("webgl2");
+    const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+    gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let lit = 0;
+    let bare = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i] > 12 || pixels[i + 1] > 12 || pixels[i + 2] > 12) lit += 1;
+      const off =
+        Math.abs(pixels[i] - background[0]) +
+        Math.abs(pixels[i + 1] - background[1]) +
+        Math.abs(pixels[i + 2] - background[2]);
+      if (off <= 9) bare += 1;
+    }
+    const total = pixels.length / 4;
+    return { lit, bare: total === 0 ? 1 : bare / total };
+  }
+
+  function centrePixel() {
+    const canvas = q("canvas");
+    const gl = canvas.getContext("webgl2");
+    const pixel = new Uint8Array(4);
+    gl.readPixels(
+      Math.floor(canvas.width / 2),
+      Math.floor(canvas.height / 2),
+      1,
+      1,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      pixel,
+    );
+    return [...pixel];
+  }
+
+  // Gallery, wizard, bake, and then the only question that matters: is the result something a
+  // person would look at. jsdom answers none of it -- it computes no boxes, has no WebGL, and no
+  // FileList can be handed to an input there.
+  async function runTemplates() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    labelled("Aus Vorlage").click();
+    const gallery = await until("the gallery", () => q('[data-testid="template-gallery"]'));
+
+    const cards = [...gallery.querySelectorAll("[data-template-id]")];
+    check("the gallery shows every template that ships", cards.length, 4);
+    check(
+      "and each one under its own name",
+      cards.map((card) => card.querySelector(".v-template__name").textContent),
+      ["Drei Aufnahmen", "Auftakt und Abspann", "Hochformat-Story", "Bild im Bild"],
+    );
+    // The card draws the timeline the template will build, so the count is the template's clip
+    // count -- three for the montage, one per track for the picture in picture.
+    check(
+      "the card draws one block per clip the template will make",
+      [
+        card("three-shots").querySelectorAll(".v-template__block").length,
+        card("picture-in-picture").querySelectorAll(".v-template__block").length,
+        card("picture-in-picture").querySelectorAll(".v-template__lane").length,
+      ],
+      [3, 2, 2],
+    );
+    check(
+      "and marks the one that dissolves",
+      card("three-shots").querySelectorAll(".v-template__block[data-dissolve]").length,
+      2,
+    );
+    check("an untouched project is not worth saving as a template",
+      labelled("Projekt als Vorlage speichern"), undefined);
+
+    card("three-shots").querySelector("button").click();
+    const wizard = await until("the wizard", () => q('[data-testid="template-wizard"]'));
+    check("the wizard opens on the template's own first step",
+      wizard.querySelector('[role="status"]').textContent.includes("Schritt 1 von 2"), true);
+    check("with one field per placeholder of that step",
+      [...wizard.querySelectorAll("[data-slot-id]")].map((slot) => slot.dataset.slotId),
+      ["shot1", "shot2", "shot3"]);
+    check("it says how much material a placeholder wants",
+      wizard.textContent.includes("Braucht mindestens 2,5 s Material."), true);
+
+    const advance = () => labelled("Weiter").closest("button");
+    check("and refuses to go on while the placeholders are empty", advance().disabled, true);
+
+    await chooseFile(fileInput("shot1"), "fixture.mp4");
+    await until("the first choice to register", () => q('[data-chosen="shot1"]'));
+    await chooseFile(fileInput("shot2"), "fixture.mp4");
+    await until("the second choice to register", () => q('[data-chosen="shot2"]'));
+    check("two out of three is still not enough", advance().disabled, true);
+
+    await chooseFile(fileInput("shot3"), "fixture.mp4");
+    await until("the third choice to register", () => q('[data-chosen="shot3"]'));
+    check("the third one opens the way on", advance().disabled, false);
+    check("choosing material raised nothing", banner(), "");
+
+    advance().click();
+    await until("the second step", () =>
+      q('[data-testid="template-wizard"] [data-slot-id="title"]'));
+    check("the name field starts on the template's own name",
+      q('[data-slot-id="title"] input[type="text"]').value, "Drei Aufnahmen");
+    setValue(q('[data-slot-id="title"] input[type="text"]'), "Sommer 2026");
+    setValue(q('[data-slot-id="color"] input[type="color"]'), "#1188ff");
+    await sleep(100);
+    check("what was typed is what the field holds",
+      [
+        q('[data-slot-id="title"] input[type="text"]').value,
+        q('[data-slot-id="color"] input[type="color"]').value,
+      ],
+      ["Sommer 2026", "#1188ff"]);
+
+    labelled("Projekt erstellen").click();
+    await until("the wizard to close", () => q('[data-testid="template-wizard"]') === null);
+    check("the gallery closed with it", q('[data-testid="template-gallery"]'), null);
+    check("baking raised nothing", banner(), "");
+
+    const clips = [...document.querySelectorAll("[data-clip-id]")];
+    check("the template's three clips are on the timeline", clips.length, 3);
+    // Two and a half seconds is 250 px at the default zoom, and 2.0 s of material is all the
+    // fixture has. A bake that shortened the clip to what the file holds would give 200 px and a
+    // hole where the dissolve expects a picture; slowing it keeps the rhythm the card promised.
+    check("each one is as long as the template says, not as long as the file",
+      clips.map((clip) => Math.round(clip.getBoundingClientRect().width)), [250, 250, 250]);
+    check("and they overlap by the length of the dissolve",
+      clips.map((clip) => clip.offsetLeft), [0, 200, 400]);
+    check("the same file chosen three times is one medium",
+      document.querySelectorAll("[data-media-id]").length, 1);
+
+    // The tab is where a project's name is visible in this version, and a passive effect is what
+    // puts it there, so it is waited for rather than read on the same turn.
+    await until("the name to reach the tab", () => document.title !== "Videola", 10000);
+    check("the typed name is the project's name", document.title, "Sommer 2026 — Videola");
+
+    // A 640x360 clip maps one source pixel to one project pixel unless something fitted it, and in
+    // a 1920x1080 frame that leaves eight ninths of the picture showing the bare background.
+    // Nothing in this version's interface sets a transform, so a frame with no background left in
+    // it can only have come from the bake. Counted against the background rather than against
+    // brightness on purpose: a dark shot is dark either way, but background is background.
+    const blue = [0x11, 0x88, 0xff];
+    // Both counts out of the same read. Two reads would let the second one land after the page
+    // compositor has taken the buffer, and an empty buffer holds no background either -- the
+    // measurement would pass by being blank rather than by being right.
+    const shown = await until("the baked picture", () => {
+      const measured = measure(blue);
+      return measured.lit > 1000 ? measured : null;
+    }, 40000);
+    checkAtLeast("the baked project shows a decoded frame", shown.lit, 1000);
+    check("and the fitted clip leaves no background showing", shown.bare < 0.2, true);
+
+    // Past the last clip there is nothing but the background, which is where the colour answer
+    // becomes something a person can see. Waited for as "an opaque pixel that is not the one on the
+    // clip" rather than as "a blue pixel": a wrong colour has to fail the three checks below, not
+    // time the wait out. The opacity is what rules out a buffer the page compositor has already
+    // taken -- that reads back as four zeroes, which is a change like any other.
+    const onTheClip = centrePixel().join();
+    button("Ans Ende").click();
+    const behind = await until(
+      "the picture past the last clip",
+      () => {
+        const pixel = centrePixel();
+        return pixel[3] > 200 && pixel.join() !== onTheClip ? pixel : null;
+      },
+      20000,
+    );
+    checkNear("the chosen colour lies behind everything, in red", behind[0], 0x11, 3);
+    checkNear("in green", behind[1], 0x88, 3);
+    checkNear("and in blue", behind[2], 0xff, 3);
+    check("nothing was reported along the way", banner(), "");
+
+    // Back onto the first clip, so the picture the screenshot at the end of the budget catches is
+    // the fitted one -- a shot filling the frame is what the whole milestone claims.
+    button("An den Anfang").click();
+    await until("the picture again", () => measure(blue).lit > 1000, 20000);
+  }
+
+  const card = (id) => q(`[data-template-id="${id}"]`);
+  const fileInput = (slot) => q(`[data-slot-id="${slot}"] input[type="file"]`);
+
   async function dropFixture() {
     const bytes = await (await fetch("/fixture.mp4")).blob();
     const transfer = new DataTransfer();
@@ -463,7 +667,7 @@
     return until("a clip on the timeline", () => q("[data-clip-id]"));
   }
 
-  (phone ? runPhone() : run())
+  (templates ? runTemplates() : phone ? runPhone() : run())
     .catch((error) => {
       results.push({ name: "the run itself", ok: false, got: String(error), want: "no throw" });
     })

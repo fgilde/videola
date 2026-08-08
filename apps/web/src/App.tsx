@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 
 import {
+  builtinTemplates,
   cmd,
+  createTemplateBackend,
   createWasmBackend,
   FLICKS_PER_SECOND,
+  readTemplateFile,
   VideolaDocument,
   type ClipId,
   type Command,
+  type Frame,
   type LoadWarning,
   type MediaAsset,
   type MediaId,
   type Project,
+  type SlotAnswer,
+  type Template,
   type Time,
   type Track,
   type TrackKind,
@@ -38,6 +44,8 @@ import {
   pickFiles,
   Preview,
   projectEnd,
+  TemplateGallery,
+  TemplateWizard,
   Timeline,
   Transport,
   useI18n,
@@ -79,6 +87,13 @@ export function App(): ReactElement {
   const [formats, setFormats] = useState<ExportFormatChoice[]>([]);
   const [progress, setProgress] = useState<ExportProgress>();
   const [exportError, setExportError] = useState<string>();
+  const [gallery, setGallery] = useState(false);
+  const [catalogue, setCatalogue] = useState<Template[]>([]);
+  const [template, setTemplate] = useState<Template>();
+  const [slotMedia, setSlotMedia] = useState<Record<string, MediaAsset>>({});
+  const [templateError, setTemplateError] = useState<string>();
+  const [baking, setBaking] = useState(false);
+  const [epoch, setEpoch] = useState(0);
   const runningExport = useRef<ExportHandle>(undefined);
   const nextErrorId = useRef(0);
   // The same pure function of the same window the shell reads, so the two cannot disagree. Passing
@@ -91,16 +106,27 @@ export function App(): ReactElement {
     setError({ key, reason: reasonOf(cause), id: ++nextErrorId.current });
   }, []);
 
+  // The one way a document is taken over, whether it came from an empty start, from a file or from
+  // a template. `epoch` is what makes the preview a fresh element each time: `Playback.dispose()`
+  // takes the WebGL context of the canvas it was attached to down with it, on purpose (see
+  // context.ts), so handing the next Playback the same element would hand it a lost context and a
+  // preview that never draws again.
+  const adopt = useCallback((next: VideolaDocument) => {
+    setDoc(next);
+    setProject(next.state);
+    setWarnings(next.warnings);
+    setFlags({ canUndo: next.canUndo, canRedo: next.canRedo });
+    setSelectedClip(undefined);
+    setError(undefined);
+    setEpoch((current) => current + 1);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     createWasmBackend()
       .then((backend) => {
         if (cancelled) return;
-        const next = new VideolaDocument(backend);
-        setDoc(next);
-        setProject(next.state);
-        setWarnings(next.warnings);
-        setFlags({ canUndo: next.canUndo, canRedo: next.canRedo });
+        adopt(new VideolaDocument(backend));
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -109,7 +135,7 @@ export function App(): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [reportError]);
+  }, [adopt, reportError]);
 
   useEffect(() => {
     if (doc === undefined) return;
@@ -123,6 +149,13 @@ export function App(): ReactElement {
       setFlags({ canUndo: doc.canUndo, canRedo: doc.canRedo });
     });
   }, [doc]);
+
+  // The one place a project's name is visible in this version. Without it a title -- typed in the
+  // wizard or not -- would only ever show up in the name of a downloaded file.
+  useEffect(() => {
+    const title = project?.meta.title.trim() ?? "";
+    window.document.title = title === "" ? "Videola" : `${title} — Videola`;
+  }, [project?.meta.title]);
 
   // Keyed on the ids and not on the library object: the core hands back a fresh project on every
   // dispatch, and a drag across the timeline would otherwise stat OPFS once per pointer movement.
@@ -321,17 +354,11 @@ export function App(): ReactElement {
     const file = (await pickFiles(".videola"))[0];
     if (file === undefined) return;
     try {
-      const backend = await createWasmBackend(new Uint8Array(await file.arrayBuffer()));
-      const next = new VideolaDocument(backend);
-      setDoc(next);
-      setProject(next.state);
-      setWarnings(next.warnings);
-      setFlags({ canUndo: next.canUndo, canRedo: next.canRedo });
-      setError(undefined);
+      adopt(new VideolaDocument(await createWasmBackend(new Uint8Array(await file.arrayBuffer()))));
     } catch (err) {
       reportError("error.openFailed", err);
     }
-  }, [reportError]);
+  }, [adopt, reportError]);
 
   // One file at a time and in order, because each one decides where it lands from the state the
   // one before it left behind. A rejected file costs itself and not the rest of the drop.
@@ -386,6 +413,95 @@ export function App(): ReactElement {
     [playback, reportError],
   );
 
+  // The catalogue comes out of the core once per session; nothing in it changes while the
+  // application runs, and it carries no media to pay for.
+  const openGallery = useCallback(() => {
+    setTemplateError(undefined);
+    setGallery(true);
+    if (catalogue.length > 0) return;
+    void builtinTemplates().then(setCatalogue, () =>
+      setTemplateError("error.templateOpenFailed"),
+    );
+  }, [catalogue.length]);
+
+  const closeTemplates = useCallback(() => {
+    setGallery(false);
+    setTemplate(undefined);
+    setSlotMedia({});
+    setTemplateError(undefined);
+  }, []);
+
+  // The ordinary import: hashed, into storage, probed. A slot answer is the asset that comes out of
+  // it, so material chosen in the wizard is in no way different from material dropped on the editor.
+  const pickSlotMedia = useCallback(
+    async (slot: string, file: File) => {
+      if (doc === undefined) return;
+      try {
+        const id = await importFile(file, doc, probe);
+        const asset = doc.state.library.find((entry) => entry.id === id);
+        if (asset !== undefined) setSlotMedia((current) => ({ ...current, [slot]: asset }));
+        setTemplateError(undefined);
+      } catch (err) {
+        setTemplateError(templateReason(err, "error.importFailed"));
+      }
+    },
+    [doc],
+  );
+
+  const openTemplateFile = useCallback(async (file: File) => {
+    try {
+      const opened = await readTemplateFile(new Uint8Array(await file.arrayBuffer()));
+      setSlotMedia({});
+      setTemplateError(undefined);
+      setTemplate(opened);
+    } catch {
+      setTemplateError("error.templateOpenFailed");
+    }
+  }, []);
+
+  // Bake-to-project, and that is the end of the template: what comes back is a document like any
+  // other, so everything below simply swaps the one it was holding.
+  const bake = useCallback(
+    (answers: Readonly<Record<string, SlotAnswer>>, frame: Frame) => {
+      if (template === undefined) return;
+      setBaking(true);
+      void createTemplateBackend(template, answers, {
+        ...template.project.settings,
+        width: frame.width,
+        height: frame.height,
+      })
+        .then(
+          (backend) => {
+            adopt(new VideolaDocument(backend));
+            closeTemplates();
+          },
+          (err: unknown) => setTemplateError(templateReason(err, "error.templateBakeFailed")),
+        )
+        .finally(() => setBaking(false));
+    },
+    [adopt, template, closeTemplates],
+  );
+
+  const saveAsTemplate = useCallback(() => {
+    if (doc === undefined || project === undefined) return;
+    try {
+      const now = new Date().toISOString();
+      const bytes = doc.saveAsTemplate(
+        {
+          appVersion: "0.1.0",
+          created: now,
+          modified: now,
+          locale: navigator.language,
+        },
+        project.meta.id,
+      );
+      downloadBlob(bytes, `${project.meta.title || project.meta.id}.videolat`);
+      setTemplateError(undefined);
+    } catch (err) {
+      setTemplateError(templateReason(err, "error.templateSaveFailed"));
+    }
+  }, [doc, project]);
+
   const playPause = useCallback(() => {
     if (playback === undefined) return;
     if (playback.isPlaying) playback.pause();
@@ -399,6 +515,7 @@ export function App(): ReactElement {
   return (
     <AppShell
       onNew={() => window.location.reload()}
+      onTemplates={openGallery}
       onOpen={() => void open()}
       onImportMedia={
         doc === undefined ? undefined : () => void pickFiles(MEDIA_ACCEPT).then(importMedia)
@@ -430,6 +547,7 @@ export function App(): ReactElement {
           ) : (
             <>
               <Preview
+                key={epoch}
                 width={project.settings.width}
                 height={project.settings.height}
                 onCanvas={setCanvas}
@@ -482,6 +600,36 @@ export function App(): ReactElement {
           )}
         </div>
       </DropZone>
+      {gallery && template === undefined && (
+        <TemplateGallery
+          templates={catalogue}
+          error={templateError}
+          onChoose={(entry) => {
+            setSlotMedia({});
+            setTemplateError(undefined);
+            setTemplate(entry);
+          }}
+          onOpenTemplate={(file) => void openTemplateFile(file)}
+          // Only offered once there is something worth turning into a recipe.
+          onSaveCurrent={hasClips(project) ? saveAsTemplate : undefined}
+          onClose={closeTemplates}
+        />
+      )}
+      {template !== undefined && (
+        <TemplateWizard
+          template={template}
+          media={slotMedia}
+          error={templateError}
+          busy={baking}
+          onPickMedia={(slot, file) => void pickSlotMedia(slot, file)}
+          onFinish={bake}
+          onBack={() => {
+            setTemplate(undefined);
+            setTemplateError(undefined);
+          }}
+          onClose={closeTemplates}
+        />
+      )}
       {exporting && project !== undefined && (
         <ExportDialog
           formats={formats}
@@ -576,6 +724,18 @@ function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement 
 
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function hasClips(project: Project | undefined): boolean {
+  return project?.timeline.tracks.some((track) => track.clips.length > 0) === true;
+}
+
+// The template dialogs translate whatever they are handed, so only a catalogue key may reach them.
+// The core's own refusals are English prose meant for a log, not for a panel.
+function templateReason(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.startsWith("error.")) return error.message;
+  console.error(error);
+  return fallback;
 }
 
 // The whole project, or the one clip that is selected. A range is a pair of instants either way,

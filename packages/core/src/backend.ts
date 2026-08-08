@@ -50,6 +50,9 @@ export interface DocumentBackend {
   // batch that did land sitting on redo, one keystroke away from being reapplied.
   rollback(): void;
   save(options: SaveOptions, media: MediaBytes): Uint8Array<ArrayBuffer>;
+  // A `.videolat` of this project: every medium it uses becomes a slot and the bytes stay behind,
+  // so unlike `save` there is nothing for the caller to gather first.
+  saveAsTemplate(options: SaveOptions, id: string): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
   warnings(): LoadWarning[];
 }

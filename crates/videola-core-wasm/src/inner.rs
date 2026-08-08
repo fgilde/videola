@@ -9,8 +9,10 @@ use videola_core::format::{
     reader, writer, LoadWarning, MediaStore, MemoryMediaStore, SaveOptions,
 };
 use videola_core::model::{
-    ClipId, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project, Time,
+    ClipId, Effect, EffectId, MediaAsset, MediaId, MediaKind, ParamValue, Project, ProjectSettings,
+    Time,
 };
+use videola_core::template::{SlotAnswer, Template};
 use videola_core::{CoreError, DispatchResult, Document, Result};
 
 pub struct DocumentHost {
@@ -49,6 +51,23 @@ impl DocumentHost {
             media,
             media_bytes_total,
             warnings: loaded.warnings,
+        })
+    }
+
+    // The baked project walks in through `Document::from_project`, the same door a `.videola`
+    // uses, so nothing downstream can tell a template's output from a file that was opened. No
+    // media is held: the answers name material the host already put in its own storage, exactly
+    // as after an ordinary import.
+    pub fn from_template(
+        template: &Template,
+        answers: &BTreeMap<String, SlotAnswer>,
+        settings: Option<&ProjectSettings>,
+    ) -> Result<Self> {
+        Ok(Self {
+            document: Document::from_project(template.bake(answers, settings)?)?,
+            media: MemoryMediaStore::default(),
+            media_bytes_total: 0,
+            warnings: Vec::new(),
         })
     }
 
@@ -179,6 +198,20 @@ impl DocumentHost {
         writer::write(&mut sink, self.document.project(), &store, &options)?;
         Ok(sink.into_inner())
     }
+
+    // `Template::from_project` leaves the material behind, so the library it writes is empty and
+    // the store never has to hand anything over -- no media parameter, and no way for this call to
+    // fail on bytes the host would have had to re-read.
+    pub fn save_as_template(&self, options: SaveOptions, id: &str) -> Result<Vec<u8>> {
+        let template = Template::from_project(self.document.project(), id)?;
+        let mut sink = Cursor::new(Vec::new());
+        writer::write_template(&mut sink, &template, &MemoryMediaStore::default(), &options)?;
+        Ok(sink.into_inner())
+    }
+}
+
+pub fn read_template(bytes: &[u8]) -> Result<Template> {
+    reader::read_template(Cursor::new(bytes))
 }
 
 // The same ceiling the reader enforces when it loads media back out of a `.videola`, applied on

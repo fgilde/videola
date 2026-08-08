@@ -80,6 +80,10 @@ export class VideolaDocument {
     return this.#backend.save(options, media);
   }
 
+  saveAsTemplate(options: SaveOptions, id: string): Uint8Array<ArrayBuffer> {
+    return this.#backend.saveAsTemplate(options, id);
+  }
+
   #absorb(result: DispatchResult): DispatchResult {
     this.#canUndo = result.canUndo;
     this.#canRedo = result.canRedo;

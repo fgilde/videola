@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use zip::ZipArchive;
 
-use super::{Manifest, MANIFEST_ENTRY, MEDIA_PREFIX, PROJECT_ENTRY};
+use super::{Manifest, MANIFEST_ENTRY, MEDIA_PREFIX, PROJECT_ENTRY, TEMPLATE_ENTRY};
 use crate::model::{MediaId, Project};
+use crate::template::{Template, TemplateManifest};
 use crate::{CoreError, Result};
 
 // Deflate's documented worst-case expansion is a bit over 1000:1 (RFC 1951, an all-zero input),
@@ -49,7 +50,27 @@ pub struct LoadedProject {
     pub manifest: Manifest,
     pub project: Project,
     pub media: BTreeMap<MediaId, Vec<u8>>,
+    /// Present exactly when the archive was a `.videolat`. `None` is an ordinary project, not a
+    /// template whose manifest failed to read — a broken `template.json` fails the whole load.
+    pub template: Option<TemplateManifest>,
     pub warnings: Vec<LoadWarning>,
+}
+
+/// A `.videolat` read as what it is. Refuses an archive without a `template.json` rather than
+/// handing back something that looks like a template with no questions in it.
+pub fn read_template<R: Read + Seek>(source: R) -> Result<Template> {
+    let loaded = read(source)?;
+    let Some(manifest) = loaded.template else {
+        return Err(CoreError::NotAProject(
+            "this file is a project, not a template".into(),
+        ));
+    };
+    let mut template = Template {
+        manifest,
+        project: loaded.project,
+    };
+    template.normalize()?;
+    Ok(template)
 }
 
 pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {
@@ -58,6 +79,7 @@ pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {
 
     let raw_project = read_required_entry(&mut archive, PROJECT_ENTRY, MAX_JSON_ENTRY_BYTES)?;
     let manifest = read_manifest(&mut archive)?;
+    let template = read_template_manifest(&mut archive)?;
     let (project, mut warnings) = super::migrate::load(&raw_project)?;
     let (media, media_warnings) = read_media(&mut archive)?;
 
@@ -73,6 +95,7 @@ pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {
         manifest,
         project,
         media,
+        template,
         warnings,
     })
 }
@@ -80,6 +103,29 @@ pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {
 fn read_manifest<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest> {
     let raw = read_required_entry(archive, MANIFEST_ENTRY, MAX_JSON_ENTRY_BYTES)?;
     serde_json::from_str(&raw).map_err(|error| CoreError::NotAProject(error.to_string()))
+}
+
+// Absence is asked about separately from readability on purpose: `read_entry_bytes` reports both a
+// missing entry and a corrupt one as `Unreadable`, and treating a corrupt `template.json` as "this
+// was never a template" would turn a damaged file into a plain project without a word.
+fn read_template_manifest<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+) -> Result<Option<TemplateManifest>> {
+    if !has_entry(archive, TEMPLATE_ENTRY) {
+        return Ok(None);
+    }
+    let raw = read_required_entry(archive, TEMPLATE_ENTRY, MAX_JSON_ENTRY_BYTES)?;
+    let manifest =
+        serde_json::from_str(&raw).map_err(|error| CoreError::NotAProject(error.to_string()))?;
+    Ok(Some(manifest))
+}
+
+fn has_entry<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> bool {
+    (0..archive.len()).any(|index| {
+        archive
+            .by_index(index)
+            .is_ok_and(|entry| entry.name() == name)
+    })
 }
 
 // A missing, oversized or unreadable *required* entry all mean the same thing to the caller:

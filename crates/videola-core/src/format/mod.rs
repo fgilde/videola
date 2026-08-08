@@ -16,6 +16,11 @@ pub use reader::{LoadWarning, LoadedProject};
 pub const MANIFEST_ENTRY: &str = "videola.json";
 pub const PROJECT_ENTRY: &str = "project.json";
 pub const MEDIA_PREFIX: &str = "media/";
+// A `.videolat` is a `.videola` with this one extra entry. Reusing the container rather than
+// inventing a second one means the size caps, the content-addressed media naming, the manifest
+// and the migration path are already written and already tested — and a template that outgrows
+// "no media of its own" needs no new format to carry it.
+pub const TEMPLATE_ENTRY: &str = "template.json";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

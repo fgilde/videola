@@ -9,7 +9,8 @@ use wasm_bindgen::JsCast;
 use inner::DocumentHost;
 use videola_core::command::Dispatch;
 use videola_core::format::SaveOptions;
-use videola_core::model::{MediaId, Time};
+use videola_core::model::{MediaId, ProjectSettings, Time};
+use videola_core::template::{builtin, SlotAnswer, Template};
 use videola_core::DispatchResult;
 
 // A bare id string would drop the undo/redo flags the import itself just changed, leaving the
@@ -40,6 +41,40 @@ impl WasmDocument {
     pub fn open(bytes: &[u8]) -> std::result::Result<WasmDocument, JsError> {
         Ok(WasmDocument {
             host: DocumentHost::open(bytes).map_err(to_js)?,
+        })
+    }
+
+    /// The shipped catalogue, whole: manifest and project together, because the gallery draws its
+    /// preview from the timeline the template will actually build. There is nothing to keep back —
+    /// none of them carries media.
+    #[wasm_bindgen(js_name = builtinTemplates)]
+    pub fn builtin_templates() -> std::result::Result<JsValue, JsError> {
+        to_js_value(&builtin::templates())
+    }
+
+    /// A `.videolat` from disk.
+    #[wasm_bindgen(js_name = readTemplate)]
+    pub fn read_template(bytes: &[u8]) -> std::result::Result<JsValue, JsError> {
+        to_js_value(&inner::read_template(bytes).map_err(to_js)?)
+    }
+
+    /// Template plus answers becomes a document like any other: the same undo stack, the same
+    /// commands, no mode to leave. `settings` is `null` to keep the template's own frame.
+    #[wasm_bindgen(js_name = fromTemplate)]
+    pub fn from_template(
+        template: JsValue,
+        answers: JsValue,
+        settings: JsValue,
+    ) -> std::result::Result<WasmDocument, JsError> {
+        // Whatever came back across the boundary is untrusted, even if this module handed it out a
+        // moment ago -- nothing stops the host from editing it in between.
+        let mut template: Template = serde_wasm_bindgen::from_value(template)?;
+        template.normalize().map_err(to_js)?;
+        let answers: BTreeMap<String, SlotAnswer> = serde_wasm_bindgen::from_value(answers)?;
+        let settings: Option<ProjectSettings> = serde_wasm_bindgen::from_value(settings)?;
+        Ok(WasmDocument {
+            host: DocumentHost::from_template(&template, &answers, settings.as_ref())
+                .map_err(to_js)?,
         })
     }
 
@@ -128,6 +163,18 @@ impl WasmDocument {
         self.host
             .save(parsed, supplied_media(&media)?)
             .map_err(to_js)
+    }
+
+    /// This project as a `.videolat`. Every medium it uses becomes a slot and stays behind, which
+    /// is why there is no media map here.
+    #[wasm_bindgen(js_name = saveAsTemplate)]
+    pub fn save_as_template(
+        &self,
+        options: JsValue,
+        id: String,
+    ) -> std::result::Result<Vec<u8>, JsError> {
+        let parsed: SaveOptions = serde_wasm_bindgen::from_value(options)?;
+        self.host.save_as_template(parsed, &id).map_err(to_js)
     }
 }
 

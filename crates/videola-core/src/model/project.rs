@@ -318,7 +318,10 @@ const MAX_REASONABLE_DIMENSION: u32 = 16_384;
 // oversampled pro-audio pipeline without accepting values that only a corrupt file would carry.
 const MAX_REASONABLE_SAMPLE_RATE: u32 = 384_000;
 
-fn dimension_bounded(value: u32) -> Result<()> {
+// Shared with `template::Frame`, which offers alternative output sizes that end up in exactly
+// these two fields — an aspect ratio a template offers must not be one the resulting project
+// could never carry.
+pub(crate) fn dimension_bounded(value: u32) -> Result<()> {
     if value == 0 || value > MAX_REASONABLE_DIMENSION {
         Err(CoreError::InvalidArgument(
             "width and height must be between 1 and 16384".into(),
@@ -346,7 +349,25 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
     rate_bounded(settings.fps)?;
     dimension_bounded(settings.width)?;
     dimension_bounded(settings.height)?;
-    sample_rate_bounded(settings.sample_rate)
+    sample_rate_bounded(settings.sample_rate)?;
+    hex_color(&settings.background)
+}
+
+// The renderer's own reading of this field (`parseColor` in draw-list.ts) falls back to opaque
+// black for anything it cannot parse, which means a typo becomes a colour rather than a complaint.
+// Checked here so the one gate that judges settings judges all of them -- template colour slots
+// write straight into this field and must not be able to smuggle in a value the compositor
+// silently reinterprets.
+fn hex_color(value: &str) -> Result<()> {
+    let digits = value.strip_prefix('#').unwrap_or("");
+    let shaped = matches!(digits.len(), 3 | 6 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit());
+    if shaped {
+        Ok(())
+    } else {
+        Err(CoreError::InvalidArgument(
+            "background must be a hex colour such as #101820".into(),
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS, JsonSchema)]
@@ -827,6 +848,24 @@ mod tests {
         let mut p: Project =
             serde_json::from_str(&project_json_with_settings(1920, 1080, 0)).unwrap();
         assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_background_that_is_not_a_hex_colour_fails_to_load() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(1920, 1080, 48_000)).unwrap();
+        p.settings.background = "chartreuse".into();
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn the_three_hex_lengths_a_compositor_reads_all_load() {
+        for background in ["#fff", "#3366cc", "#80808080", "#ABCDEF"] {
+            let mut p: Project =
+                serde_json::from_str(&project_json_with_settings(1920, 1080, 48_000)).unwrap();
+            p.settings.background = background.into();
+            assert!(p.normalize().is_ok(), "{background} should be accepted");
+        }
     }
 
     #[test]

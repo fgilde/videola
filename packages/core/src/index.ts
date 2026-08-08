@@ -2,4 +2,9 @@ export * from "./backend";
 export * from "./commands";
 export * from "./document";
 export * from "./generated";
-export { createWasmBackend } from "./wasm-backend";
+export {
+  builtinTemplates,
+  createTemplateBackend,
+  createWasmBackend,
+  readTemplateFile,
+} from "./wasm-backend";
