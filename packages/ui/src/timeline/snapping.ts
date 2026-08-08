@@ -39,6 +39,9 @@ export function snapTime(
   candidates: readonly SnapCandidate[],
   options: SnapOptions,
 ): SnapResult {
+  // Zero is the off switch, and it has to be an early exit: a radius of zero still admits an
+  // exact hit, which drew a snap line for a snap that was not happening.
+  if (options.radiusPx <= 0) return { time };
   const radius = options.radiusPx * options.flicksPerPixel;
   let best: SnapCandidate | undefined;
   let bestDistance = Number.POSITIVE_INFINITY;
@@ -46,10 +49,7 @@ export function snapTime(
   for (const candidate of withGrid(time, candidates, options.gridStep)) {
     const distance = Math.abs(candidate.time - time);
     if (distance > radius) continue;
-    if (
-      distance < bestDistance ||
-      (distance === bestDistance && best !== undefined && RANK[candidate.kind] < RANK[best.kind])
-    ) {
+    if (best === undefined || distance < bestDistance || beats(candidate, best, distance, bestDistance)) {
       best = candidate;
       bestDistance = distance;
     }
@@ -92,6 +92,20 @@ export function snapCandidates(project: Project, options: CandidateOptions): Sna
     if (inRange(marker, options.range)) candidates.push({ time: marker.time, kind: "marker" });
   }
   return candidates;
+}
+
+// Equal distance and equal rank used to be decided by the order the candidates happened to be
+// collected in, which is the track order. The earlier time is arbitrary too, but it is the same
+// answer every time and does not move when a track is added.
+function beats(
+  candidate: SnapCandidate,
+  best: SnapCandidate,
+  distance: Time,
+  bestDistance: Time,
+): boolean {
+  if (distance !== bestDistance) return false;
+  if (RANK[candidate.kind] !== RANK[best.kind]) return RANK[candidate.kind] < RANK[best.kind];
+  return candidate.time < best.time;
 }
 
 function withGrid(

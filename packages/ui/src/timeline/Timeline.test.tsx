@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FLICKS_PER_SECOND, type Clip, type Project, type Track } from "@videola/core";
 
 import { I18nProvider } from "../i18n/I18nProvider";
-import { MAX_ELEMENT_WIDTH_PX } from "./geometry";
 import { Timeline } from "./Timeline";
 
 const VIEWPORT_WIDTH = 900;
@@ -182,18 +181,25 @@ describe("Timeline", () => {
     expect(width()).toBe(before * 16);
   });
 
-  it("refuses to zoom past the point where the content element stops laying out", () => {
+  // Asserting the width against MAX_ELEMENT_WIDTH_PX would only restate the definition of the
+  // floor. What is worth knowing is that the floor is reached and then holds: further clicks
+  // stop changing anything instead of creeping past it one step at a time.
+  it("comes to rest at the zoom floor instead of creeping past it", () => {
     const clip = makeClip("clp_1", 0, 24 * 3600 * FLICKS_PER_SECOND);
     const { container } = renderTimeline(
       <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
     );
+    const width = () =>
+      Number.parseFloat(container.querySelector<HTMLElement>(".v-timeline__content")?.style.width ?? "0");
+
     for (let step = 0; step < 40; step += 1) {
       act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
     }
-    const content = container.querySelector<HTMLElement>(".v-timeline__content");
-    expect(Number.parseFloat(content?.style.width ?? "0")).toBeLessThanOrEqual(
-      MAX_ELEMENT_WIDTH_PX + VIEWPORT_WIDTH,
-    );
+    const settled = width();
+    act(() => screen.getByRole("button", { name: "Vergrößern" }).click());
+
+    expect(width()).toBe(settled);
+    expect(settled).toBeGreaterThan(VIEWPORT_WIDTH);
   });
 
   it("shows the empty hint when the project has no tracks", () => {

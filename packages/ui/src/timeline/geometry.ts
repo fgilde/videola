@@ -29,7 +29,9 @@ export interface TimeRange {
 export function clampZoom(flicksPerPixel: number, contentDuration = 0): number {
   const floor = minZoomFor(contentDuration);
   if (!Number.isFinite(flicksPerPixel) || flicksPerPixel <= 0) return floor;
-  return Math.min(MAX_FLICKS_PER_PIXEL, Math.max(floor, flicksPerPixel));
+  // The floor is the outer clamp: written the other way round it loses to the ceiling once a
+  // project is long enough for the two to cross, and the content element silently truncates.
+  return Math.max(floor, Math.min(MAX_FLICKS_PER_PIXEL, flicksPerPixel));
 }
 
 export function timeToX(time: Time, flicksPerPixel: number): number {
@@ -114,12 +116,18 @@ export function frameDuration(fps: Rate): Time {
 }
 
 const STEP_SECONDS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
-const STEP_FRAMES = [1, 2, 5, 10];
+// Reaches past 10 frames, or a thousand-frame-per-second project falls off the end of the frame
+// ladder and lands on whole seconds, jumping the tick spacing by a factor of forty. Steps of a
+// second or more are the seconds ladder's business -- 50 frames of 30 is 1.667 s, which is a
+// tick nobody can read.
+const STEP_FRAMES = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 
 export function tickStep(flicksPerPixel: number, fps: Rate, minSpacingPx = 90): Time {
   const frame = frameDuration(fps);
   for (const frames of STEP_FRAMES) {
-    if (timeToX(frame * frames, flicksPerPixel) >= minSpacingPx) return frame * frames;
+    const step = frame * frames;
+    if (step >= FLICKS_PER_SECOND) break;
+    if (timeToX(step, flicksPerPixel) >= minSpacingPx) return step;
   }
   for (const seconds of STEP_SECONDS) {
     const step = seconds * FLICKS_PER_SECOND;

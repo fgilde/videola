@@ -218,7 +218,6 @@ function Status({ project }: { project?: Project }): ReactElement {
       <span>
         {project.settings.width}×{project.settings.height}
       </span>
-      {tracks === 0 && <em>{t("empty.noTracks")}</em>}
     </div>
   );
 }

@@ -66,6 +66,24 @@ describe("snapTime", () => {
     expect(snapTime(100_001, candidates, { radiusPx: 0, flicksPerPixel: 1000 }).candidate)
       .toBeUndefined();
   });
+
+  // An exact hit still has distance zero, which is not greater than a radius of zero. Off has to
+  // mean off, or the timeline draws a snap line for a snap that is not happening.
+  it("reports nothing even for an exact hit once snapping is off", () => {
+    expect(snapTime(100_000, candidates, { radiusPx: 0, flicksPerPixel: 1000 }))
+      .toEqual({ time: 100_000 });
+    expect(snapTime(100_000, [], { radiusPx: 0, flicksPerPixel: 1000, gridStep: 100_000 }))
+      .toEqual({ time: 100_000 });
+  });
+
+  // Two clip edges the same distance to either side used to be decided by the order the tracks
+  // happened to be collected in, so adding a track could change where a clip landed.
+  it("resolves a tie between equally ranked candidates without consulting the list order", () => {
+    const left: SnapCandidate = { time: 90_000, kind: "clipEdge" };
+    const right: SnapCandidate = { time: 110_000, kind: "clipEdge" };
+    expect(snapTime(100_000, [left, right], WIDE).candidate).toEqual(left);
+    expect(snapTime(100_000, [right, left], WIDE).candidate).toEqual(left);
+  });
 });
 
 describe("snapSpan", () => {

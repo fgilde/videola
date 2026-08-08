@@ -9,6 +9,7 @@ import {
   MAX_ELEMENT_WIDTH_PX,
   MAX_FLICKS_PER_PIXEL,
   MIN_FLICKS_PER_PIXEL,
+  minZoomFor,
   rulerTicks,
   tickStep,
   timeToX,
@@ -45,18 +46,29 @@ describe("zoom", () => {
     expect(clampZoom(0)).toBe(MIN_FLICKS_PER_PIXEL);
   });
 
-  // The content element is as wide as the project, so the zoom floor has to rise with the
-  // project length. A fixed floor put a 24 hour project at 305 million pixels, ten times past
-  // what a browser still lays out - it would have scrolled to a silently truncated end.
-  it("keeps even the longest project the core accepts inside the element width", () => {
-    for (const hours of [1, 6, 24]) {
-      const duration = hours * 3600 * FLICKS_PER_SECOND;
-      expect(timeToX(duration, clampZoom(1, duration))).toBeLessThanOrEqual(MAX_ELEMENT_WIDTH_PX);
-    }
+  // What this cannot answer: whether 30 million is a width a browser honours. That is a fact
+  // about Chrome, and packages/ui/browser measures it -- the ceiling is 33,554,428 px.
+  // What it can answer is that the floor rises with the project, which a fixed floor did not:
+  // a 24 hour project came out 305 million pixels wide and scrolled to a truncated end.
+  it("raises the zoom floor in step with the project length", () => {
+    const day = 24 * 3600 * FLICKS_PER_SECOND;
+    expect(minZoomFor(day)).toBe(day / MAX_ELEMENT_WIDTH_PX);
+    expect(minZoomFor(day)).toBeGreaterThan(MIN_FLICKS_PER_PIXEL);
   });
 
   it("does not raise the floor for a project that fits anyway", () => {
     expect(clampZoom(1, 60 * FLICKS_PER_SECOND)).toBe(MIN_FLICKS_PER_PIXEL);
+  });
+
+  // Written as min(MAX, max(floor, x)) the ceiling wins once the two cross, and the clamp
+  // returns a zoom below its own floor - the element width it exists to protect.
+  it("never returns a zoom under its own floor, however long the project", () => {
+    for (const years of [1, 10, 100]) {
+      const duration = years * 365 * 24 * 3600 * FLICKS_PER_SECOND;
+      expect(clampZoom(MAX_FLICKS_PER_PIXEL, duration)).toBeGreaterThanOrEqual(
+        minZoomFor(duration),
+      );
+    }
   });
 });
 
@@ -114,6 +126,18 @@ describe("tickStep", () => {
   it("derives the frame duration from the rational rate, not from a rounded one", () => {
     expect(frameDuration(NTSC)).toBe(Math.round((FLICKS_PER_SECOND * 1001) / 30000));
     expect(frameDuration(NTSC)).not.toBe(Math.round(FLICKS_PER_SECOND / 30));
+  });
+
+  // The ladder used to stop at ten frames. Above a few hundred frames per second that is still
+  // under the label spacing, so the next step was a whole second and the ruler jumped.
+  it("leaves no gap in the ladder, at any frame rate", () => {
+    for (const fps of [PAL, NTSC, { numerator: 240, denominator: 1 }, { numerator: 1000, denominator: 1 }]) {
+      for (let zoom = MIN_FLICKS_PER_PIXEL; zoom <= MAX_FLICKS_PER_PIXEL; zoom *= 1.3) {
+        const spacing = timeToX(tickStep(zoom, fps), zoom);
+        expect(spacing, `${fps.numerator}/${fps.denominator} at ${zoom}`).toBeGreaterThanOrEqual(90);
+        expect(spacing, `${fps.numerator}/${fps.denominator} at ${zoom}`).toBeLessThan(90 * 4);
+      }
+    }
   });
 
   it("survives a degenerate rate instead of returning NaN", () => {
