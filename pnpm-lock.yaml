@@ -35,6 +35,9 @@ importers:
       '@videola/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@videola/media':
+        specifier: workspace:*
+        version: link:../../packages/media
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
