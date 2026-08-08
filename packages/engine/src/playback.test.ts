@@ -443,6 +443,30 @@ describe("Playback", () => {
     expect(sources.opened).toEqual([HASH, HASH]);
   });
 
+  // Relinking puts the bytes back without touching the project, so nothing else in here would
+  // ever ask again -- the failure is remembered on purpose, and this is the one way out of it.
+  it("tries a medium again once it has been told to forget the failure", async () => {
+    const { playback, sources, recording } = rig(times((at) => [["clp_1", at]]));
+    sources.missing.add(HASH);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await playback.load(project([clip("clp_1")]));
+    playback.seek(SECOND);
+    await settle();
+
+    playback.refresh();
+    await settle();
+    expect(sources.opened).toEqual([HASH]);
+    expect(uploads(recording)).toHaveLength(0);
+
+    sources.missing.delete(HASH);
+    playback.forget(HASH);
+    playback.refresh();
+    await settle();
+
+    expect(sources.opened).toEqual([HASH, HASH]);
+    expect(uploads(recording)).toHaveLength(1);
+  });
+
   it("closes every source on dispose and stops painting afterwards", async () => {
     const { playback, sources, recording } = rig(times((at) => [["clp_1", at]]));
     await playback.load(project([clip("clp_1")]));

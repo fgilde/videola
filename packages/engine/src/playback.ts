@@ -144,6 +144,13 @@ export class Playback {
     this.#show(this.#clock.now());
   }
 
+  // The counterpart to the remembered absence in `#open`: a medium whose bytes came back has an
+  // "it is not there" in the way that no tick would ever retry. Dropping the entry is what lets
+  // the next paint open it for real.
+  forget(hash: string): void {
+    this.#release(hash);
+  }
+
   onTime(cb: (t: Time) => void): () => void {
     return this.#clock.onTick(cb);
   }
@@ -247,9 +254,8 @@ export class Playback {
     return opening;
   }
 
-  // ponytail: a medium that failed to open is remembered as absent until the project changes.
-  // Retrying per tick would hammer OPFS sixty times a second for a file that is not coming back;
-  // a relink command (Task 22) is what should clear it.
+  // A medium that failed to open is remembered as absent until `forget` or a `load` drops it.
+  // Retrying per tick would hammer OPFS sixty times a second for a file that is not coming back.
   async #open(hash: string): Promise<FrameSource | undefined> {
     const source = this.#createFrameSource();
     try {
