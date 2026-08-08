@@ -129,7 +129,9 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y ffmpeg
           fi
-          ffprobe -version | head -1
+          # sed statt head: head schliesst die Pipe nach der ersten Zeile, und sobald jemand
+          # `shell: bash` ergaenzt, macht pipefail aus dem SIGPIPE einen roten Schritt.
+          ffprobe -version | sed -n 1p
       # Die Anwendungs-Harness faehrt die gebaute Anwendung, nicht die Quellen.
       - run: pnpm --filter videola-web build
       - run: pnpm --filter @videola/engine test:gpu
