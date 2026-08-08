@@ -47,6 +47,8 @@ interface Scene {
   playhead?: Time;
   /** What the core answers for `amount`; the default is a value no static field carries. */
   amountAt?: (at: Time) => number | undefined;
+  /** For the kinds `amountAt` cannot express -- a project may carry any `ParamValue` here. */
+  rawAmountAt?: (at: Time) => ParamValue;
   dispatch?: (command: Command, key?: string) => void;
 }
 
@@ -61,9 +63,11 @@ function show(scene: Scene = {}): Rig {
 
   const effectParamsAt = (at: Time): EffectParamSnapshot => {
     rig.asked.push(at);
+    const raw = scene.rawAmountAt?.(at);
     const amount = scene.amountAt?.(at);
-    if (amount === undefined) return new Map();
-    return new Map([["eff_1", new Map<string, ParamValue>([["amount", float(amount)]])]]);
+    if (raw === undefined && amount === undefined) return new Map();
+    const value = raw ?? float(amount ?? 0);
+    return new Map([["eff_1", new Map<string, ParamValue>([["amount", value]])]]);
   };
 
   render(
@@ -129,6 +133,10 @@ function float(value: number): ParamValue {
 
 function slider(name: string): HTMLInputElement {
   return screen.getByLabelText(name) as HTMLInputElement;
+}
+
+function readout(name: string): string | undefined {
+  return slider(name).parentElement?.querySelector("output")?.textContent ?? undefined;
 }
 
 function press(name: string): void {
@@ -215,8 +223,12 @@ describe("the inspector", () => {
   // 640x360 into 1920x1080 is 3 on both axes, which cannot tell the width ratio from the height
   // ratio apart. A 640x1000 source can: 3 against 1.08.
   it("fits a clip to the frame by the tighter of the two ratios", () => {
+    // Pushed off centre first: with x and y already at zero, "the fit recentres" is a statement
+    // about the fixture rather than about the fit.
+    const moved = clipWithMedia({ transform: { ...identity(), x: 300, y: -200 } });
     const rig = show({
-      project: makeProject([makeTrack("trk_1", [clipWithMedia()])], [
+      clip: moved,
+      project: makeProject([makeTrack("trk_1", [moved])], [
         { ...MEDIA, width: 640, height: 1000 } as Project["library"][number],
       ]),
     });
@@ -368,6 +380,9 @@ describe("the inspector", () => {
 
     expect(screen.getByRole("button", { name: "Helligkeit hinzufügen" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Ueberblendung hinzufügen/u })).toBeNull();
+    // And the other way round: an effect with one input is not a transition either.
+    const select = screen.getByLabelText("Übergang") as HTMLSelectElement;
+    expect([...select.options].map((option) => option.value)).toEqual(["", "crossfade"]);
   });
 
   it("stops offering an effect the clip already carries", () => {
@@ -574,10 +589,33 @@ describe("the inspector", () => {
     expect(slider("Staerke").value).toBe("3");
   });
 
-  it("pulls a value from outside the declared range back onto the slider", () => {
+  // The range element sanitises its own value, so the readout beside it is the only place an
+  // unclamped number would be visible -- and the readout is what says what is being drawn.
+  it("pulls a value from outside the declared range back onto the row", () => {
     show({ clip: clipWithMedia(withBrightness()), amountAt: () => 99 });
 
     expect(slider("Staerke").value).toBe("4");
+    expect(readout("Staerke")).toBe("4");
+  });
+
+  // A NaN travels through `Math.min(Math.max(...))` unchanged and lands on the row as "NaN",
+  // and a project file can carry one -- as it can carry a value of a kind that is not a number.
+  it("falls back to the manifest default for a value that is not a finite number", () => {
+    show({
+      clip: clipWithMedia(withBrightness()),
+      rawAmountAt: () => ({ kind: "float", value: Number.NaN }),
+    });
+
+    expect(readout("Staerke")).toBe("1");
+  });
+
+  it("falls back to the manifest default for a value that is not a number at all", () => {
+    show({
+      clip: clipWithMedia(withBrightness()),
+      rawAmountAt: () => ({ kind: "choice", value: "bright" }),
+    });
+
+    expect(readout("Staerke")).toBe("1");
   });
 
   // React 19 catches an exception thrown from an event handler itself, so a broken handler looks
