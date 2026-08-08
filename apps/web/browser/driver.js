@@ -2,6 +2,11 @@
 // step frames, play. jsdom has no OPFS, no WebCodecs, no WebGL and no Web Audio, so nothing below
 // the component boundary can be checked anywhere else. Same shape as packages/engine/gpu and
 // packages/ui/browser, one level up: this one exercises the whole application.
+// Both harnesses look controls up by their German labels, and the language otherwise follows
+// the browser: German on this machine, English on a CI runner. Pinning it is what makes the
+// two runs the same run.
+localStorage.setItem("videola.locale", "de");
+
 (function () {
   const results = [];
   const noise = [];

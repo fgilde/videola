@@ -67,6 +67,11 @@ function project(tracks, markers) {
 const host = document.createElement("div");
 host.id = "host";
 document.body.append(host);
+// Both harnesses look controls up by their German labels, and the language otherwise follows
+// the browser: German on this machine, English on a CI runner. Pinning it is what makes the
+// two runs the same run.
+localStorage.setItem("videola.locale", "de");
+
 const root = T.createRoot(host);
 
 // The dispatch only records. A faithful fake of the core would be the trap Gruppe B paid for;
