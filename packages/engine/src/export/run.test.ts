@@ -266,6 +266,7 @@ function audibleProject(): Project {
           solo: false,
           volume: 1,
           pan: 0,
+          effects: [],
           clips: [
             {
               id: "clp_0",

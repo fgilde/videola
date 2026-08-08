@@ -177,7 +177,14 @@ async function renderAudio(input: ExportInput): Promise<ExportAudio | undefined>
     Math.round(timeToSeconds(options.range.to - options.range.from) * sampleRate),
   );
   const context = new OfflineAudioContext(2, length, sampleRate);
-  const graph = new AudioGraph(context, input.audioSource ?? new AudioSource());
+  // The same resolver the frames are drawn from. An export that resolved its own keyframes would be
+  // exactly the divergence between what was heard and what was written that this graph exists to
+  // rule out.
+  const graph = new AudioGraph(
+    context,
+    input.audioSource ?? new AudioSource(),
+    input.effectParams,
+  );
   await graph.prepare(project);
   // The offline context's clock stands at zero until it renders, so the range start is the whole
   // of the offset -- the same call playback makes, with wall time taken out of it.

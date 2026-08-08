@@ -255,7 +255,7 @@ export function App(): ReactElement {
     const audio = new AudioContext();
     const next = new Playback({
       audio,
-      graph: new AudioGraph(audio, new AudioSource()),
+      graph: new AudioGraph(audio, new AudioSource(), doc.effectParamsAt),
       sourceTimes: doc.sourceTimesAt,
       effectParams: doc.effectParamsAt,
       transforms: doc.transformsAt,
@@ -322,7 +322,7 @@ export function App(): ReactElement {
   // never per frame. Its own context, because the one driving playback is running and rendering into
   // it would fight the transport for the same graph.
   const measure = useCallback(() => {
-    if (project === undefined) return;
+    if (project === undefined || doc === undefined) return;
     const seconds = timeToSeconds(projectEnd(project));
     if (seconds <= 0) {
       setLoudness(Number.NEGATIVE_INFINITY);
@@ -331,10 +331,12 @@ export function App(): ReactElement {
     setMeasuring(true);
     const rate = project.settings.sampleRate;
     const ctx = new OfflineAudioContext(2, Math.ceil(seconds * rate), rate);
-    measureLoudness(ctx, project, new AudioSource())
+    // The core's resolver goes in for the same reason the export gets it: a reading taken without
+    // the mastering chain would report a loudness no listener and no file ever has.
+    measureLoudness(ctx, project, new AudioSource(), doc.effectParamsAt)
       .then(setLoudness, (err: unknown) => reportError("error.actionFailed", err))
       .finally(() => setMeasuring(false));
-  }, [project, reportError]);
+  }, [doc, project, reportError]);
 
   const addTrack = useCallback(() => {
     if (doc === undefined) return;

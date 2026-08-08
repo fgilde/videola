@@ -1,10 +1,21 @@
 import { timeToSeconds } from "@videola/core";
 import { mediaHash, peaks } from "@videola/media";
 
-import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
+import type {
+  Clip,
+  Effect,
+  EffectParams,
+  Keyframe,
+  MediaAsset,
+  Project,
+  Time,
+  Track,
+} from "@videola/core";
 import type { Peaks } from "@videola/media";
 
 import { audibleClips } from "../nesting";
+import { audioEffect, clampParam } from "./effects";
+import type { EffectParam } from "./effects";
 import { integratedLufs } from "./loudness";
 
 export interface AudioBufferSource {
@@ -20,20 +31,34 @@ interface Voice {
 // Long enough that a volume slider cannot click, short enough that it still feels immediate.
 const MASTER_GLIDE_SECONDS = 0.01;
 
+// How finely a keyframe segment is sampled between its two corners. Only a curve needs it -- a
+// linear segment lands every extra sample back on the line it already had -- and eight is where a
+// filter sweep stops being audibly a sequence of straight runs.
+const CURVE_STEPS = 8;
+
 export class AudioGraph {
   #ctx: BaseAudioContext;
   #source: AudioBufferSource;
   #master: GainNode;
+  #params?: EffectParams;
   #tracks: readonly Track[] = [];
+  #masterEffects: readonly Effect[] = [];
   #voices: Voice[] = [];
   #live: AudioNode[] = [];
   #playing: AudioBufferSourceNode[] = [];
   #buffers = new Map<string, AudioBuffer>();
   #generation = 0;
 
-  constructor(ctx: BaseAudioContext, source: AudioBufferSource) {
+  /**
+   * `params` is the core's own resolver -- `Document.effectParamsAt` -- and the reason a keyframed
+   * cutoff sweeps here without a second interpolation living next to the one in Rust. Preview,
+   * export and the loudness reading are all handed the same one, which is what keeps them hearing
+   * the same thing. Left out, effects still sound, at the static values they were authored with.
+   */
+  constructor(ctx: BaseAudioContext, source: AudioBufferSource, params?: EffectParams) {
     this.#ctx = ctx;
     this.#source = source;
+    this.#params = params;
     this.#master = ctx.createGain();
     this.#master.connect(ctx.destination);
   }
@@ -61,15 +86,21 @@ export class AudioGraph {
     if (generation !== this.#generation) return;
     this.#master.gain.value = project.master.volume;
     this.#tracks = project.timeline.tracks;
+    this.#masterEffects = project.master.effects;
     this.#voices = voices;
   }
 
   startAt(contextTime: number, projectTime: Time): void {
     this.stop();
+    // Built before the buses, because a bus needs somewhere to send to and that is now the head of
+    // the mastering chain rather than the master fader itself.
+    const masterIn = this.#chain(this.#masterEffects, this.#master, contextTime, projectTime);
     const soloing = this.#tracks.some((track) => track.solo);
     const buses = new Map<string, AudioNode>();
     for (const voice of this.#voices) {
-      const bus = buses.get(voice.track.id) ?? this.#bus(voice.track, soloing);
+      const bus =
+        buses.get(voice.track.id) ??
+        this.#bus(voice.track, soloing, masterIn, contextTime, projectTime);
       buses.set(voice.track.id, bus);
       this.#schedule(voice, bus, contextTime, projectTime);
     }
@@ -146,14 +177,82 @@ export class AudioGraph {
   // Mute and solo land here rather than on the clip gains, so a track that is silenced mid-fade
   // stays silenced and the fade automation underneath it is left untouched. Mute beats solo: a
   // track that is both stays silent, and soloing it silences everything else all the same.
-  #bus(track: Track, soloing: boolean): AudioNode {
+  #bus(
+    track: Track,
+    soloing: boolean,
+    masterIn: AudioNode,
+    contextTime: number,
+    projectTime: Time,
+  ): AudioNode {
     const gain = this.#ctx.createGain();
     gain.gain.value = soloing && !track.solo ? 0 : track.muted ? 0 : track.volume;
     const panner = this.#ctx.createStereoPanner();
     panner.pan.value = track.pan;
-    gain.connect(panner).connect(this.#master);
+    gain.connect(panner).connect(masterIn);
     this.#live.push(gain, panner);
-    return gain;
+    return this.#chain(track.effects, gain, contextTime, projectTime);
+  }
+
+  // Inserts sit ahead of the fader, the way a console wires them: the fader then rides a signal the
+  // compressor has already levelled, so pulling it down changes how loud the track is and not what
+  // the compressor is doing to it. The same rule on the master leaves `setMasterVolume`'s glide as
+  // the last thing before the output, which is what a fader is for.
+  //
+  // Walked backwards because each effect is built already connected to what stands downstream of
+  // it, and what comes back is the head -- the node whoever is upstream should feed.
+  #chain(
+    effects: readonly Effect[],
+    destination: AudioNode,
+    contextTime: number,
+    projectTime: Time,
+  ): AudioNode {
+    let head = destination;
+    for (let index = effects.length - 1; index >= 0; index -= 1) {
+      const effect = effects[index]!;
+      if (!effect.enabled) continue;
+      const manifest = audioEffect(effect.effectType);
+      // A blur someone put on an audio bus, or a type this build does not carry. Silently passing
+      // it through costs that one effect; refusing would cost the whole track its sound.
+      if (manifest === undefined) continue;
+      const built = manifest.build(this.#ctx);
+      for (const param of manifest.params) {
+        const knob = built.knobs.get(param.key);
+        if (knob === undefined) continue;
+        automate(knob, this.#points(effect, param, contextTime, projectTime), contextTime);
+      }
+      built.node.connect(head);
+      this.#live.push(built.node);
+      head = built.node;
+    }
+    return head;
+  }
+
+  // The same shape a fade takes, and the same `automate` underneath: a list of corners scheduled
+  // once, interpolated by the audio thread per sample. A cutoff written per animation frame is a
+  // staircase, and a staircase in a filter frequency is a zipper.
+  #points(
+    effect: Effect,
+    param: EffectParam,
+    contextTime: number,
+    projectTime: Time,
+  ): Point[] {
+    const corners = sampleTimes(effect.keyframes[param.key] ?? []);
+    // Nothing keyframed: one value, held. Asked at the moment playback opens, because a project
+    // whose parameter is static still has a core that is the one to state what static means.
+    if (corners.length === 0) corners.push(projectTime);
+    return corners.map((at) => ({
+      // In flicks first and seconds after, so a corner an hour into the timeline lands on the
+      // sample the timeline says it does.
+      at: contextTime + timeToSeconds(at - projectTime),
+      value: this.#valueAt(effect, param, at),
+    }));
+  }
+
+  // The core resolves, this clamps. A project file may carry a cutoff of a million or a `ParamValue`
+  // that is not a number at all, and a BiquadFilterNode takes both without complaint.
+  #valueAt(effect: Effect, param: EffectParam, at: Time): number {
+    const resolved = this.#params?.(at).get(effect.id)?.get(param.key);
+    return clampParam(param, (resolved ?? effect.params[param.key])?.value);
   }
 
   #schedule(voice: Voice, bus: AudioNode, contextTime: number, projectTime: Time): void {
@@ -193,8 +292,9 @@ export async function measureLoudness(
   ctx: OfflineAudioContext,
   project: Project,
   source: AudioBufferSource,
+  params?: EffectParams,
 ): Promise<number> {
-  const graph = new AudioGraph(ctx as unknown as BaseAudioContext, source);
+  const graph = new AudioGraph(ctx as unknown as BaseAudioContext, source, params);
   await graph.prepare(project);
   graph.startAt(ctx.currentTime, 0);
   const rendered = await ctx.startRendering();
@@ -222,6 +322,32 @@ function automate(gain: AudioParam, points: readonly Point[], from: number): voi
   for (const point of points) {
     if (point.at > from) gain.linearRampToValueAtTime(point.value, point.at);
   }
+}
+
+// Where the core gets asked, for one keyframed parameter. The corners are where the shape may turn;
+// the steps between them are what makes an eased segment a polyline through the core's own values
+// instead of a straight run between its ends. A linear segment is untouched by them -- every extra
+// sample lands back on the line it already had -- and the one a single flick short of each corner is
+// what keeps a hold a step rather than a ramp across its last eighth.
+//
+// No interpolation is done here, which is the point: this decides *when* to ask and the core decides
+// what the answer is, so an eased sweep sounds like the curve the inspector drew.
+function sampleTimes(track: readonly Keyframe[]): Time[] {
+  const times: Time[] = [];
+  const push = (at: Time): void => {
+    if (times.length === 0 || at > times[times.length - 1]!) times.push(at);
+  };
+  for (const [index, corner] of track.entries()) {
+    push(corner.time);
+    const next = track[index + 1];
+    if (next === undefined) continue;
+    const span = next.time - corner.time;
+    for (let step = 1; step < CURVE_STEPS; step += 1) {
+      push(corner.time + Math.round((span * step) / CURVE_STEPS));
+    }
+    push(next.time - 1);
+  }
+  return times;
 }
 
 // A hold reads as a ramp between two equal values, so the whole envelope is one list of corners
