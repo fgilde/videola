@@ -43,3 +43,6 @@ Thumbs.db
 # Test output
 /test-output
 **/__diff__
+
+# Prozessdokumentation der Agenten: Arbeitsmaterial, keine Quelle.
+.superpowers/
