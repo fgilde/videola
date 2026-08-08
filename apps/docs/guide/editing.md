@@ -173,11 +173,12 @@ writes them at the playhead. `keyframe.add` is an upsert, which is what makes a 
 While the playhead stands outside the clip the keyframe controls are locked: a keyframe written
 there is never evaluated for this clip, so the switch would report a state no picture ever shows.
 
-**Only effect parameters have the switch.** `Clip::keyframes` exists in the model, but nothing
-evaluates it — the draw list reads `clip.transform` statically. A switch on transform or volume
-would write data no picture ever sees. Giving it one means sending `clip.transform` through the
-same evaluation as an effect parameter, which is work in the core and in the engine rather than in
-the surface.
+**The transform can be keyframed too; the inspector does not offer it yet.** The core resolves
+`Clip::keyframes` and the draw list places the picture from the resolved value, so the switch would
+now write data a picture really shows — see [Keyframing a
+transform](./commands-and-undo.md#keyframing-a-transform) for the command. What is left is the
+surface: a row per transform field with the same switch an effect parameter's row carries. Volume
+is still unanimated, and that one is genuinely missing an evaluation.
 
 ## Playback
 

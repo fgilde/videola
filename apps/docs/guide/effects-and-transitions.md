@@ -260,13 +260,14 @@ project actually carries an effect.
 
 ## What is not there yet, by name
 
-- **Masks and motion paths.** Cropping gives a rectangular mask and the vignette a radial one, but a
-  shaped or tracked mask needs paths, and paths need the draw list to read `Clip::keyframes` — which
-  it does not. That is the same gap as the one below.
-- **Keyframes exist on effect parameters and nowhere else.** `Clip::keyframes` is in the model and
-  the draw list reads `clip.transform` statically, so a keyframe on a clip property is data no
-  picture sees. Everything animated in this milestone is either an effect parameter or a title's
-  declarative preset.
+- **Masks.** Cropping gives a rectangular mask and the vignette a radial one; a shaped or tracked
+  mask still needs paths and a shader that samples one. What it no longer needs is a place to
+  animate from — a transform is keyframable and the draw list places the picture from the resolved
+  value (see [Commands and undo](./commands-and-undo.md#keyframing-a-transform)).
+- **A motion path is a keyframe track and nothing more.** `x` and `y` interpolate through the same
+  `Interp` an effect parameter uses. What is missing is an editor for the curve between two keys —
+  bezier handles are in the model and no command writes them, so a path eases the way the defaults
+  ease.
 - **Motion blur** needs more than one moment per output frame, which means more than one decoded
   frame per output frame. That is a change to the gather, not to a shader.
 - **LUT import** needs a file import, a 3D texture and a parameter that is not a float. The manifest

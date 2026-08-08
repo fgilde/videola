@@ -38,6 +38,28 @@ The second cost is what dictates the shape of the boundary. It is deliberately c
 `dispatch(command)` returning a patch — rather than a fine-grained object graph the front end could
 walk. A chatty boundary would pay the serialisation cost per property access.
 
+### The three batch queries
+
+Reading is coarse for the same reason writing is. Playback asks at display rate, so anything the
+renderer needs per frame crosses once for the whole frame rather than once per element:
+
+| Query | Answers with | Read by |
+|---|---|---|
+| `sourceTimesAt(at)` | every clip the moment touches → the point in its own medium it reads from | the decoder |
+| `effectParamsAt(at)` | every effect on those clips, plus every track chain and the project's own → each parameter it can answer for | the draw list, the inspector |
+| `transformsAt(at)` | every clip the moment touches → its geometry | the draw list |
+
+All three resolve keyframes on the way out, and that is the point of them being in the core rather
+than in the renderer. `Clip.transform` and `Effect.params` are the values *at rest*; the value at a
+moment is what these return, and nothing that draws may compute it for itself — a second
+interpolation next to the first is exactly how a preview and an export come to disagree about a
+frame. A track chain and the project's mastering chain have no clip window to fall outside of, so
+`effectParamsAt` answers for them at every moment.
+
+`transformsAt` answers for every clip the moment touches, animated or not, so the draw list has one
+rule instead of a fallback: a clip that stops being keyframed must not quietly change which side of
+the boundary decides where it sits.
+
 One thing the design anticipates but has not reached: the crate is meant to be linked natively into
 the Tauri shell and into a server as well as compiled to WASM. Today only the WASM path exists. The
 Tauri shell in `apps/desktop` hosts the web bundle and does not depend on `videola-core` at all, so
@@ -71,7 +93,7 @@ reverse patch; redo applies the forward one.
 The alternative is the conventional one: each command implements its own inverse. That is where undo
 bugs come from. An inverse has to be written and maintained for every command, it is only exercised
 when someone presses Ctrl+Z on that exact command, and it silently goes stale the moment the forward
-operation is changed without the inverse being updated. Thirty-seven commands would mean thirty-seven inverses
+operation is changed without the inverse being updated. Thirty-eight commands would mean thirty-eight inverses
 to keep honest; a diff means none. The undo machinery is written once and is correct for the next
 command before it is written.
 

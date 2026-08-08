@@ -29,6 +29,28 @@ Zwei Kosten sind bewusst in Kauf genommen: die Entwicklungsschleife enthält ein
 (`pnpm wasm` muss vorher laufen), und die Grenze zwischen TypeScript und WASM serialisiert. Deshalb
 ist sie grob geschnitten — ein `dispatch(command)`, das einen Patch zurückgibt.
 
+### Die drei Stapelabfragen
+
+Gelesen wird aus demselben Grund grob wie geschrieben. Die Wiedergabe fragt mit Anzeigerate, also
+tritt alles, was die Darstellung pro Bild braucht, einmal fürs ganze Bild über die Grenze statt
+einmal pro Element:
+
+| Abfrage | Antwortet mit | Gelesen von |
+|---|---|---|
+| `sourceTimesAt(at)` | jedem Clip, den der Moment berührt → die Stelle im eigenen Medium | dem Dekoder |
+| `effectParamsAt(at)` | jedem Effekt auf diesen Clips, dazu jede Spurkette und die des Projekts → jeder Parameter, den er beantworten kann | der Zeichenliste, dem Inspector |
+| `transformsAt(at)` | jedem Clip, den der Moment berührt → seiner Geometrie | der Zeichenliste |
+
+Alle drei lösen dabei Keyframes auf, und genau dafür sitzen sie im Kern und nicht in der
+Darstellung. `Clip.transform` und `Effect.params` sind die Werte *in Ruhe*; der Wert zu einem
+Moment ist das, was diese Abfragen liefern, und nichts, was zeichnet, darf ihn selbst ausrechnen —
+eine zweite Interpolation neben der ersten ist genau der Weg, auf dem Vorschau und Export sich über
+ein Bild uneinig werden. Eine Spurkette und die Mastering-Kette des Projekts haben kein Clipfenster,
+aus dem sie fallen könnten, also beantwortet `effectParamsAt` sie zu jedem Moment.
+
+`transformsAt` antwortet für jeden berührten Clip, ob animiert oder nicht, damit die Zeichenliste
+eine Regel hat statt eines Rückfalls.
+
 Geplant, aber nicht erreicht: die Crate soll auch nativ in die Tauri-Hülle und in einen Server
 gelinkt werden. Heute existiert nur der WASM-Pfad; `apps/desktop` hängt gar nicht von
 `videola-core` ab, sondern hostet das Web-Bundle.
@@ -41,7 +63,7 @@ Umkehr-Patch landen als Paar auf dem Undo-Stack.
 
 Der Grund: ein handgeschriebenes Gegenstück pro Command ist der am seltensten ausgeführte Code im
 Editor und veraltet, sobald die Vorwärtsoperation geändert wird. Siebenunddreißig Commands wären
-siebenunddreißig Umkehrungen, die gepflegt werden müssten. Ein Diff ist einmal geschrieben und für den
+achtunddreißig Umkehrungen, die gepflegt werden müssten. Ein Diff ist einmal geschrieben und für den
 nächsten Command schon richtig, bevor er existiert.
 
 ## Zeit ist eine Ganzzahl

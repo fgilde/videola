@@ -2,7 +2,7 @@
 
 ::: info Zusammenfassung
 Das vollständige Kapitel gibt es nur auf Englisch: [Commands and
-undo](/guide/commands-and-undo). Dort stehen alle siebenunddreißig Commands mit ihren Feldern, das
+undo](/guide/commands-and-undo). Dort stehen alle achtunddreißig Commands mit ihren Feldern, das
 Drahtformat und der Ablauf im Detail. Diese Seite fasst es zusammen.
 :::
 
@@ -10,11 +10,11 @@ Jede Bearbeitung ist ein serialisierbarer Command. Es gibt keinen Pfad, der das 
 verändert — daraus fallen Undo, die HTTP-API und der MCP-Server aus einem Mechanismus statt aus drei.
 Die beiden nach außen gerichteten stehen in [Die API und der MCP-Server](/de/guide/api-and-mcp).
 
-## Die siebenunddreißig Commands
+## Die achtunddreißig Commands
 
 | Gruppe | Commands |
 |---|---|
-| `project.*` | `setSettings`, `setTitle` |
+| `project.*` | `setSettings`, `setTitle`, `setMasterVolume` |
 | `track.*` | `add`, `remove`, `reorder`, `rename`, `setVolume`, `setPan`, `setFlags` |
 | `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `setSpeed`, `setVolume`, `setTransform`, `setTransition` |
 | `effect.*` | `add`, `setParam` |
@@ -61,12 +61,24 @@ ausgehende Kante gibt es keinen Command, weil sie niemand liest: ein Übergang w
 der eingehende Clip in das Bild gemischt wird, das der Frame schon trägt — er gehört also dem Clip,
 der ankommt. Eine gelöschte Überblendung ist im Modell *abwesend*, nicht `null`.
 
+## Wo ein Effekt wohnt
+
+`effect.add` und `effect.setParam` nennen mit `target` die Kette, nicht den Clip:
+`{ kind: "clip", clip }`, `{ kind: "track", track }` oder `{ kind: "project" }`. Eine Weichzeichnung
+auf einem Clip, ein Equalizer auf einer Spur und ein Limiter in der Mastering-Kette sind dieselben
+zwei Commands, anders gerichtet. Alle drei Plätze stehen seit dem ersten Schema im Modell —
+`Clip.effects`, `Track.effects`, `MasterSettings.effects` — und bis es die Adresse gab, war nur der
+erste erreichbar.
+
+`project.setMasterVolume` bewegt den einen Regler, durch den die ganze Mischung läuft. Er wird auf
+dieselben `0 .. 4` geklemmt wie der Regler einer Spur.
+
 ## Keyframes
 
-Ein Keyframe adressiert einen Effektparameter über dasselbe Tripel aus `clip`, `effectType` und
-`key`, das auch `effect.setParam` benutzt. Ein Parameter mit Keyframe-Spur wird aus der Spur gelesen,
-einer ohne aus dem statischen Wert. Der statische Wert bleibt darunter erhalten, also nimmt das
-Löschen des letzten Keyframes den Parameter wieder von der Uhr, statt ihn einzufrieren.
+Ein Keyframe adressiert dieselbe Kette wie `effect.setParam` — ein Tripel aus `target`, `effectType`
+und `key`. Ein Parameter mit Keyframe-Spur wird aus der Spur gelesen, einer ohne aus dem statischen
+Wert. Der statische Wert bleibt darunter erhalten, also nimmt das Löschen des letzten Keyframes den
+Parameter wieder von der Uhr, statt ihn einzufrieren.
 
 `keyframe.add` ist ein *Upsert*: dieselbe Zeit noch einmal ersetzt den dortigen Keyframe, statt einen
 zweiten daneben zu legen. Genau das macht einen Schieberzug im Inspector zur selben Form wie einen
@@ -76,8 +88,21 @@ Clipzug — eine Sendung pro Zeigerbewegung, alle unter einem Coalesce-Key, ein 
 Command schreibt sie. `keyframe.move` weigert sich, auf einer schon besetzten Zeit zu landen, nimmt
 aber einen Zug hin, der dort endet, wo er anfing.
 
-Keyframes auf einer *Clip*-Eigenschaft haben im Modell einen Platz und keinen Command, weil sie
-niemand auswertet: nur `Effect::param_at` liest eine Keyframe-Spur.
+### Eine Transformation keyframen
+
+Lässt man `effectType` weg — sendet also `null` —, adressiert der Keyframe statt eines Effekts die
+Transformation des Clips selbst. Die Schlüssel sind ihre eigenen Feldnamen: `x`, `y`, `scaleX`,
+`scaleY`, `rotation`, `anchorX`, `anchorY`, `opacity`, `cropLeft`, `cropTop`, `cropRight`,
+`cropBottom`. Jeder andere Name wird abgelehnt: ein Keyframe, den die Darstellung nie liest, ist
+schlimmer als keiner — er wird gespeichert, wieder geladen und tut nichts, und der Editor, der ihn
+geschrieben hat, merkt es nicht.
+
+Ein gekeyframtes Feld gewinnt gegen das gleichnamige Feld aus `clip.setTransform`, genau wie ein
+gekeyframter Parameter gegen `effect.setParam` gewinnt. Nur ein Clip hat eine Transformation;
+`{ kind: "track" }` und `{ kind: "project" }` werden hier abgelehnt.
+
+Platziert wird das Bild aus `transformsAt`, nicht aus `clip.transform` — siehe
+[Architektur](/de/guide/architecture).
 
 ## Drahtformat
 

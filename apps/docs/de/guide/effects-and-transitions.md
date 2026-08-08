@@ -265,13 +265,13 @@ Projekt wirklich einen Effekt trägt.
 
 ## Was es noch nicht gibt, beim Namen
 
-- **Masken und Bewegungspfade.** Beschnitt gibt eine rechteckige Maske und die Vignettierung eine
-  radiale, aber eine geformte oder mitlaufende Maske braucht Pfade, und Pfade brauchen, dass die
-  Zeichenliste `Clip::keyframes` liest — was sie nicht tut. Das ist dieselbe Lücke wie die nächste.
-- **Keyframes gibt es auf Effektparametern und sonst nirgends.** `Clip::keyframes` steht im Modell,
-  und die Zeichenliste liest `clip.transform` statisch, also ist ein Keyframe auf einer
-  Clip-Eigenschaft ein Datum, das kein Bild sieht. Alles Animierte in diesem Meilenstein ist entweder
-  ein Effektparameter oder die deklarative Vorlage eines Titels.
+- **Masken.** Beschnitt gibt eine rechteckige Maske und die Vignettierung eine radiale; eine
+  geformte oder mitlaufende Maske braucht noch Pfade und einen Shader, der eine abtastet. Was sie
+  nicht mehr braucht, ist ein Ort zum Animieren — eine Transformation ist keyframebar, und die
+  Zeichenliste platziert das Bild aus dem aufgelösten Wert.
+- **Ein Bewegungspfad ist eine Keyframe-Spur und sonst nichts.** `x` und `y` interpolieren über
+  dasselbe `Interp` wie ein Effektparameter. Es fehlt ein Editor für die Kurve zwischen zwei
+  Schlüsseln — Bezier-Anfasser stehen im Modell, und kein Command schreibt sie.
 - **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
   dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
 - **LUT-Import** braucht einen Dateiimport, eine 3D-Textur und einen Parameter, der kein Float ist.

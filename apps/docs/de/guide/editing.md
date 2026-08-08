@@ -180,11 +180,11 @@ Undo-Schritt. Steht der Playhead außerhalb des Clips, sind die Keyframe-Bediene
 dort geschriebener Keyframe wird für diesen Clip nie ausgewertet, der Schalter würde also einen
 Zustand melden, den kein Bild je zeigt.
 
-**Den Schalter gibt es nur auf Effektparametern.** `Clip::keyframes` existiert im Modell, aber
-niemand wertet es aus — die Zeichenliste liest `clip.transform` statisch. Ein Schalter auf
-Transformation oder Lautstärke würde Daten schreiben, die kein Bild je zu sehen bekommt. Ihn dort
-hinzustellen heißt, `clip.transform` durch dieselbe Auswertung zu schicken wie einen
-Effektparameter, und das ist Arbeit im Kern und in der Engine, nicht in der Oberfläche.
+**Die Transformation lässt sich ebenfalls keyframen, der Inspector bietet es nur noch nicht an.**
+Der Kern löst `Clip::keyframes` auf, und die Zeichenliste platziert das Bild aus dem aufgelösten
+Wert — der Schalter schriebe also Daten, die ein Bild wirklich zeigt. Es fehlt die Oberfläche: eine
+Zeile je Transformationsfeld mit demselben Schalter, den eine Effektparameterzeile trägt. Die
+Lautstärke bleibt unanimiert, dort fehlt tatsächlich noch die Auswertung.
 
 ## Wiedergabe
 

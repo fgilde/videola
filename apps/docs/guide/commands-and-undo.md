@@ -8,9 +8,9 @@ The bus lives in `crates/videola-core/src/command`, the history in
 `crates/videola-core/src/history.rs`, and the two are joined by `Document` in
 `crates/videola-core/src/document.rs`.
 
-## The thirty-seven commands
+## The thirty-eight commands
 
-`videola-core` defines thirty-seven commands today. The design reserves a wider set still — masks,
+`videola-core` defines thirty-eight commands today. The design reserves a wider set still — masks,
 text, markers, audio chains, render and templates — but none of those exist yet.
 
 ### `project.*`
@@ -19,6 +19,10 @@ text, markers, audio chains, render and templates — but none of those exist ye
 |---|---|
 | `project.setSettings` | `settings` |
 | `project.setTitle` | `title` |
+| `project.setMasterVolume` | `volume` |
+
+`project.setMasterVolume` moves the one fader the whole mix passes through. It is clamped to the
+same `0 .. 4` a track's fader is, so a slider can send whatever it produces.
 
 ### `track.*`
 
@@ -112,25 +116,31 @@ Markers are kept in time order, whatever order they were placed in.
 
 | Command | Fields |
 |---|---|
-| `effect.add` | `clip`, `effectType` |
-| `effect.setParam` | `clip`, `effectType`, `key`, `value` |
+| `effect.add` | `target`, `effectType` |
+| `effect.setParam` | `target`, `effectType`, `key`, `value` |
+
+`target` names the chain, not the clip: `{ kind: "clip", clip }`, `{ kind: "track", track }` or
+`{ kind: "project" }`. A blur on a clip, an equaliser on a bus and a limiter on the mastering chain
+are the same two commands pointed somewhere else. All three places have been in the model since the
+first schema — `Clip.effects`, `Track.effects`, `MasterSettings.effects` — and until the address
+existed only the first of them could be reached.
 
 `value` is a tagged `ParamValue`: `float`, `int`, `bool`, `color`, `vec2` or `choice`. Both commands
-address the effect by `effectType` rather than by `EffectId`, so two effects of the same type on one
-clip cannot be told apart from the outside — the model allows it, the command catalogue does not
+address the effect by `effectType` rather than by `EffectId`, so two effects of the same type in one
+chain cannot be told apart from the outside — the model allows it, the command catalogue does not
 reach it.
 
 ### `keyframe.*`
 
 | Command | Fields |
 |---|---|
-| `keyframe.add` | `clip`, `effectType`, `key`, `time`, `value`, `interp` |
-| `keyframe.remove` | `clip`, `effectType`, `key`, `time` |
-| `keyframe.move` | `clip`, `effectType`, `key`, `from`, `to` |
-| `keyframe.setInterp` | `clip`, `effectType`, `key`, `time`, `interp` |
+| `keyframe.add` | `target`, `effectType`, `key`, `time`, `value`, `interp` |
+| `keyframe.remove` | `target`, `effectType`, `key`, `time` |
+| `keyframe.move` | `target`, `effectType`, `key`, `from`, `to` |
+| `keyframe.setInterp` | `target`, `effectType`, `key`, `time`, `interp` |
 
-Keyframes address an effect parameter, the same `clip` plus `effectType` plus `key` triple that
-`effect.setParam` uses. A parameter with a keyframe track is read from the track; a parameter
+Keyframes address the same chain `effect.setParam` does — a `target` plus `effectType` plus `key`
+triple — so a track equaliser sweeps its cutoff by exactly the commands a clip effect uses. A parameter with a keyframe track is read from the track; a parameter
 without one is read from the static value `effect.setParam` wrote. The static value survives
 underneath, so removing the last keyframe takes the parameter back off the clock rather than
 freezing it — and `keyframe.remove` drops the empty track from the model so that nothing later
@@ -146,9 +156,21 @@ writes them; a bezier key without handles uses the ease-in-out defaults. `keyfra
 land on a time another key already occupies rather than silently replacing it, but moving a key to
 where it already is is accepted — a drag cannot know in advance that it went nowhere.
 
-Keyframes on a *clip* property — opacity, volume, a transform field — have a place in the model and
-no command, because nothing evaluates them: only `Effect::param_at` reads a keyframe track, so
-writing one on a clip would be a promise with nothing behind it.
+#### Keyframing a transform
+
+Leave `effectType` out — send `null` — and the keyframe addresses the clip's own transform instead
+of an effect. The keys are the transform's own field names: `x`, `y`, `scaleX`, `scaleY`,
+`rotation`, `anchorX`, `anchorY`, `opacity`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`. Any
+other name is refused, because a keyframe the renderer would never read is worse than no keyframe —
+it saves, reloads and does nothing, and the editor that wrote it cannot tell.
+
+A keyframed field wins over the matching field of `clip.setTransform`, exactly the way a keyframed
+parameter wins over `effect.setParam`, and the static value survives underneath. Only a clip target
+has a transform; `{ kind: "track" }` and `{ kind: "project" }` are refused here.
+
+The picture is placed by `transformsAt`, not by `clip.transform`. That batch is described in
+[Architecture](./architecture.md#the-three-batch-queries); nothing that draws may read the static
+transform, or the preview and the export would each be free to interpolate their own way.
 
 ### `media.*`
 
@@ -243,7 +265,7 @@ of the diffing.
 
 A hand-written inverse is code that only runs when a user presses Ctrl+Z after that specific command.
 It is therefore the least-exercised code in the editor, and it goes stale the instant the forward
-operation changes without it. Thirty-seven commands would mean thirty-seven inverses to keep honest, and the
+operation changes without it. Thirty-eight commands would mean thirty-eight inverses to keep honest, and the
 count only grows: the roadmap adds masks, nesting and an audio chain. The six commands this
 milestone added cost nothing on the undo side — a test asserts that every variant in the catalogue
 dispatches and undoes back to the exact prior state, and the new ones passed it the day they were
