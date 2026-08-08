@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:gpu": "node gpu/run.mjs"
   },
   "dependencies": {
     "@videola/core": "workspace:*",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
     "jsdom": "^30.0.1",
     "node-web-audio-api": "^2.1.0",
     "typescript": "^7.0.2",

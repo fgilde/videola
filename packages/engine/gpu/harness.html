@@ -1,0 +1,264 @@
+<body><pre id="out">pending</pre>
+<script src="./bundle.js"></script>
+<script>
+const MEDIA = "med_" + "a".repeat(64);
+
+function transform(over) {
+  return Object.assign({ x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5,
+    anchorY: 0.5, opacity: 1, crop: { left: 0, top: 0, right: 0, bottom: 0 } }, over || {});
+}
+
+function project(width, height, background, clips, sourceWidth, sourceHeight) {
+  return {
+    settings: { width, height, background },
+    library: [{ id: MEDIA, width: sourceWidth ?? width, height: sourceHeight ?? height }],
+    timeline: { tracks: [{ id: "trk_0", kind: "video", hidden: false, clips: clips.map((c, i) => ({
+      id: c.id ?? ("clp_" + i), source: { kind: "media", media: MEDIA }, start: 0, duration: 1000,
+      blend: c.blend ?? "normal", transform: transform(c.t) })) }] },
+  };
+}
+
+function frame(w, h, pixel) {
+  const bytes = new Uint8Array(w * h * 4);
+  for (let i = 0; i < w * h; i += 1) bytes.set(pixel(i % w, (i / w) | 0), i * 4);
+  return new VideoFrame(bytes, { format: "RGBA", codedWidth: w, codedHeight: h, timestamp: 0 });
+}
+
+function canvasOf(w, h) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  return canvas;
+}
+
+// readPixels hands back the rows bottom-up; this reads them the way a picture is described.
+function reader(pixels, w, h) {
+  return (x, y) => {
+    const at = ((h - 1 - y) * w + x) * 4;
+    return [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]];
+  };
+}
+
+function rig(w, h, background, clips, sourceWidth, sourceHeight) {
+  const canvas = canvasOf(w, h);
+  const context = R.createContext(canvas);
+  return { canvas, context, compositor: new R.Compositor(context),
+    scene: project(w, h, background, clips, sourceWidth, sourceHeight) };
+}
+
+// What the page sees, which is where a hole in the alpha channel shows up.
+function overPage(canvas, pageColor, x, y) {
+  const two = canvasOf(canvas.width, canvas.height).getContext("2d");
+  two.fillStyle = pageColor;
+  two.fillRect(0, 0, canvas.width, canvas.height);
+  two.drawImage(canvas, 0, 0);
+  return Array.from(two.getImageData(x, y, 1, 1).data);
+}
+
+const results = [];
+
+function check(name, got, want, tolerance) {
+  const slack = tolerance ?? 1;
+  const list = Array.isArray(got) && Array.isArray(want);
+  const ok = list
+    ? got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= slack)
+    : JSON.stringify(got) === JSON.stringify(want);
+  results.push({ name, ok, got, want });
+}
+
+function test(name, fn) {
+  try {
+    fn();
+  } catch (error) {
+    results.push({ name, ok: false, got: "THREW " + error.name + ": " + error.message, want: "no throw" });
+  }
+}
+
+test("driver", () => {
+  const { context } = rig(4, 4, "#000000", []);
+  check("webgl2 present", typeof context.gl.getParameter(context.gl.VERSION), "string");
+  check("shaders compile and link", (() => {
+    const { compositor, scene, context: c } = rig(4, 4, "#ff0000", [{}]);
+    const f = frame(4, 4, () => [0, 0, 255, 255]);
+    compositor.render(scene, 0, new Map([["clp_0", f]]));
+    f.close();
+    return [c.gl.getError(), ...reader(compositor.readPixels(), 4, 4)(2, 2)];
+  })(), [0, 0, 0, 255, 255]);
+});
+
+test("premultiplied alpha", () => {
+  const half = (clips, texel) => {
+    const { compositor, scene } = rig(4, 4, "#ff0000", clips);
+    const f = frame(4, 4, () => texel);
+    compositor.render(scene, 0, new Map([["clp_0", f]]));
+    f.close();
+    return reader(compositor.readPixels(), 4, 4)(2, 2);
+  };
+  check("half-transparent green over red", half([{}], [0, 255, 0, 128]), [128, 128, 0, 255]);
+  check("opaque white at half opacity", half([{ t: { opacity: 0.5 } }], [255, 255, 255, 255]),
+    [255, 128, 128, 255]);
+  check("alpha and opacity multiply", half([{ t: { opacity: 0.5 } }], [0, 255, 0, 128]),
+    [191, 64, 0, 255]);
+});
+
+test("two clips", () => {
+  const { compositor, scene } = rig(4, 4, "#000000", [{ id: "clp_a" }, { id: "clp_b", t: { opacity: 0.5 } }]);
+  const red = frame(4, 4, () => [255, 0, 0, 255]);
+  const green = frame(4, 4, () => [0, 255, 0, 255]);
+  compositor.render(scene, 0, new Map([["clp_a", red], ["clp_b", green]]));
+  red.close();
+  green.close();
+  check("upper clip at half opacity over lower", reader(compositor.readPixels(), 4, 4)(2, 2),
+    [128, 128, 0, 255]);
+});
+
+// A blend mode that reaches the alpha channel punches a hole the page shines through.
+test("blend modes keep the picture opaque", () => {
+  const modes = ["normal", "multiply", "screen", "overlay", "add", "subtract", "difference",
+    "lighten", "darken"];
+  for (const mode of modes) {
+    for (const alpha of [255, 128]) {
+      const { canvas, compositor, scene } = rig(4, 4, "#804020",
+        [{ id: "clp_a" }, { id: "clp_b", blend: mode, t: { opacity: alpha === 255 ? 1 : 0.5 } }]);
+      const lower = frame(4, 4, () => [200, 100, 50, 255]);
+      const upper = frame(4, 4, () => [100, 150, 200, alpha]);
+      compositor.render(scene, 0, new Map([["clp_a", lower], ["clp_b", upper]]));
+      lower.close();
+      upper.close();
+      const buffer = reader(compositor.readPixels(), 4, 4)(2, 2);
+      check(mode + " alpha=" + alpha + " stays opaque", buffer[3], 255);
+      // With an opaque buffer the page contributes nothing, so what it shows is what was drawn.
+      check(mode + " alpha=" + alpha + " lets no page through", overPage(canvas, "#ff00ff", 2, 2),
+        buffer);
+    }
+  }
+});
+
+// The FrameCache may close a frame between the tick and the render. Uploading it would leave the
+// texture on the previous frame, or -- with no previous frame -- opaque black over everything.
+test("a closed frame does not black out the picture", () => {
+  const { compositor, scene, context } = rig(4, 4, "#ff0000", [{}]);
+  const dead = frame(4, 4, () => [0, 255, 0, 255]);
+  dead.close();
+  compositor.render(scene, 0, new Map([["clp_0", dead]]));
+  check("background survives a closed frame", reader(compositor.readPixels(), 4, 4)(2, 2),
+    [255, 0, 0, 255]);
+  check("and no driver error was left behind", context.gl.getError(), 0);
+});
+
+test("a frame the driver cannot hold is left out", () => {
+  const { compositor, scene, context } = rig(4, 4, "#ff0000", [{}]);
+  const huge = frame(context.maxTextureSize + 1, 1, () => [0, 255, 0, 255]);
+  compositor.render(scene, 0, new Map([["clp_0", huge]]));
+  huge.close();
+  check("background survives an oversize frame", reader(compositor.readPixels(), 4, 4)(2, 2),
+    [255, 0, 0, 255]);
+  check("and no driver error was left behind", context.gl.getError(), 0);
+});
+
+test("background with alpha", () => {
+  const { canvas, compositor } = rig(4, 4, "#80808080", []);
+  compositor.render(project(4, 4, "#80808080", []), 0, new Map());
+  // Half of the grey, because half of it is the black page underneath.
+  check("a half-transparent background over a black page", overPage(canvas, "#000000", 1, 1),
+    [64, 64, 64, 255]);
+});
+
+test("dispose is final", () => {
+  const { compositor, scene, context } = rig(4, 4, "#ff0000", [{}]);
+  const f = frame(4, 4, () => [0, 0, 255, 255]);
+  compositor.render(scene, 0, new Map([["clp_0", f]]));
+  compositor.dispose();
+  // A queued animation frame after the preview unmounted. Nothing may reach the driver, so the
+  // buffer still holds the last real render -- read past the compositor to see it.
+  compositor.render(project(4, 4, "#00ff00", []), 0, new Map());
+  compositor.dispose();
+  f.close();
+  const raw = new Uint8Array(4 * 4 * 4);
+  context.gl.readPixels(0, 0, 4, 4, context.gl.RGBA, context.gl.UNSIGNED_BYTE, raw);
+  check("the drawing buffer is untouched after dispose", reader(raw, 4, 4)(2, 2), [0, 0, 255, 255]);
+  check("and the compositor reads nothing back", compositor.readPixels().length, 0);
+});
+
+test("geometry", () => {
+  const { compositor, scene } = rig(16, 16, "#000000",
+    [{ t: { rotation: 90, anchorX: 0, anchorY: 0, scaleX: 0.5, scaleY: 0.5 } }], 16, 16);
+  const f = frame(16, 16, () => [255, 255, 255, 255]);
+  compositor.render(scene, 0, new Map([["clp_0", f]]));
+  f.close();
+  const at = reader(compositor.readPixels(), 16, 16);
+  // Anchor at the source's top-left corner, which sits in the middle of the frame. A quarter turn
+  // clockwise swings the picture from below-right into below-left.
+  check("turns clockwise about the anchor", [at(4, 12)[0], at(12, 12)[0]], [255, 0]);
+
+  const quad = rig(16, 16, "#000000", [{}], 16, 16);
+  const corners = frame(16, 16, (x, y) => (y < 8 ? (x < 8 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+    : (x < 8 ? [0, 0, 255, 255] : [255, 255, 0, 255])));
+  quad.compositor.render(quad.scene, 0, new Map([["clp_0", corners]]));
+  corners.close();
+  const q = reader(quad.compositor.readPixels(), 16, 16);
+  check("top left is red", q(4, 4), [255, 0, 0, 255]);
+  check("top right is green", q(12, 4), [0, 255, 0, 255]);
+  check("bottom left is blue", q(4, 12), [0, 0, 255, 255]);
+  check("bottom right is yellow", q(12, 12), [255, 255, 0, 255]);
+});
+
+test("a canvas resized behind our back", () => {
+  const { canvas, compositor } = rig(8, 8, "#ff0000", [{}]);
+  canvas.width = 16;
+  canvas.height = 16;
+  const f = frame(8, 8, () => [0, 0, 255, 255]);
+  compositor.render(project(16, 16, "#ff0000", [{}], 16, 16), 0, new Map([["clp_0", f]]));
+  f.close();
+  const pixels = compositor.readPixels();
+  check("the viewport follows the drawing buffer", pixels.length, 16 * 16 * 4);
+  check("and covers the whole of it", reader(pixels, 16, 16)(15, 0), [0, 0, 255, 255]);
+});
+
+test("offscreen canvas", () => {
+  const context = R.createContext(new OffscreenCanvas(4, 4));
+  const compositor = new R.Compositor(context);
+  const f = frame(4, 4, () => [0, 0, 255, 255]);
+  compositor.render(project(4, 4, "#ff0000", [{}]), 0, new Map([["clp_0", f]]));
+  f.close();
+  check("the export worker's canvas renders the same picture",
+    reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255]);
+});
+
+// The one thing a phone does routinely. Everything below rebuilds lazily, so the proof is a
+// correct pixel after the context comes back.
+const lossCanvas = canvasOf(4, 4);
+const lossContext = R.createContext(lossCanvas);
+const lossCompositor = new R.Compositor(lossContext);
+const lossScene = project(4, 4, "#000000", [{}]);
+const blue = () => frame(4, 4, () => [0, 0, 255, 255]);
+let prevented = null;
+let lostSeen = 0;
+let restoredSeen = 0;
+lossContext.onLost(() => { lostSeen += 1; });
+lossContext.onRestored(() => { restoredSeen += 1; });
+lossCanvas.addEventListener("webglcontextlost", (e) => { prevented = e.defaultPrevented; });
+const first = blue();
+lossCompositor.render(lossScene, 0, new Map([["clp_0", first]]));
+first.close();
+const lose = lossContext.gl.getExtension("WEBGL_lose_context");
+lose.loseContext();
+setTimeout(() => {
+  check("the loss event is cancelled so the browser will restore", prevented, true);
+  check("the loss reaches its listener", lostSeen, 1);
+  const during = blue();
+  lossCompositor.render(lossScene, 0, new Map([["clp_0", during]]));
+  during.close();
+  lose.restoreContext();
+  setTimeout(() => {
+    check("the restoration reaches its listener", restoredSeen, 1);
+    const after = blue();
+    lossCompositor.render(lossScene, 0, new Map([["clp_0", after]]));
+    after.close();
+    check("and the picture is back", reader(lossCompositor.readPixels(), 4, 4)(2, 2),
+      [0, 0, 255, 255]);
+    check("with no driver error", lossContext.gl.getError(), 0);
+    document.getElementById("out").textContent = JSON.stringify(results);
+  }, 300);
+}, 200);
+</script></body>

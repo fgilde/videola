@@ -9,6 +9,7 @@ dist
 .vite
 *.tsbuildinfo
 .pnpm-store
+packages/engine/gpu/bundle.js
 
 # Tauri
 src-tauri/target
