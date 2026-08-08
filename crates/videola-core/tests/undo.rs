@@ -162,6 +162,42 @@ fn coalescing_after_an_undo_does_not_resurrect_stale_redo() {
     assert!(doc.redo().is_err());
 }
 
+// What the API's atomic batch rests on: the commands that did land under one coalesce key come
+// back off in a single step, and — unlike `undo` — nothing is left on the redo stack for a later
+// `redo` to reapply half a rejected batch from.
+#[test]
+fn rollback_removes_a_partial_batch_without_leaving_it_on_redo() {
+    let mut doc = Document::new();
+    doc.dispatch(add_track("V1")).unwrap();
+    let track = doc.project().timeline.tracks[0].id.clone();
+    let before = serde_json::to_value(doc.project()).unwrap();
+    let history_before = doc.history().labels().len();
+
+    for name in ["A", "B"] {
+        doc.dispatch(
+            Dispatch::new(Command::TrackRename {
+                track: track.clone(),
+                name: name.into(),
+            })
+            .coalesce("batch-1"),
+        )
+        .unwrap();
+    }
+
+    doc.rollback().unwrap();
+
+    assert_eq!(serde_json::to_value(doc.project()).unwrap(), before);
+    assert_eq!(doc.history().labels().len(), history_before);
+    assert!(!doc.history().can_redo());
+    assert!(doc.redo().is_err());
+}
+
+#[test]
+fn rollback_with_nothing_to_undo_reports_it_instead_of_panicking() {
+    let mut doc = Document::new();
+    assert!(doc.rollback().is_err());
+}
+
 // F7: a command whose effect is a no-op (renaming a track to the name it already has, here)
 // must not push a dead undo step the user then has to click through.
 #[test]

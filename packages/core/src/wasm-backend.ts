@@ -31,6 +31,7 @@ export async function createWasmBackend(bytes?: Uint8Array): Promise<DocumentBac
     dispatch: (dispatch: Dispatch) => handle.dispatch(dispatch) as DispatchResult,
     undo: () => handle.undo() as DispatchResult,
     redo: () => handle.redo() as DispatchResult,
+    rollback: () => handle.rollback(),
     // The glue's own .d.ts under-types this as plain Uint8Array, but the JS it generates
     // (getArrayU8FromWasm0(...).slice()) always allocates a fresh ArrayBuffer-backed copy -
     // never a view into wasm memory, never a SharedArrayBuffer - so this cast just corrects

@@ -45,6 +45,10 @@ export interface DocumentBackend {
   dispatch(dispatch: Dispatch): DispatchResult;
   undo(): DispatchResult;
   redo(): DispatchResult;
+  // Undo that also drops the reverted step from the redo stack. A caller applying several
+  // commands as one atomic unit needs this: a plain undo would leave the half of a rejected
+  // batch that did land sitting on redo, one keystroke away from being reapplied.
+  rollback(): void;
   save(options: SaveOptions, media: MediaBytes): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
   warnings(): LoadWarning[];
