@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { cmd, FLICKS_PER_SECOND, MAX_COMPOUND_DEPTH, readableSourceTimeAt } from "./commands";
 import { VideolaDocument } from "./document";
-import type { Clip } from "./generated";
-import { createWasmBackend } from "./wasm-backend";
+import type { Clip, Project } from "./generated";
+import { createProjectBackend, createWasmBackend } from "./wasm-backend";
 import { initSync } from "./wasm/videola_core.js";
 
 // Needs the real build in packages/core/src/wasm (gitignored - run `pnpm wasm` first). Every
@@ -277,5 +277,44 @@ describe("nesting through the real WASM backend", () => {
     }
 
     expect(() => doc.dispatch(cmd.clipNest([clipOn(doc, 0).id]))).toThrow();
+  });
+});
+
+// The other half of the autosave: a project state with no media around it, taken back over as an
+// ordinary document. It goes through `Project::normalize` like a `.videola` does, which is what
+// makes a snapshot that survived a crash mid-write a refusal rather than a corrupt editor.
+describe("a project state through the real WASM backend", () => {
+  it("comes back as a document that can be edited and undone like any other", async () => {
+    const built = await timeline();
+    built.dispatch(cmd.clipAdd(trackId(built, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+
+    const restored = new VideolaDocument(await createProjectBackend(built.state));
+
+    expect(restored.state).toEqual(built.state);
+    // A fresh history, not the old one: the snapshot is a state, and there is nothing behind it
+    // to step back into.
+    expect(restored.canUndo).toBe(false);
+    restored.dispatch(cmd.trackAdd("audio", "A1"));
+    expect(restored.canUndo).toBe(true);
+  });
+
+  it("refuses a project the loader would refuse", async () => {
+    const built = await timeline();
+    built.dispatch(cmd.clipAdd(trackId(built, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    const broken = JSON.parse(JSON.stringify(built.state)) as Project;
+    broken.timeline.tracks[0]!.clips[0]!.start = Number.MAX_SAFE_INTEGER;
+
+    await expect(createProjectBackend(broken)).rejects.toThrow();
+  });
+
+  it("keeps a nested timeline across the snapshot", async () => {
+    const built = await timeline();
+    built.dispatch(cmd.clipAdd(trackId(built, 0), { kind: "media", media: MEDIA }, 0, SECOND));
+    built.dispatch(cmd.clipNest([clipOn(built, 0).id]));
+
+    const restored = new VideolaDocument(await createProjectBackend(built.state));
+
+    expect(restored.state.timeline.tracks[0]!.clips[0]!.source.kind).toBe("compound");
+    expect(restored.sourceTimesAt(SECOND / 2)).toEqual(built.sourceTimesAt(SECOND / 2));
   });
 });

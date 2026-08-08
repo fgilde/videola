@@ -13,5 +13,7 @@ export {
   storageEstimate,
 } from "./opfs";
 export { mediaForProject } from "./save";
+export { clearSession, readSession, worthSaving, writeSession } from "./session";
+export type { Session } from "./session";
 export { peaks } from "./waveform";
 export type { Peaks } from "./waveform";

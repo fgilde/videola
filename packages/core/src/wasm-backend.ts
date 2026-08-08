@@ -36,6 +36,15 @@ export async function createWasmBackend(bytes?: Uint8Array): Promise<DocumentBac
   return wrap(bytes === undefined ? new WasmDocument() : WasmDocument.open(bytes));
 }
 
+// An autosaved project state, taken over as an ordinary document. No media travel with it: the
+// bytes are in OPFS under their content hash already, which is where everything that decodes,
+// draws or exports reads them from. The project is untrusted all the same and goes through the
+// same `normalize` gate a `.videola` does.
+export async function createProjectBackend(project: Project): Promise<DocumentBackend> {
+  await ensureReady();
+  return wrap(WasmDocument.fromProject(project));
+}
+
 /// The templates the application ships with. Manifest and project together, because the gallery
 /// draws its preview from the very timeline the template will build.
 export async function builtinTemplates(): Promise<Template[]> {

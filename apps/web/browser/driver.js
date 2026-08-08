@@ -361,6 +361,23 @@ async function announce() {
     check("a track was created to hold it",
       document.querySelectorAll(".v-timeline__header").length, 1);
 
+    // The autosave in the browser it actually runs in: a real interval, real OPFS, a real
+    // project. Virtual time only, because the timer is half a minute out and the wall-clock run
+    // is shorter than that on purpose -- an autosave that fired on every edit would be one.
+    if (virtual) {
+      let snapshot;
+      for (let round = 0; round < 150 && snapshot === undefined; round += 1) {
+        snapshot = await autosaved();
+        if (snapshot === undefined) await sleep(POLL_MS);
+      }
+      check("the timeline reaches storage without anyone asking for it",
+        snapshot?.project?.timeline?.tracks?.[0]?.clips?.length, 1);
+      // The whole reason a snapshot can be this frequent: it carries no media. Those are in OPFS
+      // under their content hash already, which is where the renderer reads them from.
+      check("and the snapshot carries the project alone",
+        Object.keys(snapshot ?? {}).sort(), ["project", "savedAt"]);
+    }
+
     if (virtual) {
       checkAtLeast("the preview shows a decoded frame",
         await until("a decoded frame", () => (litPixels() > 1000 ? litPixels() : 0), 90000), 1000);
@@ -1048,6 +1065,18 @@ async function announce() {
 
   const card = (id) => q(`[data-template-id="${id}"]`);
   const fileInput = (slot) => q(`[data-slot-id="${slot}"] input[type="file"]`);
+
+  // Read straight out of OPFS rather than through the module the application uses: what is being
+  // checked is that bytes are on disk, and asking the writer whether it wrote proves nothing.
+  async function autosaved() {
+    try {
+      const root = await navigator.storage.getDirectory();
+      const text = await (await (await root.getFileHandle("session.json")).getFile()).text();
+      return text === "" ? undefined : JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
 
   async function dropFixture() {
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();
