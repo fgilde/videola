@@ -4,6 +4,7 @@ use ts_rs::{Config, TS};
 use videola_core::command::{Command, Dispatch, ALL_COMMAND_LABELS};
 use videola_core::format::{LoadWarning, Manifest};
 use videola_core::model::{Clip, Effect, Keyframe, ParamValue, Project};
+use videola_core::template::{SlotAnswer, Template};
 use videola_core::DispatchResult;
 
 // ts-rs 12's `export_all` takes a `&Config` (older versions took none), and this version reads no
@@ -29,6 +30,8 @@ fn generated_bindings_are_complete_and_the_barrel_matches() {
     Manifest::export_all(&cfg).expect("manifest types");
     LoadWarning::export_all(&cfg).expect("warning types");
     DispatchResult::export_all(&cfg).expect("dispatch result types");
+    Template::export_all(&cfg).expect("template types");
+    SlotAnswer::export_all(&cfg).expect("slot answer types");
 
     // Not a ts-rs binding: the label strings live in Rust source, not in a serializable type, so
     // they need their own hand-rolled export. This is what lets the UI's catalogue completeness
