@@ -12,6 +12,7 @@ export * from "./preview/Preview";
 export * from "./preview/Transport";
 export * from "./timeline/Timeline";
 export * from "./timeline/geometry";
+export * from "./export/ExportDialog";
 export * from "./shell/AppShell";
 export * from "./shell/PanelTabs";
 export * from "./shell/TopBar";

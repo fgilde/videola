@@ -198,7 +198,8 @@ it. Transitions fall out of the same mechanism: a transition is an effect with t
 | Native linking of the core into the Tauri shell and a server | planned |
 | Timeline UI, preview, playback, audio graph | planned |
 | Effect registry, GLSL shaders, WebGL2 compositor, brightness and cross dissolve | built |
+| Export to MP4/WebM through WebCodecs in a worker | built |
 | Shared WGSL sources, WebGPU and `wgpu` compositors | planned |
-| Export in any form; FFmpeg | planned |
+| FFmpeg, native rendering, server rendering | planned |
 | REST API, MCP server, generated command catalogue | planned |
 | Template mode (`.videolat`, gallery, wizard) | planned |

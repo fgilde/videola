@@ -13,6 +13,8 @@ packages/engine/gpu/bundle.js
 apps/web/browser/preview.png
 apps/web/browser/phone.png
 apps/web/browser/phone-library.png
+packages/engine/browser/bundle.js
+packages/engine/browser/worker.js
 
 # Tauri
 src-tauri/target

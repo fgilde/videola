@@ -2,8 +2,8 @@
 
 # Videola
 
-Videola is a browser-based video editor. It is early, but it edits: drop a video in, cut it on the
-timeline, press play and watch it. There is no effect, keyframe, inspector or export yet.
+Videola is a browser-based video editor. It is early, but the chain runs end to end: drop a video
+in, cut it on the timeline, play it back, and export a file a player opens.
 
 ![The editor with a decoded frame in the preview](apps/docs/public/editor-preview.png)
 
@@ -16,7 +16,7 @@ timeline, press play and watch it. There is no effect, keyframe, inspector or ex
   areas grow to 44 px when the pointer is not a mouse. A whole drag is one undo step.
 - Playback through WebCodecs decoding and a WebGL2 compositor, with the audio clock in the lead and
   a transport for play/pause, frame stepping and jumping to either end.
-- A Rust core (`videola-core`) with the project data model, a command bus of 20 commands, and
+- A Rust core (`videola-core`) with the project data model, a command bus of 26 commands, and
   undo/redo built from JSON-Patch diffs. Time is stored as integer flicks, not float seconds.
 - The `.videola` project format: a ZIP holding a manifest, `project.json`, and media files named by
   their SHA-256 hash.
@@ -26,6 +26,9 @@ timeline, press play and watch it. There is no effect, keyframe, inspector or ex
   layout detection for phone, tablet and desktop.
 - The web app opens, switches theme and language, adds a track, undoes and redoes, saves a
   `.videola` file and reads it back.
+- Export to MP4 with H.264 and AAC, or to WebM with VP9 and Opus where the browser cannot encode
+  H.264. It runs in a worker through the same WebGL2 compositor as the preview, with progress and a
+  cancel that really stops it. See [Exporting](https://fgilde.github.io/videola/guide/exporting).
 - CI runs fmt, clippy, the Rust tests, a check that the generated TypeScript types are current, the
   wasm build, and the web typecheck, tests and build.
 - Three browser harnesses that need no Playwright, only an installed Chrome: `test:gpu` renders real
@@ -51,6 +54,18 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+Two checks need a real browser and are not part of `pnpm test`. They find Chrome on their own;
+`CHROME_PATH` overrides the search.
+
+```
+pnpm --filter @videola/engine test:gpu      # the compositor against a real WebGL2 driver
+pnpm --filter @videola/engine test:export   # a real export, verified with ffprobe and ffmpeg
+pnpm --filter @videola/ui test:browser      # the timeline against real layout
+```
+
+`test:export` needs `ffprobe` and `ffmpeg` on the path: it hands the file it produced to a decoder
+that shares no code with this repository.
 
 If `wasm-opt` crashes on your machine, run the `wasm` script from `package.json` directly with
 `--no-opt` added. That changes the output size only. CI builds without the flag.
@@ -82,9 +97,9 @@ result or as `skipped`.
 | Android APK and AAB | `ANDROID_KEYSTORE` (base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | the job is skipped; an unsigned APK cannot be installed or shipped to Play |
 | iOS IPA | `IOS_CERTIFICATE` (base64 distribution `.p12`) and `IOS_MOBILE_PROVISION` (base64), plus `APPLE_CERTIFICATE_PASSWORD` and `APPLE_TEAM_ID` | the job is skipped; no distributable IPA exists without a certificate and a provisioning profile |
 
-An installer built today packages the editor described above: import, timeline editing and playback
-work, effects and export do not, so nothing can leave the application yet. FFmpeg is not bundled
-either, and the Docker image only serves static files.
+An installer built today packages the editor described above: import, timeline editing, playback and
+export all work. FFmpeg is not bundled — the export runs on the browser's own encoders — and the
+Docker image only serves static files.
 
 The published `v0.1.0` release predates all of this and installs the app frame alone.
 

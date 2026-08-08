@@ -10,6 +10,7 @@ export interface TopBarActions {
   onSave?: () => void;
   onImportMedia?: () => void;
   onAddTrack?: () => void;
+  onExport?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -43,6 +44,9 @@ export function TopBar(actions: TopBarActions): ReactElement {
       </button>
       <button className="v-button" onClick={actions.onRedo} disabled={actions.canRedo !== true}>
         {t("action.redo")}
+      </button>
+      <button className="v-button" onClick={actions.onExport} disabled={!actions.onExport}>
+        {t("action.export")}
       </button>
       <span className="v-topbar__spacer" />
       <SettingsMenu />

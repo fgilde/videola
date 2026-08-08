@@ -8,7 +8,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:gpu": "node gpu/run.mjs"
+    "test:gpu": "node gpu/run.mjs",
+    "test:export": "node browser/run.mjs"
   },
   "dependencies": {
     "@videola/core": "workspace:*",
