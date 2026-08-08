@@ -741,6 +741,24 @@ function compound(over: Partial<Clip>, tracks: Track[]): Clip {
 }
 
 describe("a compound clip in the audio graph", () => {
+  // The trim inside a compound moves the nested clip's in point, and the fake source above cannot
+  // see that: it shapes its buffer across whatever range it is handed, so every range comes back
+  // looking the same. This one reports the absolute source position instead, which is the only way
+  // a cut taken off the wrong end shows up as a different sound.
+  function positionSignal(ctx: BaseAudioContext, span: Time): AudioBufferSource {
+    return {
+      async bufferFor(_hash: string, from: Time, to: Time): Promise<AudioBuffer> {
+        const frames = Math.round(timeToSeconds(to - from) * SAMPLE_RATE);
+        const buffer = ctx.createBuffer(2, frames, SAMPLE_RATE);
+        const data = new Float32Array(frames);
+        for (let i = 0; i < frames; i += 1) data[i] = (from + ((to - from) * i) / frames) / span;
+        buffer.copyToChannel(data, 0);
+        buffer.copyToChannel(data, 1);
+        return buffer;
+      },
+    };
+  }
+
   const inner = [
     clip({ id: "clp_a", start: 0, duration: SECOND, volume: 0.5 }),
     clip({ id: "clp_b", start: SECOND, duration: SECOND, fades: { inDuration: SECOND / 2, outDuration: 0 } }),
@@ -778,29 +796,29 @@ describe("a compound clip in the audio graph", () => {
     expect(at(out, 0.5)).toBeCloseTo(0.25, 2);
   });
 
-  // Not "there is still sound": a compound at double speed has to be *through* its material in
-  // half the time, which is what a fold that ignored the rate would get wrong.
+  // Not "there is still sound", and not "it stops in time" either: a fold that dropped the rate
+  // would get both of those right and read the wrong second of material while doing it. What is
+  // measured is where in the material the playhead actually is, half a second in.
   it("plays what is inside it at its own rate", async () => {
     const ctx = context(2);
-    const out = await render(
-      ctx,
-      dc(ctx),
-      project([
-        track("A1", [
-          compound(
-            {
-              id: "clp_group",
-              start: 0,
-              duration: SECOND,
-              speed: { rate: 2, reverse: false, preservePitch: true },
-            },
-            [track("A_in", [clip({ start: 0, duration: 2 * SECOND })])],
-          ),
-        ]),
+    const doubled = project([
+      track("A1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: SECOND,
+            speed: { rate: 2, reverse: false, preservePitch: true },
+          },
+          [track("A_in", [clip({ start: 0, duration: 2 * SECOND })])],
+        ),
       ]),
-    );
+    ]);
+    const out = await render(ctx, positionSignal(ctx, 2 * SECOND), doubled);
 
-    expect(at(out, 0.5)).toBeCloseTo(1, 2);
+    // Half a second of timeline into a compound at double speed is one second of material, which
+    // is halfway through a two-second clip.
+    expect(at(out, 0.5)).toBeCloseTo(0.5, 1);
     expect(at(out, 1.5)).toBeCloseTo(0, 2);
   });
 
@@ -848,29 +866,12 @@ describe("a compound clip in the audio graph", () => {
     expect(at(out, 1.5)).toBeCloseTo(0, 2);
   });
 
-  // The trim inside a compound moves the nested clip's in point, and the fake source above cannot
-  // see that: it shapes its buffer across whatever range it is handed, so every range comes back
-  // looking the same. This one reports the absolute source position instead, which is the only way
-  // a cut taken off the wrong end shows up as a different sound.
-  function positionSignal(ctx: BaseAudioContext, span: Time): AudioBufferSource {
-    return {
-      async bufferFor(_hash: string, from: Time, to: Time): Promise<AudioBuffer> {
-        const frames = Math.round(timeToSeconds(to - from) * SAMPLE_RATE);
-        const buffer = ctx.createBuffer(2, frames, SAMPLE_RATE);
-        const data = new Float32Array(frames);
-        for (let i = 0; i < frames; i += 1) data[i] = (from + ((to - from) * i) / frames) / span;
-        buffer.copyToChannel(data, 0);
-        buffer.copyToChannel(data, 1);
-        return buffer;
-      },
-    };
-  }
-
-  function trimmedCompound(over: Partial<Clip>): Project {
+  function trimmedCompound(over: Partial<Clip> = {}): Project {
+    const nested = { ...clip(), start: 0, duration: 2 * SECOND, ...over } as Clip;
     return project([
       track("A1", [
         compound({ id: "clp_group", start: 0, duration: SECOND, inPoint: SECOND }, [
-          track("A_in", [clip({ start: 0, duration: 2 * SECOND, ...over })]),
+          track("A_in", [nested]),
         ]),
       ]),
     ]);

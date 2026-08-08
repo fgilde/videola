@@ -243,7 +243,17 @@ describe("the source-time mapping on both sides of the boundary", () => {
       doc.dispatch(cmd.clipSetSpeed(clipOn(doc, 0).id, rate, reverse));
       const clip = clipOn(doc, 0);
 
-      for (let at = 0; at < 5 * SECOND; at += 333_667) {
+      // The edges by name as well as by sweep: the clamp on a reversed head differs from the raw
+      // mapping at exactly one flick, and a stride that never lands on `clip.start` walks past it.
+      const edges = [
+        clip.start - 1,
+        clip.start,
+        clip.start + 1,
+        clip.start + clip.duration - 1,
+        clip.start + clip.duration,
+      ];
+      const sweep = Array.from({ length: 15 }, (_, step) => step * 333_667);
+      for (const at of [...edges, ...sweep]) {
         expect(readableSourceTimeAt(clip, at)).toBe(doc.sourceTimesAt(at).get(clip.id));
       }
     });

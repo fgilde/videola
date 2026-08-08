@@ -665,6 +665,29 @@ describe("a compound clip in the draw list", () => {
     expect(corner(item, 1, 1)).toEqual([0.5, -0.5]);
   });
 
+  // A compound whose own transform is identity composes the same either way round, and so does a
+  // nested clip that fills the frame -- so an order test needs both of them to be doing something.
+  // Half the frame, and inside it a clip pushed a quarter of the frame to the right.
+  it("applies its own placement outside the one the nested clip already has", () => {
+    const both = project([
+      track("trk_1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: 4 * SECOND,
+            transform: transform({ scaleX: 0.5, scaleY: 0.5 }),
+          },
+          [track("trk_in", [clip({ id: "clp_a", transform: transform({ x: 480 }) })])],
+        ),
+      ]),
+    ]);
+    const item = list(both, 0).items[0]!;
+    // 480 project pixels inside a group at half scale is 240 on screen, a quarter of the frame.
+    expect(corner(item, 0.5, 0.5)[0]).toBeCloseTo(0.25);
+    expect(corner(item, 0, 0)).toEqual([-0.25, 0.5]);
+  });
+
   it("multiplies its opacity into the clips inside it", () => {
     const dimmed = project([
       track("trk_1", [
