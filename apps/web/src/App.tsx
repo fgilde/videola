@@ -15,16 +15,20 @@ import {
   type TrackKind,
 } from "@videola/core";
 import { AudioGraph, AudioSource, Playback, probe } from "@videola/engine";
-import { importFile, mediaForProject } from "@videola/media";
+import { importFile, mediaForProject, mediaHash, missingMedia, relinkMedia } from "@videola/media";
 import {
   AppShell,
   DropZone,
+  MediaLibrary,
+  PanelTabs,
   pickFiles,
   Preview,
   projectEnd,
   Timeline,
   Transport,
   useI18n,
+  useLayoutMode,
+  type EditorPanel,
 } from "@videola/ui";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed" | "error.importFailed";
@@ -37,6 +41,7 @@ interface ShellError {
 
 const MEDIA_ACCEPT = "video/*,audio/*";
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
+const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 
 export function App(): ReactElement {
   const [doc, setDoc] = useState<VideolaDocument>();
@@ -48,7 +53,12 @@ export function App(): ReactElement {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [playhead, setPlayhead] = useState<Time>(0);
   const [playing, setPlaying] = useState(false);
+  const [missing, setMissing] = useState(NOTHING_MISSING);
+  const [panel, setPanel] = useState<EditorPanel>("timeline");
   const nextErrorId = useRef(0);
+  // The same pure function of the same window the shell reads, so the two cannot disagree. Passing
+  // it down would mean turning AppShell's children into a render prop for one boolean.
+  const layout = useLayoutMode("auto");
 
   // A stable identity per report, so an identical repeat error still replaces the DOM node
   // and gets re-announced by assistive tech instead of sitting there as unchanged content.
@@ -88,6 +98,20 @@ export function App(): ReactElement {
       setFlags({ canUndo: doc.canUndo, canRedo: doc.canRedo });
     });
   }, [doc]);
+
+  // Keyed on the ids and not on the library object: the core hands back a fresh project on every
+  // dispatch, and a drag across the timeline would otherwise stat OPFS once per pointer movement.
+  const libraryIds = (project?.library ?? []).map((asset) => asset.id).join(" ");
+
+  useEffect(() => {
+    let cancelled = false;
+    void missingMedia(libraryIds === "" ? [] : libraryIds.split(" ")).then((next) => {
+      if (!cancelled) setMissing(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryIds]);
 
   // One transport per document: the batch queries are bound to the document they came from, and
   // opening another project has to leave the old audio context behind rather than steer two.
@@ -232,6 +256,42 @@ export function App(): ReactElement {
     [doc, reportError],
   );
 
+  // On a phone the timeline is behind a tab, so the clip has to be shown as well as placed --
+  // otherwise the button looks like it did nothing.
+  const addToTimeline = useCallback(
+    (media: MediaId) => {
+      if (doc === undefined) return;
+      try {
+        appendClip(doc, media);
+        setPanel("timeline");
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
+
+  const relink = useCallback(
+    async (media: MediaId) => {
+      const file = (await pickFiles(MEDIA_ACCEPT))[0];
+      if (file === undefined) return;
+      try {
+        await relinkMedia(media, file);
+        setMissing((current) => new Set([...current].filter((id) => id !== media)));
+        // The project did not change, so nothing else would ever ask this medium again: playback
+        // remembers a failed open until it is told to drop it.
+        const hash = mediaHash(media);
+        if (hash !== undefined) playback?.forget(hash);
+        playback?.refresh();
+        setError(undefined);
+      } catch (err) {
+        reportError("error.importFailed", err);
+      }
+    },
+    [playback, reportError],
+  );
+
   const playPause = useCallback(() => {
     if (playback === undefined) return;
     if (playback.isPlaying) playback.pause();
@@ -258,7 +318,7 @@ export function App(): ReactElement {
     >
       <DropZone onFiles={(files) => void importMedia(files)}>
         <div className="v-editor">
-          <div>
+          <div className="v-editor__banners">
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
           </div>
@@ -281,7 +341,23 @@ export function App(): ReactElement {
                 onSeek={seek}
                 onStep={step}
               />
-              <Timeline project={project} playhead={playhead} dispatch={edit} onSeek={seek} />
+              {layout === "phone" && <PanelTabs panel={panel} onSelect={setPanel} />}
+              {/* Unmounted rather than hidden while the other panel shows: the timeline windows
+                  its clips by the width it measures, and a display:none container measures zero.
+                  It would come back empty. */}
+              {(layout !== "phone" || panel === "library") && (
+                <MediaLibrary
+                  library={project.library}
+                  missing={missing}
+                  fps={project.settings.fps}
+                  onImport={() => void pickFiles(MEDIA_ACCEPT).then(importMedia)}
+                  onAdd={addToTimeline}
+                  onRelink={(media) => void relink(media)}
+                />
+              )}
+              {(layout !== "phone" || panel === "timeline") && (
+                <Timeline project={project} playhead={playhead} dispatch={edit} onSeek={seek} />
+              )}
             </>
           )}
         </div>

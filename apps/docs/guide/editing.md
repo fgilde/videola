@@ -20,6 +20,26 @@ An untouched project adopts the format of its first medium, because M1 has no co
 clip transform — a 640×360 clip in a 1080p project would otherwise sit as a small rectangle in the
 corner.
 
+## The media library
+
+Everything the project holds, with its length, its size in pixels and its sample rate. **Add to
+timeline** puts a medium behind whatever is already on the first track of its kind — the same place
+an import lands, so a medium can be placed as often as you like without importing it again.
+
+There are no thumbnails and no waveform. `packages/media` computes neither, and a grey rectangle
+where a picture belongs would be a promise the application cannot keep.
+
+### When the bytes are gone
+
+Media live in OPFS, which belongs to the browser and the origin, not to the project file. Open a
+project on another machine — or in another browser — and the library entries are there while their
+bytes are not. Such an entry is marked **Data missing**, cannot be placed on the timeline, and
+offers **Relink**.
+
+Relinking asks for the file and checks it: the id of a medium *is* the SHA-256 of its content, so
+only the same file is accepted. Another file would be a different medium wearing this one's name,
+and every clip pointing at it would quietly show the wrong picture.
+
 ## The timeline
 
 | Gesture | Result |
@@ -66,6 +86,25 @@ built from the decimal drifts off the ruler within a few hundred frames.
 Browsers start an `AudioContext` suspended and only allow it to resume after a user gesture, so the
 first press of play does slightly more work than the ones after it.
 
+## On a phone
+
+![The media library on a phone, with the preview staying above it](/phone-library.png)
+
+Below 768 px the editor switches to a single column: the preview and the transport stay at the top,
+and a tab bar underneath swaps between **Media** and **Timeline**. The picture has to stay visible
+while you work below it, and 390 px cannot hold a library, a preview and a timeline side by side
+without all three being useless.
+
+Two tabs, not the six the design sketch names. Effects, text, audio and export have no panel yet;
+a tab that opens nothing is worse than a tab that is not there, and each one joins the bar on the
+day its panel does.
+
+The panel that is not showing is unmounted rather than hidden. The timeline windows its clips by
+the width it measures, and a `display: none` container measures zero — it would come back empty.
+
+Nothing else changes. The same Pointer Events path carries mouse, pen and finger, the touch targets
+were already 44 px, and every action reachable on a desktop is reachable here.
+
 ## Saving
 
 **Save** writes a `.videola` file: a ZIP holding a manifest, `project.json` and every referenced
@@ -75,8 +114,15 @@ OPFS, so a saved project carries its footage with it rather than pointing at pat
 ## What is verified, and what is not
 
 The compositor is checked against real pixels in headless Chrome, the timeline against real browser
-layout, and the application itself against a real dropped video — 132 checks in three harnesses
+layout, and the application itself against a real dropped video — 173 checks in three harnesses
 that run without Playwright.
 
+The phone layout is driven at a real 390×844 viewport at twice the pixel density, over the devtools
+protocol: Chrome on Windows refuses a window narrower than 500 CSS pixels, so `--window-size` alone
+would have measured a small tablet and called it a phone. Import, a finger drag, undo, both tabs and
+playback are checked there, and the screenshots above come out of that run.
+
 Not verified: lip-sync, because headless Chrome has no audio output; sustained frame rate at 1080p;
-and the phone layout with a live preview.
+and pixel readback at phone size — the drawing buffer is gone once the page has composited it, and
+the phone run needs the wall clock for its layout to be trustworthy. The screenshot is the evidence
+that the preview decodes there.

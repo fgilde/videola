@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
@@ -11,10 +11,18 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "dist");
 const shot = join(here, "preview.png");
+const phoneShot = join(here, "phone.png");
+const phoneLibraryShot = join(here, "phone-library.png");
 // Outside the repository: Chrome keeps the directory locked for a moment after it exits, and a
 // half-deleted profile in a working tree is worse than one in the temp directory.
 const profiles = join(tmpdir(), `videola-harness-${process.pid}`);
 const PORT = Number(process.env.VIDEOLA_HARNESS_PORT ?? 4399);
+const DEVTOOLS_PORT = PORT + 1;
+// An iPhone 14 in portrait. It cannot be had from --window-size: Chrome on Windows refuses a
+// window narrower than 500 CSS pixels and silently gives 500 instead, which is a small tablet
+// and would have proven nothing about a phone. The device metrics override is the only way to
+// ask for the viewport the layout is meant for -- and it brings the retina scale with it.
+const PHONE = { width: 390, height: 844, deviceScaleFactor: 2, mobile: true };
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -45,6 +53,9 @@ if (!existsSync(join(dist, "index.html"))) {
 }
 
 let deliver = () => undefined;
+// The page decides what is worth a picture: only it knows when the library is open or the
+// playhead is running. Node holds the devtools connection, so the request comes back out here.
+let capture = async () => undefined;
 
 const server = createServer((req, res) => {
   const url = req.url.split("?")[0];
@@ -63,6 +74,11 @@ const server = createServer((req, res) => {
       send(res, Buffer.from("ok"), "text/plain");
       deliver(JSON.parse(body));
     });
+    return;
+  }
+  if (url === "/shot") {
+    const name = new URL(req.url, "http://harness").searchParams.get("name") ?? "shot";
+    void capture(name).then(() => send(res, Buffer.from("ok"), "text/plain"));
     return;
   }
   if (url === "/fixture.mp4") return send(res, readFileSync(join(here, "fixture.mp4")), TYPES[".mp4"]);
@@ -96,7 +112,6 @@ function launch(url, extra) {
     "--enable-unsafe-swiftshader",
     "--no-sandbox",
     "--autoplay-policy=no-user-gesture-required",
-    "--window-size=1440,900",
     "--force-device-scale-factor=1",
     `--user-data-dir=${join(profiles, String(Math.random()).slice(2))}`,
     ...extra,
@@ -119,19 +134,103 @@ function drive(url, extra, budgetMs) {
   });
 }
 
+function reported(budgetMs, what) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`the harness never reported back from ${what}`)), budgetMs);
+    deliver = (results) => {
+      clearTimeout(timer);
+      resolve(results);
+    };
+  });
+}
+
+// The devtools protocol by hand over the WebSocket Node already has. Four commands is less than
+// a browser-automation dependency costs, and the two things it buys cannot be had from the
+// command line: a viewport smaller than a window may be, and a screenshot taken at a moment the
+// harness chooses rather than when the page finished loading.
+async function connect(url) {
+  const socket = new WebSocket(url);
+  const pending = new Map();
+  let nextId = 0;
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    const settle = pending.get(message.id);
+    pending.delete(message.id);
+    settle?.(message.result);
+  };
+  await new Promise((resolve, reject) => {
+    socket.onopen = resolve;
+    socket.onerror = () => reject(new Error(`no devtools at ${url}`));
+  });
+  return {
+    send: (method, params) =>
+      new Promise((resolve) => {
+        nextId += 1;
+        pending.set(nextId, resolve);
+        socket.send(JSON.stringify({ id: nextId, method, params }));
+      }),
+    close: () => socket.close(),
+  };
+}
+
+async function pageTarget(deadline) {
+  for (;;) {
+    try {
+      const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`)).json();
+      const page = targets.find((target) => target.type === "page");
+      if (page !== undefined) return page;
+    } catch {
+      // Chrome has not opened the port yet.
+    }
+    if (Date.now() > deadline) throw new Error("devtools never came up");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+// Wall clock, so the frame clock runs and playback really ticks -- and because layout under
+// --virtual-time-budget lags behind the DOM: a dragged clip's inline style says it moved while
+// its rect still says it did not, and every claim in the phone run is about a rect.
+async function drivePhone(budgetMs) {
+  const child = launch("about:blank", [
+    "--window-size=900,900",
+    `--remote-debugging-port=${DEVTOOLS_PORT}`,
+  ]);
+  try {
+    const page = await pageTarget(Date.now() + 30_000);
+    const devtools = await connect(page.webSocketDebuggerUrl);
+    await devtools.send("Emulation.setDeviceMetricsOverride", PHONE);
+    // Without this the editor still reports a fine pointer, and the timeline would hand a finger
+    // the four-pixel trim zone it keeps for a mouse.
+    await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    capture = async (name) => {
+      const png = await devtools.send("Page.captureScreenshot", { format: "png" });
+      writeFileSync(join(here, `${name}.png`), Buffer.from(png.data, "base64"));
+    };
+    const results = reported(budgetMs, "the phone");
+    await devtools.send("Page.navigate", { url: `http://localhost:${PORT}/?phone=1` });
+    const out = await results;
+    devtools.close();
+    return out;
+  } finally {
+    child.kill();
+  }
+}
+
 await new Promise((resolve) => server.listen(PORT, resolve));
 
 try {
+  const desktop = ["--window-size=1440,900"];
   // Wall clock: the frame clock runs, so playback can tick and the transport can be watched.
-  const live = await drive(`http://localhost:${PORT}/`, [], 120_000);
+  const live = await drive(`http://localhost:${PORT}/`, desktop, 120_000);
   // Virtual clock: the frame clock is stopped, so the drawing buffer survives long enough to be
   // read back -- and the screenshot is taken once the budget runs out, which is after the run.
   const drawn = await drive(
     `http://localhost:${PORT}/?virtual=1`,
-    ["--virtual-time-budget=300000", `--screenshot=${shot}`],
+    [...desktop, "--virtual-time-budget=300000", `--screenshot=${shot}`],
     300_000,
   );
-  const results = [...live, ...drawn];
+  const pocket = await drivePhone(180_000);
+  const results = [...live, ...drawn, ...pocket];
   for (const result of results.filter((entry) => !entry.ok)) {
     console.error(
       `FAIL ${result.name}\n  got  ${JSON.stringify(result.got)}\n  want ${JSON.stringify(result.want)}`,
@@ -139,7 +238,7 @@ try {
   }
   const failed = results.filter((entry) => !entry.ok).length;
   console.log(`${results.length - failed}/${results.length} application checks passed`);
-  console.log(`screenshot: ${shot}`);
+  for (const path of [shot, phoneShot, phoneLibraryShot]) console.log(`screenshot: ${path}`);
   process.exitCode = failed === 0 ? 0 : 1;
 } finally {
   server.close();

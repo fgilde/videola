@@ -21,6 +21,28 @@ Ein unberührtes Projekt übernimmt das Format seines ersten Mediums, weil M1 ke
 eine Clip-Transformation setzt — ein 640×360-Clip säße sonst als kleines Rechteck in der Ecke eines
 1080p-Bildes.
 
+## Die Medienbibliothek
+
+Alles, was im Projekt liegt, mit Länge, Maßen in Pixeln und Abtastrate. **Auf die Zeitleiste** setzt
+ein Medium hinter das, was auf der ersten Spur seiner Art schon liegt — dieselbe Stelle, an der ein
+Import landet. Ein Medium lässt sich so beliebig oft platzieren, ohne es erneut zu importieren.
+
+Es gibt keine Vorschaubilder und keine Waveform. `packages/media` rechnet weder das eine noch das
+andere, und ein graues Rechteck an der Stelle eines Bildes wäre ein Versprechen, das die Anwendung
+nicht halten kann.
+
+### Wenn die Bytes fehlen
+
+Medien liegen in OPFS, und das gehört dem Browser und der Herkunft, nicht der Projektdatei. Ein
+Projekt auf einem anderen Rechner geöffnet — oder in einem anderen Browser — hat seine
+Bibliothekseinträge, aber nicht ihre Bytes. So ein Eintrag ist mit **Daten fehlen** markiert, lässt
+sich nicht auf die Zeitleiste setzen und bietet **Neu verknüpfen** an.
+
+Das Neuverknüpfen fragt nach der Datei und prüft sie: die Kennung eines Mediums **ist** der
+SHA-256 seines Inhalts, also wird nur dieselbe Datei angenommen. Eine andere wäre ein anderes
+Medium unter dem Namen dieses einen, und jeder Clip, der darauf zeigt, zeigte still das falsche
+Bild.
+
 ## Die Timeline
 
 | Geste | Wirkung |
@@ -68,6 +90,26 @@ Bildschritt aus der Dezimalzahl läuft schon nach wenigen hundert Bildern vom Li
 Browser starten einen `AudioContext` angehalten und lassen ihn erst nach einer Nutzergeste
 fortsetzen; der erste Druck auf Abspielen tut deshalb etwas mehr als die folgenden.
 
+## Auf dem Telefon
+
+![Die Medienbibliothek auf einem Telefon, die Vorschau bleibt darüber stehen](/phone-library.png)
+
+Unter 768 px wechselt der Editor in eine Spalte: Vorschau und Transport bleiben oben stehen, eine
+Leiste darunter wechselt zwischen **Medien** und **Zeitleiste**. Das Bild muss sichtbar bleiben,
+während man darunter arbeitet, und 390 px tragen Bibliothek, Vorschau und Timeline nicht
+nebeneinander, ohne dass alle drei unbrauchbar werden.
+
+Zwei Bereiche, nicht die sechs aus dem Entwurf. Effekte, Text, Ton und Export haben noch keine
+Fläche; ein Reiter, der nichts öffnet, ist schlimmer als ein Reiter, den es nicht gibt — jeder
+kommt an dem Tag dazu, an dem seine Fläche kommt.
+
+Der Bereich, der gerade nicht dran ist, wird ausgehängt statt versteckt. Die Timeline fenstert ihre
+Clips nach der Breite, die sie misst, und ein `display: none`-Behälter misst null — sie käme leer
+zurück.
+
+Sonst ändert sich nichts. Derselbe Pointer-Events-Pfad trägt Maus, Stift und Finger, die
+Trefferflächen waren schon 44 px, und alles, was am Schreibtisch erreichbar ist, ist es auch hier.
+
 ## Speichern
 
 **Speichern** schreibt eine `.videola`-Datei: ein ZIP mit einem Manifest, `project.json` und jedem
@@ -78,8 +120,16 @@ auf deinem Rechner zu zeigen.
 ## Was geprüft ist und was nicht
 
 Der Compositor wird gegen echte Pixel in headless Chrome geprüft, die Timeline gegen echtes
-Browser-Layout, und die Anwendung selbst gegen ein wirklich hineingezogenes Video — 132 Prüfungen in
+Browser-Layout, und die Anwendung selbst gegen ein wirklich hineingezogenes Video — 173 Prüfungen in
 drei Harnessen, die ohne Playwright laufen.
 
+Das Phone-Layout wird auf einem echten 390×844-Viewport bei doppelter Pixeldichte gefahren, über das
+Devtools-Protokoll: Chrome unter Windows verweigert ein Fenster schmaler als 500 CSS-Pixel, mit
+`--window-size` allein hätte man also ein kleines Tablet vermessen und Telefon dazu gesagt. Import,
+ein Fingerzug, Rückgängig, beide Bereiche und die Wiedergabe werden dort geprüft, und die
+Schirmbilder oben stammen aus diesem Lauf.
+
 Nicht geprüft: Lippensynchronität, weil headless Chrome keine Tonausgabe hat; die dauerhafte
-Bildrate bei 1080p; und das Phone-Layout mit laufender Vorschau.
+Bildrate bei 1080p; und das Zurücklesen der Pixel in Telefongröße — der Zeichenpuffer ist fort,
+sobald die Seite ihn komponiert hat, und der Telefonlauf braucht die Wanduhr, damit sein Layout
+verlässlich ist. Der Screenshot ist der Beleg, dass die Vorschau auch dort dekodiert.

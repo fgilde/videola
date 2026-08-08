@@ -11,6 +11,8 @@ dist
 .pnpm-store
 packages/engine/gpu/bundle.js
 apps/web/browser/preview.png
+apps/web/browser/phone.png
+apps/web/browser/phone-library.png
 
 # Tauri
 src-tauri/target
