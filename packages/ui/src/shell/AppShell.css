@@ -75,11 +75,36 @@
 .v-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%);
+  /* The second column is `auto`, so while no clip is selected and the inspector is empty of
+     controls it costs the picture nothing. */
+  grid-template-columns: minmax(0, 1fr) auto;
   height: 100%;
 }
 
+.v-editor > .v-banners,
+.v-editor > .v-timeline {
+  grid-column: 1 / -1;
+}
+
+.v-editor > .v-inspector {
+  grid-column: 2;
+  grid-row: 2 / 4;
+}
+
+/* On a phone the inspector cannot be a column: it goes under the transport and above the
+   timeline, capped so that the picture and the timeline both stay on screen. */
 .v-shell[data-layout="phone"] .v-editor {
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(160px, 50%);
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(160px, 40%);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.v-shell[data-layout="phone"] .v-editor > .v-inspector {
+  grid-column: 1;
+  grid-row: 4;
+  width: auto;
+  max-height: 35vh;
+  border-left: none;
+  border-top: 1px solid var(--v-border);
 }
 
 .v-shell[data-layout="tablet"] .v-button,

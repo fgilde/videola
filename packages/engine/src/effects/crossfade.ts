@@ -24,6 +24,8 @@ export const crossfade: EffectManifest = {
   inputs: 2,
   // Not authored by hand: the draw list works `progress` out of the transition's window and the
   // moment being drawn. It is declared all the same, because that is how it reaches the shader.
-  params: [{ key: "progress", default: 1, min: 0, max: 1 }],
+  params: [
+    { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
+  ],
   fragmentSource: FRAGMENT_SOURCE,
 };

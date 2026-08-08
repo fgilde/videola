@@ -16,6 +16,18 @@ describe("the effect registry", () => {
     }
   });
 
+  // The inspector labels a parameter row from the manifest and never from the catalogues, so a
+  // parameter without a name would put an untranslated key like "amount" on screen.
+  it("carries a name in both languages for every parameter", () => {
+    for (const manifest of effectManifests()) {
+      for (const param of manifest.params) {
+        expect(param.name.de.length, `${manifest.id}.${param.key}`).toBeGreaterThan(0);
+        expect(param.name.en.length, `${manifest.id}.${param.key}`).toBeGreaterThan(0);
+        expect(param.name.de, `${manifest.id}.${param.key}`).not.toBe(param.name.en);
+      }
+    }
+  });
+
   it("keeps every default inside the range the same manifest declares", () => {
     for (const manifest of effectManifests()) {
       for (const param of manifest.params) {

@@ -5,6 +5,7 @@ import {
   createWasmBackend,
   FLICKS_PER_SECOND,
   VideolaDocument,
+  type ClipId,
   type Command,
   type LoadWarning,
   type MediaAsset,
@@ -14,11 +15,12 @@ import {
   type Track,
   type TrackKind,
 } from "@videola/core";
-import { AudioGraph, AudioSource, Playback, probe } from "@videola/engine";
+import { AudioGraph, AudioSource, effectManifests, Playback, probe } from "@videola/engine";
 import { importFile, mediaForProject } from "@videola/media";
 import {
   AppShell,
   DropZone,
+  Inspector,
   pickFiles,
   Preview,
   projectEnd,
@@ -48,6 +50,9 @@ export function App(): ReactElement {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [playhead, setPlayhead] = useState<Time>(0);
   const [playing, setPlaying] = useState(false);
+  // The timeline owns the selection and reports it; keeping a second one here would be a
+  // second answer to the same question.
+  const [selected, setSelected] = useState<ClipId>();
   const nextErrorId = useRef(0);
 
   // A stable identity per report, so an identical repeat error still replaces the DOM node
@@ -258,11 +263,11 @@ export function App(): ReactElement {
     >
       <DropZone onFiles={(files) => void importMedia(files)}>
         <div className="v-editor">
-          <div>
+          <div className="v-banners">
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
           </div>
-          {project === undefined ? (
+          {project === undefined || doc === undefined ? (
             <p style={{ padding: "var(--v-space-6)" }}>…</p>
           ) : (
             <>
@@ -281,7 +286,22 @@ export function App(): ReactElement {
                 onSeek={seek}
                 onStep={step}
               />
-              <Timeline project={project} playhead={playhead} dispatch={edit} onSeek={seek} />
+              <Inspector
+                project={project}
+                clip={selected}
+                playhead={playhead}
+                effects={effectManifests()}
+                effectParamsAt={doc.effectParamsAt}
+                dispatch={edit}
+                onSeek={seek}
+              />
+              <Timeline
+                project={project}
+                playhead={playhead}
+                dispatch={edit}
+                onSeek={seek}
+                onSelectionChange={setSelected}
+              />
             </>
           )}
         </div>

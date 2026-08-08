@@ -9,6 +9,8 @@ export * from "./layout/useLayoutMode";
 export * from "./media/DropZone";
 export * from "./preview/Preview";
 export * from "./preview/Transport";
+export * from "./inspector/Inspector";
+export * from "./inspector/ParamRow";
 export * from "./timeline/Timeline";
 export * from "./timeline/geometry";
 export * from "./shell/AppShell";

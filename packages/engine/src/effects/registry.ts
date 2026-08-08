@@ -3,6 +3,9 @@ import { crossfade } from "./crossfade";
 
 export interface EffectParam {
   key: string;
+  // Bilingual here for the same reason the effect's own name is: the inspector labels a row
+  // without knowing which effect it belongs to, and adding an effect stays one file.
+  name: { de: string; en: string };
   default: number;
   min: number;
   max: number;
