@@ -34,8 +34,10 @@ const CHROME_CANDIDATES = [
 ];
 
 const TYPES = {
-  ".html": "text/html",
-  ".js": "text/javascript",
+  ".html": "text/html; charset=utf-8",
+  // The charset is spelled out because the driver matches German control labels by their text,
+  // and a classic script inheriting the wrong encoding turns every umlaut into a miss.
+  ".js": "text/javascript; charset=utf-8",
   ".css": "text/css",
   ".wasm": "application/wasm",
   ".png": "image/png",

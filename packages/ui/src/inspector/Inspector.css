@@ -1,0 +1,153 @@
+.v-inspector {
+  width: 300px;
+  overflow-y: auto;
+  padding: var(--v-space-3);
+  background: var(--v-bg-elevated);
+  border-left: 1px solid var(--v-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-4);
+}
+
+.v-inspector__empty {
+  margin: 0;
+  color: var(--v-text-muted);
+}
+
+.v-inspector__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+}
+
+.v-inspector__title {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--v-text-muted);
+}
+
+.v-inspector__effect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-inspector__effectName {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Three lines, not three columns. The keyframe controls are four targets wide, and beside the
+   readout in a 300 px panel they squeezed the slider down to 18 px on a phone -- measured, not
+   guessed. One layout for every pointer, so the coarse rules below only change sizes. */
+.v-param {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label label"
+    "slider value"
+    "keys keys";
+  align-items: center;
+  gap: var(--v-space-1) var(--v-space-2);
+}
+
+.v-param__label {
+  grid-area: label;
+  font-size: 0.85rem;
+  color: var(--v-text-muted);
+}
+
+.v-param__slider {
+  grid-area: slider;
+  min-width: 0;
+  accent-color: var(--v-accent);
+}
+
+.v-param__value,
+.v-param__select,
+.v-param__toggle {
+  grid-area: value;
+}
+
+.v-param__value {
+  font-family: var(--v-font-mono);
+  font-size: 0.85rem;
+  text-align: right;
+  min-width: 4ch;
+}
+
+.v-param__keys {
+  grid-area: keys;
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
+}
+
+.v-param__key {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+.v-param__key[aria-pressed="true"] {
+  background: var(--v-accent);
+  color: var(--v-accent-contrast);
+  border-color: transparent;
+}
+
+.v-param__key:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.v-param__select,
+.v-param__interp {
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+/* A finger has no thumb to aim at. The shell already decides this for .v-button from the layout
+   mode; any-pointer catches the case the viewport cannot see -- a touchscreen at desktop width. */
+@media (any-pointer: coarse) {
+  .v-param__key,
+  .v-param__interp,
+  .v-param__select {
+    min-width: var(--v-touch-target);
+    min-height: var(--v-touch-target);
+  }
+
+  .v-param__slider {
+    height: var(--v-touch-target);
+  }
+}
+
+.v-shell[data-layout="tablet"] .v-param__key,
+.v-shell[data-layout="phone"] .v-param__key,
+.v-shell[data-layout="tablet"] .v-param__interp,
+.v-shell[data-layout="phone"] .v-param__interp,
+.v-shell[data-layout="tablet"] .v-param__select,
+.v-shell[data-layout="phone"] .v-param__select {
+  min-width: var(--v-touch-target);
+  min-height: var(--v-touch-target);
+}
+
+.v-shell[data-layout="tablet"] .v-param__slider,
+.v-shell[data-layout="phone"] .v-param__slider {
+  height: var(--v-touch-target);
+}

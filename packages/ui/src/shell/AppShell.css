@@ -73,19 +73,22 @@
    is what a shell is for; each of them only knows how to fill the box it is given. Both flexible
    rows carry minmax(0, ...) so a canvas or a scroll container inside them can shrink; a bare 1fr
    floors at its content and pushes the timeline off-screen. */
+/* Library left, picture in the middle, inspector right, timeline across the bottom. The inspector
+   column is `auto`, so while no clip is selected and it holds no controls it costs the picture
+   nothing. */
 .v-editor {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
   grid-template-rows: auto minmax(0, 1fr) auto minmax(180px, 45%);
   grid-template-areas:
-    "banners banners"
-    "library preview"
-    "library transport"
-    "timeline timeline";
+    "banners  banners   banners"
+    "library  preview   inspector"
+    "library  transport inspector"
+    "timeline timeline  timeline";
   height: 100%;
 }
 
-.v-editor__banners {
+.v-editor > .v-banners {
   grid-area: banners;
 }
 
@@ -101,6 +104,10 @@
   grid-area: transport;
 }
 
+.v-editor > .v-inspector {
+  grid-area: inspector;
+}
+
 .v-editor .v-timeline {
   grid-area: timeline;
 }
@@ -108,16 +115,25 @@
 /* One column on a phone: the picture stays put at the top and the panels take turns underneath,
    because 390 px cannot hold a library and a timeline side by side without both being useless.
    The preview row is capped rather than flexible -- a 16:9 picture in a 390 px column is 220 px
-   tall, and an even split would leave a third of the screen as empty letterbox. */
+   tall, and an even split would leave a third of the screen as empty letterbox. The inspector
+   sits between the transport and the tabs, capped, and is empty until a clip is selected. */
 .v-shell[data-layout="phone"] .v-editor {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 32vh) auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 32vh) auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "banners"
     "preview"
     "transport"
+    "inspector"
     "tabs"
     "panel";
+}
+
+.v-shell[data-layout="phone"] .v-editor > .v-inspector {
+  max-height: 35vh;
+  width: auto;
+  border-left: none;
+  border-top: 1px solid var(--v-border);
 }
 
 .v-shell[data-layout="phone"] .v-editor .v-library,

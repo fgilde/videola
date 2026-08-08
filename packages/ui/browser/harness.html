@@ -4,7 +4,10 @@
   html, body { margin: 0; }
   /* An offset host, so anything that forgets to subtract the surface origin shows up. */
   #host { position: absolute; left: 37px; top: 53px; width: 1060px; height: 420px; }
-  #out { position: absolute; left: 0; top: 900px; }
+  /* The inspector gets its own root: it is mounted inside a .v-shell whose data-layout is what
+     decides its touch targets, and the timeline host must not carry that attribute. */
+  #panel { position: absolute; left: 37px; top: 500px; width: 360px; height: 380px; display: flex; }
+  #out { position: absolute; left: 0; top: 1000px; }
 </style>
 <script src="./bundle.js"></script>
 <script>
@@ -290,6 +293,103 @@ test("limit dragging", function () {
   pointer("pointerup", surface(), atSurface(-200, 90));
   window.removeEventListener("error", onError);
   check("a refused edit never escapes the gesture", escaped, 0);
+});
+
+// ---------------------------------------------------------------- the inspector as geometry
+
+const panel = document.createElement("div");
+panel.id = "panel";
+panel.className = "v-shell";
+document.body.append(panel);
+const panelRoot = T.createRoot(panel);
+
+const BRIGHTNESS = {
+  id: "brightness", name: { de: "Helligkeit", en: "Brightness" }, inputs: 1,
+  params: [{ key: "amount", name: { de: "Staerke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+};
+
+function clipWithEffect() {
+  return clip("clp_1", 0, 10, {
+    source: { kind: "media", media: "med_1" },
+    transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5,
+      opacity: 1, crop: { left: 0, top: 0, right: 0, bottom: 0 } },
+    effects: [{ id: "eff_1", effectType: "brightness", enabled: true,
+      params: { amount: { kind: "float", value: 1 } },
+      keyframes: { amount: [{ time: 0, value: { kind: "float", value: 0 }, interp: "linear" },
+                            { time: 5 * SECOND, value: { kind: "float", value: 4 }, interp: "linear" }] } }],
+  });
+}
+
+function drawInspector(layout) {
+  const only = clipWithEffect();
+  const scene = project([track("trk_1", [only])]);
+  scene.library = [{ id: "med_1", originalName: "a.mp4", mimeType: "video/mp4", kind: "video",
+    width: 640, height: 360, duration: 10 * SECOND }];
+  panel.setAttribute("data-layout", layout);
+  T.flushSync(function () { panelRoot.render(null); });
+  T.flushSync(function () {
+    panelRoot.render(T.createElement(T.I18nProvider, null, T.createElement(T.Inspector, {
+      project: scene,
+      clip: "clp_1",
+      playhead: 0,
+      effects: [BRIGHTNESS],
+      effectParamsAt: function () {
+        return new Map([["eff_1", new Map([["amount", { kind: "float", value: 0 }]])]]);
+      },
+      dispatch: function (command, key) { sent.push({ command: command, key: key }); },
+      onSeek: function (time) { seeks.push(time); },
+    })));
+  });
+}
+
+function inPanel(selector) { return panel.querySelector(selector); }
+function allInPanel(selector) { return Array.from(panel.querySelectorAll(selector)); }
+
+test("inspector touch targets", function () {
+  drawInspector("desktop");
+  const fine = inPanel(".v-param__key").getBoundingClientRect();
+  checkAtMost("a mouse gets a compact keyframe switch", Math.round(fine.height), 32);
+
+  drawInspector("phone");
+  const keys = allInPanel(".v-param__key").map(function (node) {
+    return node.getBoundingClientRect();
+  });
+  checkAtLeast("every keyframe control is a touch target wide",
+    Math.round(Math.min.apply(null, keys.map(function (box) { return box.width; }))), 44);
+  checkAtLeast("and a touch target tall",
+    Math.round(Math.min.apply(null, keys.map(function (box) { return box.height; }))), 44);
+  checkAtLeast("the interpolation picker is one too",
+    Math.round(inPanel(".v-param__interp").getBoundingClientRect().height), 44);
+  checkAtLeast("and the slider is thick enough to hit",
+    Math.round(inPanel(".v-param__slider").getBoundingClientRect().height), 44);
+  check("--v-touch-target is what all of them resolve to",
+    getComputedStyle(document.documentElement).getPropertyValue("--v-touch-target").trim(), "44px");
+});
+
+test("inspector rows do not collide", function () {
+  drawInspector("phone");
+  // The keyframed effect row is the crowded one: label, slider, readout and four controls.
+  const row = inPanel(".v-inspector__effect .v-param");
+  const slider = row.querySelector(".v-param__slider").getBoundingClientRect();
+  const keys = row.querySelector(".v-param__keys").getBoundingClientRect();
+  checkAtMost("the keyframe controls sit below the slider, not beside it",
+    Math.round(slider.bottom - keys.top), 0);
+  checkAtLeast("so the slider keeps a width worth aiming at",
+    Math.round(slider.width), 180);
+  checkAtMost("the whole row stays inside the panel",
+    Math.round(row.getBoundingClientRect().right - panel.getBoundingClientRect().right), 0);
+});
+
+// A label the browser does not associate with its input is a row a screen reader reads as an
+// unnamed slider; jsdom's queries pass on markup a real browser would not connect.
+test("inspector labels are wired to their inputs", function () {
+  drawInspector("desktop");
+  const sliders = allInPanel('input[type="range"]');
+  checkAtLeast("there are rows at all", sliders.length, 7);
+  check("every slider carries a label element the browser has bound to it",
+    sliders.filter(function (input) { return input.labels.length === 1; }).length, sliders.length);
+  check("and the effect parameter is named from the manifest, not from its key",
+    inPanel(".v-inspector__effect input[type=range]").labels[0].textContent, "Staerke");
 });
 
 document.getElementById("out").textContent = JSON.stringify(results);

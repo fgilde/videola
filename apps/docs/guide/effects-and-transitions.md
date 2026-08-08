@@ -107,10 +107,10 @@ A transition is an effect with two inputs, not a second subsystem. `u_second` is
 frame already holds when the incoming clip's turn comes, `u_source` is that clip after its own
 effects, and `progress` runs from nothing to everything across the transition's window.
 
-To author one in this milestone: put the two clips so that they **overlap in time**, and give the
-incoming clip a `transitionIn` of type `crossfade` aligned to `in`. Both clips then have a picture
-for the length of the overlap, and the middle of the dissolve is half of each — a measurable colour,
-and it is measured.
+To author one: put the two clips so that they **overlap in time** and pick the cross dissolve in the
+inspector's transition group. It lands on the incoming clip's edge aligned to `in`, which is the
+only alignment M1 can play out. Both clips then have a picture for the length of the overlap, and
+the middle of the dissolve is half of each — a measurable colour, and it is measured.
 
 The incoming clip's opacity is carried in the same progress. A half-opaque clip halfway through its
 transition is a quarter of the way over, not a half that is afterwards faded. Once the window is
@@ -118,10 +118,12 @@ behind the moment, the clip is composited the ordinary way again.
 
 ## What is not there yet, by name
 
-- **No command creates a transition, and none creates a keyframe.** The model carries both and the
-  renderer reads both, but the command catalogue has `effect.add` and `effect.setParam` and nothing
-  else. Until `keyframe.add` and a transition command exist, both can only arrive in a `.videola`
-  file written elsewhere.
+- **A transition set through the inspector has never been drawn in a test.** A cross dissolve needs
+  two overlapping clips, and the application harness drops one file. That the field arrives
+  unchanged is measured, and that the renderer mixes it is measured — but never in one pass.
+- **Keyframes exist on effect parameters and nowhere else.** `Clip::keyframes` is in the model, but
+  `Effect::param_at` is the only evaluation in the repository and the draw list reads
+  `clip.transform` statically, so a keyframe on a clip property would be data no picture sees.
 - **A centred or trailing transition is half invisible.** Its window reaches back before the clip
   starts, where the clip is not drawn at all. Playing it out needs handles — material past the cut —
   and nothing in this milestone creates them.

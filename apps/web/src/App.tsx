@@ -18,6 +18,7 @@ import {
 import {
   AudioGraph,
   AudioSource,
+  effectManifests,
   EXPORT_FORMATS,
   formatSupport,
   Playback,
@@ -31,6 +32,7 @@ import {
   AppShell,
   DropZone,
   ExportDialog,
+  Inspector,
   MediaLibrary,
   PanelTabs,
   pickFiles,
@@ -70,6 +72,8 @@ export function App(): ReactElement {
   const [playing, setPlaying] = useState(false);
   const [missing, setMissing] = useState(NOTHING_MISSING);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
+  // The timeline owns the selection and reports it; keeping a second one here would be a
+  // second answer to the same question. The export dialogue reads it too.
   const [selectedClip, setSelectedClip] = useState<ClipId>();
   const [exporting, setExporting] = useState(false);
   const [formats, setFormats] = useState<ExportFormatChoice[]>([]);
@@ -417,11 +421,11 @@ export function App(): ReactElement {
     >
       <DropZone onFiles={(files) => void importMedia(files)}>
         <div className="v-editor">
-          <div className="v-editor__banners">
+          <div className="v-banners">
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
           </div>
-          {project === undefined ? (
+          {project === undefined || doc === undefined ? (
             <p style={{ padding: "var(--v-space-6)" }}>…</p>
           ) : (
             <>
@@ -440,6 +444,17 @@ export function App(): ReactElement {
                 onSeek={seek}
                 onStep={step}
               />
+              {doc !== undefined && (
+                <Inspector
+                  project={project}
+                  clip={selectedClip}
+                  playhead={playhead}
+                  effects={effectManifests()}
+                  effectParamsAt={doc.effectParamsAt}
+                  dispatch={edit}
+                  onSeek={seek}
+                />
+              )}
               {layout === "phone" && <PanelTabs panel={panel} onSelect={setPanel} />}
               {/* Unmounted rather than hidden while the other panel shows: the timeline windows
                   its clips by the width it measures, and a display:none container measures zero.
