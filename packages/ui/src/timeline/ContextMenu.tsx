@@ -1,18 +1,23 @@
 import { useEffect, useRef, type ReactElement } from "react";
 
-import { useI18n } from "../i18n/useI18n";
-import type { ClipMenu } from "./useTimelineGestures";
+export interface MenuItem {
+  /** Catalogue key, and the React key of the row. */
+  label: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
 
 export interface ContextMenuProps {
-  menu: ClipMenu;
-  canSplit: boolean;
-  onSplit: () => void;
-  onDelete: () => void;
+  x: number;
+  y: number;
+  label: string;
+  items: readonly MenuItem[];
   onClose: () => void;
 }
 
-export function ContextMenu({ menu, canSplit, onSplit, onDelete, onClose }: ContextMenuProps): ReactElement {
-  const { t } = useI18n();
+// A list rather than a fixed set of props: the entries differ between a clip and a marker, and an
+// entry that cannot do anything is disabled here instead of dispatching a command the core refuses.
+export function ContextMenu({ x, y, label, items, onClose }: ContextMenuProps): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(ref, onClose);
 
@@ -21,15 +26,20 @@ export function ContextMenu({ menu, canSplit, onSplit, onDelete, onClose }: Cont
       ref={ref}
       className="v-timeline__menu"
       role="menu"
-      aria-label={t("timeline.clipMenu")}
-      style={{ left: `${menu.x}px`, top: `${menu.y}px` }}
+      aria-label={label}
+      style={{ left: `${x}px`, top: `${y}px` }}
     >
-      <button type="button" role="menuitem" disabled={!canSplit} onClick={onSplit}>
-        {t("timeline.split")}
-      </button>
-      <button type="button" role="menuitem" onClick={onDelete}>
-        {t("timeline.deleteClip")}
-      </button>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          role="menuitem"
+          disabled={item.disabled === true}
+          onClick={item.onSelect}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }

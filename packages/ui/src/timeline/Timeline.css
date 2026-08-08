@@ -170,6 +170,30 @@
   right: 1px;
 }
 
+.v-timeline__toolbar select {
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  color: var(--v-text);
+  font: inherit;
+}
+
+/* A flag on the ruler line, wide enough to be hit by a finger without covering the clip below. */
+.v-timeline__marker {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 14px;
+  margin-left: -1px;
+  padding: 0;
+  border: none;
+  border-radius: 2px 2px 2px 0;
+  cursor: pointer;
+  z-index: 4;
+}
+
 .v-timeline__playhead {
   position: absolute;
   top: 0;

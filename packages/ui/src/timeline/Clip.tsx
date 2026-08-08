@@ -45,10 +45,16 @@ export function Clip({
       data-clip-id={box.clip.id}
       data-clip-run={box.count > 1 ? box.count : undefined}
       data-selected={selected}
+      data-clip-group={box.clip.groupId ?? undefined}
       aria-pressed={selected}
       aria-label={box.count > 1 ? t("timeline.clipRun", { count: box.count }) : undefined}
       style={{ left: `${timeToX(box.start, flicksPerPixel)}px`, width: `${width}px` }}
-      onClick={() => onSelect(box.clip.id)}
+      // Only keyboard activation selects from here (`detail` is 0 then). A pointer has already
+      // been through the gesture path, which is the one that knows about modifier keys, and a
+      // second call would undo the toggle it just made.
+      onClick={(event) => {
+        if (event.detail === 0) onSelect(box.clip.id);
+      }}
     >
       {width >= MIN_CLIP_LABEL_PX && box.count === 1 && (
         <span className="v-clip__label">{clipLabel(box.clip, mediaNames, t)}</span>

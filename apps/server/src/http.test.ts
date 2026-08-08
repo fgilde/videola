@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 
 import { cmd } from "@videola/core";
+import { COMMAND_LABELS } from "@videola/core/src/generated/commandLabels";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Api } from "./api";
@@ -53,8 +54,11 @@ describe("the read-only routes", () => {
   it("hands out a schema entry for every command the core knows", async () => {
     const { body } = await json("/api/schema");
 
-    expect(body.commands).toHaveLength(26);
-    expect(body.commands.map((entry: { command: string }) => entry.command)).toContain("clip.split");
+    // Against the core's own label list, not against the catalogue the route serves: comparing the
+    // generated file with itself would pass however many commands went missing on the way.
+    expect(body.commands.map((entry: { command: string }) => entry.command).sort()).toEqual(
+      [...COMMAND_LABELS].map((label) => label.replace(/^cmd\./, "")).sort(),
+    );
   });
 
   it("reports an unknown route rather than a blank 200", async () => {

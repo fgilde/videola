@@ -131,10 +131,23 @@ describe("snapCandidates", () => {
   });
 
   it("leaves out the clip being dragged, so it cannot snap to itself", () => {
-    const times = snapCandidates(project(), { range, exclude: "clp_1" })
+    const times = snapCandidates(project(), { range, exclude: new Set(["clp_1"]) })
       .filter((candidate) => candidate.kind === "clipEdge")
       .map((candidate) => candidate.time);
     expect(times).toEqual([2 * SECOND, 3 * SECOND]);
+  });
+
+  // A drag moves the whole selection, so every clip travelling with the pointer has to drop out --
+  // excluding only the one under the finger left the others as lines to snap to, and a group of
+  // clips would then snap to its own members.
+  it("leaves out every clip of the selection being dragged", () => {
+    const times = snapCandidates(project(), {
+      range,
+      exclude: new Set(["clp_1", "clp_2"]),
+    })
+      .filter((candidate) => candidate.kind === "clipEdge")
+      .map((candidate) => candidate.time);
+    expect(times).toEqual([]);
   });
 
   it("includes the playhead only when one is given", () => {

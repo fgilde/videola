@@ -11,7 +11,7 @@ export interface TrackProps {
   flicksPerPixel: number;
   range: TimeRange;
   mediaNames: ReadonlyMap<string, string>;
-  selected: ClipId | undefined;
+  selected: ReadonlySet<ClipId>;
   trimZonePx: number;
   onSelect: (clip: ClipId) => void;
 }
@@ -39,7 +39,7 @@ export function Track({
           box={box}
           flicksPerPixel={flicksPerPixel}
           mediaNames={mediaNames}
-          selected={box.count === 1 && box.clip.id === selected}
+          selected={box.count === 1 && selected.has(box.clip.id)}
           trimZonePx={trimZonePx}
           onSelect={onSelect}
         />

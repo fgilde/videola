@@ -82,7 +82,7 @@ export function App(): ReactElement {
   const [panel, setPanel] = useState<EditorPanel>("timeline");
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
-  const [selectedClip, setSelectedClip] = useState<ClipId>();
+  const [selection, setSelection] = useState<readonly ClipId[]>([]);
   const [exporting, setExporting] = useState(false);
   const [formats, setFormats] = useState<ExportFormatChoice[]>([]);
   const [progress, setProgress] = useState<ExportProgress>();
@@ -116,7 +116,7 @@ export function App(): ReactElement {
     setProject(next.state);
     setWarnings(next.warnings);
     setFlags({ canUndo: next.canUndo, canRedo: next.canRedo });
-    setSelectedClip(undefined);
+    setSelection([]);
     setError(undefined);
     setEpoch((current) => current + 1);
   }, []);
@@ -301,8 +301,8 @@ export function App(): ReactElement {
   }, [exporting, project]);
 
   const beginExport = useCallback(
-    (selection: ExportSelection) => {
-      const format = EXPORT_FORMATS.find((entry) => entry.id === selection.formatId);
+    (options: ExportSelection) => {
+      const format = EXPORT_FORMATS.find((entry) => entry.id === options.formatId);
       if (doc === undefined || project === undefined || format === undefined) return;
       setExportError(undefined);
       setProgress({ done: 0, total: 1 });
@@ -312,12 +312,12 @@ export function App(): ReactElement {
         effectParams: doc.effectParamsAt,
         options: {
           format,
-          width: selection.width,
-          height: selection.height,
-          fps: selection.fps,
-          videoBitrate: selection.videoBitrate,
-          audioBitrate: selection.audioBitrate,
-          range: rangeOf(project, selection.range === "selection" ? selectedClip : undefined),
+          width: options.width,
+          height: options.height,
+          fps: options.fps,
+          videoBitrate: options.videoBitrate,
+          audioBitrate: options.audioBitrate,
+          range: rangeOf(project, options.range === "selection" ? selection : []),
         },
         onProgress: (done, total) => {
           if (runningExport.current === handle) setProgress({ done, total });
@@ -343,7 +343,7 @@ export function App(): ReactElement {
         },
       );
     },
-    [doc, project, selectedClip],
+    [doc, project, selection],
   );
 
   const cancelExport = useCallback(() => {
@@ -565,7 +565,7 @@ export function App(): ReactElement {
               {doc !== undefined && (
                 <Inspector
                   project={project}
-                  clip={selectedClip}
+                  clip={selection[0]}
                   playhead={playhead}
                   effects={effectManifests()}
                   effectParamsAt={doc.effectParamsAt}
@@ -593,7 +593,7 @@ export function App(): ReactElement {
                   playhead={playhead}
                   dispatch={edit}
                   onSeek={seek}
-                  onSelectionChange={setSelectedClip}
+                  onSelectionChange={setSelection}
                 />
               )}
             </>
@@ -634,7 +634,7 @@ export function App(): ReactElement {
         <ExportDialog
           formats={formats}
           settings={project.settings}
-          hasSelection={selectedClip !== undefined}
+          hasSelection={selection.length > 0}
           progress={progress}
           error={exportError}
           onExport={beginExport}
@@ -738,14 +738,18 @@ function templateReason(error: unknown, fallback: string): string {
   return fallback;
 }
 
-// The whole project, or the one clip that is selected. A range is a pair of instants either way,
-// so the export never learns that a selection was involved.
-function rangeOf(project: Project, clip: ClipId | undefined): ExportRange {
+// The whole project, or everything the selection spans -- from the earliest selected clip to the
+// last one that ends. A range is a pair of instants either way, so the export never learns that a
+// selection was involved.
+function rangeOf(project: Project, clips: readonly ClipId[]): ExportRange {
   const selected = project.timeline.tracks
     .flatMap((track) => track.clips)
-    .find((entry) => entry.id === clip);
-  if (selected === undefined) return { from: 0, to: projectEnd(project) };
-  return { from: selected.start, to: selected.start + selected.duration };
+    .filter((entry) => clips.includes(entry.id));
+  if (selected.length === 0) return { from: 0, to: projectEnd(project) };
+  return {
+    from: Math.min(...selected.map((clip) => clip.start)),
+    to: Math.max(...selected.map((clip) => clip.start + clip.duration)),
+  };
 }
 
 // Everything the export throws is a catalogue key. Anything else came from the browser and is of
