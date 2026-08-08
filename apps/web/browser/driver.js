@@ -467,23 +467,28 @@
     // it can only have come from the bake. Counted against the background rather than against
     // brightness on purpose: a dark shot is dark either way, but background is background.
     const blue = [0x11, 0x88, 0xff];
+    // Both counts out of the same read. Two reads would let the second one land after the page
+    // compositor has taken the buffer, and an empty buffer holds no background either -- the
+    // measurement would pass by being blank rather than by being right.
     const shown = await until("the baked picture", () => {
       const measured = measure(blue);
       return measured.lit > 1000 ? measured : null;
     }, 40000);
     checkAtLeast("the baked project shows a decoded frame", shown.lit, 1000);
-    check("and the fitted clip leaves no background showing", measure(blue).bare < 0.2, true);
+    check("and the fitted clip leaves no background showing", shown.bare < 0.2, true);
 
     // Past the last clip there is nothing but the background, which is where the colour answer
-    // becomes something a person can see. Waited for as "the picture changed" rather than as "the
-    // picture is blue": a wrong colour has to fail the three checks below, not time the wait out.
+    // becomes something a person can see. Waited for as "an opaque pixel that is not the one on the
+    // clip" rather than as "a blue pixel": a wrong colour has to fail the three checks below, not
+    // time the wait out. The opacity is what rules out a buffer the page compositor has already
+    // taken -- that reads back as four zeroes, which is a change like any other.
     const onTheClip = centrePixel().join();
     button("Ans Ende").click();
     const behind = await until(
       "the picture past the last clip",
       () => {
         const pixel = centrePixel();
-        return pixel.join() === onTheClip ? null : pixel;
+        return pixel[3] > 200 && pixel.join() !== onTheClip ? pixel : null;
       },
       20000,
     );

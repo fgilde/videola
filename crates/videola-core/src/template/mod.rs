@@ -367,9 +367,13 @@ impl TemplateManifest {
 fn check_slot(slot: &Slot, project: &Project) -> Result<()> {
     for binding in &slot.bindings {
         let allowed = match (slot.kind, binding) {
+            // No check that the clip is a *media* clip: `check_every_clip_has_a_source` already
+            // refuses a template containing any other kind, so a second check here could only
+            // change the wording of the refusal. A mutation that removed it survived, which is
+            // what said so.
             (SlotKind::Media, SlotBinding::ClipMedia { clip, fit }) => {
                 fit_bounded(fit)?;
-                media_clip(project, clip)?;
+                exists(project, clip)?;
                 true
             }
             (SlotKind::Text, SlotBinding::ClipLabel { clip }) => find_clip(project, clip).is_some(),
@@ -442,10 +446,9 @@ fn check_every_clip_has_a_source(project: &Project, slots: &[Slot]) -> Result<()
     Ok(())
 }
 
-fn media_clip<'p>(project: &'p Project, clip: &ClipId) -> Result<&'p Clip> {
+fn exists(project: &Project, clip: &ClipId) -> Result<()> {
     match find_clip(project, clip) {
-        Some(found) if matches!(found.source, ClipSource::Media { .. }) => Ok(found),
-        Some(_) => Err(invalid("a media slot may only fill a media clip")),
+        Some(_) => Ok(()),
         None => Err(CoreError::ClipNotFound(clip.clone())),
     }
 }
@@ -1092,6 +1095,20 @@ mod tests {
     fn a_slot_no_step_asks_about_is_refused() {
         let mut template = one_slot_template();
         template.manifest.steps[0].slots.clear();
+
+        assert!(matches!(
+            template.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    // Asked twice is as wrong as never asked: the second panel would show a field whose answer the
+    // first one already took, and whichever one the user fills last silently wins.
+    #[test]
+    fn a_slot_asked_about_in_two_steps_is_refused() {
+        let mut template = one_slot_template();
+        let twin = template.manifest.steps[0].clone();
+        template.manifest.steps.push(twin);
 
         assert!(matches!(
             template.normalize(),
