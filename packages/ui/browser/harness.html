@@ -220,6 +220,26 @@ test("page offset", function () {
   check("scrubbing at surface x 500 seeks five seconds", seeks[seeks.length - 1], 5 * SECOND);
 });
 
+// The three things that made a clip read as a grey rectangle: a centred name, square corners, and
+// a selection you had to look twice for. The name is measured through a Range, because the label
+// box fills the clip whatever the text inside it does -- reading text-align back would only be the
+// rule restating itself.
+test("a clip looks like a clip", function () {
+  draw(project([track("trk_1", [clip("clp_1", 0, 10)])]));
+  const box = q("[data-clip-id]");
+  const range = document.createRange();
+  range.selectNodeContents(q(".v-clip__label"));
+  checkAtMost("the name starts at the left edge instead of in the middle",
+    Math.round(range.getBoundingClientRect().left - box.getBoundingClientRect().left), 12);
+  checkAtLeast("the corners are rounded",
+    parseFloat(getComputedStyle(box).borderTopLeftRadius), 4);
+  check("an unselected clip lies flat", getComputedStyle(box).boxShadow, "none");
+  pointer("pointerdown", box, atSurface(100, 90));
+  pointer("pointerup", surface(), atSurface(100, 90));
+  check("and choosing one lifts it off the row",
+    getComputedStyle(q("[data-clip-id]")).boxShadow !== "none", true);
+});
+
 // What a clip is made of has to be readable before its name is: a row of grey rectangles says
 // nothing about which of them carries sound. Read out of the computed style rather than out of the
 // class list, because what is claimed is that they *look* different.
