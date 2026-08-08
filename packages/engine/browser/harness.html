@@ -246,7 +246,9 @@ async function main() {
       12,
     );
     check("and the cut really restarts the source", frames[CUT_AT].pixel, colourAt(0), 12);
-    check("the sound is in there too", hasAudio, true);
+    // Only where the browser said it could write one. Chrome on Linux encodes H.264 and refuses
+    // AAC, and the export then goes silent on purpose rather than failing halfway through.
+    check("the sound is in there where the browser can encode it", hasAudio, chosenHasAudio);
   });
 
   // The draw list maps into clip space from the project's own size, so a different output size is
