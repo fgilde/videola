@@ -7,7 +7,7 @@ use ts_rs::TS;
 
 use super::effect::{Effect, Transition};
 use super::keyframe::Keyframe;
-use super::{ClipId, MediaId, Time};
+use super::{ClipId, GroupId, MediaId, Time};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +16,7 @@ pub struct Clip {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub group_id: Option<String>,
+    pub group_id: Option<GroupId>,
     pub source: ClipSource,
     pub start: Time,
     pub duration: Time,

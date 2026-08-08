@@ -106,6 +106,7 @@ fn normalize_timeline(timeline: &mut Timeline, depth: usize) -> Result<()> {
 fn normalize_track(track: &mut Track, depth: usize) -> Result<()> {
     finite(track.volume)?;
     finite(track.pan)?;
+    hex_color(&track.color_hex)?;
     for clip in &mut track.clips {
         normalize_clip(clip, depth)?;
     }
@@ -120,6 +121,17 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     bounded(clip.fades.out_duration)?;
     speed_rate_bounded(clip.speed.rate)?;
     clip_scalars_finite(clip)?;
+    // An empty group id would make every clip carrying one a member of the same group, so a single
+    // `clip.ungroup` would dissolve unrelated groups across the project.
+    if clip
+        .group_id
+        .as_ref()
+        .is_some_and(|id| id.as_str().is_empty())
+    {
+        return Err(CoreError::InvalidArgument(
+            "a group id must not be empty".into(),
+        ));
+    }
     normalize_transition(&clip.transition_in)?;
     normalize_transition(&clip.transition_out)?;
     normalize_keyframes(&mut clip.keyframes)?;
@@ -233,6 +245,7 @@ pub(crate) fn keyframe_bounded(keyframe: &Keyframe) -> Result<()> {
 fn normalize_markers(markers: &[Marker]) -> Result<()> {
     for marker in markers {
         bounded(marker.time)?;
+        hex_color(&marker.color_hex)?;
     }
     Ok(())
 }
@@ -358,6 +371,9 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
 // Checked here so the one gate that judges settings judges all of them -- template colour slots
 // write straight into this field and must not be able to smuggle in a value the compositor
 // silently reinterprets.
+//
+// Track and marker colours go through the same check: both end up in an inline style in the
+// timeline, where anything unparsable is dropped without a word.
 fn hex_color(value: &str) -> Result<()> {
     let digits = value.strip_prefix('#').unwrap_or("");
     let shaped = matches!(digits.len(), 3 | 6 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit());
@@ -866,6 +882,66 @@ mod tests {
             p.settings.background = background.into();
             assert!(p.normalize().is_ok(), "{background} should be accepted");
         }
+    }
+
+    // Both colours end up in an inline style in the timeline, where an unparsable value is dropped
+    // without a word -- the same silent reinterpretation `settings.background` is checked against.
+    #[test]
+    fn a_track_colour_that_is_not_a_hex_colour_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        track.color_hex = "javascript:alert(1)".into();
+        p.timeline.tracks.push(track);
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_marker_colour_that_is_not_a_hex_colour_fails_to_load() {
+        let mut p: Project =
+            serde_json::from_str(&project_json_with_settings(1920, 1080, 48_000)).unwrap();
+        p.markers.push(super::Marker {
+            id: crate::model::MarkerId::new(),
+            time: Time::ZERO,
+            label: "x".into(),
+            color_hex: "rebeccapurple".into(),
+        });
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    // An empty group id would put every clip carrying one in the same group, so one `clip.ungroup`
+    // anywhere would dissolve groups the author never touched.
+    #[test]
+    fn a_clip_with_an_empty_group_id_fails_to_load() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.group_id = Some(crate::model::GroupId::from(String::new()));
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn a_clip_with_a_real_group_id_still_loads() {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.group_id = Some(crate::model::GroupId::new());
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+
+        assert!(p.normalize().is_ok());
     }
 
     #[test]

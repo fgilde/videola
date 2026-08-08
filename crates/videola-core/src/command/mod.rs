@@ -1,4 +1,5 @@
 mod clip;
+mod marker;
 mod project;
 
 use schemars::JsonSchema;
@@ -6,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::model::{
-    ClipId, ClipSource, Interp, MediaAsset, MediaId, ParamValue, Project, ProjectSettings, Time,
-    TrackId, TrackKind, Transform, Transition,
+    Clip, ClipId, ClipSource, Interp, MarkerId, MediaAsset, MediaId, ParamValue, Project,
+    ProjectSettings, Time, TrackId, TrackKind, Transform, Transition,
 };
 use crate::Result;
 
@@ -87,6 +88,47 @@ pub enum Command {
     /// Cut a clip in two at a timeline position strictly inside it.
     #[serde(rename = "clip.split")]
     ClipSplit { clip: ClipId, at: Time },
+    /// Delete a clip and pull every later clip on its track back by the gap, leaving none.
+    #[serde(rename = "clip.rippleDelete")]
+    ClipRippleDelete { clip: ClipId },
+    /// Trim one edge like `clip.trim` and move every later clip on the track by the same step, so
+    /// no gap opens and none closes. Trimming the head keeps the clip where it is and moves its
+    /// material instead.
+    #[serde(rename = "clip.rippleTrim")]
+    ClipRippleTrim {
+        clip: ClipId,
+        edge: TrimEdge,
+        delta: Time,
+    },
+    /// Move the cut this clip's edge shares with its neighbour: both clips are trimmed by `delta`,
+    /// so the pair keeps its total length. Refused where no clip meets that edge.
+    #[serde(rename = "clip.roll")]
+    ClipRoll {
+        clip: ClipId,
+        edge: TrimEdge,
+        delta: Time,
+    },
+    /// Move the material under a clip while the clip stays where it is and keeps its length.
+    #[serde(rename = "clip.slip")]
+    ClipSlip { clip: ClipId, delta: Time },
+    /// Move a clip along its track and let the clips that meet it absorb the step, so everything
+    /// around it keeps its total length.
+    #[serde(rename = "clip.slide")]
+    ClipSlide { clip: ClipId, delta: Time },
+    /// Place a copy of a whole clip on a track. Ids and group membership are new; everything else
+    /// — material, speed, transform, effects, keyframes — comes from `clip`.
+    #[serde(rename = "clip.paste")]
+    ClipPaste {
+        track: TrackId,
+        clip: Box<Clip>,
+        start: Time,
+    },
+    /// Tie clips together, so an editor can select and move them as one. At least two.
+    #[serde(rename = "clip.group")]
+    ClipGroup { clips: Vec<ClipId> },
+    /// Dissolve the group this clip belongs to, for every clip in it.
+    #[serde(rename = "clip.ungroup")]
+    ClipUngroup { clip: ClipId },
     /// Set playback rate and direction. `rate` is a factor in (0, 100]; 1 is unchanged.
     #[serde(rename = "clip.setSpeed")]
     ClipSetSpeed {
@@ -163,6 +205,16 @@ pub enum Command {
         interp: Interp,
     },
 
+    /// Put a marker on the timeline at `time`.
+    #[serde(rename = "marker.add")]
+    MarkerAdd { time: Time, label: String },
+    /// Remove a marker.
+    #[serde(rename = "marker.remove")]
+    MarkerRemove { marker: MarkerId },
+    /// Change a marker's label.
+    #[serde(rename = "marker.rename")]
+    MarkerRename { marker: MarkerId, label: String },
+
     /// Put an asset into the library. The id must be `med_` followed by the SHA-256 of the file's
     /// bytes, so importing the same file twice yields the same id.
     #[serde(rename = "media.import")]
@@ -215,6 +267,16 @@ impl Command {
             } => clip::move_clip(target, clip, to_track, *start),
             Self::ClipTrim { clip, edge, delta } => clip::trim(target, clip, *edge, *delta),
             Self::ClipSplit { clip, at } => clip::split(target, clip, *at),
+            Self::ClipRippleDelete { clip } => clip::ripple_delete(target, clip),
+            Self::ClipRippleTrim { clip, edge, delta } => {
+                clip::ripple_trim(target, clip, *edge, *delta)
+            }
+            Self::ClipRoll { clip, edge, delta } => clip::roll(target, clip, *edge, *delta),
+            Self::ClipSlip { clip, delta } => clip::slip(target, clip, *delta),
+            Self::ClipSlide { clip, delta } => clip::slide(target, clip, *delta),
+            Self::ClipPaste { track, clip, start } => clip::paste(target, track, clip, *start),
+            Self::ClipGroup { clips } => clip::group(target, clips),
+            Self::ClipUngroup { clip } => clip::ungroup(target, clip),
             Self::ClipSetSpeed {
                 clip,
                 rate,
@@ -271,6 +333,9 @@ impl Command {
                 time,
                 interp,
             } => clip::set_keyframe_interp(target, clip, effect_type, key, *time, *interp),
+            Self::MarkerAdd { time, label } => marker::add(target, *time, label),
+            Self::MarkerRemove { marker } => marker::remove(target, marker),
+            Self::MarkerRename { marker, label } => marker::rename(target, marker, label),
             Self::MediaImport { asset } => project::import_media(target, asset),
             Self::MediaRemove { media } => project::remove_media(target, media),
         }
@@ -292,6 +357,14 @@ impl Command {
             Self::ClipMove { .. } => LABEL_CLIP_MOVE,
             Self::ClipTrim { .. } => LABEL_CLIP_TRIM,
             Self::ClipSplit { .. } => LABEL_CLIP_SPLIT,
+            Self::ClipRippleDelete { .. } => LABEL_CLIP_RIPPLE_DELETE,
+            Self::ClipRippleTrim { .. } => LABEL_CLIP_RIPPLE_TRIM,
+            Self::ClipRoll { .. } => LABEL_CLIP_ROLL,
+            Self::ClipSlip { .. } => LABEL_CLIP_SLIP,
+            Self::ClipSlide { .. } => LABEL_CLIP_SLIDE,
+            Self::ClipPaste { .. } => LABEL_CLIP_PASTE,
+            Self::ClipGroup { .. } => LABEL_CLIP_GROUP,
+            Self::ClipUngroup { .. } => LABEL_CLIP_UNGROUP,
             Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
             Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
@@ -302,6 +375,9 @@ impl Command {
             Self::KeyframeRemove { .. } => LABEL_KEYFRAME_REMOVE,
             Self::KeyframeMove { .. } => LABEL_KEYFRAME_MOVE,
             Self::KeyframeSetInterp { .. } => LABEL_KEYFRAME_SET_INTERP,
+            Self::MarkerAdd { .. } => LABEL_MARKER_ADD,
+            Self::MarkerRemove { .. } => LABEL_MARKER_REMOVE,
+            Self::MarkerRename { .. } => LABEL_MARKER_RENAME,
             Self::MediaImport { .. } => LABEL_MEDIA_IMPORT,
             Self::MediaRemove { .. } => LABEL_MEDIA_REMOVE,
         }
@@ -322,6 +398,14 @@ pub const LABEL_CLIP_REMOVE: &str = "cmd.clip.remove";
 pub const LABEL_CLIP_MOVE: &str = "cmd.clip.move";
 pub const LABEL_CLIP_TRIM: &str = "cmd.clip.trim";
 pub const LABEL_CLIP_SPLIT: &str = "cmd.clip.split";
+pub const LABEL_CLIP_RIPPLE_DELETE: &str = "cmd.clip.rippleDelete";
+pub const LABEL_CLIP_RIPPLE_TRIM: &str = "cmd.clip.rippleTrim";
+pub const LABEL_CLIP_ROLL: &str = "cmd.clip.roll";
+pub const LABEL_CLIP_SLIP: &str = "cmd.clip.slip";
+pub const LABEL_CLIP_SLIDE: &str = "cmd.clip.slide";
+pub const LABEL_CLIP_PASTE: &str = "cmd.clip.paste";
+pub const LABEL_CLIP_GROUP: &str = "cmd.clip.group";
+pub const LABEL_CLIP_UNGROUP: &str = "cmd.clip.ungroup";
 pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
 pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
@@ -332,10 +416,13 @@ pub const LABEL_KEYFRAME_ADD: &str = "cmd.keyframe.add";
 pub const LABEL_KEYFRAME_REMOVE: &str = "cmd.keyframe.remove";
 pub const LABEL_KEYFRAME_MOVE: &str = "cmd.keyframe.move";
 pub const LABEL_KEYFRAME_SET_INTERP: &str = "cmd.keyframe.setInterp";
+pub const LABEL_MARKER_ADD: &str = "cmd.marker.add";
+pub const LABEL_MARKER_REMOVE: &str = "cmd.marker.remove";
+pub const LABEL_MARKER_RENAME: &str = "cmd.marker.rename";
 pub const LABEL_MEDIA_IMPORT: &str = "cmd.media.import";
 pub const LABEL_MEDIA_REMOVE: &str = "cmd.media.remove";
 
-pub const ALL_COMMAND_LABELS: [&str; 26] = [
+pub const ALL_COMMAND_LABELS: [&str; 37] = [
     LABEL_PROJECT_SET_SETTINGS,
     LABEL_PROJECT_SET_TITLE,
     LABEL_TRACK_ADD,
@@ -350,6 +437,14 @@ pub const ALL_COMMAND_LABELS: [&str; 26] = [
     LABEL_CLIP_MOVE,
     LABEL_CLIP_TRIM,
     LABEL_CLIP_SPLIT,
+    LABEL_CLIP_RIPPLE_DELETE,
+    LABEL_CLIP_RIPPLE_TRIM,
+    LABEL_CLIP_ROLL,
+    LABEL_CLIP_SLIP,
+    LABEL_CLIP_SLIDE,
+    LABEL_CLIP_PASTE,
+    LABEL_CLIP_GROUP,
+    LABEL_CLIP_UNGROUP,
     LABEL_CLIP_SET_SPEED,
     LABEL_CLIP_SET_VOLUME,
     LABEL_CLIP_SET_TRANSFORM,
@@ -360,6 +455,9 @@ pub const ALL_COMMAND_LABELS: [&str; 26] = [
     LABEL_KEYFRAME_REMOVE,
     LABEL_KEYFRAME_MOVE,
     LABEL_KEYFRAME_SET_INTERP,
+    LABEL_MARKER_ADD,
+    LABEL_MARKER_REMOVE,
+    LABEL_MARKER_RENAME,
     LABEL_MEDIA_IMPORT,
     LABEL_MEDIA_REMOVE,
 ];
