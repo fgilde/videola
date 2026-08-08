@@ -6,7 +6,8 @@ import { AudioGraph, hasAudibleClips } from "../audio/graph";
 import { AudioSource } from "../decode/audio-source";
 import type { AudioBufferSource } from "../audio/graph";
 import type { ExportAudio, ExportFrame, ExportRequest } from "./encode";
-import type { ExportFormat } from "./format";
+import { formatSupport } from "./format";
+import type { EncodeProbe, ExportFormat } from "./format";
 
 export interface ExportRange {
   from: Time;
@@ -42,6 +43,8 @@ export interface ExportInput {
   onProgress?: (done: number, total: number) => void;
   createWorker?: () => Worker;
   audioSource?: AudioBufferSource;
+  /** Injectable so a test, or a harness, can ask something other than the live browser. */
+  encodeProbe?: EncodeProbe;
 }
 
 export interface ExportHandle {
@@ -73,6 +76,19 @@ export function exportFrames(input: ExportInput): ExportFrame[] {
     sources: input.sourceTimes(at),
     params: input.effectParams(at),
   }));
+}
+
+async function canEncodeAudio(input: ExportInput): Promise<boolean> {
+  const support = await formatSupport(
+    {
+      width: input.options.width,
+      height: input.options.height,
+      sampleRate: input.project.settings.sampleRate,
+      channels: 2,
+    },
+    input.encodeProbe ?? undefined,
+  );
+  return support.find((entry) => entry.format.id === input.options.format.id)?.audio === true;
 }
 
 export function startExport(input: ExportInput): ExportHandle {
@@ -149,6 +165,10 @@ function transfers(request: ExportRequest): Transferable[] {
 async function renderAudio(input: ExportInput): Promise<ExportAudio | undefined> {
   const { project, options } = input;
   if (!hasAudibleClips(project)) return undefined;
+  // A browser can carry a format's picture and not its sound -- Chrome on Linux encodes H.264 and
+  // refuses AAC. The interface already says what happens then ("the export will be silent"), and
+  // this is where that becomes true instead of an exception halfway through the encode.
+  if (!(await canEncodeAudio(input))) return undefined;
   const sampleRate = project.settings.sampleRate;
   const length = Math.max(
     1,
