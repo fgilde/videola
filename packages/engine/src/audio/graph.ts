@@ -208,6 +208,16 @@ function audibleHash(clip: Clip, library: ReadonlyMap<string, MediaAsset>): stri
   return mediaHash(asset.id);
 }
 
+// Whether a project has anything to put in an audio track at all. Shares `audibleHash` with the
+// graph on purpose: an export that decides for itself would write a silent track for material the
+// graph refuses to schedule, or leave one out that it would have.
+export function hasAudibleClips(project: Project): boolean {
+  const library = new Map(project.library.map((asset) => [asset.id, asset]));
+  return project.timeline.tracks.some((track) =>
+    track.clips.some((clip) => audibleHash(clip, library) !== undefined),
+  );
+}
+
 function outPoint(clip: Clip): Time {
   return clip.inPoint + Math.round(clip.duration * clip.speed.rate);
 }
