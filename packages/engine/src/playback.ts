@@ -1,6 +1,7 @@
 import { frameDuration } from "@videola/core";
 import { mediaHash } from "@videola/media";
 
+import type { Peaks } from "@videola/media";
 import type {
   EffectParams,
   EffectParamSnapshot,
@@ -33,6 +34,10 @@ export interface FrameSource {
   frameAt(t: Time): Promise<VideoFrame | undefined>;
   close(): void;
 }
+
+// Enough detail that a clip filling the screen does not look stepped, cheap enough that fifty of
+// them cost nothing. Raise it if a strip ever looks blocky at full zoom.
+export const WAVEFORM_BUCKETS = 600;
 
 export interface PlaybackOptions {
   audio: AudioTransport;
@@ -149,6 +154,13 @@ export class Playback {
   // the next paint open it for real.
   forget(hash: string): void {
     this.#release(hash);
+  }
+
+  // Read after `load` resolves, because that is when the graph holds the decoded samples. Fixed
+  // resolution rather than one derived from the clip's width in pixels: the strip is stretched to
+  // the clip by its viewBox, so no zoom step can invalidate it.
+  waveforms(buckets = WAVEFORM_BUCKETS): Map<string, Peaks> {
+    return this.#graph.waveforms(buckets);
   }
 
   onTime(cb: (t: Time) => void): () => void {

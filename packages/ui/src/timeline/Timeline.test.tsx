@@ -282,3 +282,80 @@ describe("Timeline virtualisation", () => {
     expect(Number.parseFloat(content?.style.width ?? "0")).toBeGreaterThan(360_000);
   });
 });
+
+// The strip was left out of M1 on purpose: it did not exist, so the surface did not promise it.
+// Now that it does, absent peaks still have to mean no strip rather than an empty one.
+describe("Timeline waveforms", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  const peaks = { min: Float32Array.from([-1, -0.5]), max: Float32Array.from([1, 0.5]) };
+
+  it("draws the strip of a clip it was given peaks for", () => {
+    const project = makeProject([makeTrack("trk_1", [makeClip("clp_1", 0, FLICKS_PER_SECOND)])]);
+    renderTimeline(
+      <Timeline
+        project={project}
+        playhead={0}
+        waveforms={new Map([["clp_1", peaks]])}
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    const strip = screen.getByTestId("clip-waveform");
+    expect(strip.getAttribute("d")).toBeNull();
+    expect(strip.querySelector("path")?.getAttribute("d")).toBe("M0 0L1 0.5L1 1.5L0 2Z");
+    // Stretched by the viewBox, so the path outlives every zoom step unrebuilt.
+    expect(strip.getAttribute("viewBox")).toBe("0 0 2 2");
+    expect(strip.getAttribute("preserveAspectRatio")).toBe("none");
+  });
+
+  it("draws no strip for a clip whose audio has not been read", () => {
+    const project = makeProject([makeTrack("trk_1", [makeClip("clp_1", 0, FLICKS_PER_SECOND)])]);
+    renderTimeline(
+      <Timeline project={project} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
+    );
+
+    expect(screen.queryByTestId("clip-waveform")).toBeNull();
+  });
+
+  // A run of clips too narrow to draw separately has no single signal to show, and the peaks of
+  // whichever clip happens to lead it would be a lie about the rest.
+  it("draws no strip on a collapsed run of clips", () => {
+    const clips = Array.from({ length: 40 }, (_, i) =>
+      makeClip(`clp_${i}`, i * (FLICKS_PER_SECOND / 100), FLICKS_PER_SECOND / 100),
+    );
+    const project = makeProject([makeTrack("trk_1", clips)]);
+    renderTimeline(
+      <Timeline
+        project={project}
+        playhead={0}
+        waveforms={new Map(clips.map((clip) => [clip.id, peaks]))}
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    const runs = document.querySelectorAll("[data-clip-run]");
+    expect(runs.length).toBeGreaterThan(0);
+    for (const run of runs) expect(run.querySelector("[data-testid=clip-waveform]")).toBeNull();
+  });
+
+  // The gestures read the clip element and its trim zones. An SVG that took pointer events would
+  // become the target and every drag on a clip with sound would miss.
+  it("keeps the strip out of the way of the pointer", () => {
+    const project = makeProject([makeTrack("trk_1", [makeClip("clp_1", 0, FLICKS_PER_SECOND)])]);
+    renderTimeline(
+      <Timeline
+        project={project}
+        playhead={0}
+        waveforms={new Map([["clp_1", peaks]])}
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("clip-waveform").getAttribute("aria-hidden")).toBe("true");
+  });
+});

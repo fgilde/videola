@@ -13,3 +13,5 @@ export {
   storageEstimate,
 } from "./opfs";
 export { mediaForProject } from "./save";
+export { peaks } from "./waveform";
+export type { Peaks } from "./waveform";

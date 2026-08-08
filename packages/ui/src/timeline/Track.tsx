@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { ClipId, Track as TrackModel } from "@videola/core";
+import type { Peaks } from "@videola/media";
 
 import { Clip } from "./Clip";
 import { clipBoxes, trackHeight, type TimeRange } from "./geometry";
@@ -11,6 +12,7 @@ export interface TrackProps {
   flicksPerPixel: number;
   range: TimeRange;
   mediaNames: ReadonlyMap<string, string>;
+  waveforms?: ReadonlyMap<string, Peaks>;
   selected: ClipId | undefined;
   trimZonePx: number;
   onSelect: (clip: ClipId) => void;
@@ -22,6 +24,7 @@ export function Track({
   flicksPerPixel,
   range,
   mediaNames,
+  waveforms,
   selected,
   trimZonePx,
   onSelect,
@@ -39,6 +42,7 @@ export function Track({
           box={box}
           flicksPerPixel={flicksPerPixel}
           mediaNames={mediaNames}
+          peaks={waveforms?.get(box.clip.id)}
           selected={box.count === 1 && box.clip.id === selected}
           trimZonePx={trimZonePx}
           onSelect={onSelect}

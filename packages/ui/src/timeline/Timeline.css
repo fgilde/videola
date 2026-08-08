@@ -126,6 +126,18 @@
   box-shadow: inset 0 0 0 1px var(--v-accent);
 }
 
+/* Behind the label and the trim handles, and out of the way of the pointer: the gestures read the
+   clip element and its trim zones, and an SVG child would otherwise become the event target. */
+.v-clip__wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: var(--v-accent);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .v-clip__label {
   display: block;
   /* The inset lives on the label, so a clip narrower than the padding still draws its own

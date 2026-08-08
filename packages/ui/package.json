@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@videola/core": "workspace:*",
+    "@videola/media": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

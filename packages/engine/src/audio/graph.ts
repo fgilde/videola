@@ -1,7 +1,8 @@
 import { timeToSeconds } from "@videola/core";
-import { mediaHash } from "@videola/media";
+import { mediaHash, peaks } from "@videola/media";
 
 import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
+import type { Peaks } from "@videola/media";
 
 export interface AudioBufferSource {
   bufferFor(hash: string, from: Time, to: Time): Promise<AudioBuffer>;
@@ -76,6 +77,21 @@ export class AudioGraph {
     for (const node of this.#live) node.disconnect();
     this.#playing = [];
     this.#live = [];
+  }
+
+  // The strips the timeline draws come from the samples the graph decoded for playback, so what is
+  // seen and what is heard cannot drift apart -- a reversed clip included, whose held buffer is
+  // already the reversed copy. A clip the graph does not schedule gets no entry, which is what lets
+  // the timeline tell "no sound" from "not read yet".
+  waveforms(buckets: number): Map<string, Peaks> {
+    return new Map(
+      this.#voices.map((voice) => {
+        const planes = Array.from({ length: voice.buffer.numberOfChannels }, (_, channel) =>
+          voice.buffer.getChannelData(channel),
+        );
+        return [voice.clip.id, peaks(planes, buckets)];
+      }),
+    );
   }
 
   setMasterVolume(volume: number): void {

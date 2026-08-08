@@ -591,3 +591,52 @@ describe("AudioGraph, reversed clips", () => {
     ).toBe(true);
   });
 });
+
+// The graph already holds the decoded samples for every clip it schedules, so the timeline's strip
+// costs no second decode and no second cache. Anything else would decode the same range twice.
+describe("AudioGraph, waveform peaks", () => {
+  it("reads peaks from the buffer it already decoded", async () => {
+    const ctx = context(0.3);
+    const graph = new AudioGraph(ctx, signal(ctx, (progress) => progress));
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    const found = graph.waveforms(4).get("clp_1");
+
+    expect(found?.max[0]).toBeCloseTo(0.25, 2);
+    expect(found?.max[3]).toBeCloseTo(1, 2);
+  });
+
+  it("shows a reversed clip the way it plays", async () => {
+    const ctx = context(0.3);
+    const graph = new AudioGraph(ctx, signal(ctx, (progress) => progress));
+    await graph.prepare(
+      project([track("A1", [clip({ speed: { rate: 1, reverse: true, preservePitch: true } })])]),
+    );
+
+    const found = graph.waveforms(4).get("clp_1");
+
+    expect(found?.max[0]).toBeCloseTo(1, 2);
+    expect(found?.max[3]).toBeCloseTo(0.25, 2);
+  });
+
+  it("has nothing to show for a clip it never scheduled", async () => {
+    const ctx = context(0.3);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    expect(graph.waveforms(4).get("clp_missing")).toBeUndefined();
+  });
+
+  it("does not decode a second time to draw a strip", async () => {
+    const ctx = context(0.3);
+    const source = dc(ctx);
+    const decode = vi.spyOn(source, "bufferFor");
+    const graph = new AudioGraph(ctx, source);
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    graph.waveforms(8);
+    graph.waveforms(16);
+
+    expect(decode).toHaveBeenCalledOnce();
+  });
+});

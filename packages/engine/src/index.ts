@@ -22,7 +22,7 @@ export type {
   ExportRange,
   ExportResult,
 } from "./export/run";
-export { clipHashes, Playback } from "./playback";
+export { clipHashes, Playback, WAVEFORM_BUCKETS } from "./playback";
 export type { AudioTransport, FrameSource, PlaybackOptions } from "./playback";
 export { createContext } from "./render/context";
 export type { GlContext } from "./render/context";

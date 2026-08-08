@@ -34,6 +34,7 @@ import {
   type ExportRange,
 } from "@videola/engine";
 import { importFile, mediaForProject, mediaHash, missingMedia, relinkMedia } from "@videola/media";
+import type { Peaks } from "@videola/media";
 import {
   AppShell,
   DropZone,
@@ -79,6 +80,7 @@ export function App(): ReactElement {
   const [playhead, setPlayhead] = useState<Time>(0);
   const [playing, setPlaying] = useState(false);
   const [missing, setMissing] = useState(NOTHING_MISSING);
+  const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
   const [panel, setPanel] = useState<EditorPanel>("timeline");
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -214,8 +216,17 @@ export function App(): ReactElement {
   // refresh right after it already draws the edit that caused this.
   useEffect(() => {
     if (playback === undefined || project === undefined) return;
-    void playback.load(project);
+    let cancelled = false;
+    // The strips come from the buffers `load` decoded, so they can only be read once it resolves.
+    // Dropping a superseded result is what keeps a drag from painting the strips of a project state
+    // that two pointer movements have already replaced.
+    void playback.load(project).then(() => {
+      if (!cancelled) setWaveforms(playback.waveforms());
+    });
     playback.refresh();
+    return () => {
+      cancelled = true;
+    };
   }, [playback, project]);
 
   // Deliberately not wrapped in try/catch: the timeline decides which refusals are ordinary,
@@ -591,6 +602,7 @@ export function App(): ReactElement {
                 <Timeline
                   project={project}
                   playhead={playhead}
+                  waveforms={waveforms}
                   dispatch={edit}
                   onSeek={seek}
                   onSelectionChange={setSelectedClip}
