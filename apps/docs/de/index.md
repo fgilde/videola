@@ -3,9 +3,8 @@ layout: home
 hero:
   text: Ein Video-Editor auf einem Rust-Kern
   tagline: >
-    Datenmodell, Command-Bus und Anwendungsrahmen stehen, dazu eine bedienbare Timeline mit
-    Zeigergesten für Maus und Finger. Wiedergabe, Effekte und Export sind noch nicht in der
-    Oberfläche angekommen.
+    Video hineinziehen, auf der Timeline schneiden, abspielen und zusehen. Effekte, Keyframes und
+    Export sind noch nicht in der Oberfläche.
   image:
     src: /videola-logo.webp
     alt: Videola
@@ -20,6 +19,20 @@ hero:
       text: Quellcode
       link: https://github.com/fgilde/videola
 features:
+  - title: Importieren, schneiden, abspielen
+    details: >
+      Ein Video auf das Fenster ziehen oder über den Knopf auswählen. Es landet in OPFS unter dem
+      Hash seiner eigenen Bytes, wird zum Clip und läuft über WebCodecs und einen
+      WebGL2-Compositor, wobei die Audio-Uhr führt.
+    link: /de/guide/editing
+    linkText: Schneiden
+  - title: Ein Zeigerpfad für Maus und Finger
+    details: >
+      Verschieben, Trimmen, Scrubben, Pinch-Zoom und langes Drücken laufen alle über Pointer
+      Events, das Handy ist also keine zweite Umsetzung. Trefferflächen wachsen auf 44 px, sobald
+      der Zeiger keine Maus ist.
+    link: /de/guide/editing#die-timeline
+    linkText: Gesten
   - title: Ein Modell, einmal geschrieben
     details: >
       Datenmodell, Command-Bus und die .videola-Ein- und Ausgabe liegen in videola-core, einer
