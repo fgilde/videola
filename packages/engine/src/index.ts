@@ -1,3 +1,5 @@
+export { audioEffect, audioEffectManifests } from "./audio/effects";
+export type { AudioEffectManifest, AudioEffectNode } from "./audio/effects";
 export { AudioGraph, hasAudibleClips, measureLoudness } from "./audio/graph";
 export { integratedLufs, LOUDNESS_BLOCK_SECONDS, peakDbfs } from "./audio/loudness";
 export type { AudioBufferSource } from "./audio/graph";

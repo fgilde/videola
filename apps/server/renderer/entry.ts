@@ -52,12 +52,12 @@ async function stills(backend: DocumentBackend, project: Project, job: Job): Pro
 // Rendered offline through the graph the export uses, then reduced to two extremes per bucket the
 // way the timeline draws its strips. Anything that reads these numbers is reading the sound that
 // would be written, mixed and levelled, not one clip's file.
-async function audioPeaks(project: Project, job: Job): Promise<void> {
+async function audioPeaks(backend: DocumentBackend, project: Project, job: Job): Promise<void> {
   if (job.kind !== "peaks") return;
   const sampleRate = project.settings.sampleRate;
   const length = Math.max(1, Math.round(timeToSeconds(job.to - job.from) * sampleRate));
   const context = new OfflineAudioContext(2, length, sampleRate);
-  const graph = new AudioGraph(context, new AudioSource());
+  const graph = new AudioGraph(context, new AudioSource(), backend.effectParamsAt);
   await graph.prepare(project);
   graph.startAt(0, job.from);
   const rendered = await context.startRendering();
@@ -86,7 +86,7 @@ async function run(): Promise<void> {
   const project = backend.state();
   await unpack(backend, project);
   await stills(backend, project, job);
-  await audioPeaks(project, job);
+  await audioPeaks(backend, project, job);
 }
 
 // A failure has to travel as a failure. Reporting nothing would leave the caller waiting for its

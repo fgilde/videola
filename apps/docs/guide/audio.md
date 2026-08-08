@@ -9,7 +9,9 @@ timestamp.
 
 ```
 Clip → buffer source → clip gain (volume, fades)
+     → track inserts (equaliser, compressor, …)
      → track bus (gain for volume/mute/solo → stereo panner)
+     → master inserts (the mastering chain)
      → master gain
      → destination
 ```
@@ -30,6 +32,58 @@ alone.
 **Mute beats solo.** A track that is both muted and soloed stays silent, and soloing it still
 silences every track that is not soloed. The mixer's two buttons are independent for the same
 reason: pressing one must not quietly clear the other.
+
+### Effects on a bus
+
+A track and the project itself each carry a chain of effects, addressed by the same `effect.add` and
+`effect.setParam` commands a clip's effects use — pointed at `on.track(id)` or at `on.project`
+instead of at `on.clip(id)`.
+
+Three exist, and all three are native Web Audio nodes:
+
+| Effect | Node | Knobs |
+| --- | --- | --- |
+| Equaliser | `BiquadFilterNode`, peaking | frequency, gain, Q |
+| Compressor | `DynamicsCompressorNode` | threshold, ratio, attack, release |
+| Limiter | `DynamicsCompressorNode` at ratio 20, no knee | threshold |
+
+**Inserts sit ahead of the fader**, the way a console wires them. The fader then rides a signal the
+compressor has already levelled, so pulling it down changes how loud the track is and not what the
+compressor is doing to it. The same rule on the master leaves the master fader as the last thing
+before the output, which is what a fader is for.
+
+An effect type the build has no node for — a blur someone dropped on a bus, or a type from a newer
+version — is passed over, and the rest of the chain still sounds. Refusing the chain would cost the
+whole track its sound over one entry. A disabled effect is skipped the same way.
+
+Chains are sequences, not sets: a limiter after a boost catches what the boost made, and the same two
+the other way round boost what the limiter already held down.
+
+::: warning What the limiter's threshold is not
+`DynamicsCompressorNode` applies its own makeup gain, so the level that leaves sits above the
+threshold rather than at it — measured, at ratio 20 and no knee, a full-scale tone comes out at about
+−4 dBFS with the threshold at −12. The knob is therefore called a threshold and not a ceiling: what it
+does is real and monotone (lower it and the master gets quieter and more even), but it is not a
+brickwall guarantee, and naming it one would be naming something the node does not deliver.
+:::
+
+### Automation on a bus
+
+A bus parameter takes keyframes exactly as a clip's does, so an automated filter sweep or a ducking
+curve is the same mechanism as an animated blur. Unlike a clip's, a bus parameter can be keyed
+wherever the playhead stands: a track and a mastering chain have no clip window to fall outside of.
+
+The keyframes are resolved **in the core and nowhere else.** The graph reads the corner times to
+decide *when* to ask, then asks `Document.effectParamsAt` for the value at each of them and hands the
+result to the same scheduling used for fades. Between two corners it asks again at a few points in
+between, so a curve the core bends is followed as a polyline through the core's own values instead of
+being straightened into the line across its ends; a linear segment is untouched by this, because
+every extra sample lands back on the line it already had. A held keyframe steps rather than glides,
+because the graph also asks one flick short of each corner.
+
+The consequence worth stating: preview, export, the server renderer and the loudness reading are all
+handed the same resolver and the same `AudioGraph`. There is no second interpolation anywhere for the
+two to disagree about.
 
 ### Fades
 
@@ -102,16 +156,22 @@ top track's strip last.
 Each strip carries a volume fader, a pan control from left through centre to right, and the mute and
 solo buttons. One drag of a fader is one step in the undo history, not one per pixel.
 
+Below those sits the strip's insert chain: a button per effect the build can make a sound with, and
+once one has been added, a row per parameter with the same keyframe controls the inspector uses. A
+row reports the value the **core** resolved for the playhead, clamped to the range the effect
+declares — the same clamp the graph applies before the number reaches a filter, so what is read is
+what is heard.
+
+Last on the right, set apart by a border, is the **master strip**: the project's own fader and the
+mastering chain. Everything to its left feeds it.
+
 ## What is not here yet
 
 Named rather than hinted at, because a control that does nothing is worse than no control:
 
-- **EQ and compression on the track bus.** `Track.effects` exists in the model and serialises, but
-  `effect.add` and `effect.setParam` address clips only, so there is nowhere to persist band settings
-  yet. The audio side is short once there is: `BiquadFilterNode` and `DynamicsCompressorNode` are
-  native.
-- **A master fader.** `project.master.volume` is in the model and the graph honours it, but no command
-  writes it.
+- **Filter shapes other than a peaking band.** The equaliser cannot be a high- or low-pass, because a
+  filter type is a choice and the effect manifests carry floats only. `ParamValue` already has a
+  `choice` kind; the shelves arrive with the widget that can edit one.
 - **Live level metering.** Peak and gain-reduction meters need a per-bus analyser read per frame.
 - **Ducking, noise reduction, beat detection, spatial panning beyond stereo.**
 - **True peak (dBTP).** The peak reading is sample peak; an inter-sample peak needs oversampling.

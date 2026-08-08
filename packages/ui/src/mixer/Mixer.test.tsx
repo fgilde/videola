@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Command } from "@videola/core";
+import type { Command, Effect, EffectParamSnapshot, Project, Track } from "@videola/core";
 
 import { I18nProvider } from "../i18n/I18nProvider";
 import { makeProject, makeTrack } from "../timeline/Timeline.test";
@@ -172,5 +172,333 @@ describe("Mixer loudness readout", () => {
     fireEvent.click(screen.getByRole("button", { name: "Messe…" }));
 
     expect(onMeasure).not.toHaveBeenCalled();
+  });
+});
+
+// The two the engine actually builds a node for, written the way `AudioEffectManifest` hands them
+// over. Structural, not imported: @videola/ui does not depend on the engine, and the compiler proves
+// the two shapes agree at the point where App wires them together.
+const OFFERED = [
+  {
+    id: "eq",
+    name: { de: "Equalizer", en: "Equaliser" },
+    params: [
+      {
+        key: "frequency",
+        name: { de: "Frequenz", en: "Frequency" },
+        default: 1000,
+        min: 20,
+        max: 20000,
+      },
+      { key: "gain", name: { de: "Anhebung", en: "Gain" }, default: 0, min: -24, max: 24 },
+    ],
+  },
+  {
+    id: "limiter",
+    name: { de: "Limiter", en: "Limiter" },
+    params: [
+      { key: "threshold", name: { de: "Schwelle", en: "Threshold" }, default: -6, min: -40, max: 0 },
+    ],
+  },
+] as const;
+
+function authored(effectType: string, over: Record<string, unknown> = {}): Effect {
+  return {
+    id: `eff_${effectType}`,
+    effectType,
+    enabled: true,
+    params: {},
+    keyframes: {},
+    ...over,
+  } as unknown as Effect;
+}
+
+const withEffects = (effects: Effect[]): Track => audio("trk_1", { effects });
+
+const stripOf = (id: string): HTMLElement =>
+  document.querySelector<HTMLElement>(`[data-track-id="${id}"]`)!;
+
+function masterOf(project: Project, effects: Effect[]): Project {
+  return { ...project, master: { volume: project.master.volume, effects } } as Project;
+}
+
+// The number printed beside a slider, which is what a reader reads. The slider's own `value` is the
+// platform's opinion of what fits between its min and max, and asking it proves nothing about ours.
+const readoutFor = (label: string): string =>
+  screen.getByLabelText(label).parentElement!.querySelector(".v-param__value")!.textContent!;
+
+const snapshot = (entries: Record<string, Record<string, number>>): EffectParamSnapshot =>
+  new Map(
+    Object.entries(entries).map(([id, params]) => [
+      id,
+      new Map(Object.entries(params).map(([key, value]) => [key, { kind: "float", value }])),
+    ]),
+  ) as EffectParamSnapshot;
+
+describe("Mixer master strip", () => {
+  // The strips are keyed off tracks, so a master built as one more of them would turn up wherever
+  // the mixer counts tracks -- and its fader would aim a track command at a track that is not there.
+  it("stands apart from the track strips", () => {
+    show(<Mixer project={makeProject([audio("trk_1")])} dispatch={() => {}} />);
+
+    expect(screen.getByTestId("mixer-master")).toBeDefined();
+    expect([...document.querySelectorAll("[data-track-id]")]).toHaveLength(1);
+  });
+
+  it("sends the fader's value as the project's master volume", () => {
+    const dispatch = vi.fn<(command: Command, key?: string) => void>();
+    show(<Mixer project={makeProject([audio("trk_1")])} dispatch={dispatch} />);
+
+    fireEvent.change(screen.getByLabelText("Lautstärke Master"), { target: { value: "0.5" } });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      { type: "project.setMasterVolume", volume: 0.5 },
+      undefined,
+    );
+  });
+
+  it("shows the volume the project holds rather than a fixed one", () => {
+    const project = makeProject([audio("trk_1")]);
+    show(
+      <Mixer
+        project={{ ...project, master: { volume: 0.25, effects: [] } } as unknown as Project}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText<HTMLInputElement>("Lautstärke Master").value).toBe("0.25");
+  });
+});
+
+describe("Mixer effect chains", () => {
+  it("offers every effect the engine can build, on a track and on the master", () => {
+    show(<Mixer project={makeProject([audio("trk_1")])} effects={OFFERED} dispatch={() => {}} />);
+
+    expect(screen.getAllByRole("button", { name: "Equalizer hinzufügen" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Limiter hinzufügen" })).toHaveLength(2);
+  });
+
+  it("aims the add button at the chain it was pressed on", () => {
+    const dispatch = vi.fn<(command: Command, key?: string) => void>();
+    show(<Mixer project={makeProject([audio("trk_1")])} effects={OFFERED} dispatch={dispatch} />);
+
+    fireEvent.click(
+      within(screen.getByTestId("mixer-master")).getByRole("button", {
+        name: "Limiter hinzufügen",
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      { type: "effect.add", target: { kind: "project" }, effectType: "limiter" },
+    );
+
+    fireEvent.click(
+      within(stripOf("trk_1")).getByRole("button", { name: "Equalizer hinzufügen" }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      { type: "effect.add", target: { kind: "track", track: "trk_1" }, effectType: "eq" },
+    );
+  });
+
+  // Offering the same effect twice sends a second `effect.add`, which the core answers by pointing
+  // both sets of sliders at the one chain entry there is.
+  it("stops offering an effect the chain already carries", () => {
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("eq")])])}
+        effects={OFFERED}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(within(stripOf("trk_1")).queryByRole("button", { name: "Equalizer hinzufügen" })).toBeNull();
+    // The master has not gained one, so the offer is gone from that chain and no other.
+    expect(screen.getAllByRole("button", { name: "Equalizer hinzufügen" })).toHaveLength(1);
+  });
+
+  it("moves a parameter with a command aimed at the same chain", () => {
+    const dispatch = vi.fn<(command: Command, key?: string) => void>();
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("eq")])])}
+        effects={OFFERED}
+        dispatch={dispatch}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Frequenz"), { target: { value: "440" } });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      {
+        type: "effect.setParam",
+        target: { kind: "track", track: "trk_1" },
+        effectType: "eq",
+        key: "frequency",
+        value: { kind: "float", value: 440 },
+      },
+      undefined,
+    );
+  });
+
+  it("moves a master parameter with a command aimed at the project", () => {
+    const dispatch = vi.fn<(command: Command, key?: string) => void>();
+    show(
+      <Mixer
+        project={masterOf(makeProject([audio("trk_1")]), [authored("limiter")])}
+        effects={OFFERED}
+        dispatch={dispatch}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Schwelle"), { target: { value: "-12" } });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      {
+        type: "effect.setParam",
+        target: { kind: "project" },
+        effectType: "limiter",
+        key: "threshold",
+        value: { kind: "float", value: -12 },
+      },
+      undefined,
+    );
+  });
+
+  // The core resolves; the row reports. A slider reading the value at rest would show 9000 while a
+  // keyframed filter sat at 400, which is a lie about the one thing the row exists for.
+  it("shows the value the core resolved at the playhead, not the one at rest", () => {
+    show(
+      <Mixer
+        project={makeProject([
+          withEffects([authored("eq", { params: { frequency: { kind: "float", value: 9000 } } })]),
+        ])}
+        effects={OFFERED}
+        playhead={5}
+        effectParamsAt={() => snapshot({ eff_eq: { frequency: 400 } })}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText<HTMLInputElement>("Frequenz").value).toBe("400");
+  });
+
+  // Read off the readout and not off the slider. A range input clamps its own `value` to its own
+  // `max`, so asking the input what it holds asks the platform, not this code -- and the number
+  // beside it, which is the one anybody reads, would go on saying 99 while the filter ran at 24.
+  it("shows a stored value past the declared range clamped to it", () => {
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("eq")])])}
+        effects={OFFERED}
+        effectParamsAt={() => snapshot({ eff_eq: { gain: 99 } })}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(readoutFor("Anhebung")).toBe("24");
+  });
+
+  // Nothing clamps this one for us: a `ParamValue` of another kind reaches a range input as NaN,
+  // which empties the slider and prints nothing at all where a number belongs.
+  it("falls back to the default for a stored value that is not a number", () => {
+    const odd = new Map([
+      ["eff_eq", new Map([["frequency", { kind: "bool", value: true }]])],
+    ]) as unknown as EffectParamSnapshot;
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("eq")])])}
+        effects={OFFERED}
+        effectParamsAt={() => odd}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(readoutFor("Frequenz")).toBe("1.000");
+    expect(screen.getByLabelText<HTMLInputElement>("Frequenz").value).toBe("1000");
+  });
+
+  it("gives no row to an effect type this build cannot make a sound with", () => {
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("brightness")])])}
+        effects={OFFERED}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Frequenz")).toBeNull();
+  });
+});
+
+describe("Mixer effect keyframes", () => {
+  const held = (): Effect =>
+    authored("eq", {
+      keyframes: {
+        frequency: [{ time: 400, value: { kind: "float", value: 800 }, interp: "hold" }],
+      },
+    });
+
+  // A bus has no clip window to fall outside of, so unlike a clip's row this one is settable
+  // wherever the playhead stands -- which is what `effectParamsAt` already says by answering for
+  // track and master chains at every moment there is.
+  it("writes a keyframe wherever the playhead stands", () => {
+    const dispatch = vi.fn<(command: Command, key?: string) => void>();
+    show(
+      <Mixer
+        project={masterOf(makeProject([audio("trk_1")]), [authored("limiter")])}
+        effects={OFFERED}
+        playhead={9_000}
+        dispatch={dispatch}
+        onSeek={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Keyframe für Schwelle am Playhead"));
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "keyframe.add",
+        target: { kind: "project" },
+        effectType: "limiter",
+        key: "threshold",
+        time: 9_000,
+      }),
+    );
+  });
+
+  // A slider dragged across a keyframed parameter upserts the key it is standing on, and must not
+  // turn a hold into a ramp on the way past.
+  it("keeps a held keyframe held when the slider moves over it", () => {
+    const dispatch = vi.fn<(command: Command, key?: string) => void>();
+    show(
+      <Mixer
+        project={makeProject([withEffects([held()])])}
+        effects={OFFERED}
+        playhead={400}
+        dispatch={dispatch}
+        onSeek={() => {}}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Frequenz"), { target: { value: "500" } });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "keyframe.add", key: "frequency", interp: "hold" }),
+      undefined,
+    );
+  });
+
+  // Three arrows with nowhere to seek to are three buttons that do nothing, which is the state this
+  // milestone exists to end.
+  it("leaves the keyframe controls out where there is nowhere to seek", () => {
+    show(
+      <Mixer
+        project={makeProject([withEffects([authored("eq")])])}
+        effects={OFFERED}
+        dispatch={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText("Frequenz")).toBeDefined();
+    expect(screen.queryByLabelText("Keyframe für Frequenz am Playhead")).toBeNull();
   });
 });
