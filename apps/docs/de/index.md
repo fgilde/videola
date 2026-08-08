@@ -3,8 +3,9 @@ layout: home
 hero:
   text: Ein Video-Editor auf einem Rust-Kern
   tagline: >
-    Datenmodell, Command-Bus und Anwendungsrahmen stehen. Die Editor-Oberfläche nicht: es gibt
-    bisher keine Timeline, keine Wiedergabe, keine Effekte und keinen Export.
+    Datenmodell, Command-Bus und Anwendungsrahmen stehen, dazu eine bedienbare Timeline mit
+    Zeigergesten für Maus und Finger. Wiedergabe, Effekte und Export sind noch nicht in der
+    Oberfläche angekommen.
   image:
     src: /videola-logo.webp
     alt: Videola

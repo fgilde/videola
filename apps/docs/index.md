@@ -3,8 +3,9 @@ layout: home
 hero:
   text: A video editor built on a Rust core
   tagline: >
-    The project model, the command bus and the application shell exist. The editing surface does
-    not: there is no timeline, no playback, no effects and no export yet.
+    The project model, the command bus and the application shell exist, and so does a usable
+    timeline with one pointer path for mouse and touch. Playback, effects and export have not
+    reached the surface yet.
   image:
     src: /videola-logo.webp
     alt: Videola
