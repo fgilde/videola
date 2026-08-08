@@ -139,20 +139,68 @@ fortsetzen; der erste Druck auf Abspielen tut deshalb etwas mehr als die folgend
 ![Die Medienbibliothek auf einem Telefon, die Vorschau bleibt darüber stehen](/phone-library.png)
 
 Unter 768 px wechselt der Editor in eine Spalte: Vorschau und Transport bleiben oben stehen, eine
-Leiste darunter wechselt zwischen **Medien** und **Zeitleiste**. Das Bild muss sichtbar bleiben,
-während man darunter arbeitet, und 390 px tragen Bibliothek, Vorschau und Timeline nicht
-nebeneinander, ohne dass alle drei unbrauchbar werden.
+Leiste darunter wechselt zwischen **Medien**, **Zeitleiste** und **Eigenschaften**. Das Bild muss
+sichtbar bleiben, während man darunter arbeitet, und 390 px tragen Bibliothek, Vorschau und Timeline
+nicht nebeneinander, ohne dass alle drei unbrauchbar werden.
 
-Zwei Bereiche, nicht die sechs aus dem Entwurf. Effekte, Text, Ton und Export haben noch keine
-Fläche; ein Reiter, der nichts öffnet, ist schlimmer als ein Reiter, den es nicht gibt — jeder
-kommt an dem Tag dazu, an dem seine Fläche kommt.
+Drei Bereiche, nicht die sechs aus dem Entwurf. Text, Ton und Export haben noch keine eigene Fläche;
+ein Reiter, der nichts öffnet, ist schlimmer als ein Reiter, den es nicht gibt — jeder kommt an dem
+Tag dazu, an dem seine Fläche kommt. **Eigenschaften** ist der dritte, weil dort Effekte, Keyframes,
+Übergänge und Tempo liegen: als Streifen zwischen Transport und Reiterleiste hatte der Bereich ein
+Drittel des Schirms und konnte trotzdem keinen einzigen Effekt zeigen, was das Telefon zum Betrachter
+statt zum Werkzeug machte.
 
 Der Bereich, der gerade nicht dran ist, wird ausgehängt statt versteckt. Die Timeline fenstert ihre
 Clips nach der Breite, die sie misst, und ein `display: none`-Behälter misst null — sie käme leer
 zurück.
 
-Sonst ändert sich nichts. Derselbe Pointer-Events-Pfad trägt Maus, Stift und Finger, die
-Trefferflächen waren schon 44 px, und alles, was am Schreibtisch erreichbar ist, ist es auch hier.
+Derselbe Pointer-Events-Pfad trägt Maus, Stift und Finger, die Trefferflächen sind 44 px.
+
+### Die Kopfzeile
+
+Die Kopfzeile trägt zehn Bedienelemente, und die passen bei 44 px nicht auf 390 px. Die
+Projektaktionen — neu, Vorlage, öffnen, importieren, Spur hinzufügen — liegen hinter dem **☰** links,
+auf dem Telefon zusätzlich Export, Speichern sowie Sprach- und Themenumschalter. Auf der Leiste
+bleiben Rückgängig und Wiederholen, die beiden, nach denen ein Daumen ständig greift.
+
+Es ist ein `<details>`-Element statt eines selbstgebauten Menüs: Offen-Zustand, Tastaturbedienung und
+zugänglicher Name kommen mit.
+
+Vorher scrollte die Leiste einfach seitwärts. Jeder Knopf blieb im Grundsatz erreichbar, und im
+Ruhezustand stand die Hälfte davon außerhalb des Fensters — „Medien importie…“ am rechten Rand
+abgeschnitten. Kein Test sah das, weil kein Test fragte, ob die Leiste ins Fenster passt. Jetzt tut
+es einer: bei 390 px muss ihre `scrollWidth` gleich ihrer `clientWidth` sein.
+
+### Kamera und Galerie
+
+Auf Telefon und Tablet bietet die Bibliothek neben **Medien importieren** auch **Aufnehmen** und
+**Aus der Galerie**. Beides sind gewöhnliche `<input type="file" accept="video/*">`; das erste trägt
+zusätzlich `capture="environment"`, und genau das fragt ein Telefon nach seiner rückwärtigen Kamera
+statt nach seinem Dateisystem.
+
+Dieses Attribut ist das ganze Feature, und so weit reicht auch der Nachweis: ein headless Browser hat
+weder Kamera noch Galerie. Die Harness prüft, dass das Feld da ist, mit dem richtigen `accept` und
+`capture`, und dass es eine 44-px-Fläche ist. Was ein echtes Telefon daraus macht, ist nicht
+beobachtet.
+
+## Auf dem Tablet
+
+![Der Editor auf einem Tablet, zwei Medien auf zwei Spuren](/tablet.png)
+
+Zwischen 768 px und 1280 px — und auf allem ohne feinen Zeiger, gleich welcher Breite — legt der
+Editor sich in zwei Spalten: die Medienbibliothek links, Bild, Transport und Eigenschaften
+übereinander rechts, die Zeitleiste über die ganze Breite unten.
+
+Zwei Spalten statt der drei vom Schreibtisch, weil ein Tablet im Hochformat knapp an Breite und
+reichlich an Höhe ist. Bei 834 px ließen drei Flächen nebeneinander der mittleren rund 330 px —
+schmaler als der Transport selbst, und die Zeitanzeige brach mitten in der Ziffer ab.
+
+Bibliothek und Zeitleiste sind gleichzeitig sichtbar, und das ist der Sinn des Modus: nur so lässt
+sich **ein Medium aus der Bibliothek auf eine Spur ziehen**, was das Telefon nicht anbieten kann,
+weil beide dort nie zusammen zu sehen sind. Eintrag drücken, über die Zeitleiste führen — die
+Zielspur leuchtet auf und eine Linie zeigt, wo der Clip beginnen würde — und loslassen. Ein Kommando,
+also ein Undo-Schritt. Der Knopf **Auf die Zeitleiste** bleibt daneben bestehen: ein Zug ist nicht
+mit der Tastatur bedienbar und wäre sonst der einzige Weg auf die Zeitleiste.
 
 ## Speichern
 
@@ -174,15 +222,24 @@ Bild am ersten Keyframe auf 0 zurück, in der Mitte auf die Hälfte und am zweit
 ursprüngliche Helligkeit — die Interpolation ist die des Kerns, die Pixel sind die des Compositors,
 und beide Hälften laufen in einem Durchgang.
 
-Das Phone-Layout wird auf einem echten 390×844-Viewport bei doppelter Pixeldichte gefahren, über das
-Devtools-Protokoll: Chrome unter Windows verweigert ein Fenster schmaler als 500 CSS-Pixel, mit
-`--window-size` allein hätte man also ein kleines Tablet vermessen und Telefon dazu gesagt. Import,
-ein Fingerzug, Rückgängig, beide Bereiche und die Wiedergabe werden dort geprüft, und die
-Schirmbilder oben stammen aus diesem Lauf.
+Das Phone-Layout wird auf einem echten 390×844-Viewport bei doppelter Pixeldichte gefahren, das
+Tablet auf 834×1112, beides über das Devtools-Protokoll mit eingeschalteter Berührung: Chrome unter
+Windows verweigert ein Fenster schmaler als 500 CSS-Pixel und beschneidet das Schirmbild, statt es zu
+skalieren — mit `--window-size` allein hätte man also ein kleines Tablet vermessen und Telefon dazu
+gesagt. Auf dem Telefon werden Import, ein Fingerzug, Rückgängig, jeder Reiter, ein auf einen Clip
+gelegter Effekt und die Wiedergabe geprüft; auf dem Tablet zwei Medien auf zwei Spuren, der Zug aus
+der Bibliothek auf eine Spur, und dass Bild, Transport und Flächen jeweils eine Box im Fenster
+bekommen. Die Schirmbilder oben stammen aus diesen Läufen.
+
+Vorschaubilder werden als Bilder geprüft, nicht als Elemente: das `<img>` muss eine `naturalWidth`
+ungleich null bei 160×90 melden, die beiden Medien im Tablet-Lauf müssen sich voneinander
+unterscheiden, und ein Standbild darf keine einzelne Fläche einer Farbe sein — ein Platzhalter, ein
+schwarzes Bild und ein fehlgeschlagenes Dekodieren fallen daran alle durch.
 
 Nicht geprüft: Lippensynchronität, weil headless Chrome keine Tonausgabe hat; die dauerhafte
-Bildrate bei 1080p; das Zurücklesen der Pixel in Telefongröße — der Zeichenpuffer ist fort, sobald
-die Seite ihn komponiert hat, und der Telefonlauf braucht die Wanduhr, damit sein Layout verlässlich
-ist, der Screenshot ist also der Beleg, dass die Vorschau auch dort dekodiert; und ein über den
-Inspector gesetzter Übergang ist nie gezeichnet worden, weil eine Überblendung zwei überlappende
-Clips braucht und die Harness eine Datei ablegt.
+Bildrate bei 1080p; was eine echte Kamera oder Galerie mit `capture` tut, weil ein headless Browser
+beides nicht hat; das Zurücklesen der Pixel in Telefongröße — der Zeichenpuffer ist fort, sobald die
+Seite ihn komponiert hat, und der Telefonlauf braucht die Wanduhr, damit sein Layout verlässlich ist,
+der Screenshot ist also der Beleg, dass die Vorschau auch dort dekodiert; und ein über den Inspector
+gesetzter Übergang ist nie gezeichnet worden, weil eine Überblendung zwei überlappende Clips über
+demselben Schnitt braucht.
