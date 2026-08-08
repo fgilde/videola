@@ -1,4 +1,6 @@
 import { clampParam, effect } from "../effects/registry";
+import { paintsGenerator } from "../generate/generator";
+import { generatorMotion } from "../generate/motion";
 
 import type {
   BlendMode,
@@ -130,9 +132,12 @@ function drawItem(
   params: EffectParamSnapshot,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
-  const transform = clip.transform;
+  // A title's in, out and loop animation is a transform, so it arrives here rather than in the
+  // pixels -- which is also why a fade-in at its very first moment drops the clip from the list and
+  // spares the decoder a frame nobody sees.
+  const transform = generatorMotion(clip, at, frame);
   if (transform.opacity <= 0) return undefined;
-  const source = sourceSize(clip, library);
+  const source = sourceSize(clip, library, frame);
   if (source === undefined) return undefined;
   const uv = croppedRect(transform);
   if (uv[2] <= 0 || uv[3] <= 0) return undefined;
@@ -226,9 +231,17 @@ function uniforms(
   return values;
 }
 
-// ponytail: generators and compound clips have no size and are dropped. Solids and text are M3,
-// and a compound clip needs its own pass over a nested timeline.
-function sourceSize(clip: Clip, library: readonly MediaAsset[]): Size | undefined {
+// A generator fills the frame, because that is the only size it has: text, a solid and a gradient are
+// all authored against the output rather than against a source of their own, which is why every
+// measurement in a text style is a fraction. A transform still moves and scales it from there.
+//
+// ponytail: a compound clip has no size either and is still dropped -- it needs its own pass over a
+// nested timeline. Generators the renderer cannot paint are dropped too, so nothing appears as an
+// empty rectangle promising a picture that is not coming.
+function sourceSize(clip: Clip, library: readonly MediaAsset[], frame: Size): Size | undefined {
+  if (clip.source.kind === "generator") {
+    return paintsGenerator(clip.source.generator) ? frame : undefined;
+  }
   if (clip.source.kind !== "media") return undefined;
   const media = clip.source.media;
   // A scan beats an index here: a handful of clips are visible at a time, and building a map of

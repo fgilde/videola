@@ -496,6 +496,57 @@ describe("a transition in the draw list", () => {
   });
 });
 
+describe("a generator clip in the draw list", () => {
+  function generator(source: unknown, over: Record<string, unknown> = {}): Clip {
+    return clip({ source, ...over });
+  }
+
+  const TITLE = {
+    kind: "generator",
+    generator: { type: "text", content: "Hello", style: {} },
+  };
+
+  // A generator has no source of its own, so it takes the frame's size -- and the proof is the matrix
+  // rather than the number, because a size that does not reach the matrix reaches nothing.
+  it("fills the frame, whatever the frame is", () => {
+    const wide = only([generator(TITLE)], 0);
+    expect(corner(wide, 0, 0)).toEqual([-1, 1]);
+    expect(corner(wide, 1, 1)).toEqual([1, -1]);
+  });
+
+  it("leaves out a generator this renderer cannot paint", () => {
+    const shape = { kind: "generator", generator: { type: "shape", shape: "star", color: "#fff" } };
+
+    expect(list(project([track("trk_1", [generator(shape)])]), 0).items).toEqual([]);
+  });
+
+  // The animation is a transform, so the first moment of a fade-in is a clip at zero opacity -- and a
+  // clip at zero opacity is not drawn at all, which is also a picture nobody has to paint.
+  it("drops a title whose fade-in has not started", () => {
+    const fading = generator({
+      kind: "generator",
+      generator: { type: "text", content: "Hello", style: { animateIn: "fade" } },
+    });
+
+    expect(list(project([track("trk_1", [fading])]), 0).items).toEqual([]);
+    expect(list(project([track("trk_1", [fading])]), SECOND / 2).items).toHaveLength(1);
+  });
+
+  it("carries a title's fade into the mix of a transition on the same clip", () => {
+    const fading = generator(
+      {
+        kind: "generator",
+        generator: { type: "text", content: "Hello", style: { animateIn: "fade",
+          animateInSeconds: 1 } },
+      },
+      { transitionIn: transition() },
+    );
+
+    // Halfway through a half-second dissolve, at a fade whose smoothstep has reached 0.15625.
+    expect(only([fading], SECOND / 4).mix?.values.progress).toBeCloseTo(0.5 * 0.15625);
+  });
+});
+
 describe("a separable effect in the draw list", () => {
   // One authored effect, two draws, and the order of the sweeps is what makes it separable rather
   // than the same blur applied twice along one axis.

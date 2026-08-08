@@ -676,6 +676,197 @@ test("no transition lets the page through", () => {
   }
 });
 
+// A generator has no decoder, so its picture is painted rather than fetched. These checks drive the
+// same GeneratorFrames the preview and the export both use, and read the pixels it produced.
+function generated(generator, over) {
+  const spec = over || {};
+  const size = spec.size || 32;
+  const scene = project(size, size, spec.background || "#ff0000", []);
+  scene.timeline.tracks[0] = { id: "trk_0", kind: "video", hidden: false, clips: [{
+    id: "clp_0", source: { kind: "generator", generator }, start: 0,
+    duration: spec.duration || 1000, blend: "normal", effects: [],
+    transform: transform(spec.t) }] };
+  const canvas = canvasOf(size, size);
+  const context = R.createContext(canvas);
+  const compositor = new R.Compositor(context);
+  const frames = new R.GeneratorFrames();
+  const at = spec.at || 0;
+  const pictures = frames.pictures(scene, new Set(["clp_0"]));
+  compositor.render(scene, at, pictures, new Map());
+  const pixels = compositor.readPixels();
+  frames.close();
+  return { canvas, frames, scene, compositor, at: reader(pixels, size, size) };
+}
+
+test("a solid generator paints the frame", () => {
+  check("an opaque solid covers the background",
+    generated({ type: "solid", color: "#0000ff" }).at(16, 16), [0, 0, 255, 255]);
+  check("a colour the format cannot read falls back to black rather than to nothing",
+    generated({ type: "solid", color: "rgb(0 255 0)" }).at(16, 16), [0, 0, 0, 255]);
+});
+
+// A canvas holds straight alpha and the compositor's clip shader premultiplies on the way into the
+// chain. If a canvas-painted frame arrived already multiplied it would be multiplied twice, and a
+// half-transparent solid over red would come back at 64 rather than 128.
+test("a painted frame goes through the premultiplication once", () => {
+  check("a half-transparent green solid over red",
+    generated({ type: "solid", color: "#00ff0080" }).at(16, 16), [128, 128, 0, 255]);
+});
+
+// `check` only honours a tolerance between two arrays, so a single number that is allowed to wobble
+// travels as an array of one.
+function near(value) {
+  return [value];
+}
+
+test("a gradient runs across the frame at its own angle", () => {
+  const across = generated({ type: "gradient", from: "#000000", to: "#ffffff", angle: 0 });
+  check("dark at the left edge", near(across.at(0, 16)[0]), near(4), 6);
+  check("mid in the middle", near(across.at(16, 16)[0]), near(132), 6);
+  check("light at the right edge", near(across.at(31, 16)[0]), near(251), 6);
+  check("and flat down the frame", near(across.at(16, 2)[0]), near(across.at(16, 29)[0]), 2);
+
+  const down = generated({ type: "gradient", from: "#000000", to: "#ffffff", angle: 90 });
+  check("ninety degrees runs down the picture, not up it",
+    [down.at(16, 2)[0] < down.at(16, 29)[0], down.at(2, 16)[0]], [true, down.at(29, 16)[0]]);
+});
+
+// The title itself. Nothing here asserts a glyph shape -- what is measured is that a title puts ink
+// where its style says and leaves the rest of the frame alone, which is the whole of "text became
+// pixels".
+const TITLE = { type: "text", content: "III", style: { color: "#ffffff", fontSize: 0.5,
+  background: "", animateIn: "none" } };
+
+function inked(shot, size) {
+  let lit = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) if (shot.at(x, y)[1] > 40) lit += 1;
+  }
+  return lit;
+}
+
+// How much ink, rather than how many pixels carry any. Opacity scales the one and barely touches
+// the other.
+function energy(shot, size) {
+  let total = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) total += shot.at(x, y)[1];
+  }
+  return total;
+}
+
+test("a text generator puts ink on the frame", () => {
+  const shot = generated(TITLE);
+  const lit = inked(shot, 32);
+  check("there is ink", lit > 0, true);
+  check("and it is not the whole frame", lit < 32 * 32, true);
+  check("the corner is still background", shot.at(0, 0), [255, 0, 0, 255]);
+});
+
+test("an empty title paints nothing at all", () => {
+  const blank = generated({ type: "text", content: "   ", style: {} });
+  check("no ink anywhere", inked(blank, 32), 0);
+  check("and the background is untouched", blank.at(16, 16), [255, 0, 0, 255]);
+});
+
+// Every measurement in a text style is a fraction of the frame, so the same style rasterises to the
+// same picture at any output size. A pixel-valued font size would shrink the title as the export grew.
+test("a title keeps its proportions when the frame changes size", () => {
+  const small = generated(TITLE, { size: 32 });
+  const large = generated(TITLE, { size: 64 });
+  const share = (shot, size) => inked(shot, size) / (size * size);
+  check("the same share of the frame is inked", near(share(large, 64)), near(share(small, 32)), 0.03);
+});
+
+test("a title moves where its style puts it", () => {
+  const styled = (over) => generated({ type: "text", content: "III",
+    style: Object.assign({}, TITLE.style, over) });
+  const high = styled({ y: 0.2 });
+  const low = styled({ y: 0.8 });
+  check("high on the frame leaves the bottom clear", inked(low, 32) > 0, true);
+  check("and low leaves the top clear",
+    [high.at(16, 28)[1] > 40, low.at(16, 4)[1] > 40], [false, false]);
+});
+
+// How much of the background is still showing. Counting is what makes this robust against where a
+// glyph happens to fall: the box's job is to hide the picture behind the title, not to be blue at one
+// particular pixel.
+function background(shot, size) {
+  let seen = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const p = shot.at(x, y);
+      if (p[0] > 200 && p[1] < 40 && p[2] < 40) seen += 1;
+    }
+  }
+  return seen;
+}
+
+test("a title's background box covers what is behind it", () => {
+  const style = { color: "#ffffff", fontSize: 0.3, padding: 0.5 };
+  const bare = generated({ type: "text", content: "III", style });
+  const boxed = generated({ type: "text", content: "III",
+    style: Object.assign({ background: "#0000ff" }, style) });
+  check("the box hides a good deal of what was behind it",
+    background(boxed, 32) < background(bare, 32) - 50, true);
+  check("but not the whole frame", background(boxed, 32) > 0, true);
+  check("and the corner of the frame is still background", boxed.at(0, 0), [255, 0, 0, 255]);
+});
+
+// The claim the whole design rests on: what animates a title is its transform, not its glyphs. So a
+// faded title is the same ink at a lower opacity, and the cache underneath it never repaints.
+test("a title fades through its transform", () => {
+  const fading = { type: "text", content: "III",
+    style: { color: "#ffffff", fontSize: 0.5, animateIn: "fade", animateInSeconds: 1 } };
+  const SECOND = 705600000;
+  const over = { duration: 4 * SECOND, background: "#000000" };
+  const full = generated(fading, Object.assign({ at: SECOND }, over));
+  const half = generated(fading, Object.assign({ at: SECOND / 2 }, over));
+  check("some ink at full opacity", inked(full, 32) > 0, true);
+  // A fade halves how bright the ink is, not how much of it there is -- counting lit pixels sees
+  // almost no difference, which is a check that would have passed with the fade wired to nothing.
+  check("halfway through the fade is half the ink",
+    near(2 * energy(half, 32)), near(energy(full, 32)), energy(full, 32) * 0.05);
+});
+
+// One clip, two moments, one cache: the second moment must not repaint and must not hand back a
+// closed frame. A frame closed under the compositor uploads as an error nothing throws on.
+test("a generator's picture survives a second frame", () => {
+  const scene = project(32, 32, "#ff0000", []);
+  scene.timeline.tracks[0] = { id: "trk_0", kind: "video", hidden: false, clips: [{
+    id: "clp_0", source: { kind: "generator", generator: { type: "solid", color: "#0000ff" } },
+    start: 0, duration: 10000, blend: "normal", effects: [], transform: transform() }] };
+  const context = R.createContext(canvasOf(32, 32));
+  const compositor = new R.Compositor(context);
+  const frames = new R.GeneratorFrames();
+  const shot = (at) => {
+    compositor.render(scene, at, frames.pictures(scene, new Set(["clp_0"])), new Map());
+    return reader(compositor.readPixels(), 32, 32)(16, 16);
+  };
+  check("the first frame is the solid", shot(0), [0, 0, 255, 255]);
+  check("and so is the second", shot(500), [0, 0, 255, 255]);
+  check("with the same picture handed back rather than a new one",
+    frames.pictures(scene, new Set(["clp_0"])).get("clp_0"),
+    frames.pictures(scene, new Set(["clp_0"])).get("clp_0"));
+  check("and no driver error", context.gl.getError(), 0);
+  frames.close();
+});
+
+// A clip that has left the screen keeps a full-frame picture alive otherwise, and one scrub through a
+// timeline of titles would hold one for every one of them.
+test("a generator's picture is let go when its clip leaves the screen", () => {
+  const scene = project(32, 32, "#ff0000", []);
+  scene.timeline.tracks[0] = { id: "trk_0", kind: "video", hidden: false, clips: [{
+    id: "clp_0", source: { kind: "generator", generator: { type: "solid", color: "#0000ff" } },
+    start: 0, duration: 1000, blend: "normal", effects: [], transform: transform() }] };
+  const frames = new R.GeneratorFrames();
+  const held = frames.pictures(scene, new Set(["clp_0"])).get("clp_0");
+  frames.pictures(scene, new Set());
+  // `format` is null on a closed frame and stays defined there, which is what makes it the probe.
+  check("the frame it was holding is closed", held.format, null);
+  frames.close();
+});
+
 test("a canvas resized behind our back", () => {
   const { canvas, compositor } = rig(8, 8, "#ff0000", [{}]);
   canvas.width = 16;

@@ -8,6 +8,10 @@ export type { AudioTrackInfo, MediaInfo, TrackId, VideoTrackInfo } from "./decod
 export { DEFAULT_FRAME_BUDGET_BYTES, FrameCache } from "./decode/frame-cache";
 export { clampParam, effect, effectManifests } from "./effects/registry";
 export type { EffectManifest, EffectParam } from "./effects/registry";
+export { GeneratorFrames, paintGenerator, paintsGenerator } from "./generate/generator";
+export { generatorMotion } from "./generate/motion";
+export { paintText, textStyle } from "./generate/text";
+export type { TextMove, TextStyle } from "./generate/text";
 export { VideoSource } from "./decode/video-source";
 export { audioChunks, runExport } from "./export/encode";
 export type { ExportAudio, ExportFrame, ExportHooks, ExportRequest } from "./export/encode";

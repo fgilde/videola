@@ -12,6 +12,7 @@ import type {
 import { Clock } from "./clock";
 import type { ClockSource } from "./clock";
 import { VideoSource } from "./decode/video-source";
+import { GeneratorFrames } from "./generate/generator";
 import { Compositor } from "./render/compositor";
 import { createContext } from "./render/context";
 import { drawList } from "./render/draw-list";
@@ -57,6 +58,7 @@ export class Playback {
   #project?: Project;
   #hashes: ReadonlyMap<string, string> = new Map();
   #sources = new Map<string, Promise<FrameSource | undefined>>();
+  #generated = new GeneratorFrames();
   #rolling = false;
   #painting = false;
   #due?: Time;
@@ -158,6 +160,7 @@ export class Playback {
   dispose(): void {
     this.pause();
     for (const hash of [...this.#sources.keys()]) this.#release(hash);
+    this.#generated.close();
     this.#detach();
     this.#project = undefined;
   }
@@ -225,11 +228,21 @@ export class Playback {
     at: Time,
     params: EffectParamSnapshot,
   ): Promise<Map<string, VideoFrame>> {
+    const items = drawList(project, at, params).items;
     const sourceTimes = this.#sourceTimes(at);
     const found = await Promise.all(
-      drawList(project, at, params).items.map((item) => this.#frameFor(item.clip, sourceTimes)),
+      items.map((item) => this.#frameFor(item.clip, sourceTimes)),
     );
-    return new Map(found.filter((entry) => entry !== undefined));
+    const frames = new Map(found.filter((entry) => entry !== undefined));
+    // Painted rather than decoded, and painted last: nothing is awaited after this, so a generator's
+    // picture cannot go stale between here and the upload the way a decoded one can.
+    for (const [clip, picture] of this.#generated.pictures(
+      project,
+      new Set(items.map((item) => item.clip)),
+    )) {
+      frames.set(clip, picture);
+    }
+    return frames;
   }
 
   async #frameFor(

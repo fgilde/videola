@@ -14,6 +14,7 @@ import type { EffectParamSnapshot, Project, Rate, Time } from "@videola/core";
 import type { AudioEncodingConfig, OutputFormat, VideoEncodingConfig } from "mediabunny";
 
 import { VideoSource } from "../decode/video-source";
+import { GeneratorFrames } from "../generate/generator";
 import { clipHashes } from "../playback";
 import { Compositor } from "../render/compositor";
 import { createContext } from "../render/context";
@@ -72,6 +73,7 @@ export async function runExport(
   const context = createContext(canvas);
   const compositor = new Compositor(context);
   const sources = new SourcePool(hooks.createFrameSource ?? ((): FrameSource => new VideoSource()));
+  const generated = new GeneratorFrames();
   const video = new CanvasSource(canvas, videoEncoding(request));
   output.addVideoTrack(video, { frameRate: request.fps.numerator / request.fps.denominator });
   const audio = request.audio && new AudioSampleSource(audioEncoding(request));
@@ -79,7 +81,13 @@ export async function runExport(
 
   try {
     await output.start();
-    await writeVideo(request, { compositor, video, sources, onProgress: hooks.onProgress });
+    await writeVideo(request, {
+      compositor,
+      video,
+      sources,
+      generated,
+      onProgress: hooks.onProgress,
+    });
     if (audio !== undefined && request.audio !== undefined) {
       await writeAudio(audio, request.audio);
     }
@@ -91,6 +99,7 @@ export async function runExport(
     throw error;
   } finally {
     sources.close();
+    generated.close();
     compositor.dispose();
     context.dispose();
   }
@@ -103,6 +112,7 @@ interface VideoPass {
   compositor: Compositor;
   video: CanvasSource;
   sources: SourcePool;
+  generated: GeneratorFrames;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -112,7 +122,7 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   const origin = request.frames[0]!.at;
   let index = 0;
   for (const frame of request.frames) {
-    const pictures = await gather(pass.sources, hashes, request.project, frame);
+    const pictures = await gather(pass, hashes, request.project, frame);
     // Nothing is awaited between the last frame arriving and the upload, and `CanvasSource.add`
     // captures the canvas before it returns -- so the pictures are alive for the render and the
     // render is on the canvas before anything else can touch it.
@@ -123,18 +133,22 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   }
 }
 
+// Both halves of the picture, through the same draw list the preview uses: decoded media and painted
+// generators. Two lists would be two answers to "what is on screen", and a title that appears in the
+// preview and not in the file is the kind of divergence nobody finds until the file is delivered.
 async function gather(
-  sources: SourcePool,
+  pass: VideoPass,
   hashes: ReadonlyMap<string, string>,
   project: Project,
   frame: ExportFrame,
 ): Promise<Map<string, VideoFrame>> {
-  const pictures = new Map<string, VideoFrame>();
-  for (const item of drawList(project, frame.at, frame.params).items) {
+  const items = drawList(project, frame.at, frame.params).items;
+  const pictures = pass.generated.pictures(project, new Set(items.map((item) => item.clip)));
+  for (const item of items) {
     const hash = hashes.get(item.clip);
     const at = frame.sources.get(item.clip);
     if (hash === undefined || at === undefined) continue;
-    const source = await sources.get(item.clip, hash);
+    const source = await pass.sources.get(item.clip, hash);
     const picture = await source?.frameAt(at);
     if (picture !== undefined) pictures.set(item.clip, picture);
   }
