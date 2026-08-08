@@ -29,6 +29,9 @@ importers:
       '@videola/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@videola/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@videola/media':
         specifier: workspace:*
         version: link:../../packages/media

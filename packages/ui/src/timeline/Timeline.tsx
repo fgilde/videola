@@ -202,7 +202,7 @@ export function Timeline({
   );
 }
 
-function timelineEnd(project: Project): Time {
+export function timelineEnd(project: Project): Time {
   return project.timeline.tracks.reduce((longest, track) => {
     // Clips are kept sorted by start, but the last one is not necessarily the longest.
     const end = track.clips.reduce((last, clip) => Math.max(last, clip.start + clip.duration), 0);

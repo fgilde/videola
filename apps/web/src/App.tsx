@@ -4,13 +4,30 @@ import {
   cmd,
   createWasmBackend,
   VideolaDocument,
+  type ClipId,
   type Command,
   type LoadWarning,
   type Project,
   type Time,
 } from "@videola/core";
+import {
+  EXPORT_FORMATS,
+  formatSupport,
+  startExport,
+  type ExportHandle,
+  type ExportRange,
+} from "@videola/engine";
 import { mediaForProject } from "@videola/media";
-import { AppShell, Timeline, useI18n } from "@videola/ui";
+import {
+  AppShell,
+  ExportDialog,
+  Timeline,
+  timelineEnd,
+  useI18n,
+  type ExportFormatChoice,
+  type ExportProgress,
+  type ExportSelection,
+} from "@videola/ui";
 
 type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed";
 
@@ -27,6 +44,12 @@ export function App(): ReactElement {
   const [flags, setFlags] = useState({ canUndo: false, canRedo: false });
   const [error, setError] = useState<ShellError>();
   const [playhead, setPlayhead] = useState<Time>(0);
+  const [selectedClip, setSelectedClip] = useState<ClipId>();
+  const [exporting, setExporting] = useState(false);
+  const [formats, setFormats] = useState<ExportFormatChoice[]>([]);
+  const [progress, setProgress] = useState<ExportProgress>();
+  const [exportError, setExportError] = useState<string>();
+  const runningExport = useRef<ExportHandle>(undefined);
   const nextErrorId = useRef(0);
 
   // A stable identity per report, so an identical repeat error still replaces the DOM node
@@ -131,6 +154,74 @@ export function App(): ReactElement {
     }
   }, [doc, project, reportError]);
 
+  // Asked once the dialog opens and once per project size, because the answer depends on both the
+  // machine and the resolution -- a 4K H.264 encode can be refused where 1080p is fine.
+  useEffect(() => {
+    if (!exporting || project === undefined) return;
+    let stale = false;
+    void formatSupport({
+      width: project.settings.width,
+      height: project.settings.height,
+      sampleRate: project.settings.sampleRate,
+      channels: 2,
+    }).then((support) => {
+      if (stale) return;
+      setFormats(support.map((entry) => ({ id: entry.format.id, ...entry })));
+    });
+    return () => {
+      stale = true;
+    };
+  }, [exporting, project]);
+
+  const beginExport = useCallback(
+    (selection: ExportSelection) => {
+      const format = EXPORT_FORMATS.find((entry) => entry.id === selection.formatId);
+      if (doc === undefined || project === undefined || format === undefined) return;
+      setExportError(undefined);
+      setProgress({ done: 0, total: 1 });
+      const handle = startExport({
+        project,
+        sourceTimes: doc.sourceTimesAt,
+        options: {
+          format,
+          width: selection.width,
+          height: selection.height,
+          fps: selection.fps,
+          videoBitrate: selection.videoBitrate,
+          audioBitrate: selection.audioBitrate,
+          range: rangeOf(project, selection.range === "selection" ? selectedClip : undefined),
+        },
+        onProgress: (done, total) => {
+          if (runningExport.current === handle) setProgress({ done, total });
+        },
+      });
+      runningExport.current = handle;
+      const name = project.meta.title || project.meta.id;
+      handle.result.then(
+        (result) => {
+          // A cancelled run's rejection and a finished run's file can both be in flight while the
+          // next one is already going. Whichever handle is current owns the screen.
+          if (runningExport.current !== handle) return;
+          runningExport.current = undefined;
+          downloadBlob(result.bytes, `${name}.${result.extension}`, result.mimeType);
+          setProgress(undefined);
+          setExporting(false);
+        },
+        (err: unknown) => {
+          if (runningExport.current !== handle) return;
+          runningExport.current = undefined;
+          setProgress(undefined);
+          setExportError(exportReason(err));
+        },
+      );
+    },
+    [doc, project, selectedClip],
+  );
+
+  const cancelExport = useCallback(() => {
+    runningExport.current?.cancel();
+  }, []);
+
   const open = useCallback(async () => {
     const file = await pickFile(".videola");
     if (file === undefined) return;
@@ -152,6 +243,7 @@ export function App(): ReactElement {
       onNew={() => window.location.reload()}
       onOpen={() => void open()}
       onImport={doc === undefined ? undefined : addTrack}
+      onExport={doc === undefined ? undefined : () => setExporting(true)}
       onSave={doc === undefined ? undefined : save}
       onUndo={undo}
       onRedo={redo}
@@ -167,6 +259,19 @@ export function App(): ReactElement {
           playhead={playhead}
           dispatch={edit}
           onSeek={setPlayhead}
+          onSelectionChange={setSelectedClip}
+        />
+      )}
+      {exporting && project !== undefined && (
+        <ExportDialog
+          formats={formats}
+          settings={project.settings}
+          hasSelection={selectedClip !== undefined}
+          progress={progress}
+          error={exportError}
+          onExport={beginExport}
+          onCancel={cancelExport}
+          onClose={() => setExporting(false)}
         />
       )}
     </AppShell>
@@ -226,8 +331,31 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function downloadBlob(bytes: Uint8Array<ArrayBuffer>, filename: string): void {
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+// The whole project, or the one clip that is selected. A range is a pair of instants either way,
+// so the export never learns that a selection was involved.
+function rangeOf(project: Project, clip: ClipId | undefined): ExportRange {
+  const selected = project.timeline.tracks
+    .flatMap((track) => track.clips)
+    .find((entry) => entry.id === clip);
+  if (selected === undefined) return { from: 0, to: timelineEnd(project) };
+  return { from: selected.start, to: selected.start + selected.duration };
+}
+
+// Everything the export throws is a catalogue key. Anything else came from the browser and is of
+// no use on screen, so it keeps its place in the console and the user is told what is true.
+function exportReason(error: unknown): string {
+  if (!(error instanceof Error)) return "error.exportFailed";
+  if (/^(error|export)\./.test(error.message)) return error.message;
+  console.error(error);
+  return "error.exportFailed";
+}
+
+function downloadBlob(
+  bytes: Uint8Array<ArrayBuffer>,
+  filename: string,
+  type = "application/zip",
+): void {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
   const anchor = window.document.createElement("a");
   anchor.href = url;
   anchor.download = filename;

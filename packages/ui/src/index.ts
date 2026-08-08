@@ -8,5 +8,6 @@ export * from "./layout/detectLayoutMode";
 export * from "./layout/useLayoutMode";
 export * from "./timeline/Timeline";
 export * from "./timeline/geometry";
+export * from "./export/ExportDialog";
 export * from "./shell/AppShell";
 export * from "./shell/TopBar";

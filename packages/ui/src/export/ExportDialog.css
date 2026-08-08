@@ -1,0 +1,81 @@
+.v-export__scrim {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 55%);
+  z-index: 20;
+}
+
+.v-export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-3);
+  width: min(28rem, calc(100vw - 2 * var(--v-space-4)));
+  /* Taller than the phone viewport once the notes are showing, so the panel scrolls rather than
+     pushing its own buttons off the bottom of the screen. */
+  max-height: calc(100dvh - 2 * var(--v-space-4));
+  overflow-y: auto;
+  padding: var(--v-space-4);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-export__title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.v-export__note {
+  margin: 0;
+  padding: var(--v-space-2) var(--v-space-3);
+  background: var(--v-surface);
+  border-radius: var(--v-radius-md);
+  font-size: 0.9rem;
+}
+
+.v-export__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.v-export__row input[type="number"],
+.v-export__row select {
+  min-height: var(--v-touch-target);
+  min-width: 9rem;
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+}
+
+.v-export__row legend {
+  padding: 0;
+}
+
+.v-export__row label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  min-height: var(--v-touch-target);
+  margin-left: var(--v-space-3);
+}
+
+.v-export__progress {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-export__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--v-space-2);
+}
