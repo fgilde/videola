@@ -54,7 +54,8 @@ export function MotionPath({ frame, path, keys, onDragKey, onDrop }: MotionPathP
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
       } catch {
-        // A pointer that has already gone is not one to capture; the move handler reads the ref.
+        // A pointer that has already gone is not one to capture. The move handler reads the same
+        // ref either way, so nothing here depends on the capture succeeding.
       }
     };
   }

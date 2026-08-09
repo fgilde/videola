@@ -70,6 +70,17 @@ if (!existsSync(join(dist, "index.html"))) {
   throw new Error("no build to drive -- run `pnpm --filter videola-web build` first");
 }
 
+// The driver is a classic script, so one duplicate `const` in a five-hundred-line function does not
+// fail a line: it fails the file. Nothing then runs, nothing reports, and every run times out
+// looking exactly like a page that hung -- which cost an evening once. Parsed here, before a
+// browser is launched, so the message names the mistake instead of the symptom.
+try {
+  // eslint-disable-next-line no-new-func
+  new Function(readFileSync(join(here, "driver.js"), "utf8"));
+} catch (error) {
+  throw new Error(`driver.js does not parse: ${error.message}`);
+}
+
 let deliver = () => undefined;
 // The page decides what is worth a picture: only it knows when the library is open or the
 // playhead is running. Node holds the devtools connection, so the request comes back out here.

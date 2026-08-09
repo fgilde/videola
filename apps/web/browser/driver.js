@@ -630,11 +630,20 @@ async function announce() {
       path.getAttribute("points").split(" ").length, 20);
     check("with a handle on every key", all("[data-path-key]").length, 2);
 
-    // Dragging a key is not driven here. Synthesised on this handle it takes the page down with
-    // it -- reproducibly, and not through anything the checks can see: no banner, no console, and
-    // no report. What a drag reports is measured in MotionPath.test.tsx against a stubbed box, and
-    // what it writes is one `keyframe.add` per key at the instant that key already sits at. Left
-    // as an open question in STATE.md rather than as a check that hangs the run.
+    // Dragging one moves the clip at that instant and nowhere else, which is what makes it a path
+    // rather than a second way of setting the transform.
+    const held = Number(rowSlider("Position X").value);
+    const handle = q('[data-path-key="1"]');
+    const spot = handle.getBoundingClientRect();
+    const grabbed = { x: spot.left + spot.width / 2, y: spot.top + spot.height / 2 };
+    pointer("pointerdown", handle, { clientX: grabbed.x, clientY: grabbed.y });
+    pointer("pointermove", q(".v-path__svg"), { clientX: grabbed.x - 60, clientY: grabbed.y });
+    pointer("pointerup", q(".v-path__svg"), { clientX: grabbed.x - 60, clientY: grabbed.y });
+    await sleep(300);
+    check("dragging a path key raised nothing", banner(), "");
+    check("and it moved the clip at that instant",
+      Number(rowSlider("Position X").value) !== held, true);
+    check("without minting a key of its own", all("[data-path-key]").length, 2);
 
     // Put the timeline back the way the rest of the run expects to find it: no keys, no path, and
     // the playhead at the start. A check that leaves its own state behind is a check that breaks
