@@ -151,7 +151,12 @@ function Entry({
   onArm: ((media: MediaId) => void) | undefined;
 }): ReactElement {
   const { t, formatTimecode } = useI18n();
-  const grabbable = draggable && !missing && onGrab !== undefined;
+  // A lookup table is a library entry that is never a clip: it has no picture, no length and
+  // nothing a track could show. Every control that would put it on the timeline is therefore
+  // absent rather than disabled -- the same rule the inspector follows for a slider that would
+  // move a number the renderer never reads.
+  const placeable = asset.kind !== "lut";
+  const grabbable = draggable && placeable && !missing && onGrab !== undefined;
 
   // Only which medium is under the pointer is reported. Whether that becomes a drop, on which
   // track and at which instant, is the timeline's decision -- all three are its geometry, and one
@@ -184,7 +189,11 @@ function Entry({
         {asset.originalName}
       </span>
       <span className="v-library__facts">
-        <span>{formatTimecode(timeToSeconds(asset.duration ?? 0), asset.fps ?? fps)}</span>
+        {/* A table has no length, and a timecode of zero beside it would read as one that does. */}
+        {placeable && (
+          <span>{formatTimecode(timeToSeconds(asset.duration ?? 0), asset.fps ?? fps)}</span>
+        )}
+        {!placeable && <span>{t("library.lut")}</span>}
         {asset.width != null && asset.height != null && (
           <span>{`${asset.width} × ${asset.height}`}</span>
         )}
@@ -196,17 +205,19 @@ function Entry({
             is the only way onto the timeline -- removing it would leave the panel unusable
             without a pointer. A symbol rather than a line of text: one per medium over the full
             width of the panel turned a list of five into a screen of scrolling. */}
-        <IconButton
-          icon="plus"
-          label={t("library.addToTimeline")}
-          disabled={missing}
-          onClick={() => onAdd(asset.id)}
-        />
+        {placeable && (
+          <IconButton
+            icon="plus"
+            label={t("library.addToTimeline")}
+            disabled={missing}
+            onClick={() => onAdd(asset.id)}
+          />
+        )}
         {/* The other way onto the timeline, and the one classical cutting is built on: mark a
             range in this medium and insert or overwrite with it, rather than dropping the whole
             of it at the end. Pressed rather than gone while it is armed, so the entry the source
             bar is showing can be read off the list. */}
-        {onArm !== undefined && (
+        {onArm !== undefined && placeable && (
           <IconButton
             icon="scissors"
             label={t("library.markRange")}

@@ -56,6 +56,7 @@ import {
 import {
   clearSession,
   importFile,
+  importLut,
   mediaForProject,
   mediaHash,
   missingMedia,
@@ -118,7 +119,7 @@ interface ShellError {
   id: number;
 }
 
-const MEDIA_ACCEPT = "video/*,audio/*";
+const MEDIA_ACCEPT = "video/*,audio/*,.cube";
 
 // Both extensions and both media types: a browser that knows neither still offers the file, and a
 // browser that knows one of them stops offering everything else.
@@ -128,6 +129,12 @@ const CAPTION_ACCEPT = ".srt,.vtt,text/vtt,application/x-subrip";
 // often as not. The name is what the person who saved the file chose.
 function isCaptionFile(file: File): boolean {
   return /\.(?:srt|vtt)$/i.test(file.name);
+}
+
+// By the name for the same reason, and with less choice: a browser guesses nothing at all for a
+// `.cube` and hands it over with an empty type.
+function isLutFile(file: File): boolean {
+  return /\.cube$/i.test(file.name);
 }
 
 // Often enough that a crash costs a minute of work at most, rarely enough that it never competes
@@ -934,17 +941,37 @@ export function App(): ReactElement {
     [doc, reportError],
   );
 
+  // A colour table joins the library like every other medium -- hashed, into OPFS, packed into the
+  // .videola by the writer that walks the library -- and never joins the timeline: it has no
+  // picture. No track, no clip, which is the whole difference from `importMedia` above.
+  const importLuts = useCallback(
+    async (files: readonly File[]) => {
+      if (doc === undefined) return;
+      for (const file of files) {
+        try {
+          await importLut(file, doc);
+          setError(undefined);
+        } catch (err) {
+          reportError("error.importFailed", err);
+        }
+      }
+    },
+    [doc, reportError],
+  );
+
   // A file that is dropped is a file someone meant to bring in, whatever it is. Sorting the caption
-  // files out here rather than at each call site is what stops a dropped .srt from reaching the
-  // media importer, which would have refused it as an unsupported medium.
+  // and table files out here rather than at each call site is what stops a dropped .srt or .cube
+  // from reaching the media importer, which would have refused both as an unsupported medium.
   const importFiles = useCallback(
     async (files: File[]) => {
       const captions = files.filter(isCaptionFile);
-      const media = files.filter((file) => !isCaptionFile(file));
+      const tables = files.filter(isLutFile);
+      const media = files.filter((file) => !isCaptionFile(file) && !isLutFile(file));
       if (captions.length > 0) await importCaptions(captions);
+      if (tables.length > 0) await importLuts(tables);
       if (media.length > 0) await importMedia(media);
     },
-    [importCaptions, importMedia],
+    [importCaptions, importLuts, importMedia],
   );
 
   const exportCaptions = useCallback(() => {
