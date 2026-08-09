@@ -710,7 +710,7 @@ function identity(): Clip["transform"] {
 // the menu with no cover. Every run below asserts what actually reached `dispatch`, and that the
 // whole list arrived under one key so it is one press of undo.
 describe("Inspector, presets", () => {
-  const press = (rig: Rig, label: string): void => {
+  const press = (label: string): void => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: label }));
     });
@@ -718,7 +718,7 @@ describe("Inspector, presets", () => {
 
   it("sends a Ken Burns move as one undoable step of six keyframes", () => {
     const rig = show();
-    press(rig, "Ken-Burns-Fahrt hinein");
+    press("Ken-Burns-Fahrt hinein");
 
     expect(rig.sent).toHaveLength(6);
     expect(new Set(rig.sent.map((entry) => entry.key)).size).toBe(1);
@@ -731,7 +731,7 @@ describe("Inspector, presets", () => {
 
   it("writes the rate track for a slow start, and nothing else", () => {
     const rig = show();
-    press(rig, "Langsamer Anfang");
+    press("Langsamer Anfang");
 
     expect(rig.sent).toHaveLength(2);
     for (const entry of rig.sent) {
@@ -743,8 +743,8 @@ describe("Inspector, presets", () => {
   // user an undo step they can never reach.
   it("gives each press its own undo step", () => {
     const rig = show();
-    press(rig, "Langsamer Anfang");
-    press(rig, "Langsames Ende");
+    press("Langsamer Anfang");
+    press("Langsames Ende");
 
     const keys = new Set(rig.sent.map((entry) => entry.key));
     expect(keys.size).toBe(2);
@@ -752,7 +752,7 @@ describe("Inspector, presets", () => {
 
   it("shrinks the clip and puts it in a corner for picture in picture", () => {
     const rig = show();
-    press(rig, "Bild im Bild");
+    press("Bild im Bild");
 
     expect(rig.sent).toHaveLength(1);
     const command = rig.sent[0]!.command as { type: string; transform: { x: number; scaleX: number } };
@@ -784,7 +784,7 @@ describe("Inspector, presets", () => {
 
   it("freezes from the playhead with two keys on the rate track", () => {
     const rig = show({ playhead: SECOND });
-    press(rig, "Standbild ab hier");
+    press("Standbild ab hier");
 
     expect(rig.sent).toHaveLength(2);
     const values = rig.sent.map((entry) => (entry.command as { value: { value: number } }).value.value);

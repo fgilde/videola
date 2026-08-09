@@ -160,7 +160,9 @@ function spanArea(track: readonly Keyframe[], from: Time, to: Time): number {
   if (left === undefined) return rateOf(track[0]) * width;
   const next = track[right];
   const span = next === undefined ? 0 : next.time - left.time;
-  if (next === undefined || span <= 0 || left.interp === "hold") return rateOf(left) * width;
+  // A held key needs no branch: `easeArea` answers zero at both ends of it, so the general form
+  // below already collapses to `width * start`, which is what a hold means.
+  if (next === undefined || span <= 0) return rateOf(left) * width;
   const alpha = (from - left.time) / span;
   const beta = (to - left.time) / span;
   const start = rateOf(left);

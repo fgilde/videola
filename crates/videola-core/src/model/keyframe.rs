@@ -147,8 +147,12 @@ fn span_area(track: &[Keyframe], from: Time, to: Time) -> f64 {
     let Some(next) = track.get(right) else {
         return float(left) * width;
     };
+    // Only the degenerate span needs a branch. A held key needs none: `ease_area` answers zero at
+    // both ends of it, so the general form below already collapses to `width * start` -- which is
+    // exactly what a hold means. A second guard here would be a rule with no behaviour behind it,
+    // and the counterproof found it by removing it and changing nothing.
     let span = (next.time - left.time).as_flicks() as f64;
-    if span <= 0.0 || left.interp == Interp::Hold {
+    if span <= 0.0 {
         return float(left) * width;
     }
     let alpha = (from - left.time).as_flicks() as f64 / span;
