@@ -411,11 +411,16 @@ picture under a layer and another beside it and reads both back: the one below h
 one beside it must not — and a hidden layer, a layer with no clip on it and a layer whose clip is
 elsewhere in time all have to change neither.
 
-The passes run per clip rather than once over the composed picture. Where two clips overlap under one
-layer, a blur sees each of them on its own rather than the seam between them, and an effect applied
-to both is not the same as the effect applied once to what they made together. Doing that properly
-wants the tracks below the layer rendered into a target of their own — the same isolation a compound
-clip is still waiting for, and the two arrive together or not at all.
+The passes run **once over the composed picture**, not once per clip. Everything below the layer is
+composited onto a surface of its own first, and the chain then meets that one picture — so a blur
+sees the seam between two clips rather than each of them alone, and an effect applied to five shots
+is the effect applied once to what the five make together. The harness measures the difference: two
+clips meeting edge to edge under a blurred layer keep red and green adding up to a whole 255 across
+the join, where blurring them one at a time drops the same sum to 194 and lets the background show
+between them.
+
+A layer covering nothing costs nothing: the surface is asked for only where a layer actually stands
+over something, and the drawing buffer is still the surface everywhere else.
 
 ## The measuring instruments
 
@@ -649,9 +654,8 @@ project actually carries an effect.
 - **`transitionOut` is never read.** A cut between two clips is authored as the incoming clip's
   `transitionIn`, because the outgoing clip is drawn first and cannot mix with what comes after it.
 - **Track effects and master effects still paint nothing.** The seam is in the draw list; the
-  machinery is the same chain, applied to a track's intermediate target. Adjustment *tracks* do
-  reach the picture now (see above), by handing their chain to the clips below rather than by
-  composing those clips first.
+  machinery is the same chain over a track's own surface — which is the machinery an adjustment
+  layer and a compound clip already run.
 - **`overlay` and `difference` still fall back to `normal`.** They need the destination as a
   texture, which the transition path has — a small step rather than a missing piece.
 - **Fonts in the export worker are whatever the worker can resolve.** A generic family always works;

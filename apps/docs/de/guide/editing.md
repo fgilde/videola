@@ -205,13 +205,21 @@ entscheiden, wie viel der verschachtelten Zeitachse er verbraucht — und eine G
 retimt alles darin, rückwärts eingeschlossen. Acht Ebenen tief darf verschachtelt werden; eine neunte
 wird abgelehnt, statt gespeichert und dann still nicht gezeichnet zu werden.
 
-Vier Dinge kann ein Compound noch nicht, weil alle vier die verschachtelte Zeitachse zuerst auf eine
-eigene Fläche gezeichnet brauchen: seine Deckkraft wirkt auf jeden Clip darin statt auf das fertige
-Bild (sichtbar nur dort, wo zwei sich überlappen), seine Effekte laufen einmal pro verschachteltem
-Clip statt einmal über die Gruppe, sein Blendmodus erreicht nur Clips ohne eigenen, und ein Zuschnitt
-auf ihm wird ignoriert. Ein Übergang auf einem Compound wird rundheraus abgelehnt — er würde das Bild
-darunter einmal pro verschachteltem Clip mitmischen, und eine Blende, die still das Falsche tut, ist
-schlimmer als eine, die sich nicht anlegen lässt.
+Ein Compound ist **isoliert**: seine Clips werden auf eine eigene Fläche komponiert, und Deckkraft,
+Blendmodus, Effektkette, Zuschnitt und Übergang treffen danach dieses eine fertige Bild. Blendet man
+einen Compound mit zwei überlappenden Clips auf die Hälfte, liest die Überlappung genau das, was der
+Rest liest — 128 über Schwarz, während das getrennte Blenden jedes Clips den gemeinsamen Streifen auf
+191 brachte und eine Naht dazwischen zog. Ein Blendmodus läuft einmal statt einmal je Clip, ein
+Zuschnitt ist ein Schnitt durch die Gruppe statt etwas, das im Bild eines einzelnen Clips gar keine
+Bedeutung hat, und eine Blende mischt das Bild darunter einmal mit — weshalb ein Übergang auf einem
+Compound überhaupt erst anlegbar ist.
+
+Die Fläche kostet je Isolierungsebene ein volles Bild an Speicher — 8,3 MB bei 1080p, also 66 MB für
+ein Projekt, das so tief verschachtelt ist, wie es darf — und sie bleibt bis zum Abbau der Vorschau
+belegt. Ein Compound, der nichts blendet, nichts überlagert, nichts gradet, nichts zuschneidet und
+nichts überblendet, wird deshalb weiter flach gezeichnet: die Fläche gäbe genau zurück, was auf sie
+kam, und flach zu zeichnen ist das, was *Verschachteln ändert kein Pixel* byteweise wahr hält statt
+beinahe.
 
 Ein **Auflösen** gibt es nicht: <kbd>Strg</kbd>+<kbd>Z</kbd> nimmt das Zusammenfassen zurück, und ein
 aus einer Datei wieder geöffneter Compound bleibt einer.

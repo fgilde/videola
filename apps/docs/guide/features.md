@@ -30,7 +30,10 @@ the work happens. **The mixer** carries one strip per track plus a master.
 Ripple delete closes the gap it leaves. Groups move together. Cut, copy and paste work on whole
 clips, markers sit on the ruler, and a selection can be folded into a **compound clip** — that the
 picture does not change when you do is proven against the whole frame buffer, the draw list at
-sixteen instants and the audio render sample for sample.
+sixteen instants and the audio render sample for sample. Give that compound an opacity, a blend, an
+effect, a crop or a dissolve and it is composited onto a surface of its own first, so all five meet
+the finished group once: two overlapping clips faded to half read 128 across the overlap, not the
+191 that used to draw a seam through them.
 
 Everything runs through Pointer Events, so mouse, pen and finger take the same path, and a whole
 drag — two hundred pointer moves — is **one** undo step.
@@ -42,9 +45,10 @@ timeline the length it was. Each is one command, so an insert across three track
 is one <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
 
 An **adjustment track** carries no picture of its own: its clips' effects run over everything drawn
-below them, so five shots are graded at once instead of five times. That the picture underneath
-changes and the picture beside it does not is checked on real pixels, because that is the only place
-the claim exists.
+below them — over the composed picture, once, not once per clip — so five shots are graded at once
+instead of five times. That the picture underneath changes and the picture beside it does not is
+checked on real pixels, because that is the only place the claim exists; and so is the seam, where
+two clips meeting under a blurred layer keep their colours adding up to a whole 255 instead of 194.
 
 Markers carry a colour and a note, and the list beside the marker button jumps between them —
 <kbd>Shift</kbd> and an arrow key does the same from the keyboard.

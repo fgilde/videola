@@ -33,7 +33,10 @@ Ripple-Löschen schließt die Lücke, die es hinterlässt. Gruppen bewegen sich 
 Kopieren und Einfügen arbeiten auf ganzen Clips, Marker sitzen im Lineal, und eine Auswahl lässt sich
 zu einem **Compound-Clip** zusammenfassen — dass sich das Bild dabei nicht ändert, ist gegen den
 ganzen Bildpuffer, die Zeichenliste an sechzehn Zeitpunkten und den Tonlauf Sample für Sample
-nachgewiesen.
+nachgewiesen. Gibt man diesem Compound eine Deckkraft, einen Blendmodus, einen Effekt, einen
+Zuschnitt oder eine Blende, wird er zuerst auf eine eigene Fläche komponiert, und alle fünf treffen
+die fertige Gruppe genau einmal: zwei überlappende Clips auf die Hälfte geblendet lesen über die
+Überlappung 128 statt der 191, die früher eine Naht hindurchzogen.
 
 Alles läuft über Pointer Events, damit Maus, Stift und Finger denselben Weg nehmen, und ein ganzer
 Zug über zweihundert Bewegungen ist **ein** Undo-Schritt.
@@ -45,9 +48,11 @@ lässt die Zeitleiste so lang, wie sie war. Jedes davon ist ein Command; ein Ein
 und ein Dutzend Clips ist ein <kbd>Strg</kbd>+<kbd>Z</kbd>.
 
 Eine **Anpassungsspur** trägt kein eigenes Bild: die Effekte ihrer Clips laufen über alles, was
-darunter gezeichnet wird, damit fünf Einstellungen auf einmal gegradet werden statt fünfmal. Dass
-sich das Bild darunter ändert und das daneben nicht, ist an echten Pixeln geprüft — der einzige Ort,
-an dem diese Aussage überhaupt existiert.
+darunter gezeichnet wird — über das zusammengesetzte Bild, einmal, nicht einmal je Clip —, damit fünf
+Einstellungen auf einmal gegradet werden statt fünfmal. Dass sich das Bild darunter ändert und das
+daneben nicht, ist an echten Pixeln geprüft — der einzige Ort, an dem diese Aussage überhaupt
+existiert; und die Naht ebenso: zwei Clips, die unter einer weichgezeichneten Ebene aneinanderstoßen,
+halten ihre Farben auf volle 255 statt auf 194.
 
 Marker tragen eine Farbe und eine Notiz, und die Liste neben dem Marker-Knopf springt zwischen ihnen;
 <kbd>Umschalt</kbd> und eine Pfeiltaste tut dasselbe von der Tastatur aus.

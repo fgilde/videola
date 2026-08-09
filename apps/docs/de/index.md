@@ -79,7 +79,9 @@ features:
 - **Schneiden** — Ripple-Löschen und -Trimmen, Roll, Slip, Slide, Mehrfachauswahl, Gruppen,
   Zwischenablage, Marker, Einrasten und Zoom, mit einem Zeigerpfad für Maus, Stift und Finger.
 - **Verschachtelte Clips** — eine Auswahl zu einem Clip zusammenfassen; dass das Bild sich dabei
-  nicht ändert, ist nachgewiesen.
+  nicht ändert, ist nachgewiesen. Blenden, überlagern, graden, zuschneiden oder überblenden isoliert
+  den Compound zuerst auf eine eigene Fläche, damit alle fünf die fertige Gruppe treffen und nicht
+  jeden Clip darin.
 - **Wiedergabe** — WebCodecs in einen WebGL2-Compositor, die Audio-Uhr führt, bildgenauer Transport.
 - **Effekte und Übergänge** — acht Effekte, fünf Übergänge, ein Textgenerator; jeder Parameter
   keyframebar, auch Position, Skalierung und Drehung eines Clips, alles im Rust-Kern aufgelöst,
@@ -97,7 +99,7 @@ features:
 
 Keine Masken, Bewegungspfade, kein Motion-Blur, kein LUT-Import. Kein EQ und kein Kompressor: das
 Modell hält jetzt Effektketten für Spuren und Projekt, aber noch nichts zeichnet oder klingt sie.
-Ein verschachtelter Clip wird flachgelegt statt isoliert. Die Magnetic-Timeline fehlt bewusst, und
+Die Magnetic-Timeline fehlt bewusst, und
 das [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der
 Export nutzt die Encoder des Browsers.
 

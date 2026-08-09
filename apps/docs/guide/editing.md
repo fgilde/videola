@@ -195,13 +195,20 @@ Trimming it cuts what is inside — its in point and duration decide how much of
 it consumes — and a speed on it retimes everything in it, backwards included. Nesting may go eight
 levels deep; a ninth is refused rather than stored and then quietly not drawn.
 
-Four things a compound does not yet do, because all four need the nested timeline rendered to a
-surface of its own first: its opacity applies to each clip inside rather than to the composed
-picture (visible only where two of them overlap), its effects run once per nested clip rather than
-once over the group, its blend mode reaches only clips that carry none of their own, and a crop on it
-is ignored. A transition on a compound clip is refused outright — it would mix the picture underneath
-back in once per nested clip, and a dissolve that quietly does the wrong thing is worse than one that
-cannot be authored.
+A compound is **isolated**: its clips are composited onto a surface of their own, and its opacity,
+blend mode, effect chain, crop and transition then meet that one finished picture. Fade a compound
+holding two overlapping clips to half and the overlap reads exactly what the rest of it reads —
+128 over black, where fading each clip separately made the shared strip 191 and drew a seam between
+them. Blend it and the blend runs once rather than once per clip; crop it and the crop is a cut
+through the group rather than something with no meaning in any one clip's own frame; put a
+dissolve on it and the picture underneath is mixed in once, which is why a transition on a compound
+is authorable at all.
+
+The surface costs a full frame of memory per level of isolation — 8.3 MB at 1080p, so 66 MB for a
+project nested as deep as one may be — and it is held until the preview is torn down. A compound
+that fades nothing, blends nothing, grades nothing, crops nothing and dissolves nothing is therefore
+drawn flat instead: the surface would hand back exactly what went onto it, and drawing flat is what
+keeps *folding changes no pixel* true byte for byte rather than nearly.
 
 There is no **un-nest**: <kbd>Ctrl</kbd>+<kbd>Z</kbd> takes a fold back, and a compound reopened
 from a saved file stays one.

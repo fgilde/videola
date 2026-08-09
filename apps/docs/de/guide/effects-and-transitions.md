@@ -428,12 +428,16 @@ unter eine Ebene und ein zweites daneben und liest beide zurück: das darunter m
 daneben nicht — und eine verborgene Ebene, eine Ebene ohne Clip und eine Ebene, deren Clip anderswo
 in der Zeit liegt, dürfen keines von beiden ändern.
 
-Die Durchgänge laufen je Clip und nicht einmal über das zusammengesetzte Bild. Wo sich zwei Clips
-unter einer Ebene überlappen, sieht ein Weichzeichner jeden für sich statt der Naht zwischen ihnen,
-und ein Effekt auf beide ist nicht dasselbe wie derselbe Effekt einmal auf das, was die beiden
-zusammen ergeben. Es richtig zu tun verlangt, die Spuren unter der Ebene in ein eigenes Ziel zu
-rendern — dieselbe Isolierung, auf die ein Compound-Clip noch wartet, und die beiden kommen
-gemeinsam oder gar nicht.
+Die Durchgänge laufen **einmal über das zusammengesetzte Bild**, nicht einmal je Clip. Alles unter
+der Ebene wird zuerst auf eine eigene Fläche komponiert, und die Kette trifft danach dieses eine
+Bild — ein Weichzeichner sieht also die Naht zwischen zwei Clips statt jeden für sich, und ein Effekt
+auf fünf Einstellungen ist der Effekt einmal auf das, was die fünf zusammen ergeben. Die Prüfstrecke
+misst den Unterschied: zwei Clips, die Kante an Kante unter einer weichgezeichneten Ebene stehen,
+halten Rot und Grün über die Fuge hinweg auf volle 255 — zeichnet man sie einzeln weich, fällt
+dieselbe Summe auf 194 und der Hintergrund scheint zwischen ihnen durch.
+
+Eine Ebene, die nichts bedeckt, kostet nichts: die Fläche wird nur dort angefordert, wo eine Ebene
+wirklich über etwas steht, und überall sonst bleibt der Zeichenpuffer die Fläche.
 
 ## Die Messgeräte
 
@@ -673,9 +677,8 @@ Projekt wirklich einen Effekt trägt.
   ankommenden Clips verfasst, weil der abgehende Clip zuerst gezeichnet wird und sich nicht mit dem
   mischen kann, was danach kommt.
 - **Spureffekte und Master-Effekte malen weiterhin nichts.** Die Naht sitzt in der Zeichenliste;
-  die Mechanik ist dieselbe Kette, angewandt auf das Zwischenziel einer Spur. Anpassungs*spuren*
-  erreichen das Bild inzwischen (siehe oben), indem sie ihre Kette an die Clips darunter reichen,
-  statt diese Clips vorher zusammenzusetzen.
+  die Mechanik ist dieselbe Kette über einer eigenen Fläche der Spur — und genau die fahren eine
+  Anpassungsebene und ein Compound-Clip bereits.
 - **`overlay` und `difference` fallen weiterhin auf `normal` zurück.** Sie brauchen das Ziel als
   Textur, was der Übergangsweg hat — ein kleiner Schritt statt eines fehlenden Stücks.
 - **Fonts im Export-Worker sind, was der Worker auflösen kann.** Eine generische Familie geht immer;

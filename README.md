@@ -62,7 +62,10 @@ takes rather than drawn.
 
 **Compound clips.** Fold a selection into one clip and the picture does not change — proven against
 the whole frame buffer at tolerance zero, the draw list at sixteen instants, and the audio render
-sample for sample. Autosave keeps the project state in OPFS and offers it back after a crash.
+sample for sample. Give the compound an opacity, a blend, an effect, a crop or a dissolve and it is
+composited onto a surface of its own first, so all five meet the finished group once; an adjustment
+layer grades the composed picture below it the same way. Autosave keeps the project state in OPFS
+and offers it back after a crash.
 
 **An API, an MCP server and a CLI.** `apps/server` exposes the whole command catalogue over HTTP,
 to AI agents and on the command line. The catalogue is generated from the Rust enum, so a new
@@ -90,9 +93,7 @@ a list of commands to a project without a browser.
 
 No motion blur, no LUT import, no noise reduction, no beat detection. No curve editor for keyframe
 easing: a project carrying bezier handles keeps them and keeps its shape, but nothing here can drag
-one. A compound clip is flattened rather than isolated, so opacity, effects and blend apply per
-nested clip instead of once over the composed picture — an adjustment track sits under the same
-ceiling. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent: the
+one. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent: the
 useful half is ripple delete and trim, and the rest would change the model's overlap rule that
 transitions, layering and roll/slide all depend on. FFmpeg is not bundled; the export uses the
 browser's own encoders.

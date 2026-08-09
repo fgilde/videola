@@ -76,7 +76,9 @@ features:
 
 - **Editing** — ripple delete and trim, roll, slip, slide, multi-selection, groups, clipboard,
   markers, snapping and zoom, with one pointer path for mouse, pen and finger.
-- **Compound clips** — fold a selection into one clip; the picture is proven not to change.
+- **Compound clips** — fold a selection into one clip; the picture is proven not to change. Fade,
+  blend, grade, crop or dissolve the compound and it is isolated on a surface of its own first, so
+  all five meet the composed group once rather than each clip in it.
 - **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
 - **Effects and transitions** — eight effects, five transitions, a text generator; every parameter
   keyframable, including a clip's position, scale and rotation, all resolved in the Rust core so
@@ -93,8 +95,8 @@ features:
 ## What is not there yet
 
 No masks, motion paths, motion blur or LUT import. No EQ or compressor: the model now holds track
-and project effect chains, but nothing renders or sounds them yet. A compound clip is flattened
-rather than isolated. The magnetic timeline is deliberately absent, and the
+and project effect chains, but nothing renders or sounds them yet. The magnetic timeline is
+deliberately absent, and the
 [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the browser's
 own encoders.
 
