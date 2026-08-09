@@ -162,6 +162,18 @@
   max-width: var(--v-control-max);
 }
 
+/* The swatch is the control and the target both, so it carries the touch height itself rather than
+   sitting as a 20 px square inside a row that happens to be tall enough. */
+.v-param__color {
+  align-self: flex-start;
+  width: 5rem;
+  min-height: var(--v-touch-target);
+  padding: 2px;
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+}
+
 .v-param__select,
 .v-param__interp {
   background: var(--v-surface);

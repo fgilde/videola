@@ -4,6 +4,7 @@ import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
 import type { EffectParamSnapshot, Project, Time, TransformSnapshot } from "@videola/core";
+import type { Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
 import type { DrawItem } from "./draw-list";
 
@@ -254,7 +255,7 @@ export class Compositor {
     pipeline: Pipeline,
     source: WebGLTexture,
     second: WebGLTexture | undefined,
-    values: Readonly<Record<string, number>>,
+    values: Readonly<Record<string, Uniform>>,
   ): void {
     const gl = this.#gl;
     gl.useProgram(pipeline.program);
@@ -444,8 +445,8 @@ export class Compositor {
 
 // The shader names its uniforms `u_<key>`, and that prefix is the whole convention between a
 // manifest's parameter list and its GLSL.
-function prefixed(values: Readonly<Record<string, number>>): Record<string, number> {
-  const uniforms: Record<string, number> = {};
+function prefixed(values: Readonly<Record<string, Uniform>>): Record<string, Uniform> {
+  const uniforms: Record<string, Uniform> = {};
   for (const [key, value] of Object.entries(values)) uniforms[`u_${key}`] = value;
   return uniforms;
 }

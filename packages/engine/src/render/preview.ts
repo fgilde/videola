@@ -4,7 +4,7 @@ import { createContext } from "./context";
 import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
-import type { EffectManifest } from "../effects/registry";
+import type { EffectManifest, Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
 
 /**
@@ -183,7 +183,7 @@ export class EffectPreview {
   #pass(
     manifest: EffectManifest,
     source: WebGLTexture,
-    values: Readonly<Record<string, number>>,
+    values: Readonly<Record<string, Uniform>>,
   ): void {
     const gl = this.#gl;
     const pipeline = this.#pipeline(manifest);
@@ -195,7 +195,7 @@ export class EffectPreview {
     }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
-    const uniforms: Record<string, number> = {};
+    const uniforms: Record<string, Uniform> = {};
     for (const [key, value] of Object.entries(values)) uniforms[`u_${key}`] = value;
     setUniforms(gl, pipeline.program, uniforms);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

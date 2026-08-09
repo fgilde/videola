@@ -71,7 +71,9 @@ function floats(entries) {
 // as ParamValue the way a project file carries them.
 function params(values) {
   const out = {};
-  for (const [key, value] of Object.entries(values || {})) out[key] = { kind: "float", value };
+  for (const [key, value] of Object.entries(values || {})) {
+    out[key] = Array.isArray(value) ? { kind: "color", value } : { kind: "float", value };
+  }
   return out;
 }
 
@@ -987,8 +989,34 @@ test("a dip goes out through a colour and back", () => {
     [0, 0, 0, 255]);
   check("three quarters in, the incoming clip is halfway up", crossing("dip", 750).at(2, 2),
     [0, 0, 128, 255]);
-  check("and the level chooses the colour",
-    crossing("dip", 500, { params: { level: 1 } }).at(2, 2), [255, 255, 255, 255]);
+  check("and the colour is a colour, not a shade of grey",
+    crossing("dip", 500, { params: { colour: [0, 0.5, 1, 1] } }).at(2, 2), [0, 128, 255, 255]);
+});
+
+// The first parameter in this library that is not a float, and the whole path it travels: a
+// ParamValue::Color off the model, through the manifest's own guard, into a vec4 uniform.
+test("a colour parameter reaches the shader as a colour", () => {
+  // Half covered, and therefore half of every channel once premultiplied. The reflex answer for
+  // white is 255, and it belongs to straight alpha -- through the over-operator it would paint the
+  // dip twice as bright as it is.
+  const half = crossing("dip", 500, { params: { colour: [1, 1, 1, 128 / 255] } });
+  check("a half-covered white dip is half a white, not a white",
+    half.at(2, 2), [128, 128, 128, 128]);
+  check("and the page shows through the half that is not covered",
+    overPage(half.canvas, "#ff0000", 2, 2), [255, 128, 128, 255]);
+
+  // The gap no target closes on its own. RGBA8 clamps a channel above one, so feeding 1.4 proves
+  // nothing; a channel above *alpha* and below one is where a texel stops being a legal
+  // premultiplied colour and nothing downstream notices.
+  const overshoot = crossing("dip", 500, { params: { colour: [0.9, 0.9, 0.9, 0.4] } });
+  const [r, g, b, a] = overshoot.at(2, 2);
+  check("a colour brighter than its own coverage is brought back under it",
+    [r <= a + 1, g <= a + 1, b <= a + 1, a > 2 && a < 253], [true, true, true, true]);
+
+  // A hand-authored project can put any kind on any key, and a float where a colour belongs must
+  // read as the manifest's default -- black at full cover -- rather than as an unset uniform.
+  check("a value of the wrong kind falls back to the declared default",
+    crossing("dip", 500, { params: { colour: 0.5 } }).at(2, 2), [0, 0, 0, 255]);
 });
 
 // Effect and transition crossed on a transition that is not the cross dissolve: the incoming clip's

@@ -182,3 +182,81 @@ function neighbour(track: readonly Keyframe[], at: Time, direction: 1 | -1): Key
   );
   return direction === 1 ? beyond[0] : beyond[beyond.length - 1];
 }
+
+export interface ColorRowProps {
+  label: string;
+  /** Straight rgba, each channel 0 to 1, the way the model carries a colour. */
+  value: readonly [number, number, number, number];
+  onChange: (value: readonly [number, number, number, number]) => void;
+}
+
+/**
+ * One colour, on the browser's own picker.
+ *
+ * A picker is the one control here that is not built out of tokens, because the platform already has
+ * the whole thing -- an eyedropper, a wheel, a recent list and the system dialogue a person already
+ * knows. What a custom one would add is a second set of bugs.
+ *
+ * ponytail: `input[type=color]` has no alpha, so this edits rgb and carries whatever alpha the model
+ * held. Nothing in M1 authors a translucent one; a colour that needs alpha needs a second row for it.
+ */
+export function ColorRow({ label, value, onChange }: ColorRowProps): ReactElement {
+  const id = useId();
+  return (
+    <div className="v-param">
+      <label className="v-param__label" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        id={id}
+        type="color"
+        className="v-param__color"
+        value={toHex(value)}
+        onChange={(event) => onChange(fromHex(event.target.value, value[3]))}
+      />
+    </div>
+  );
+}
+
+/**
+ * What a row is allowed to show for a resolved colour: the same guard `clampColor` applies in the
+ * engine, minus the premultiplication -- a picker shows the colour that was chosen, not the texel it
+ * becomes. Repeated rather than imported for the same reason `shownValue` is.
+ */
+export function shownColor(
+  param: { default: readonly [number, number, number, number] },
+  value: unknown,
+): readonly [number, number, number, number] {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 4 ||
+    !value.every((channel) => typeof channel === "number" && Number.isFinite(channel))
+  ) {
+    return param.default;
+  }
+  const held = value as number[];
+  return [unit(held[0]!), unit(held[1]!), unit(held[2]!), unit(held[3]!)];
+}
+
+function unit(channel: number): number {
+  return Math.min(Math.max(channel, 0), 1);
+}
+
+function toHex(value: readonly [number, number, number, number]): string {
+  const digits = value
+    .slice(0, 3)
+    .map((channel) =>
+      Math.round(unit(channel) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("");
+  return `#${digits}`;
+}
+
+// The alpha comes from what was there rather than from the field, which has none of its own.
+function fromHex(hex: string, alpha: number): readonly [number, number, number, number] {
+  const channel = (at: number): number => Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return [0, 0, 0, alpha];
+  return [channel(1), channel(3), channel(5), alpha];
+}

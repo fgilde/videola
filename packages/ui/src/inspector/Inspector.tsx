@@ -22,7 +22,7 @@ import {
 
 import { useI18n, type Locale } from "../i18n/useI18n";
 import { findClip } from "../timeline/useTimelineGestures";
-import { keyframeAt, ParamRow, shownValue } from "./ParamRow";
+import { ColorRow, keyframeAt, ParamRow, shownColor, shownValue } from "./ParamRow";
 import "./Inspector.css";
 
 /**
@@ -35,16 +35,27 @@ export interface EffectDescriptor {
   id: string;
   name: Record<Locale, string>;
   inputs: 1 | 2;
-  params: readonly EffectParamDescriptor[];
+  params: readonly ParamDescriptor[];
 }
 
 export interface EffectParamDescriptor {
+  kind?: "float";
   key: string;
   name: Record<Locale, string>;
   default: number;
   min: number;
   max: number;
 }
+
+/** A colour, straight rgba with each channel 0 to 1 -- the one parameter that is not a slider. */
+export interface ColorParamDescriptor {
+  kind: "color";
+  key: string;
+  name: Record<Locale, string>;
+  default: readonly [number, number, number, number];
+}
+
+export type ParamDescriptor = EffectParamDescriptor | ColorParamDescriptor;
 
 export interface InspectorProps {
   project: Project;
@@ -366,19 +377,40 @@ function Effects({
         return (
           <div key={authored.id} className="v-inspector__effect">
             <h4 className="v-inspector__effectName">{manifest.name[locale]}</h4>
-            {manifest.params.map((param) => (
-              <EffectParam
-                key={param.key}
-                clip={clip.id}
-                effect={authored}
-                param={param}
-                value={shownValue(param, resolved.get(authored.id)?.get(param.key)?.value)}
-                playhead={playhead}
-                inside={inside}
-                send={send}
-                onSeek={onSeek}
-              />
-            ))}
+            {manifest.params.map((param) => {
+              const held = resolved.get(authored.id)?.get(param.key)?.value;
+              return param.kind === "color" ? (
+                <ColorRow
+                  key={param.key}
+                  label={param.name[locale]}
+                  value={shownColor(param, held)}
+                  onChange={(next) =>
+                    send(
+                      cmd.effectSetParam(on.clip(clip.id), authored.effectType, param.key, {
+                        kind: "color",
+                        value: [...next],
+                      }),
+                      // One key for the whole picker: dragging around a colour wheel is one
+                      // gesture, and thirty steps of undo for it is thirty ways to lose the one
+                      // that mattered.
+                      `color:${authored.id}:${param.key}`,
+                    )
+                  }
+                />
+              ) : (
+                <EffectParam
+                  key={param.key}
+                  clip={clip.id}
+                  effect={authored}
+                  param={param}
+                  value={shownValue(param, held)}
+                  playhead={playhead}
+                  inside={inside}
+                  send={send}
+                  onSeek={onSeek}
+                />
+              );
+            })}
           </div>
         );
       })}
