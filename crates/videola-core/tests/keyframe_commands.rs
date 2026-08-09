@@ -208,12 +208,19 @@ fn dragged_handles_bend_the_value_between_two_keys() {
     let Some(ParamValue::Float(middle)) = amount_at(doc.project(), 1.0) else {
         panic!("expected a float");
     };
+    // Pinned rather than merely "below the line": both handles shape one segment, and with the
+    // arriving one left at its default this reads 0.200 instead. A loose bound passes either way,
+    // which is a run that cannot tell a command writing one handle from one writing the pair.
     assert!(
-        middle < 0.4,
-        "the handles pull the middle well below the straight line, got {middle}"
+        (middle - 0.045_455).abs() < 1e-3,
+        "the pair has to shape the middle, got {middle}"
     );
     assert_eq!(amount_at(doc.project(), 0.0), Some(ParamValue::Float(0.0)));
     assert_eq!(amount_at(doc.project(), 2.0), Some(ParamValue::Float(1.0)));
+
+    let track = &doc.project().timeline.tracks[0].clips[0].effects[0].keyframes["amount"];
+    assert_eq!(track[0].handle_out, Some([0.9, 0.05]));
+    assert_eq!(track[1].handle_in, Some([0.95, 0.1]));
 }
 
 // The same hole `normalize` closes on the load path, on the route a drag takes. A NaN handle runs

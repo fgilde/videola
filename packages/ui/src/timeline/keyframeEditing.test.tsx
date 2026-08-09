@@ -519,7 +519,12 @@ function openCurve(): HTMLElement {
     "[data-testid='keyframe-curve-disclosure']",
   );
   if (disclosure === null) throw new Error("no curve disclosure beside the picked keyframe");
-  disclosure.open = true;
+  // jsdom has no activation behaviour for a summary, so the state change is made and announced the
+  // way the browser would announce it -- which is what the timeline listens to.
+  act(() => {
+    disclosure.open = true;
+    fireEvent(disclosure, new Event("toggle"));
+  });
   const field = document.querySelector<HTMLElement>("[data-testid='keyframe-curve']");
   if (field === null) throw new Error("the disclosure opened on nothing");
   return field;
@@ -588,6 +593,26 @@ describe("the curve field", () => {
     const field = openCurve();
     expect(screen.getByTestId("keyframe-bar").contains(field)).toBe(true);
     expect(screen.getByTestId("keyframe-lane").contains(field)).toBe(false);
+  });
+
+  // Somebody shaping one curve after another opens the field once. Left to the element, its state
+  // goes with it every time the bar around it is rebuilt -- and picking the last key of a track,
+  // which has no segment, takes the whole disclosure away and brings it back closed.
+  it("stays open while the pick travels from one keyframe to another", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    down(keyAt(5 * SECOND), { clientX: 10 });
+    up({ clientX: 10 });
+    expect(screen.queryByTestId("keyframe-curve-disclosure")).toBeNull();
+
+    down(keyAt(SECOND), { clientX: 10 });
+    up({ clientX: 10 });
+
+    const back = screen.getByTestId("keyframe-curve-disclosure") as HTMLDetailsElement;
+    expect(back.open).toBe(true);
   });
 
   // The last key of a track has no travel after it to shape. Its own arriving handle belongs to the
