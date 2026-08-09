@@ -8,4 +8,5 @@ export {
   createTemplateBackend,
   createWasmBackend,
   readTemplateFile,
+  templatePreview,
 } from "./wasm-backend";

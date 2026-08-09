@@ -11,6 +11,7 @@ import type {
 import type {
   Dispatch,
   DispatchResult,
+  Frame,
   LoadWarning,
   MediaKind,
   Project,
@@ -56,6 +57,15 @@ export async function builtinTemplates(): Promise<Template[]> {
 export async function readTemplateFile(bytes: Uint8Array): Promise<Template> {
   await ensureReady();
   return WasmDocument.readTemplate(bytes) as Template;
+}
+
+// The project a gallery card is drawn from: the template baked against a stand-in for every piece
+// of material, each one a grey gradient sitting in exactly the rectangle the real answer will land
+// in. A project comes back rather than a picture, because the compositor is on this side of the
+// boundary -- `templatePoster` in @videola/engine is the half that turns it into pixels.
+export async function templatePreview(template: Template, frame?: Frame): Promise<Project> {
+  await ensureReady();
+  return WasmDocument.templatePreview(template, frame ?? null) as Project;
 }
 
 // A baked template is an ordinary document: same backend interface, same commands, same undo. The
