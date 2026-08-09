@@ -594,6 +594,43 @@ describe("the level meters", () => {
     expect(screen.getByTestId("meter").classList.contains("v-meter--hot")).toBe(true);
   });
 
+  // Not an optimisation: a loop that never ends keeps the page from ever going idle, and a browser
+  // driven under a virtual clock never gets past it. Two harness runs stopped finishing the day the
+  // meters arrived, and this is the assertion that says why.
+  it("stops asking once nothing is rolling", async () => {
+    const readLevel = vi.fn((_bus: string, _now: number) => SILENT);
+    show(
+      <Mixer
+        project={makeProject([audio("trk_1")])}
+        dispatch={() => {}}
+        readLevel={readLevel}
+        metering={false}
+      />,
+    );
+
+    await frame();
+    await frame();
+
+    expect(readLevel).not.toHaveBeenCalled();
+  });
+
+  it("paints silence while nothing is rolling rather than freezing on the last window", async () => {
+    show(
+      <Mixer
+        project={makeProject([])}
+        dispatch={() => {}}
+        readLevel={() => ({ peak: -3, rms: -6, hold: -3 })}
+        metering={false}
+      />,
+    );
+
+    await frame();
+    const meter = screen.getByTestId("meter");
+
+    expect(bar(meter, "v-meter__peak").style.width).toBe("0%");
+    expect(meter.classList.contains("v-meter--hot")).toBe(false);
+  });
+
   it("tells a screen reader the peak as a whole number", async () => {
     show(
       <Mixer

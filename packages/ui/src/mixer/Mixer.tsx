@@ -18,6 +18,7 @@ import { useI18n, type Locale } from "../i18n/useI18n";
 import { keyframeAt, ParamRow, shownValue } from "../inspector/ParamRow";
 import type { EffectParamDescriptor } from "../inspector/Inspector";
 import { AddEffect } from "../primitives/AddEffect";
+import { IconButton } from "../primitives/Icon";
 import { LevelMeter, type ReadLevel } from "./LevelMeter";
 import "./Mixer.css";
 
@@ -53,6 +54,11 @@ export interface MixerProps {
    * behind it rather than a row of bars stuck at silence.
    */
   readLevel?: (bus: string, nowMs: number) => { peak: number; rms: number; hold: number } | undefined;
+  /**
+   * False while the transport is stopped. The meters then paint silence and stop asking -- see
+   * `LevelMeter`, where the loop that never ends turns out to be the expensive kind of never.
+   */
+  metering?: boolean;
   /** Where a keyframe written from a strip lands, and what the rows read their values at. */
   playhead?: Time;
   effects?: readonly MixerEffectDescriptor[];
@@ -87,6 +93,7 @@ export function Mixer({
   loudness,
   measuring,
   readLevel,
+  metering = true,
   playhead = 0,
   effects = [],
   effectParamsAt,
@@ -123,6 +130,7 @@ export function Mixer({
             dispatch={dispatch}
             chain={chain}
             read={meter(track.id)}
+            metering={metering}
             onDuck={onDuck}
             onCutSilence={onCutSilence}
           />
@@ -138,6 +146,7 @@ export function Mixer({
           onNormalize={onNormalize}
           normalizing={normalizing}
           read={meter(MASTER_BUS)}
+          metering={metering}
         />
       </div>
 
@@ -152,6 +161,7 @@ function Strip({
   dispatch,
   chain,
   read,
+  metering,
   onDuck,
   onCutSilence,
 }: {
@@ -160,6 +170,7 @@ function Strip({
   dispatch: (command: Command, coalesceKey?: string) => void;
   chain: ChainContext;
   read?: ReadLevel;
+  metering?: boolean;
   onDuck?: (music: string, speech: string) => void;
   onCutSilence?: (track: string) => void;
 }): ReactElement {
@@ -167,12 +178,17 @@ function Strip({
 
   return (
     <div className="v-mixer__strip" data-track-id={track.id}>
-      <span className="v-mixer__name" style={{ borderLeftColor: track.colorHex }}>
-        {track.name}
-      </span>
-      {read !== undefined && (
-        <LevelMeter read={read} label={t("mixer.level", { name: track.name })} />
-      )}
+      {/* Meter beside the name and not under it: a row of its own is ten pixels plus a gap on
+          every strip, the mixer row is sized to fit its strips, and the preview above pays for
+          it -- measured at 223 px against a floor of 230 in the browser harness. */}
+      <div className="v-mixer__head">
+        <span className="v-mixer__name" style={{ borderLeftColor: track.colorHex }}>
+          {track.name}
+        </span>
+        {read !== undefined && (
+          <LevelMeter read={read} active={metering} label={t("mixer.level", { name: track.name })} />
+        )}
+      </div>
       <ParamRow
         label={t("mixer.volumeShort")}
         name={t("mixer.volume", { name: track.name })}
@@ -210,8 +226,8 @@ function Strip({
         >
           S
         </button>
+        <Tools track={track} others={others} onDuck={onDuck} onCutSilence={onCutSilence} />
       </div>
-      <Tools track={track} others={others} onDuck={onDuck} onCutSilence={onCutSilence} />
       <Chain {...chain} target={on.track(track.id)} authored={track.effects} />
     </div>
   );
@@ -222,10 +238,15 @@ function Strip({
 // ducks as one thing however many clips it was cut into, and a voice track's pauses are the pauses
 // between its phrases and not between its clips.
 //
-// Ducking is a picker rather than a button because it needs a second track named, and there is no
-// sensible guess: the strip is the music and the choice is which voice it gets out of the way of.
-// The same select shape `AddEffect` has, and for the same reason -- one control, one act, no
-// dialogue to dismiss.
+// On the mute and solo line rather than on a line of their own, and that is a measurement rather
+// than a preference: a fifth row per strip grew the mixer by sixty pixels, the editor's mixer row
+// is sized to fit its strips, and the preview above lost exactly that. The browser harness caught
+// it -- the picture fell to 223 px against a floor of 230.
+//
+// Ducking is a picker because it needs a second track named and there is no sensible guess: the
+// strip is the music and the choice is which voice it gets out of the way of. Cutting silence is a
+// symbol because the row has no width left for its name -- scissors and not a bin, which beside a
+// track name would read as "delete the track".
 function Tools({
   track,
   others,
@@ -241,7 +262,7 @@ function Tools({
   if (onDuck === undefined && onCutSilence === undefined) return null;
 
   return (
-    <div className="v-mixer__tools">
+    <>
       {onDuck !== undefined && others.length > 0 && (
         <select
           className="v-mixer__duck"
@@ -260,16 +281,13 @@ function Tools({
         </select>
       )}
       {onCutSilence !== undefined && (
-        <button
-          type="button"
-          className="v-button"
-          aria-label={t("mixer.cutSilenceOf", { name: track.name })}
+        <IconButton
+          icon="scissors"
+          label={t("mixer.cutSilenceOf", { name: track.name })}
           onClick={() => onCutSilence(track.id)}
-        >
-          {t("mixer.cutSilence")}
-        </button>
+        />
       )}
-    </div>
+    </>
   );
 }
 
@@ -290,6 +308,7 @@ function MasterStrip({
   onNormalize,
   normalizing,
   read,
+  metering,
 }: {
   project: Project;
   dispatch: Send;
@@ -300,14 +319,19 @@ function MasterStrip({
   onNormalize?: (targetLufs: number) => void;
   normalizing?: boolean;
   read?: ReadLevel;
+  metering?: boolean;
 }): ReactElement {
   const { t } = useI18n();
   const name = t("mixer.master");
 
   return (
     <div className="v-mixer__strip v-mixer__strip--master" data-testid="mixer-master">
-      <span className="v-mixer__name">{name}</span>
-      {read !== undefined && <LevelMeter read={read} label={t("mixer.level", { name })} />}
+      <div className="v-mixer__head">
+        <span className="v-mixer__name">{name}</span>
+        {read !== undefined && (
+          <LevelMeter read={read} active={metering} label={t("mixer.level", { name })} />
+        )}
+      </div>
       <ParamRow
         label={t("mixer.volumeShort")}
         name={t("mixer.volume", { name })}

@@ -20,6 +20,10 @@ const OUTLINED = {
   // fills is what a switch looks like when a tint alone has to carry pressed and disabled as well.
   keyframe: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
   trash: "M4.5 7h15M10 7V4.8h4V7M6.5 7l1 12.2h9L17.5 7M10.2 10.5v5.4M13.8 10.5v5.4",
+  // Two blades and two rings: the one symbol that reads as "take this out" without reading as
+  // "delete the track", which a bin next to a track name would.
+  scissors:
+    "M6 4l10.5 12.5M18 4L7.5 16.5M6 16.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M18 16.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5",
 } as const;
 
 // Filled rather than stroked: a transport symbol is a solid shape at every size, and a 1.8 px

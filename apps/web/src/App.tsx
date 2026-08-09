@@ -132,7 +132,12 @@ export function App(): ReactElement {
   const [playing, setPlaying] = useState(false);
   const [missing, setMissing] = useState(NOTHING_MISSING);
   const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
-  const [loudness, setLoudness] = useState<number>();
+  // A reading carries the project it was taken from, so "is this still about this timeline"
+  // is answered by comparing rather than by a second effect racing to clear it. It used to be
+  // a bare number wiped whenever the project changed -- which worked until a reading arrived
+  // *because* of an edit, and normalising is exactly that: the correction is dispatched and
+  // the number that follows it was about the corrected state all along.
+  const [reading, setReading] = useState<{ lufs: number; of: Project }>();
   const [measuring, setMeasuring] = useState(false);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
   const [grab, setGrab] = useState<MediaGrab>();
@@ -326,9 +331,6 @@ export function App(): ReactElement {
     // The strips come from the buffers `load` decoded, so they can only be read once it resolves.
     // Dropping a superseded result is what keeps a drag from painting the strips of a project state
     // that two pointer movements have already replaced.
-    // A reading belongs to the project it was taken from. Any edit can change it, so it goes rather
-    // than standing there as a number about a timeline that no longer exists.
-    setLoudness(undefined);
     void playback.load(project).then(() => {
       if (!cancelled) setWaveforms(playback.waveforms());
     });
@@ -355,7 +357,7 @@ export function App(): ReactElement {
     if (project === undefined || doc === undefined) return;
     const seconds = timeToSeconds(projectEnd(project));
     if (seconds <= 0) {
-      setLoudness(Number.NEGATIVE_INFINITY);
+      setReading({ lufs: Number.NEGATIVE_INFINITY, of: project });
       return;
     }
     setMeasuring(true);
@@ -364,7 +366,10 @@ export function App(): ReactElement {
     // The core's resolver goes in for the same reason the export gets it: a reading taken without
     // the mastering chain would report a loudness no listener and no file ever has.
     measureLoudness(ctx, project, new AudioSource(), doc.effectParamsAt)
-      .then(setLoudness, (err: unknown) => reportError("error.actionFailed", err))
+      .then(
+        (lufs) => setReading({ lufs, of: project }),
+        (err: unknown) => reportError("error.actionFailed", err),
+      )
       .finally(() => setMeasuring(false));
   }, [doc, project, reportError]);
 
@@ -397,7 +402,9 @@ export function App(): ReactElement {
             if (result.volume !== project.master.volume) {
               doc.dispatch(cmd.projectSetMasterVolume(result.volume));
             }
-            setLoudness(result.loudness);
+            // Against `doc.state` and not against `project`: the dispatch above has just
+            // replaced it, and the reading is about what the fader now is.
+            setReading({ lufs: result.loudness, of: doc.state });
           },
           (err: unknown) => reportError("error.actionFailed", err),
         )
@@ -911,9 +918,10 @@ export function App(): ReactElement {
               {(layout !== "phone" || panel === "mixer") && (
                 <Mixer
                   project={project}
-                  loudness={loudness}
+                  loudness={reading?.of === project ? reading.lufs : undefined}
                   measuring={measuring}
                   readLevel={readLevel}
+                  metering={playing}
                   playhead={playhead}
                   effects={audioEffectManifests()}
                   effectParamsAt={doc?.effectParamsAt}

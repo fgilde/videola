@@ -17,8 +17,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--v-space-1);
-  /* Wide enough for a label, its fader and the readout on one line -- see .v-mixer .v-param. */
-  min-width: 220px;
+  /* Wide enough for a label, its fader and the readout on one line (see .v-mixer .v-param), and
+     for mute, solo, the duck picker and the scissors on the line below without wrapping -- a
+     wrapped flags row is the fifth row that costs the preview its height. Wider strips scroll
+     sideways, which the mixer already does; taller ones do not. */
+  min-width: 244px;
   padding: var(--v-space-2);
   background: var(--v-surface);
   border-radius: var(--v-radius-md);
@@ -47,22 +50,20 @@
   white-space: nowrap;
 }
 
-/* One row, wrapping rather than growing: the strip is 220 px wide and a picker plus a button does
-   not always fit on a phone. Wrapping costs a second line on the narrowest layout; not wrapping
-   costs the button, which slides out under the strip beside it. */
-.v-mixer__tools,
+/* Picker and button on one line under the reading, which is where the master strip has the room a
+   track strip spends on its pan row. Every strip is then the same height and the mixer costs the
+   picture nothing beyond its meters. */
 .v-mixer__normalize {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--v-space-1);
   align-items: center;
 }
 
-/* Both pickers shrink before their buttons do -- a truncated track name is still a track name, a
-   truncated "Stille schneiden" is not a label. */
+/* Both pickers shrink and nothing else does: they are the only controls whose label may be cut
+   without the control losing its meaning, because the accessible name is on the element itself. */
 .v-mixer__duck,
 .v-mixer__target {
-  flex: 1 1 6rem;
+  flex: 1 1 4rem;
   min-width: 0;
 }
 
@@ -89,6 +90,24 @@
   letter-spacing: var(--v-tracking-wide);
 }
 
+/* Name and meter share the top line. The name takes what it needs up to half the strip and the
+   meter takes the rest, so a mixer with meters is exactly as tall as one without. */
+.v-mixer__head {
+  display: flex;
+  gap: var(--v-space-2);
+  align-items: center;
+}
+
+.v-mixer__head .v-mixer__name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.v-mixer__head .v-meter {
+  flex: 1 1 auto;
+  min-width: 3rem;
+}
+
 .v-mixer__name {
   padding-left: var(--v-space-2);
   border-left: 3px solid var(--v-border-strong);
@@ -99,9 +118,12 @@
   overflow: hidden;
 }
 
+/* Mute, solo, the duck picker and the scissors, on one line and never wrapping. */
 .v-mixer__flags {
   display: flex;
+  flex-wrap: nowrap;
   gap: var(--v-space-1);
+  align-items: center;
 }
 
 /* Two letters at symbol rank, but with a resting outline the other symbols do without: mute and

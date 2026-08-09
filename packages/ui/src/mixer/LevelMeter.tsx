@@ -26,6 +26,14 @@ export interface LevelMeterProps {
    */
   read: ReadLevel;
   label: string;
+  /**
+   * False when nothing is rolling. The loop then paints silence once and stops, which is not
+   * an optimisation: an animation frame loop that never ends keeps the page from ever going
+   * idle, and a browser driven under a virtual clock -- which is how this project takes its
+   * screenshots and half its checks -- then never advances past it. Measured: two harness
+   * runs stopped finishing the moment the meters arrived.
+   */
+  active?: boolean;
 }
 
 // The bottom of the scale. Below this a bar is a sliver nobody can tell from silence, and a mixer
@@ -37,7 +45,15 @@ const FLOOR_DBFS = -60;
 // the ones worth being warned about before it does.
 const HOT_DBFS = -6;
 
-export function LevelMeter({ read, label }: LevelMeterProps): ReactElement {
+// What a stopped transport reads. Spelled here rather than imported from the engine for the
+// same reason `MeterLevel` is: this package draws meters, it does not measure.
+const SILENT: MeterLevel = {
+  peak: Number.NEGATIVE_INFINITY,
+  rms: Number.NEGATIVE_INFINITY,
+  hold: Number.NEGATIVE_INFINITY,
+};
+
+export function LevelMeter({ read, label, active = true }: LevelMeterProps): ReactElement {
   const bar = useRef<HTMLDivElement>(null);
   const rms = useRef<HTMLDivElement>(null);
   const peak = useRef<HTMLDivElement>(null);
@@ -52,8 +68,8 @@ export function LevelMeter({ read, label }: LevelMeterProps): ReactElement {
     let frame = 0;
     let shown = Number.NaN;
     const step = (now: number): void => {
-      frame = requestAnimationFrame(step);
-      const level = latest.current(now);
+      if (active) frame = requestAnimationFrame(step);
+      const level = active ? latest.current(now) : SILENT;
       if (level === undefined || bar.current === null) return;
       rms.current!.style.width = `${scale(level.rms)}%`;
       peak.current!.style.width = `${scale(level.peak)}%`;
@@ -72,7 +88,7 @@ export function LevelMeter({ read, label }: LevelMeterProps): ReactElement {
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [active]);
 
   return (
     <div
