@@ -25,9 +25,9 @@ export function compileProgram(
 }
 
 // Sampler uniforms are bound once when a program is built and never move, so every value that
-// travels per frame is a float, a vector or a matrix. That is what makes dispatching on the shape
-// of the value safe here -- an integer uniform would need the shape of the *uniform*, which only
-// getActiveUniform knows.
+// travels per frame is a float, a vector, a matrix or a table of floats. That is what makes
+// dispatching on the shape of the value safe here -- an integer uniform would need the shape of
+// the *uniform*, which only getActiveUniform knows.
 export function setUniforms(
   gl: WebGL2RenderingContext,
   program: WebGLProgram,
@@ -60,6 +60,12 @@ function write(
     case 16:
       return gl.uniformMatrix4fv(location, false, numbers);
     default:
+      // Longer than a mat4, so it cannot be a vector or a matrix -- GLSL ES has nothing wider than
+      // sixteen components. What is left is a `float[]`, which is how a curve's sampled table
+      // arrives; uniform1fv fills the whole array from the location of its first element. The rule
+      // is total rather than a guess: below seventeen the shape is still ambiguous and still
+      // refused, so a value of a length nobody meant is a throw and not a silent mis-set uniform.
+      if (numbers.length > 16) return gl.uniform1fv(location, numbers);
       throw new Error(`uniform ${name}: no call for ${numbers.length} components`);
   }
 }

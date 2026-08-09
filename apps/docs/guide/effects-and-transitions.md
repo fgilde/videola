@@ -1,9 +1,9 @@
 # Effects and transitions
 
-**Ten effects, seven transitions, two masks and a text engine — chosen from a browser that shows
-you each one at work.** Every colour on this page was measured against a real driver rather than
-asserted: `pnpm --filter @videola/engine test:gpu` runs 303 pixel checks through headless Chrome, and
-each claim below is one of them.
+**Twelve effects, seven transitions, two masks, three measuring instruments and a text engine —
+chosen from a browser that shows you each one at work.** Every colour on this page was measured
+against a real driver rather than asserted: `pnpm --filter @videola/engine test:gpu` runs 349 pixel
+checks through headless Chrome, and each claim below is one of them.
 
 ## An effect is a manifest and a fragment shader
 
@@ -61,12 +61,12 @@ from the bottom. An effect that cares about direction converts rather than assum
 to read clockwise on screen, the same convention as the transform's rotation, is
 `vec2(cos a, -sin a)` inside a pass.
 
-### A parameter is a float or a colour
+### A parameter is a float, a colour or a curve
 
-Until this milestone every manifest carried floats and nothing else, and that was the wall a LUT ran
-into. `ParamValue` in the Rust core has carried `Color`, `Int`, `Bool`, `Vec2` and `Choice` since the
-model was written; what was missing was anything between the project file and the uniform that could
-say which one a parameter is.
+Until recently every manifest carried floats and nothing else, and that was the wall a LUT ran into.
+`ParamValue` in the Rust core has carried `Color`, `Int`, `Bool`, `Vec2` and `Choice` since the model
+was written; what was missing was anything between the project file and the uniform that could say
+which one a parameter is.
 
 A manifest parameter now declares its `kind`. It is optional and defaults to `"float"`, so every
 manifest written before there was a second kind still reads -- including the audio ones, which have
@@ -89,6 +89,58 @@ second set of bugs.
 
 `ponytail:` the picker has no alpha, so it edits rgb and carries whatever alpha the model held -- and
 a colour parameter gets no keyframe switch, although `ParamValue::lerp` already interpolates one.
+
+```ts
+{ kind: "curve", key: "luma", name: { de: "Helligkeit", en: "Brightness" }, default: IDENTITY_CURVE }
+```
+
+A curve is a **list of control points**, `[input, output]` with both in 0 to 1 and the input
+ascending — the points a person drags, and not the table a shader reads. That distinction is the
+whole design decision, and it went the way it did for one reason: a table is derivable from points
+and points are not derivable from a table. A curve stored sampled could be rendered and never edited
+again, and a keyframe between two tables is not a keyframe between two curves — it is a keyframe
+between two of their shadows. `ParamValue::Curve` therefore carries the points, and `ParamValue::lerp`
+interpolates them pair by pair, both coordinates, so a keyframed knee slides sideways as well as up.
+Two curves with different point counts have no pairing at all and do not interpolate; the core holds
+the earlier keyframe, exactly as it does for a `Bool`.
+
+**Into the shader as a uniform array, not as a texture.** `clampCurve` samples the points into 32
+evenly spaced outputs and `uniform1fv` fills a `float[32]`; the shader mixes between neighbouring
+entries. A LUT texture was the other candidate and would have cost a texture unit, an upload path and
+a lifetime to manage in the compositor — the three things that leak — while buying nothing, because
+a keyframed curve has different points every frame and the texture would be rebuilt from those points
+anyway. What a texture *would* buy is hardware interpolation and a table long enough that the
+interpolation does not matter; measured, it does not matter at 32 either. The error a linear read
+leaves against the curve itself is under half of one 8-bit level, and `curve.test.ts` is the check
+that says so.
+
+That choice needed one rule added to `setUniforms`, and it is total rather than lucky: **an array
+longer than sixteen components cannot be a vector or a matrix**, because GLSL ES has nothing wider
+than a `mat4`. Below seventeen the shape is still ambiguous and still refused.
+
+Between the points the curve is a **monotone cubic** — Fritsch–Carlson — and not an ordinary spline.
+An ordinary spline through three points a colourist would actually place overshoots between them, and
+an overshoot on a tone curve is a bright rim along every edge in the picture that crossed that tone.
+Monotone limiting gives up a little smoothness and can never leave the box its neighbouring points
+make. Outside the outermost points the curve is flat rather than extrapolated: a control point at 0.2
+says what happens at 0.2, and guessing a slope past the end of what was drawn is how a curve that
+looked tame in the editor clips the blacks.
+
+The sampler lives in `@videola/core` rather than in the engine, and that is not where pixel
+arithmetic would naturally go. Two very different consumers need exactly the same answer out of it:
+the renderer samples it into the shader's table, and the curve editor draws the line under the
+finger. A second implementation on the drawing side would be a curve that looks like one thing and
+grades like another, which is the one bug a curve tool must not have. It is not keyframe resolution —
+*which* points the curve has at a moment in time is still the core's answer, out of Rust.
+
+In the surface a curve is a square field with the points as real buttons over an SVG drawing. Drag a
+point to move it, tap the field to add one where you tapped, tap a point to take it away; the two ends
+stay. Buttons rather than circles inside the drawing, because three things come free that way and
+none of them is free in SVG: the platform focuses and reaches them with the keyboard, the touch
+target is sized from the same `--v-touch-target` as every other control, and a browser check can
+measure the rectangle a finger has to hit. A circle in a scaled `viewBox` has a radius in user units,
+and forty-four pixels is not a fixed number of those.
+
 
 ## Two passes for a separable kernel
 
@@ -137,7 +189,7 @@ Which side of that line an effect falls on decides how it is written:
 | brightness, temperature, vignette | yes | scale `rgb`, clamp to `a` |
 | saturation, blur, sharpen | yes | a weighted sum is *why* premultiplied exists |
 | cross dissolve, wipe, slide | yes | a plain `mix` of the two inputs |
-| contrast | **no** | divide by `a`, work, multiply back |
+| contrast, curves, colour wheels | **no** | divide by `a`, work, multiply back |
 | chroma key | writes `a` | scale the whole `vec4`, colour and alpha together |
 | masks | writes `a` | scale the whole `vec4`; `m` is in [0, 1], so nothing needs clamping |
 
@@ -149,9 +201,13 @@ Two consequences worth knowing before writing a shader:
 - **A blur on straight alpha counts a transparent texel's colour as much as an opaque one's.** That
   is the dark halo around every blurred cutout, and premultiplied is what removes it.
 
-Contrast is the one effect here that is not linear, and the difference is not subtle: the same slider
-on a half-transparent grey gives 97 done correctly and 33 done on the premultiplied value. No
-assertion about the shader's text could tell those apart, which is why it is a pixel check.
+Contrast was the first effect here that is not linear, and the difference is not subtle: the same
+slider on a half-transparent grey gives 97 done correctly and 33 done on the premultiplied value. No
+assertion about the shader's text could tell those apart, which is why it is a pixel check. Colour
+correction is entirely made of such effects — a curve asks about 0.31 instead of about 0.63 and comes
+back at 23 rather than 93, a lift adds a constant that premultiplication would have scaled and comes
+back at 124 rather than 92 — so every one of them undoes the premultiplication first and puts it back
+after, and every one of them has its own pixel check for it.
 
 **The alpha channel is not a blend mode's business.** The compositor composites alpha as a plain
 over-operator in `#draw`, independent of the colour equation, so no mode can punch a transparent hole
@@ -171,6 +227,8 @@ layer, which is what a vignette is.
 | Contrast | colour | `amount` 0–4 | a slope about mid grey; 0 flattens to that grey |
 | Saturation | colour | `amount` 0–2 | mixes towards luma; **0 is black and white** |
 | Colour temperature | colour | `amount` −1–1 | red against blue, green anchored |
+| Curves | colour | `luma`, `red`, `green`, `blue`, each a list of points | drags single tones up or down |
+| Colour wheels | colour | `liftTint`/`liftAmount`, `gammaTint`/`gammaAmount`, `gainTint`/`gainAmount` | black point, midtones and white point |
 | Vignette | colour | `amount` 0–1, `size` 0–1.4 | darkens towards the corners |
 | Blur | detail | `amount` 0–16 | separable Gaussian, spacing in frame pixels |
 | Sharpen | detail | `amount` 0–4 | unsharp mask against the four neighbours |
@@ -183,6 +241,37 @@ zero.
 
 A chroma key ignores greys on purpose. A grey has no meaningful hue and the arithmetic hands back
 zero for it, so without a floor on saturation a key set to red would erase every grey in the picture.
+
+### Four curves, not three
+
+The three channel curves are the ordinary ones: red in, red out. The fourth is not those three set to
+the same shape, and that is why it exists. It reads the Rec. 709 luma of the pixel, asks the curve
+what that tone should become, and scales all three channels by the ratio — so the ratio between them,
+and with it the hue and the saturation, come out exactly as they went in. Measured on a pixel of
+180, 90, 30 through the same S-curve: the brightness curve gives 146, 73, 24, still exactly two to
+one; the identical shape through the three channel curves gives 217, 60, 8, which is a saturation
+change nobody asked for.
+
+What a ratio cannot do is lift something that is already black. Raising the foot of the brightness
+curve opens the shadows and leaves true black alone — for that, use lift on the colour wheels, whose
+whole job is to add rather than to scale.
+
+### Lift, gamma and gain are one effect
+
+They are one line. Lift says where black goes, gain says where white goes — between them they define
+a straight line through the tone range — and gamma bends what lies between without moving either end.
+Split into three effects the chain would run three unpremultiply/premultiply round trips and three
+clamps to compute one line, and the middle one would be clamping a picture the last one is about to
+stretch again.
+
+Each wheel is a **tint and a strength**, which is what the two controls on a real panel are: the wheel
+pushes the three channels apart and the ring moves all three together. A tint is stored as a colour,
+so mid grey is no tint at all and the distance from mid grey is the push. It arrives premultiplied,
+like every colour that reaches a shader here, and is divided back out — alpha is coverage, and a tint
+covers nothing.
+
+The three are told apart on black, and only there. A mid grey cannot distinguish them: a lift of 0.25
+and a gain of 0.25 both put it at 160. On black, lift gives 64 and the other two give 0.
 
 ### A mask is an effect, not a field on the clip
 
@@ -327,6 +416,84 @@ layer, a blur sees each of them on its own rather than the seam between them, an
 to both is not the same as the effect applied once to what they made together. Doing that properly
 wants the tracks below the layer rendered into a target of their own — the same isolation a compound
 clip is still waiting for, and the two arrive together or not at all.
+
+## The measuring instruments
+
+Without a scope every colour decision is a guess about a monitor. Three of them read the preview:
+a **waveform**, a **vectorscope** and a **histogram**, in a strip under the picture that the switch
+on the transport opens.
+
+They read the preview because the preview is the one surface in this application anything asks for a
+pixel back from — `createContext(canvas, { readable: true })`, which is `preserveDrawingBuffer`. The
+pixels are already there.
+
+**What that costs, measured before it was chosen.** On the software rasteriser the harness runs, at
+1080p:
+
+| | per reading |
+|---|---|
+| `readPixels` of the whole drawing buffer, 8.3 MB | 3.4 ms |
+| the same, then counting all two million pixels | **33.6 ms** |
+| `sample(256, 144)` — a blit, then a 147 kB read | 0.22 ms |
+| the same, then counting 36 864 pixels | **0.91 ms** |
+
+Thirty-three milliseconds is longer than a frame, every frame, for a panel nobody is dragging. So the
+shrinking happens on the GPU: `Compositor.sample` blits the drawing buffer into a small framebuffer
+and reads that back, and the panel measures ten times a second rather than sixty. Ten hertz of 0.91 ms
+is under one percent of one core, and while the strip is closed nothing is read back at all.
+
+**The blit is NEAREST, and that is the whole difference between a measurement and a picture.**
+Averaging four neighbours invents values no pixel had: a single clipped highlight in a dark field
+averages down into a midtone and the scope stops reporting the one thing it exists to report.
+Sampling may miss such a pixel; it may never soften it into one that was not there. The pixel harness
+shrinks a 32-pixel frame carrying exactly two levels to thirteen and checks that exactly two come
+back — thirteen and not sixteen, because at a whole ratio a bilinear read lands on texel centres and
+gives the same answer nearest does.
+
+`ponytail:` the read is still synchronous, so it waits for the GPU. A `PIXEL_PACK_BUFFER` with a
+fence, read a frame late, would not wait at all — worth it if a scope ever has to keep up with
+playback rather than with a person looking at it.
+
+Three other things the instruments are careful about:
+
+- **Premultiplied, like everything downstream of the clip shader.** A scope is about the colour and
+  not about the coverage, so each pixel is divided back out by its own alpha. Read as if it were
+  straight, a half-transparent white reads as a mid grey.
+- **A pixel with no coverage has no colour to report** and is left out entirely rather than counted as
+  black. Counting it as black is what makes an empty frame look like a perfectly exposed one with the
+  lens cap on. An empty frame therefore produces an empty reading, and the panel says so in words
+  rather than dividing by a count of nought.
+- **The graticule comes out of the same transform the measurement does.** The six boxes are the
+  colour bars at three-quarter amplitude, computed rather than remembered, so the plot and the boxes
+  it is read against cannot drift apart.
+
+## The colour space, and what it means for grading
+
+The frame arrives as BT.709 with a limited range far more often than not, and the browser converts it
+on upload from the frame's own `VideoColorSpace` — `BROWSER_DEFAULT_WEBGL`. Converting it again in a
+shader of our own would compete with a conversion that knows the metadata, and two conversions are
+worse than the one that does.
+
+What comes out of that is **non-linear sRGB**, and everything downstream mixes in it. For most of the
+library that is the ordinary compromise every editor makes. For colour correction it is a real
+limitation, and it is worth naming rather than passing over:
+
+- **A gamma move is not an exposure move.** Opening up by a stop is a multiplication in linear light;
+  here it is a multiplication of already-encoded values, which lifts the shadows more than the
+  highlights. It looks like what people expect from an editor, because every editor does this, and it
+  is not what a light meter would say.
+- **Saturation and the brightness curve are luma, not luminance.** The Rec. 709 weights are applied to
+  the encoded values, so a strong desaturation shifts perceived brightness slightly. The waveform
+  reads the same quantity, which at least means the instrument and the effect agree with each other.
+- **A cross dissolve halfway is not half the light.** Mixing encoded values darkens the middle of
+  every dissolve relative to a linear mix. Visible on a dissolve between a bright and a dark shot.
+- **A wide-gamut or HDR source is tone-mapped by the browser on the way in** and there is nothing here
+  that can undo that. This pipeline grades an SDR picture.
+
+`ponytail:` the fix is a pipeline change and not a shader change: sRGB texture formats, an sRGB draw
+buffer and a half-float intermediate target, so the chain carries linear light and the encoding
+happens once at the end. Every clamp to `[0, a]` in this library would have to become a clamp against
+a larger range, and every measured number on this page would move.
 
 ## Transitions
 

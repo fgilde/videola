@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, type Mock } from "vitest";
 
 import {
+  curveAt,
   FLICKS_PER_SECOND,
   type Clip,
   type Command,
@@ -44,6 +45,26 @@ const DIP: EffectDescriptor = {
   params: [
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
     { kind: "color", key: "colour", name: { de: "Farbe", en: "Colour" }, default: [0, 0, 0, 1] },
+  ],
+};
+
+// The second kind that is not a slider, and the first whose size the project file chooses. What it
+// proves is what the dip proves one kind further along: a manifest parameter that is a list of
+// points gets a field with points in it, not a number between nought and one.
+const CURVES: EffectDescriptor = {
+  id: "curves",
+  name: { de: "Kurven", en: "Curves" },
+  inputs: 1,
+  params: [
+    {
+      kind: "curve",
+      key: "luma",
+      name: { de: "Helligkeit", en: "Brightness" },
+      default: [
+        [0, 0],
+        [1, 1],
+      ],
+    },
   ],
 };
 
@@ -170,6 +191,54 @@ function withDip(): Overrides {
 
 function colourAt(value: unknown): EffectParamSnapshot {
   return new Map([["eff_1", new Map<string, ParamValue>([["colour", value as ParamValue]])]]);
+}
+
+function withCurves(keyframes: Record<string, unknown[]> = {}): Overrides {
+  return {
+    effects: [{ id: "eff_1", effectType: "curves", enabled: true, params: {}, keyframes }],
+  };
+}
+
+function lumaAt(value: unknown): EffectParamSnapshot {
+  return new Map([["eff_1", new Map<string, ParamValue>([["luma", value as ParamValue]])]]);
+}
+
+// jsdom lays nothing out, so the field has no rectangle and every pointer position would land on
+// the same tone. A hundred by a hundred at the origin makes a client coordinate a percentage.
+function measured(): HTMLElement {
+  const field = screen.getByRole("group", { name: /Kurve für Helligkeit/ });
+  field.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }) as DOMRect;
+  return field;
+}
+
+function curvePoints(): HTMLButtonElement[] {
+  return screen.getAllByRole("button", { name: /Helligkeit, Punkt bei/ }) as HTMLButtonElement[];
+}
+
+// One press, one move, one release -- the shape a real drag has, and the only shape that shows
+// whether the moves under one grab collapse into one entry on the undo stack.
+function dragPoint(point: HTMLElement, steps: [number, number][]): void {
+  act(() => void fireEvent.pointerDown(point, { pointerId: 3, clientX: 0, clientY: 100 }));
+  for (const [x, y] of steps) {
+    act(() => void fireEvent.pointerMove(point, { pointerId: 3, clientX: x, clientY: 100 - y }));
+  }
+  const last = steps.at(-1) ?? [0, 0];
+  act(() =>
+    void fireEvent.pointerUp(point, { pointerId: 3, clientX: last[0], clientY: 100 - last[1] }),
+  );
+}
+
+// Down and up in the same place, which is what tells a tap from a drag -- and the whole difference
+// between moving a point and taking it away.
+function tapPoint(point: HTMLElement): void {
+  act(() => void fireEvent.pointerDown(point, { pointerId: 3, clientX: 50, clientY: 50 }));
+  act(() => void fireEvent.pointerUp(point, { pointerId: 3, clientX: 50, clientY: 50 }));
+}
+
+function sentCurve(rig: Rig, index = 0): [number, number][] {
+  const command = rig.sent[index]!.command as unknown as { value: { value: [number, number][] } };
+  return command.value.value;
 }
 
 function key(time: Time, value: number, interp: Interp = "linear"): unknown {
@@ -891,6 +960,165 @@ describe("the inspector", () => {
       expect(rig.sent[0]!.command).toMatchObject({
         value: { kind: "color", value: [0.2, 0.4, 1, 1] },
       });
+    });
+  });
+
+  describe("a curve parameter", () => {
+    const showCurves = (value: unknown, over: Overrides = {}): Rig =>
+      show({
+        clip: clipWithMedia({ ...withCurves(), ...over }),
+        effects: [CURVES],
+        resolved: lumaAt(value),
+      });
+    const S = { kind: "curve", value: [[0, 0], [0.5, 0.8], [1, 1]] };
+
+    it("gets a field of draggable points rather than a slider", () => {
+      showCurves(S);
+
+      expect(curvePoints()).toHaveLength(3);
+      expect(screen.queryByRole("slider", { name: "Helligkeit" })).toBeNull();
+    });
+
+    // The point positions are what a person aims at, so they have to be where the model says --
+    // and the y axis is turned, because a graph runs up and a page runs down.
+    it("puts each point where the model says, with the output running up the field", () => {
+      showCurves(S);
+
+      expect(curvePoints().map((point) => [point.style.left, point.style.bottom])).toEqual([
+        ["0%", "0%"],
+        ["50%", "80%"],
+        ["100%", "100%"],
+      ]);
+    });
+
+    it("sends the dragged point as a curve, not as a number", () => {
+      const rig = showCurves(S);
+      measured();
+
+      dragPoint(curvePoints()[1]!, [[25, 60]]);
+
+      expect(rig.sent[0]!.command).toEqual({
+        type: "effect.setParam",
+        target: { kind: "clip", clip: "clp_1" },
+        effectType: "curves",
+        key: "luma",
+        value: { kind: "curve", value: [[0, 0], [0.25, 0.6], [1, 1]] },
+      });
+    });
+
+    // One drag is one entry on the undo stack. Without a key per gesture, crossing the field is
+    // forty steps of undo and the shape you started from is forty presses away.
+    it("collapses one drag into one undo step and starts a new one on the next grab", () => {
+      const rig = showCurves(S);
+      measured();
+
+      dragPoint(curvePoints()[1]!, [
+        [30, 50],
+        [40, 55],
+        [50, 60],
+      ]);
+      dragPoint(curvePoints()[1]!, [[60, 70]]);
+
+      expect(rig.sent).toHaveLength(4);
+      expect(new Set(rig.sent.slice(0, 3).map((entry) => entry.key)).size).toBe(1);
+      expect(rig.sent[3]!.key).not.toBe(rig.sent[0]!.key);
+    });
+
+    // A point that overtakes its neighbour changes its own place in the list, and the finger then
+    // carries on dragging whichever point inherited it. Clamped, the order can never change.
+    it("will not let a point past its neighbours", () => {
+      const rig = showCurves(S);
+      measured();
+
+      dragPoint(curvePoints()[1]!, [[400, 50]]);
+      const far = sentCurve(rig, rig.sent.length - 1);
+
+      expect(far[1]![0]).toBeLessThan(1);
+      expect(far[1]![0]).toBeGreaterThan(0);
+      expect(far.map((point) => point[0])).toEqual([...far.map((point) => point[0])].sort());
+    });
+
+    it("moves a point with the arrow keys", () => {
+      const rig = showCurves(S);
+
+      act(() => void fireEvent.keyDown(curvePoints()[1]!, { key: "ArrowUp" }));
+
+      expect(sentCurve(rig)[1]).toEqual([0.5, 0.8200000000000001]);
+    });
+
+    // Adding a point has to change nothing until it is dragged. One that landed anywhere but on
+    // the line would be a curve editor that grades the picture by being looked at.
+    it("adds a point on the line where the field was tapped", () => {
+      const rig = showCurves(S);
+      const field = measured();
+
+      act(() => void fireEvent.pointerDown(field, { clientX: 25, clientY: 50 }));
+
+      const added = sentCurve(rig);
+      expect(added).toHaveLength(4);
+      expect(added[1]![0]).toBeCloseTo(0.25, 6);
+      // On the line the curve already drew there, not at the height of the press.
+      expect(added[1]![1]).toBeCloseTo(curveAt(S.value as [number, number][], 0.25), 6);
+    });
+
+    it("takes an inner point away when it is tapped rather than dragged", () => {
+      const rig = showCurves(S);
+      measured();
+
+      tapPoint(curvePoints()[1]!);
+
+      expect(sentCurve(rig, rig.sent.length - 1)).toEqual([
+        [0, 0],
+        [1, 1],
+      ]);
+    });
+
+    // Black and white are what a curve is drawn between. A field that could lose them would end
+    // up with no shape left to speak of and no way back to one.
+    it("keeps the two ends whatever is done to them", () => {
+      const rig = showCurves(S);
+      measured();
+
+      tapPoint(curvePoints()[0]!);
+      tapPoint(curvePoints()[2]!);
+      act(() => void fireEvent.keyDown(curvePoints()[0]!, { key: "Delete" }));
+
+      expect(rig.sent).toHaveLength(0);
+    });
+
+    it("falls back to the declared default for a value of the wrong kind", () => {
+      showCurves(float(0.5));
+
+      expect(curvePoints().map((point) => [point.style.left, point.style.bottom])).toEqual([
+        ["0%", "0%"],
+        ["100%", "100%"],
+      ]);
+    });
+
+    // Curve and keyframe, crossed on the surface: with a track on the parameter the field writes a
+    // keyframe rather than a static value, and outside the clip it writes nothing at all.
+    it("writes a keyframe once the parameter is on the clock", () => {
+      const rig = showCurves(S, withCurves({ luma: [{ time: 0, value: S, interp: "linear" }] }));
+      measured();
+
+      dragPoint(curvePoints()[1]!, [[25, 60]]);
+
+      expect(rig.sent[0]!.command).toMatchObject({
+        type: "keyframe.add",
+        key: "luma",
+        value: { kind: "curve", value: [[0, 0], [0.25, 0.6], [1, 1]] },
+      });
+    });
+
+    it("cannot be dragged while the playhead stands outside a clip whose curve is keyframed", () => {
+      show({
+        clip: clipWithMedia(withCurves({ luma: [{ time: 0, value: S, interp: "linear" }] })),
+        effects: [CURVES],
+        resolved: lumaAt(S),
+        playhead: 5 * SECOND,
+      });
+
+      for (const point of curvePoints()) expect(point.disabled).toBe(true);
     });
   });
 });

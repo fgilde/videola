@@ -30,6 +30,7 @@ describe("PanelTabs", () => {
       Zeitleiste: "true",
       Eigenschaften: "false",
       Mischpult: "false",
+      Messgeräte: "false",
     });
   });
 
@@ -41,6 +42,7 @@ describe("PanelTabs", () => {
       Zeitleiste: "false",
       Eigenschaften: "false",
       Mischpult: "false",
+      Messgeräte: "false",
     });
   });
 
@@ -62,7 +64,18 @@ describe("PanelTabs", () => {
       Zeitleiste: "false",
       Eigenschaften: "false",
       Mischpult: "true",
+      Messgeräte: "false",
     });
+  });
+
+  // Without a tab the scopes exist on a desktop and nowhere else, and grading on a phone is
+  // exactly the case where guessing at the picture is worst.
+  it("puts the scopes one tap away", () => {
+    const onSelect = show("timeline");
+
+    fireEvent.click(screen.getByText("Messgeräte"));
+
+    expect(onSelect.mock.calls).toEqual([["scopes"]]);
   });
 
   it("reports the panel that was asked for", () => {

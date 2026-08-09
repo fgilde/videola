@@ -29,6 +29,13 @@ export interface TransportProps {
   onMarkerJump?: (direction: 1 | -1) => void;
   resolution?: number;
   onResolution?: (scale: number) => void;
+  /**
+   * Whether the measuring instruments are showing. Undefined on a layout that reaches them some
+   * other way -- a phone has them behind a tab, and a second switch for the same thing is a
+   * second answer to the question of which one is right.
+   */
+  scopes?: boolean;
+  onToggleScopes?: () => void;
 }
 
 export function Transport({
@@ -44,6 +51,8 @@ export function Transport({
   onMarkerJump,
   resolution = 1,
   onResolution,
+  scopes,
+  onToggleScopes,
 }: TransportProps): ReactElement {
   const { t, formatTimecode } = useI18n();
   useTransportKeys(playing, onPlayPause, onStep, onShuttle, onMarkerJump);
@@ -76,6 +85,20 @@ export function Transport({
         />
       )}
       <IconButton icon="skipEnd" label={t("transport.toEnd")} onClick={() => onSeek(duration)} />
+      {/* Off until it is asked for, and on the strip that is already there so that asking costs
+          the picture nothing until the answer is yes. The instruments take a hundred and fifty
+          pixels out of the middle column, and this editor's first rule is that the picture is the
+          largest thing in the window -- so who gives that up, and when, is a decision and not a
+          default. It is also what makes the measurement free: nothing is read back from the GPU
+          while this is off. */}
+      {onToggleScopes !== undefined && (
+        <IconButton
+          icon="waveform"
+          label={t("transport.scopes")}
+          pressed={scopes === true}
+          onClick={onToggleScopes}
+        />
+      )}
       <span className="v-transport__time" aria-label={t("transport.position")}>
         {formatTimecode(timeToSeconds(time), fps)}
         <span className="v-transport__duration"> / {formatTimecode(timeToSeconds(duration), fps)}</span>

@@ -67,6 +67,20 @@ function floats(entries) {
     new Map(values.map(([key, value]) => [key, { kind: "float", value }]))]));
 }
 
+// The same batch, with the kind read off the shape of the value the way a project file spells it:
+// a number is a float, four numbers a colour, a list of pairs a curve. What the core resolves is a
+// ParamValue whatever the kind, so a helper that could only write floats could never drive the two
+// parameters that are not floats.
+function resolved(entries) {
+  return new Map(entries.map(([id, values]) => [id,
+    new Map(values.map(([key, value]) => [key, kinded(value)]))]));
+}
+
+function kinded(value) {
+  if (typeof value === "number") return { kind: "float", value: value };
+  return Array.isArray(value[0]) ? { kind: "curve", value: value } : { kind: "color", value: value };
+}
+
 // A transition's own parameters live on the model rather than in the resolved batch, so they travel
 // as ParamValue the way a project file carries them.
 function params(values) {
@@ -601,7 +615,7 @@ function through(type, values, pixel, over) {
   const { canvas, compositor, scene } = rig(size, size, spec.background || "#000000",
     [{ effects, t: spec.t || {}, blend: spec.blend }], size, size);
   const f = frame(size, size, typeof pixel === "function" ? pixel : () => pixel);
-  draw(compositor, scene, 0, new Map([["clp_0", f]]), floats([["eff_1", Object.entries(values)]]));
+  draw(compositor, scene, 0, new Map([["clp_0", f]]), resolved([["eff_1", Object.entries(values)]]));
   f.close();
   return { canvas, at: reader(compositor.readPixels(), size, size) };
 }
@@ -965,6 +979,173 @@ test("a contrast that changes over time changes the picture", () => {
   check("and separated at the second", shot(2), [192, 192, 192, 255]);
 });
 
+// ---------------------------------------------------------------------------------------------
+// Colour correction. A curve is provable at pixels and nowhere else: what `curve.ts` pins is the
+// arithmetic, and what these pin is that the arithmetic reached the picture -- through a parameter
+// kind that is a list of points, a uniform that is a table of thirty-two floats, and a shader that
+// reads it between its entries.
+// ---------------------------------------------------------------------------------------------
+
+// The knee at a quarter and the shoulder at three quarters: the first shape anybody draws.
+const S_CURVE = [[0, 0], [0.25, 0.1], [0.75, 0.9], [1, 1]];
+const STRAIGHT = [[0, 0], [1, 1]];
+
+test("a curve nobody has bent is the picture it was given", () => {
+  check("no parameters at all leaves the grey alone",
+    through("curves", {}, [128, 128, 128, 255]).at(2, 2), [128, 128, 128, 255]);
+  check("and the straight line does too",
+    through("curves", { luma: STRAIGHT, red: STRAIGHT }, [180, 90, 30, 255]).at(2, 2),
+    [180, 90, 30, 255]);
+});
+
+// The shape, tone by tone, rather than "something moved". An S pulls the quarter down and the
+// three-quarter up by the amounts the points ask for, and leaves mid grey where it was.
+test("an S curve darkens the shadows and lifts the highlights", () => {
+  check("the quarter tone comes down", through("curves", { luma: S_CURVE }, [64, 64, 64, 255])
+    .at(2, 2), [26, 26, 26, 255]);
+  check("mid grey stands still", through("curves", { luma: S_CURVE }, [128, 128, 128, 255])
+    .at(2, 2), [128, 128, 128, 255]);
+  check("the three-quarter tone goes up", through("curves", { luma: S_CURVE }, [192, 192, 192, 255])
+    .at(2, 2), [230, 230, 230, 255]);
+});
+
+// Why there are four curves and not three. The brightness curve scales all three channels by one
+// ratio, so 180:90 comes out 146:73 -- still exactly two to one, the same colour at a different
+// brightness. The identical shape driven through the three channel curves separately moves 180 and
+// 90 by different amounts and comes out 217:60, which is a saturation change nobody asked for.
+test("the brightness curve keeps the colour and the channel curves do not", () => {
+  const tone = through("curves", { luma: S_CURVE }, [180, 90, 30, 255]).at(2, 2);
+  const apart = through("curves", { red: S_CURVE, green: S_CURVE, blue: S_CURVE },
+    [180, 90, 30, 255]).at(2, 2);
+  check("brightness alone scales the three channels together", tone, [146, 73, 24, 255]);
+  check("and the same shape per channel pulls them apart", apart, [217, 60, 8, 255]);
+  check("the ratio survives the one and not the other",
+    [Math.round(tone[0] / tone[1] * 100), Math.round(apart[0] / apart[1] * 100)], [200, 362], 2);
+});
+
+test("a channel curve moves its own channel and no other", () => {
+  check("a lifted red on a neutral grey", through("curves", { red: [[0, 0.4], [1, 1]] },
+    [128, 128, 128, 255]).at(2, 2), [179, 128, 128, 255]);
+});
+
+// The same trap contrast fell into, on a parameter with thirty-two entries instead of one. Working
+// on the premultiplied value asks the curve about 0.31 instead of about 0.63, which comes back at
+// 23 rather than 93 -- and no assertion about the shader's text could tell the two apart.
+test("a curve reads the colour, not the colour times its alpha", () => {
+  check("a half-transparent grey through the S curve",
+    through("curves", { luma: S_CURVE }, [160, 160, 160, 128]).at(2, 2), [93, 93, 93, 255]);
+});
+
+// The gap the hardware leaves open. A curve pinned at white drives the channel to one, and one is
+// not a legal premultiplied value on a pixel that is only half covered -- it has to come back at
+// its own alpha. RGBA8 would have clamped anything above one on its own, so a check that only
+// pushed past one would prove nothing.
+test("a curve cannot push a channel past its own alpha", () => {
+  check("a blue curve pinned at white on a half-transparent grey",
+    through("curves", { blue: [[0, 1], [1, 1]] }, [160, 160, 160, 128]).at(2, 2),
+    [80, 80, 128, 255]);
+});
+
+// Curve and keyframe, crossed: two moments of the same clip with the curve the core resolved for
+// each. Point-by-point interpolation is the core's and is proven there; that a curve which changes
+// over time changes the picture is only provable here.
+test("a curve that changes over time changes the picture", () => {
+  const effects = [{ id: "eff_1", effectType: "curves", enabled: true, params: {}, keyframes: {} }];
+  const { compositor, scene } = rig(4, 4, "#000000", [{ effects }], 4, 4);
+  const shot = (curve) => {
+    const f = frame(4, 4, () => [64, 64, 64, 255]);
+    draw(compositor, scene, 0, new Map([["clp_0", f]]), resolved([["eff_1", [["luma", curve]]]]));
+    f.close();
+    return reader(compositor.readPixels(), 4, 4)(2, 2);
+  };
+  check("straight at the first keyframe", shot(STRAIGHT), [64, 64, 64, 255]);
+  check("bent at the second", shot(S_CURVE), [26, 26, 26, 255]);
+  // Halfway between the two keys the core hands over the halfway curve, point for point.
+  check("and halfway between them, halfway bent",
+    shot([[0, 0], [0.25, 0.175], [0.75, 0.825], [1, 1]]), [45, 45, 45, 255], 2);
+});
+
+// A neutral wheel is mid grey, so this is the setting a project carries before anybody touches it.
+test("colour wheels at rest are the picture they were given", () => {
+  check("neutral tints and no strength", through("colorWheels", {}, [128, 128, 128, 255]).at(2, 2),
+    [128, 128, 128, 255]);
+});
+
+// The three wheels are three different things, and black is where that shows. Lift moves where
+// nought lands, gain moves where one lands, gamma moves neither -- so on a black pixel lift is the
+// only one of the three that does anything at all. A shader that wired all three into one offset
+// passes every check taken on a mid grey.
+test("lift, gamma and gain each move a different end of the range", () => {
+  const black = [0, 0, 0, 255];
+  const white = [255, 255, 255, 255];
+  const grey = [128, 128, 128, 255];
+  check("lift raises black", through("colorWheels", { liftAmount: 0.25 }, black).at(2, 2),
+    [64, 64, 64, 255]);
+  check("gain leaves black alone", through("colorWheels", { gainAmount: 0.25 }, black).at(2, 2),
+    black);
+  check("gamma leaves black alone", through("colorWheels", { gammaAmount: 0.25 }, black).at(2, 2),
+    black);
+  check("gamma leaves white alone too", through("colorWheels", { gammaAmount: 0.25 }, white)
+    .at(2, 2), white);
+  // And all three reach the midtones, which is why the midtones cannot tell them apart.
+  check("gamma bends the middle upwards",
+    through("colorWheels", { gammaAmount: 0.25 }, grey).at(2, 2), [147, 147, 147, 255]);
+  check("and downwards", through("colorWheels", { gammaAmount: -0.25 }, grey).at(2, 2),
+    [102, 102, 102, 255]);
+});
+
+// The tint half of a wheel, and the same crossing again: a warm shadow tint reddens black and
+// leaves white, a warm highlight tint leaves black and warms white. On a mid grey the two are
+// indistinguishable, which is exactly why neither is checked there alone.
+test("a wheel's tint reaches only its own end of the range", () => {
+  const warm = [1, 0.5, 0, 1];
+  const black = [0, 0, 0, 255];
+  const white = [255, 255, 255, 255];
+  check("a shadow tint colours black", through("colorWheels", { liftTint: warm }, black).at(2, 2),
+    [64, 0, 0, 255]);
+  check("and leaves white alone", through("colorWheels", { liftTint: warm }, white).at(2, 2), white);
+  check("a highlight tint leaves black alone",
+    through("colorWheels", { gainTint: warm }, black).at(2, 2), black);
+  check("and colours white", through("colorWheels", { gainTint: warm }, white).at(2, 2),
+    [255, 255, 191, 255]);
+});
+
+// A tint is a direction and not a coverage, so its alpha may not change what it does. It arrives
+// premultiplied like every colour that reaches a shader here, and a shader that used it as it came
+// would read a tint at half alpha as a weaker and differently balanced one -- which is a control
+// whose behaviour depends on a number no wheel has.
+test("a wheel's tint means the same whatever alpha it carries", () => {
+  const grey = [128, 128, 128, 255];
+  const opaque = through("colorWheels", { gainTint: [1, 0.5, 0, 1] }, grey).at(2, 2);
+  const thin = through("colorWheels", { gainTint: [1, 0.5, 0, 0.5] }, grey).at(2, 2);
+  check("a warm highlight tint at full alpha", opaque, [160, 128, 96, 255]);
+  check("and the same tint at half alpha is the same tint", thin, opaque);
+});
+
+// Lift adds a constant, and premultiplication would have scaled that constant by the coverage.
+// Working on the premultiplied value comes back at 124 rather than 92.
+test("the wheels read the colour, not the colour times its alpha", () => {
+  check("a half-transparent grey lifted",
+    through("colorWheels", { liftAmount: 0.25 }, [160, 160, 160, 128]).at(2, 2), [92, 92, 92, 255]);
+});
+
+// Past alpha and under one: the band the RGBA8 target does not close. Lift and gain together drive
+// this straight value just past one, and what has to come back is the pixel's own coverage.
+test("the wheels cannot push a channel past its own alpha", () => {
+  check("a half-transparent grey driven over the top",
+    through("colorWheels", { liftAmount: 0.25, gainAmount: 0.5 }, [160, 160, 160, 128]).at(2, 2),
+    [128, 128, 128, 255]);
+});
+
+// Wheel and opacity, crossed. Opacity is applied after the chain, so a lifted black clip at half
+// opacity is half of the lifted picture over the background -- not a lift computed on an already
+// faded pixel, which would put the red channel at 191.
+test("a graded clip is faded after it is graded, not before", () => {
+  check("a lifted black clip at half opacity over red",
+    through("colorWheels", { liftAmount: 0.25 }, [0, 0, 0, 255],
+      { t: { opacity: 0.5 }, background: "#ff0000" }).at(2, 2), [160, 32, 32, 255]);
+});
+
 // Two clips overlapping in time, the incoming one carrying the transition. Both pictures are split
 // down the middle, which is what tells a transition that *moves* them from one that only reveals.
 function crossing(type, at, over) {
@@ -1085,6 +1266,95 @@ test("a colour parameter reaches the shader as a colour", () => {
   // read as the manifest's default -- black at full cover -- rather than as an unset uniform.
   check("a value of the wrong kind falls back to the declared default",
     crossing("dip", 500, { params: { colour: 0.5 } }).at(2, 2), [0, 0, 0, 255]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// What a measuring instrument reads. `scopes.test.ts` pins the counting; only a driver can say
+// whether the pixels handed to it are the pixels that were drawn, and whether shrinking them on
+// the way keeps the values a scope exists to report.
+// ---------------------------------------------------------------------------------------------
+
+// Four quadrants, so a sample that came back mirrored, rotated or off by a row is a different
+// picture rather than the same one at another size.
+const QUADRANTS = (x, y) => (y < 16 ? (x < 16 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+  : (x < 16 ? [0, 0, 255, 255] : [255, 255, 0, 255]));
+
+function painted(pixel, size, background) {
+  const { compositor, scene } = rig(size, size, background || "#000000", [{}], size, size);
+  const f = frame(size, size, pixel);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]));
+  f.close();
+  return compositor;
+}
+
+function onlyLevels(counts) {
+  const found = [];
+  counts.forEach((count, level) => { if (count > 0) found.push(level); });
+  return found;
+}
+
+test("a sampled read is the picture at another size", () => {
+  const small = painted(QUADRANTS, 32).sample(8, 8);
+  check("the whole small buffer came back", small.length, 8 * 8 * 4);
+  const at = reader(small, 8, 8);
+  check("top left is still red", at(1, 1), [255, 0, 0, 255]);
+  check("top right is still green", at(6, 1), [0, 255, 0, 255]);
+  check("bottom left is still blue", at(1, 6), [0, 0, 255, 255]);
+  check("bottom right is still yellow", at(6, 6), [255, 255, 0, 255]);
+});
+
+// The reason the shrink is NEAREST. A clipped patch in a dark field is the single most important
+// thing a scope has to report, and an averaging shrink turns its edge into midtones that were
+// never in the picture -- a scope then reports tones nothing on screen has.
+//
+// Thirteen out of thirty-two on purpose: at a whole ratio a bilinear read lands on texel centres
+// and gives the same answer nearest does, so a check taken at half size cannot tell the two apart.
+test("shrinking a picture invents no value that was never in it", () => {
+  const patch = (x, y) => (x > 10 && x < 15 && y > 10 && y < 15
+    ? [255, 255, 255, 255] : [16, 16, 16, 255]);
+  const small = painted(patch, 32).sample(13, 13);
+  const levels = new Set();
+  for (let i = 0; i < small.length; i += 4) levels.add(small[i]);
+  check("only the two levels the frame carried came back",
+    [...levels].sort((a, b) => a - b), [16, 255]);
+});
+
+// End to end on real pixels: a flat colour has a histogram with one bar per channel, which is the
+// reading everybody checks a scope against first.
+test("a solid colour reads as one bar in every channel", () => {
+  const reading = R.measure(painted(() => [64, 128, 192, 255], 32).sample(16, 16), 16, 16);
+  check("every pixel was measured", reading.measured, 256);
+  check("red", onlyLevels(reading.histogram.red), [64]);
+  check("green", onlyLevels(reading.histogram.green), [128]);
+  check("blue", onlyLevels(reading.histogram.blue), [192]);
+  check("and the waveform sits on one line", reading.range, [119, 119]);
+});
+
+// Scope and empty picture, crossed on a driver. A frame with a transparent background has nothing
+// in it to measure, and the reading has to come back empty rather than as a spike at black.
+test("a measurement of a frame nothing was drawn into is empty", () => {
+  const { compositor } = rig(16, 16, "#00000000", []);
+  draw(compositor, project(16, 16, "#00000000", []), 0, new Map());
+  const reading = R.measure(compositor.sample(8, 8), 8, 8);
+  check("nothing was measured", reading.measured, 0);
+  check("and no level was counted", reading.range, undefined);
+});
+
+// Scope and grading, crossed: the instrument has to move when the picture does, or it is a picture
+// of a scope. A lift raises the black point, and the floor of the reading is what that means.
+test("a scope follows the grade", () => {
+  const size = 16;
+  const effects = [{ id: "eff_1", effectType: "colorWheels", enabled: true, params: {}, keyframes: {} }];
+  const { compositor, scene } = rig(size, size, "#000000", [{ effects }], size, size);
+  const floorAt = (lift) => {
+    const f = frame(size, size, (x) => [x * 16, x * 16, x * 16, 255]);
+    draw(compositor, scene, 0, new Map([["clp_0", f]]),
+      resolved([["eff_1", [["liftAmount", lift]]]]));
+    f.close();
+    return R.measure(compositor.sample(size, size), size, size).range[0];
+  };
+  check("ungraded, the darkest column is black", floorAt(0), 0);
+  check("lifted, the whole picture stands off the floor", floorAt(0.25), 64, 2);
 });
 
 // A round shape is the one thing about this that a unit test cannot see: an iris that came out an

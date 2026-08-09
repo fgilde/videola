@@ -26,6 +26,14 @@ export class RenderTarget {
     return this.#texture;
   }
 
+  /**
+   * For the one caller that needs the read and the draw binding set apart: a blit reads from one
+   * framebuffer into another, and `bind` sets both at once.
+   */
+  get framebuffer(): WebGLFramebuffer {
+    return this.#framebuffer;
+  }
+
   // Bound, sized and cleared in one call. Separating them is how a target ends up a frame behind
   // the drawing buffer after a resize: the pass still draws, into a viewport covering part of it,
   // and the rest of the picture is whatever the last frame left there.

@@ -249,6 +249,17 @@ export class Playback {
     return this.#clock.onTick(cb);
   }
 
+  /**
+   * The picture as it stands, shrunk to `width` by `height` -- what a measuring instrument reads.
+   *
+   * Empty before a canvas is attached and after it has been let go, which is what a panel asking
+   * on a timer will hit sooner or later: measuring a preview that is no longer there has to be an
+   * empty reading, not a throw at whatever rate the timer runs.
+   */
+  sample(width: number, height: number): Uint8Array {
+    return this.#compositor?.sample(width, height) ?? new Uint8Array(0);
+  }
+
   dispose(): void {
     this.pause();
     for (const hash of [...this.#sources.keys()]) this.#release(hash);

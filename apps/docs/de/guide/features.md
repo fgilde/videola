@@ -61,8 +61,8 @@ Kachel ist der Shader des Effekts über dem Bild am Playhead** — kein gemaltes
 die das Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Genau das
 verhindert, dass ein Effekt mit seinem eigenen Standardwert für sich wirbt.
 
-Helligkeit, Kontrast, Sättigung, Farbtemperatur, Vignette, Weichzeichnen, Schärfen und
-Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
+Helligkeit, Kontrast, Sättigung, Farbtemperatur, Kurven, Farbräder, Vignette, Weichzeichnen,
+Schärfen und Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
 über eine frei gewählte Farbe. Rechteckige und elliptische Masken mit weicher Kante und
 Invertierung; zwei Masken in einer Kette schneiden sich. Ein Textgenerator mit Gestaltung sowie
 Ein-, Aus- und Schleifenanimation.
@@ -92,6 +92,31 @@ Prüfungen laufen bei jedem Bau, und jede Kachel der Bibliothek ist eine davon �
 Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Ein zu einem Drittel
 gedeckter Pixel über Rot muss **81** ergeben —
 das liefert premultipliziertes Alpha; die naheliegende Antwort 255 fällt durch.
+
+## Farbkorrektur, und etwas, woran man sie beurteilt
+
+Kurven und Farbräder, und drei Messgeräte, um das Ergebnis abzulesen.
+
+**Kurven** für die Helligkeit und für jeden der drei Kanäle, mit Stützpunkten, die man zieht: ins
+Feld tippen setzt einen neuen dorthin, auf einen Punkt tippen nimmt ihn weg, und die beiden Enden
+bleiben. Die Linie ist ein monoton kubischer Spline, der zwischen zwei Punkten nicht überschießen
+kann — ein Überschwinger auf einer Tonwertkurve ist ein heller Saum an jeder Kante im Bild, die
+diesen Tonwert kreuzt. Die Helligkeitskurve ist nicht dasselbe wie die drei Kanalkurven im
+Gleichschritt: sie skaliert alle drei mit einem Verhältnis, die Farbe eines Pixels kommt also genau
+so heraus, wie sie hineinging, und nur seine Helligkeit bewegt sich.
+
+**Farbräder** — Lift, Gamma und Gain — jeweils mit Farbstich und Stärke, also mit dem, was Rad und
+Ring an einem echten Pult sind. Lift sagt, wohin Schwarz geht, Gain sagt, wohin Weiß geht, und Gamma
+biegt, was dazwischen liegt, ohne eines der beiden Enden mitzunehmen.
+
+**Messgeräte**: eine Wellenform, ein Vektorskop und ein Histogramm, in einer Leiste unter dem Bild,
+die ein Schalter in der Transportleiste öffnet. Sie lesen die Pixel der Vorschau selbst, was sie
+zeigen, ist also das, was der Export schreiben wird. Vor dem Zählen werden sie auf der GPU
+verkleinert und zehnmal in der Sekunde gemessen: 0,9 ms je Messung statt der 33 ms, die ein naives
+Zählen des ganzen Bildes bei 1080p kostet — und gar nichts, solange die Leiste zu ist.
+
+Alles hier lässt sich keyframen wie jeder andere Parameter, Kurven eingeschlossen: ein Kurven-Keyframe
+interpoliert die Stützpunkte, ein Knie wandert also seitlich mit und nicht nur nach oben.
 
 ## Umzeiten und Voreinstellungen
 

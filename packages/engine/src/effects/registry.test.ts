@@ -1,7 +1,15 @@
+import { CURVE_SAMPLES, curveAt } from "@videola/core";
 import { describe, expect, it } from "vitest";
 
-import { clampColor, clampParam, effect, effectManifests, previewValues } from "./registry";
-import type { ColorParam, EffectParam } from "./registry";
+import {
+  clampColor,
+  clampCurve,
+  clampParam,
+  effect,
+  effectManifests,
+  previewValues,
+} from "./registry";
+import type { ColorParam, CurveParam, EffectParam } from "./registry";
 
 describe("the effect registry", () => {
   it("answers for an effect type it does not know instead of throwing", () => {
@@ -62,10 +70,13 @@ describe("the effect registry", () => {
   it("declares a uniform of the right type for every parameter in the manifest", () => {
     for (const manifest of effectManifests()) {
       for (const param of manifest.params) {
-        const type = param.kind === "color" ? "vec4" : "float";
-        expect(manifest.fragmentSource, `${manifest.id}.${param.key}`).toContain(
-          `uniform ${type} u_${param.key};`,
-        );
+        const declaration =
+          param.kind === "color"
+            ? `uniform vec4 u_${param.key};`
+            : param.kind === "curve"
+              ? `uniform float u_${param.key}[${CURVE_SAMPLES}];`
+              : `uniform float u_${param.key};`;
+        expect(manifest.fragmentSource, `${manifest.id}.${param.key}`).toContain(declaration);
       }
       const second = manifest.fragmentSource.includes("uniform sampler2D u_second;");
       expect(second).toBe(manifest.inputs === 2);
@@ -121,12 +132,76 @@ describe("the effect registry", () => {
       expect(values.colour).toEqual([1, 0, 0, 1]);
     });
   });
+
+  describe("a curve parameter", () => {
+    const curve = tones(effect("curves")!.params)[0]!;
+
+    it("reaches the shader as a table of the length the shader declares", () => {
+      const table = clampCurve(curve, curve.default) as number[];
+      expect(table).toHaveLength(CURVE_SAMPLES);
+      expect(table[0]).toBeCloseTo(0, 6);
+      expect(table.at(-1)).toBeCloseTo(1, 6);
+    });
+
+    it("carries the shape that was drawn and not the straight line", () => {
+      const points = [
+        [0, 0],
+        [0.5, 0.8],
+        [1, 1],
+      ];
+      const table = clampCurve(curve, points) as number[];
+      // The two entries either side of mid grey. The straight line would put both near 0.5;
+      // the curve was drawn through 0.8 there.
+      expect(table[15]).toBeGreaterThan(0.75);
+      expect(table[16]).toBeGreaterThan(0.75);
+      // Every entry against the curve itself, so this measures the sampling rather than one point
+      // that happens to be a control point.
+      table.forEach((entry, index) => {
+        expect(entry, `entry ${index}`).toBeCloseTo(
+          curveAt(points as [number, number][], index / (CURVE_SAMPLES - 1)),
+          6,
+        );
+      });
+    });
+
+    // The default is the identity, so a project file with a float where a curve belongs is the
+    // untouched picture -- an unset uniform is a table of zeroes, which is a black clip.
+    it("falls back to its default for a value of the wrong kind", () => {
+      const identity = clampCurve(curve, curve.default);
+      expect(clampCurve(curve, 0.5)).toEqual(identity);
+      expect(clampCurve(curve, [])).toEqual(identity);
+      expect(clampCurve(curve, "nonsense")).toEqual(identity);
+    });
+
+    it("never lets an entry out of the range a tone can be in", () => {
+      const wild = clampCurve(curve, [
+        [0, -4],
+        [0.5, 9],
+        [1, 2],
+      ]) as number[];
+      for (const entry of wild) {
+        expect(entry).toBeGreaterThanOrEqual(0);
+        expect(entry).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it("is guarded in a tile too, not only in the timeline", () => {
+      const values = previewValues({ ...effect("curves")!, preview: { luma: "nonsense" } });
+      expect(values.luma).toEqual(clampCurve(curve, curve.default));
+    });
+  });
 });
 
 function floats(params: readonly { kind?: string }[]): EffectParam[] {
-  return params.filter((param) => param.kind !== "color") as EffectParam[];
+  return params.filter(
+    (param) => param.kind === undefined || param.kind === "float",
+  ) as EffectParam[];
 }
 
 function colours(params: readonly { kind?: string }[]): ColorParam[] {
   return params.filter((param) => param.kind === "color") as ColorParam[];
+}
+
+function tones(params: readonly { kind?: string }[]): CurveParam[] {
+  return params.filter((param) => param.kind === "curve") as CurveParam[];
 }
