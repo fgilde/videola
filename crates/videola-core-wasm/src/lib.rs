@@ -145,6 +145,32 @@ impl WasmDocument {
         Ok(serde_wasm_bindgen::to_value(&self.host.transforms_at(at))?)
     }
 
+    /// The shape of one segment: `count` samples from the left key to the right one, each the
+    /// fraction of the way the track has travelled at that point. This is what a curve editor plots
+    /// and nothing else.
+    ///
+    /// It takes no document because two keyframes decide the whole answer. It exists at all --
+    /// rather than four lines of easing written again in TypeScript -- because a drawn curve that
+    /// disagreed with the animated one is the single fault a curve editor cannot have, and
+    /// `segment_shape` is the very function `interpolate` applies to move the picture.
+    #[wasm_bindgen(js_name = curveShape)]
+    pub fn curve_shape(
+        left: JsValue,
+        right: JsValue,
+        count: usize,
+    ) -> std::result::Result<Vec<f32>, JsError> {
+        let left: videola_core::model::Keyframe = serde_wasm_bindgen::from_value(left)?;
+        let right: videola_core::model::Keyframe = serde_wasm_bindgen::from_value(right)?;
+        let Some(last) = count.checked_sub(1).filter(|last| *last > 0) else {
+            return Ok(Vec::new());
+        };
+        Ok((0..count)
+            .map(|step| {
+                videola_core::model::segment_shape(&left, &right, step as f32 / last as f32)
+            })
+            .collect())
+    }
+
     #[wasm_bindgen(js_name = historyLabels)]
     pub fn history_labels(&self) -> std::result::Result<JsValue, JsError> {
         to_js_value(&self.host.history_labels())

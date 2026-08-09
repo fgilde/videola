@@ -30,6 +30,7 @@ function fakeBackend(): DocumentBackend {
     // A fresh object every call mirrors the real backend, which fully
     // re-serializes the project on each state() invocation.
     state: () => ({ ...project }),
+    curveShape: () => [],
     sourceTimesAt: () => new Map(),
     effectParamsAt: () => new Map(),
     transformsAt: () => new Map(),

@@ -1,4 +1,5 @@
 import type {
+  CurveShape,
   DocumentBackend,
   EffectParams,
   MediaBytes,
@@ -54,6 +55,9 @@ export class VideolaDocument {
   effectParamsAt: EffectParams = (at) => this.#backend.effectParamsAt(at);
 
   transformsAt: Transforms = (at) => this.#backend.transformsAt(at);
+
+  curveShape: CurveShape = (left, right, samples) =>
+    this.#backend.curveShape(left, right, samples);
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);

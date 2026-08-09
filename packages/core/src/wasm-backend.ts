@@ -13,6 +13,7 @@ import type {
   Dispatch,
   DispatchResult,
   Frame,
+  Keyframe,
   LoadWarning,
   MediaKind,
   Project,
@@ -83,6 +84,11 @@ export async function createTemplateBackend(
 function wrap(handle: WasmDocument): DocumentBackend {
   return {
     state: () => handle.state() as Project,
+    // Static on the glue class, because two keyframes decide the whole answer and no document is
+    // involved. Handed out through the backend all the same, so the surface reaches a curve the
+    // same way it reaches its resolved transforms and parameters -- one object, one seam.
+    curveShape: (left: Keyframe, right: Keyframe, samples: number) =>
+      Array.from(WasmDocument.curveShape(left, right, samples)),
     sourceTimesAt: (at: Time) => handle.sourceTimesAt(at) as ReadonlyMap<string, Time>,
     effectParamsAt: (at: Time) => handle.effectParamsAt(at) as EffectParamSnapshot,
     transformsAt: (at: Time) => handle.transformsAt(at) as TransformSnapshot,

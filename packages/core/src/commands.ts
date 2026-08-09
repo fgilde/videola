@@ -402,6 +402,19 @@ export const cmd = {
     time: Time,
     interp: Interp,
   ) => ({ type: "keyframe.setInterp", target, effectType, key, time, interp }),
+  // What a curve editor drags, one pair per keyframe: `handleOut` shapes the travel away from this
+  // key and `handleIn` the travel arriving at it, both a point in the segment's own unit square --
+  // the same pair CSS `cubic-bezier` takes. `null` clears one back to the default ease-in-out.
+  //
+  // One dispatch per pointer move under one coalesce key, the shape every other drag here has.
+  keyframeSetHandles: (
+    target: EffectTarget,
+    effectType: string | null,
+    key: string,
+    time: Time,
+    handleIn: readonly [number, number] | null,
+    handleOut: readonly [number, number] | null,
+  ) => ({ type: "keyframe.setHandles", target, effectType, key, time, handleIn, handleOut }),
 
   markerAdd: (time: Time, label: string) => ({ type: "marker.add", time, label }),
   markerRemove: (marker: string) => ({ type: "marker.remove", marker }),

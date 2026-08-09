@@ -826,6 +826,31 @@ pub(super) fn set_keyframe_interp(
     speed_ramp_allowed(target, at, effect_type, key)
 }
 
+// What a curve editor drags. The whole keyframe goes back through `keyframe_bounded` afterwards
+// rather than the pair being checked on its own: a NaN handle is the same hole on this route as on
+// the load path, and one function answering for both is what keeps a curve this accepts from being
+// a curve a reload refuses. `Command::apply` works on a clone the document throws away on error, so
+// a refusal here leaves the pair the keyframe had.
+//
+// No speed check: handles are read only while the neighbouring key is `Bezier`, and a rate track
+// cannot be `Bezier` -- `set_keyframe_interp` and the load path both refuse that, which is the one
+// place the rule belongs.
+pub(super) fn set_keyframe_handles(
+    target: &mut Project,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
+    key: &str,
+    time: Time,
+    handle_in: Option<[f32; 2]>,
+    handle_out: Option<[f32; 2]>,
+) -> Result<()> {
+    let tracks = keyframes_mut(target, at, effect_type)?;
+    let (track, index) = keyframe_at(tracks, key, time)?;
+    track[index].handle_in = handle_in;
+    track[index].handle_out = handle_out;
+    crate::model::project::keyframe_bounded(&track[index])
+}
+
 // The three chains an effect can live in, behind one address. A clip's own is reached the way it
 // always was; a track's and the project's have been in the model since M0 with nothing able to put
 // anything in them.
