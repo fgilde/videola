@@ -26,6 +26,25 @@ export function timeToSeconds(time: Time): number {
   return time / FLICKS_PER_SECOND;
 }
 
+// Subtitle formats count in whole milliseconds and this project counts in flicks, and the two meet
+// here and nowhere else. 705600000 is a whole multiple of 1000, so a millisecond is exactly 705600
+// flicks and neither direction loses anything -- which is the whole reason an SRT can be read and
+// written back character for character.
+//
+// Only one of the two rounds, and deliberately so: a whole millisecond multiplies into a whole
+// number of flicks with nothing to decide, while a time a drag left between two milliseconds has to
+// land on the nearer of them. Truncating there would make every caption written out creep earlier
+// than the one on screen.
+export const FLICKS_PER_MILLISECOND = FLICKS_PER_SECOND / 1000;
+
+export function millisecondsToTime(milliseconds: number): Time {
+  return milliseconds * FLICKS_PER_MILLISECOND;
+}
+
+export function timeToMilliseconds(time: Time): number {
+  return Math.round(time / FLICKS_PER_MILLISECOND);
+}
+
 // The rate stays rational to the last division: 30000/1001 is not 29.97, and a frame step built
 // from the decimal drifts off the timeline's own ruler after a few hundred frames. Everything
 // that moves by a frame -- the ruler, the transport, playback -- has to land on the same value.
