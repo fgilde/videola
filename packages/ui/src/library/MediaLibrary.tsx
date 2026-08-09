@@ -227,15 +227,20 @@ function Entry({
           <span>{`${asset.width} × ${asset.height}`}</span>
         )}
         {asset.sampleRate != null && <span>{`${asset.sampleRate} Hz`}</span>}
-        {/* A proxy is minutes of a fan spinning for a picture nobody asked for. Saying which
-            medium is being worked on, and which one is already quick, is the difference between
-            that and an unexplained load. */}
-        {proxy !== undefined && (
-          <span className="v-library__proxy" data-state={proxy}>
-            {t(proxy === "building" ? "library.proxyBuilding" : "library.proxyReady")}
-          </span>
-        )}
         {missing && <span className="v-library__missing">{t("library.missing")}</span>}
+      </span>
+      {/* A proxy is minutes of a fan spinning for a picture nobody asked for. Saying which medium
+          is being worked on, and which one is already quick, is the difference between that and an
+          unexplained load.
+
+          Its own row, and one that is there whether or not there is anything to say: a queue
+          working through a library would otherwise grow and shrink every entry it touched, and the
+          list would jump under the pointer at every handover. Measured in the browser harness,
+          which is where the wrap this used to cause was found. */}
+      <span className="v-library__proxy" data-state={proxy ?? "none"}>
+        {proxy === undefined
+          ? ""
+          : t(proxy === "building" ? "library.proxyBuilding" : "library.proxyReady")}
       </span>
       <span className="v-library__actions">
         {/* The button stays even where the drag works. A drag is not keyboard-operable, and it

@@ -65,7 +65,8 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "thumb name    actions"
-    "thumb facts   actions";
+    "thumb facts   actions"
+    "thumb proxy   actions";
   align-items: center;
   gap: 0 var(--v-space-2);
   padding: var(--v-space-1) var(--v-space-2);
@@ -150,12 +151,23 @@
   grid-column: 1 / -1;
 }
 
-/* A fact among the facts: quiet once the proxy is there, in the accent while it is being made.
-   A ready proxy is the ordinary state and must not shout; one being built is the reason the
-   machine is busy, and that is worth a colour. */
+/* A row of its own, and one that is always there: the facts line on a 240 px rail is already at
+   its width, so a badge inside it wrapped the entry to a second line and the list jumped every
+   time the queue moved on. Reserved height, no jump. Quiet once the proxy is there, in the accent
+   while it is being made -- a ready proxy is the ordinary state and must not shout, one being
+   built is the reason the machine is busy. */
 .v-library__proxy {
+  grid-area: proxy;
+  /* One line box, filled or empty. `1em` is the font size and not the line box, and an entry
+     reserved at 1em was still a couple of pixels shorter than one with a word in it. */
+  min-height: 1lh;
   font-family: var(--v-font-ui);
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading-tight);
   color: var(--v-text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .v-library__proxy[data-state="building"] {
