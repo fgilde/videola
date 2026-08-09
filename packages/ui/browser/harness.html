@@ -11,7 +11,10 @@
      claim is about pixels, and neither can be measured inside a box with no size. */
   #scopes { position: absolute; left: 420px; top: 500px; width: 640px; height: 220px; }
   #curve { position: absolute; left: 420px; top: 760px; width: 300px; height: 300px; display: flex; }
-  #out { position: absolute; left: 0; top: 1200px; }
+  /* The width of the rail the library really lives in, so its toolbar wraps here the way it wraps
+     in the editor rather than being given room it will not have. */
+  #library { position: absolute; left: 760px; top: 760px; width: 240px; height: 400px; display: flex; }
+  #out { position: absolute; left: 0; top: 1300px; }
 </style>
 <script src="./bundle.js"></script>
 <script>
@@ -884,6 +887,89 @@ test("a curve point stands where the curve puts it", function () {
   // renderer uses is a curve that looks like one thing and grades like another.
   checkAtLeast("and the curve is drawn between them",
     (curveHost.querySelector(".v-curve__line").getAttribute("d") || "").length, 200);
+});
+
+// The library, in the rail it really lives in. What is measured here is what jsdom cannot answer:
+// how big the proxy switch is under a finger, and whether a state nobody has a picture for still
+// leaves the entry usable.
+const libraryHost = document.createElement("div");
+libraryHost.id = "library";
+document.body.append(libraryHost);
+const libraryRoot = T.createRoot(libraryHost);
+
+function asset(id, name) {
+  return { id: "med_" + id, originalName: name, mime: "video/mp4", kind: "video",
+    sizeBytes: 1000, duration: 2 * SECOND, width: 3840, height: 2160,
+    fps: { numerator: 30, denominator: 1 }, sampleRate: null, channels: null };
+}
+
+function drawLibrary(proxies, useOriginals) {
+  T.flushSync(function () { libraryRoot.render(null); });
+  T.flushSync(function () {
+    libraryRoot.render(T.createElement(T.I18nProvider, null, T.createElement(T.MediaLibrary, {
+      library: [asset("a", "a.mp4"), asset("b", "b.mp4"), asset("c", "c.mp4")],
+      missing: new Set(),
+      fps: { numerator: 25, denominator: 1 },
+      proxies: proxies,
+      useOriginals: useOriginals,
+      onUseOriginals: function () { return undefined; },
+      onImport: function () { return undefined; },
+      onAdd: function () { return undefined; },
+      onRelink: function () { return undefined; },
+    })));
+  });
+}
+
+function libraryEntry(id) {
+  return libraryHost.querySelector('[data-media-id="med_' + id + '"]');
+}
+
+test("the proxy switch is a control a thumb can hit", function () {
+  drawLibrary(new Map(), false);
+  const button = libraryHost.querySelector(".v-library__proxies");
+  const box = button.getBoundingClientRect();
+  check("it is there, and it says what state the preview is in",
+    button.textContent, "Originale benutzen");
+  checkAtLeast("and it is tall enough for the pointer in use",
+    Math.round(box.height), POINTER === "coarse" ? 44 : 32);
+  // Its own row across the rail. Sharing a line with Import would leave both of them at about a
+  // hundred pixels, which is where "Originale benutzen" starts overflowing.
+  const toolbar = libraryHost.querySelector(".v-library__toolbar").getBoundingClientRect();
+  checkAtLeast("across the whole toolbar rather than beside the import",
+    Math.round(box.width), Math.round(toolbar.width) - 24);
+  checkAtMost("and its label fits inside it", button.scrollWidth, Math.ceil(box.width) + 1);
+});
+
+test("a medium says whether it has a proxy, and one without is no worse off", function () {
+  drawLibrary(new Map([["med_a", "ready"], ["med_b", "building"]]), false);
+  check("the one that has a proxy says so", libraryEntry("a").dataset.proxy, "ready");
+  check("the one being worked on says which one it is",
+    libraryEntry("b").dataset.proxy, "building");
+  check("and the one with neither says nothing at all", libraryEntry("c").dataset.proxy, "none");
+  // The one that is being worked on is the reason the machine is busy, so it is the one that gets
+  // a colour. A ready proxy is the ordinary state and stays quiet.
+  const busy = getComputedStyle(libraryEntry("b").querySelector(".v-library__proxy")).color;
+  const done = getComputedStyle(libraryEntry("a").querySelector(".v-library__proxy")).color;
+  check("and only the busy one is picked out in the accent", busy !== done, true);
+  // The entries have to stay the same height whatever their proxy state, or a queue working
+  // through a library would make the list jump under the pointer.
+  check("an entry does not change size when a proxy appears",
+    [Math.round(libraryEntry("a").getBoundingClientRect().height),
+     Math.round(libraryEntry("c").getBoundingClientRect().height)].every(function (h, _, all) {
+       return h === all[0];
+     }), true);
+  checkAtMost("and no entry overflows its rail",
+    Math.max.apply(null, ["a", "b", "c"].map(function (id) { return libraryEntry(id).scrollWidth; })),
+    libraryHost.querySelector(".v-library__list").clientWidth);
+});
+
+test("the switch shows the state it is in", function () {
+  drawLibrary(new Map(), true);
+  check("pressed while the preview is on the originals",
+    libraryHost.querySelector(".v-library__proxies").getAttribute("aria-pressed"), "true");
+  drawLibrary(new Map(), false);
+  check("and not pressed while it is on the proxies",
+    libraryHost.querySelector(".v-library__proxies").getAttribute("aria-pressed"), "false");
 });
 
 document.getElementById("out").textContent = JSON.stringify(results);

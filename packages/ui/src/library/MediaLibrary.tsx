@@ -9,6 +9,13 @@ import { IconButton } from "../primitives/Icon";
 import type { MediaGrab } from "../timeline/geometry";
 import "./MediaLibrary.css";
 
+/**
+ * What has been done about a medium's proxy. Spelled out here rather than imported from the engine
+ * so the panel keeps its one dependency on the core: it is two words, and the alternative is the
+ * interface package knowing about decoders.
+ */
+export type MediaProxyState = "building" | "ready";
+
 export interface MediaLibraryProps {
   library: readonly MediaAsset[];
   /** Entries with no bytes behind them. They can neither be drawn nor exported nor saved. */
@@ -26,6 +33,16 @@ export interface MediaLibraryProps {
    * the whole story.
    */
   draggable?: boolean;
+  /**
+   * Which media have a proxy and which one is being given one right now. A medium that is not in
+   * here has none and is not getting one, which is a perfectly ordinary state -- the preview then
+   * decodes the original.
+   */
+  proxies?: ReadonlyMap<MediaId, MediaProxyState>;
+  /** True while the preview is decoding originals rather than proxies. */
+  useOriginals?: boolean;
+  /** Offered only where there is something to switch: left out, the control is not drawn. */
+  onUseOriginals?: (useOriginals: boolean) => void;
   onImport: () => void;
   /** Files chosen from the camera or the gallery. Only offered on a touch layout. */
   onCapture?: (files: File[]) => void;
@@ -44,6 +61,9 @@ export function MediaLibrary({
   fps,
   thumbnails,
   draggable = false,
+  proxies,
+  useOriginals = false,
+  onUseOriginals,
   onImport,
   onCapture,
   onAdd,
@@ -69,6 +89,20 @@ export function MediaLibrary({
             <Capture label={t("library.pickFromGallery")} onFiles={onCapture} />
           </>
         )}
+        {/* A proxy that nobody can switch off is a picture quality decided behind the person's
+            back. Pressed means the preview is on the originals -- the state the button names is
+            the state it is in, not the one it would go to, because the second reading is what
+            makes a toggle ambiguous. */}
+        {onUseOriginals !== undefined && (
+          <button
+            type="button"
+            className="v-button v-library__proxies"
+            aria-pressed={useOriginals}
+            onClick={() => onUseOriginals(!useOriginals)}
+          >
+            {t("library.useOriginals")}
+          </button>
+        )}
       </div>
       {library.length === 0 ? (
         <p className="v-library__empty">{t("library.empty")}</p>
@@ -81,6 +115,7 @@ export function MediaLibrary({
               missing={missing.has(asset.id)}
               fps={fps}
               thumbnail={thumbnails?.get(asset.id)}
+              proxy={proxies?.get(asset.id)}
               draggable={draggable}
               armed={armed === asset.id}
               onAdd={onAdd}
@@ -132,6 +167,7 @@ function Entry({
   missing,
   fps,
   thumbnail,
+  proxy,
   draggable,
   armed,
   onAdd,
@@ -143,6 +179,7 @@ function Entry({
   missing: boolean;
   fps: Rate;
   thumbnail: string | undefined;
+  proxy: MediaProxyState | undefined;
   draggable: boolean;
   armed: boolean;
   onAdd: (media: MediaId) => void;
@@ -167,6 +204,7 @@ function Entry({
       className="v-library__item"
       data-media-id={asset.id}
       data-missing={missing}
+      data-proxy={proxy ?? "none"}
       data-armed={armed}
       data-grabbable={grabbable}
       title={grabbable ? t("library.dragToTimeline") : undefined}
@@ -190,6 +228,19 @@ function Entry({
         )}
         {asset.sampleRate != null && <span>{`${asset.sampleRate} Hz`}</span>}
         {missing && <span className="v-library__missing">{t("library.missing")}</span>}
+      </span>
+      {/* A proxy is minutes of a fan spinning for a picture nobody asked for. Saying which medium
+          is being worked on, and which one is already quick, is the difference between that and an
+          unexplained load.
+
+          Its own row, and one that is there whether or not there is anything to say: a queue
+          working through a library would otherwise grow and shrink every entry it touched, and the
+          list would jump under the pointer at every handover. Measured in the browser harness,
+          which is where the wrap this used to cause was found. */}
+      <span className="v-library__proxy" data-state={proxy ?? "none"}>
+        {proxy === undefined
+          ? ""
+          : t(proxy === "building" ? "library.proxyBuilding" : "library.proxyReady")}
       </span>
       <span className="v-library__actions">
         {/* The button stays even where the drag works. A drag is not keyboard-operable, and it

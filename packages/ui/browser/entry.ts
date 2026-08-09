@@ -7,6 +7,7 @@ export { createElement, createRoot };
 export { I18nProvider } from "../src/i18n/I18nProvider";
 export { Inspector } from "../src/inspector/Inspector";
 export { CurveRow } from "../src/inspector/CurveRow";
+export { MediaLibrary } from "../src/library/MediaLibrary";
 export { Scopes } from "../src/scopes/Scopes";
 export { Timeline } from "../src/timeline/Timeline";
 export {

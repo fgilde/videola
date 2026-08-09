@@ -589,6 +589,34 @@ async function announce() {
     check("a track was created to hold it",
       document.querySelectorAll(".v-timeline__header").length, 1);
 
+    // The fixture is 640x360, which is under the height a proxy is made for. So this run is the
+    // whole of "a missing proxy breaks nothing", asked of the running editor rather than of a unit
+    // test: none is made, none is promised, and everything works exactly as it did.
+    await sleep(300);
+    check("material small enough needs no proxy, and is not given one",
+      q("[data-media-id]").dataset.proxy, "none");
+    check("and claims nothing about one", q(".v-library__proxy").textContent, "");
+    check("while the clip it made is on the timeline all the same",
+      all("[data-clip-id]").length, 1);
+    check("and the queue reported nothing", banner(), "");
+
+    // The switch has to be a switch. Which file the decoders then open is not something a browser
+    // check can read -- that is answered in the export harness, at the resolution of a decoded
+    // frame -- so what is asked here is that the state really changes and that closing every open
+    // decoder underneath a running preview is survivable. The console check at the end of this run
+    // is the second half of it, and it is what caught a disposed Input being reported as a decoder
+    // failure once per source, every time this button was pressed.
+    labelled("Originale benutzen").click();
+    await sleep(400);
+    check("pressing it puts the preview on the originals",
+      labelled("Originale benutzen").getAttribute("aria-pressed"), "true");
+    check("switching raised nothing", banner(), "");
+    labelled("Originale benutzen").click();
+    await sleep(400);
+    check("and it goes back to the proxies",
+      labelled("Originale benutzen").getAttribute("aria-pressed"), "false");
+    check("and the timeline is untouched by any of it", all("[data-clip-id]").length, 1);
+
     // The picture is the reason anyone opens the application, and on a desktop it had been squeezed
     // to a stamp between the transport and a mixer strip that grew with every track. Measured on the
     // canvas and not on its pane: a pane can be tall and hold nothing but letterbox.

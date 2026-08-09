@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { thumbnail } from "@videola/engine";
-import { mediaBlob, mediaHash } from "@videola/media";
+import { mediaHash, sourceBlob } from "@videola/media";
 
 import type { MediaAsset, MediaId } from "@videola/core";
 
@@ -57,7 +57,9 @@ async function still(media: MediaId): Promise<string | undefined> {
   try {
     const hash = mediaHash(media);
     if (hash === undefined) return undefined;
-    const blob = await mediaBlob(hash);
+    // A thumbnail is looked at and thrown away, so it is a preview: through the same resolver the
+    // programme monitor uses, and never a second answer to "which file is this".
+    const blob = await sourceBlob(hash, "preview");
     if (blob === undefined) return undefined;
     const image = await thumbnail(blob);
     return image === undefined ? undefined : URL.createObjectURL(image);

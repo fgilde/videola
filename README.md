@@ -20,6 +20,14 @@ the pointer is not a mouse, and a whole drag is one undo step.
 **Playback.** WebCodecs decoding into a WebGL2 compositor, the audio clock in the lead, and a
 transport for play/pause, frame stepping and jumping to either end.
 
+**Proxies.** Material taller than 720 pixels is transcoded once, in a worker, into a 720p H.264 copy
+with a key frame every second, kept in OPFS beside the original under the original's own content
+hash. The preview decodes the proxy; the export and every still decode the original. A decoded frame
+costs width x height x 4 bytes whatever the file was compressed to, so the same 256 MiB frame cache
+holds 8 frames of 4K and 72 at 720p. A medium whose proxy is missing behaves exactly like one that
+never had one, and **Use originals** switches the preview back. That the export takes the original is
+checked on a written file by ffprobe and ffmpeg, with a deliberately wrong proxy on disk at the time.
+
 **Effects and transitions.** Brightness, contrast, saturation, colour temperature, vignette, blur,
 sharpen and chroma key; cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour;
 rectangular and elliptical masks with feather and invert. A text generator with styling and

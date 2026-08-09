@@ -89,6 +89,8 @@ features:
 - **Subtitles** — SRT and WebVTT in and out, on a caption track of their own.
 - **Classical editing** — in and out points, insert and overwrite, J/K/L, adjustment tracks, speed
   ramps whose time mapping is an integral rather than a multiplication.
+- **Proxies** — anything taller than 720 pixels is transcoded once into a 720p copy the preview
+  decodes; the export always reads the original, proven on the written file by ffprobe and ffmpeg.
 - **Audio** — mixer with volume, pan, mute and solo, fades as automation, waveforms, EBU R128
   loudness checked against the Tech 3341 cases.
 - **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.

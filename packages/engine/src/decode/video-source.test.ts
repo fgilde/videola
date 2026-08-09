@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { secondsToTime } from "@videola/core";
-import { putMedia } from "@videola/media";
+import { deleteProxy, putMedia, putProxy, useProxies } from "@videola/media";
 import { installFakeOpfs } from "@videola/media/src/fake-opfs";
 
-import { tinyMp4 } from "./fixture-mp4";
+import { NTSC_FIXTURE, tinyMp4 } from "./fixture-mp4";
 import {
   heldIndexAt,
   insertHeld,
@@ -30,7 +30,7 @@ describe("VideoSource", () => {
   });
 
   it("takes its duration from the medium", async () => {
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
 
     await source.open(HASH);
 
@@ -38,13 +38,13 @@ describe("VideoSource", () => {
   });
 
   it("refuses a medium whose bytes are not in storage", async () => {
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
 
     await expect(source.open(MISSING)).rejects.toThrow("error.mediaMissing");
   });
 
   it("answers undefined instead of throwing past the end", async () => {
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
     await source.open(HASH);
 
     await expect(source.frameAt(secondsToTime(5))).resolves.toBeUndefined();
@@ -52,11 +52,11 @@ describe("VideoSource", () => {
   });
 
   it("answers undefined before a medium is open", async () => {
-    await expect(new VideoSource().frameAt(0)).resolves.toBeUndefined();
+    await expect(new VideoSource("preview").frameAt(0)).resolves.toBeUndefined();
   });
 
   it("holds nothing after close", async () => {
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
     await source.open(HASH);
 
     source.close();
@@ -70,7 +70,7 @@ describe("VideoSource", () => {
   // decoder dies must keep answering, because frameAt promises a missing frame as undefined.
   it("answers undefined and stays usable when the decoder cannot be built", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
     await source.open(HASH);
 
     await expect(source.frameAt(0)).resolves.toBeUndefined();
@@ -82,7 +82,7 @@ describe("VideoSource", () => {
 
   it("serialises overlapping requests rather than racing two windows", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
     await source.open(HASH);
 
     const frames = await Promise.all([
@@ -96,7 +96,7 @@ describe("VideoSource", () => {
 
   it("survives a close in flight", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const source = new VideoSource();
+    const source = new VideoSource("preview");
     await source.open(HASH);
 
     const inFlight = source.frameAt(0);
@@ -104,6 +104,84 @@ describe("VideoSource", () => {
 
     await expect(inFlight).resolves.toBeUndefined();
     expect(source.bytesHeld).toBe(0);
+  });
+
+  // Closing disposes the Input the decode generator is reading, and mediabunny throws out of it.
+  // That is this source being torn down on purpose. Reported as an error it becomes one line of
+  // console noise per open decoder every time the proxy switch is thrown, which is how the browser
+  // harness found it.
+  it("says nothing about a decode that was cut short by its own close", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const source = new VideoSource("preview");
+    await source.open(HASH);
+
+    const inFlight = source.frameAt(0);
+    source.close();
+    await inFlight;
+
+    expect(logged).not.toHaveBeenCalled();
+  });
+});
+
+// jsdom cannot decode, so the resolution of a frame is out of reach here -- but the two files have
+// different lengths, and which length the source reports says which file it opened just as
+// plainly. The picture side of the same question is asked in `packages/engine/browser`, where a
+// real decoder answers with real pixels.
+describe("VideoSource and proxies", () => {
+  const SHORTER = { ...NTSC_FIXTURE, sampleCount: 10 };
+  const SHORTER_SECONDS = (10 * 1001) / 30000;
+
+  beforeEach(async () => {
+    installFakeOpfs();
+    useProxies(true);
+    await putMedia(HASH, tinyMp4());
+    await putProxy(HASH, tinyMp4(SHORTER));
+  });
+
+  afterEach(() => {
+    useProxies(true);
+  });
+
+  it("opens the proxy for the preview", async () => {
+    const source = new VideoSource("preview");
+
+    await source.open(HASH);
+
+    expect(source.duration).toBe(secondsToTime(SHORTER_SECONDS));
+  });
+
+  it("opens the original for the master, proxy or no proxy", async () => {
+    const source = new VideoSource("master");
+
+    await source.open(HASH);
+
+    expect(source.duration).toBe(secondsToTime(1.001));
+  });
+
+  it("opens the original for the preview once proxies are switched off", async () => {
+    useProxies(false);
+    const source = new VideoSource("preview");
+
+    await source.open(HASH);
+
+    expect(source.duration).toBe(secondsToTime(1.001));
+  });
+
+  it("opens the original for the preview when the proxy is gone", async () => {
+    await deleteProxy(HASH);
+    const source = new VideoSource("preview");
+
+    await source.open(HASH);
+
+    expect(source.duration).toBe(secondsToTime(1.001));
+  });
+
+  // A proxy is a cache entry, not a medium. Nothing that writes a file may fall back to one.
+  it("refuses a master whose original is gone even where a proxy survives", async () => {
+    installFakeOpfs();
+    await putProxy(HASH, tinyMp4(SHORTER));
+
+    await expect(new VideoSource("master").open(HASH)).rejects.toThrow("error.mediaMissing");
   });
 });
 

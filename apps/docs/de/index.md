@@ -92,6 +92,9 @@ features:
 - **Untertitel** — SRT und WebVTT hinein und heraus, auf einer eigenen Untertitelspur.
 - **Klassischer Schnitt** — In- und Out-Punkte, Einfügen und Überschreiben, J/K/L,
   Anpassungsebenen, Geschwindigkeitsrampen mit Integral statt Multiplikation.
+- **Proxies** — alles, was höher als 720 Pixel ist, wird einmal in eine 720p-Kopie umgewandelt, die
+  die Vorschau dekodiert; der Export nimmt immer das Original, an der geschriebenen Datei mit
+  ffprobe und ffmpeg nachgewiesen.
 - **Ton** — Mischpult mit Lautstärke, Panorama, Stumm und Solo, Fades als Automation, Waveforms,
   EBU-R128-Lautheit gegen die Tech-3341-Fälle geprüft.
 - **Export** — MP4 oder WebM in einem Worker, mit Fortschritt und einem Abbruch, der wirklich stoppt.

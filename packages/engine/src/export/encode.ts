@@ -85,7 +85,11 @@ export async function runExport(
   const canvas = new OffscreenCanvas(request.width, request.height);
   const context = createContext(canvas);
   const compositor = new Compositor(context);
-  const sources = new SourcePool(hooks.createFrameSource ?? ((): FrameSource => new VideoSource()));
+  // `master`: the file is the delivery, so it is decoded from the original however small and quick
+  // a proxy of it happens to be sitting on disk.
+  const sources = new SourcePool(
+    hooks.createFrameSource ?? ((): FrameSource => new VideoSource("master")),
+  );
   const generated = new GeneratorFrames();
   const video = new CanvasSource(canvas, videoEncoding(request));
   output.addVideoTrack(video, { frameRate: request.fps.numerator / request.fps.denominator });

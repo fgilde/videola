@@ -1,8 +1,9 @@
 import { secondsToTime, timeToSeconds } from "@videola/core";
-import { mediaBlob } from "@videola/media";
+import { sourceBlob } from "@videola/media";
 import { EncodedPacketSink, VideoSampleSink } from "mediabunny";
 
 import type { Time } from "@videola/core";
+import type { Fidelity } from "@videola/media";
 import type { Input, VideoSample } from "mediabunny";
 
 import { openInput } from "./demuxer";
@@ -27,6 +28,7 @@ export interface Held {
 }
 
 export class VideoSource {
+  #fidelity: Fidelity;
   #cache: FrameCache;
   #medium?: OpenMedium;
   #window?: AsyncGenerator<VideoSample, void, unknown>;
@@ -36,7 +38,11 @@ export class VideoSource {
   #decoded = 0;
   #pending: Promise<void> = Promise.resolve();
 
-  constructor(budgetBytes: number = DEFAULT_FRAME_BUDGET_BYTES) {
+  // `fidelity` has no default. Everything that draws for the screen wants the proxy and everything
+  // that writes a file wants the original, and the two are one word apart -- so the word is asked
+  // for rather than assumed, and a new caller that has not thought about it does not compile.
+  constructor(fidelity: Fidelity, budgetBytes: number = DEFAULT_FRAME_BUDGET_BYTES) {
+    this.#fidelity = fidelity;
     this.#cache = new FrameCache(budgetBytes);
   }
 
@@ -50,6 +56,12 @@ export class VideoSource {
     return this.#cache.bytesHeld();
   }
 
+  // What the frame budget buys on this material: the same cache holds nine times as many frames of
+  // a 720p proxy as of the 4K it was made from, and that number is only readable from here.
+  get framesHeld(): number {
+    return this.#cache.framesHeld();
+  }
+
   get duration(): Time {
     return this.#duration;
   }
@@ -57,7 +69,7 @@ export class VideoSource {
   // Nothing is torn down until the new medium has proven itself, so a failed open leaves the
   // source playing what it was playing before instead of leaving it with neither.
   async open(hash: string): Promise<void> {
-    const blob = await mediaBlob(hash);
+    const blob = await sourceBlob(hash, this.#fidelity);
     if (blob === undefined) throw new Error("error.mediaMissing");
     const input = openInput(blob);
     try {
@@ -128,6 +140,12 @@ export class VideoSource {
     try {
       await this.#pump(medium, at);
     } catch (error) {
+      // Closed or reopened while this decode was in flight. Disposing the Input is what makes
+      // mediabunny throw out of the generator, so this is the teardown working, not a decoder
+      // failing -- and `close` has already cleared the window this would otherwise wipe out from
+      // under whatever opened next. Switching to the originals reopens every source at once, so
+      // this is the ordinary case rather than a race.
+      if (this.#medium !== medium) return;
       // A decoder that failed must leave the source usable: drop the dead generator so the next
       // request builds a fresh one. Throwing here instead would break the promise frameAt makes
       // -- a frame it cannot supply is undefined, never an exception -- and would leave every

@@ -225,6 +225,16 @@ den Export so, wie sie gebaut wurde. Die Vorschau lässt sich auf halbe oder vie
 stellen, die billigste Leistungssteigerung bei großem Material, und sie erreicht die exportierte
 Datei nie.
 
+Material, das höher als 720 Pixel ist, bekommt einen **Proxy**: eine 720p-Kopie in H.264 mit einem
+Keyframe pro Sekunde, einmal in einem eigenen Worker erzeugt und in OPFS neben dem Original unter
+dessen Inhalts-Hash abgelegt. Die Vorschau dekodiert den Proxy, der Export das Original. Ein
+dekodiertes Bild kostet Breite × Höhe × 4 Bytes, ganz gleich, worauf die Datei komprimiert war —
+derselbe 256-MiB-Bildpuffer hält also 8 Bilder in 4K und 72 in 720p, und das ist der Unterschied
+zwischen einem Scrubben, das seine Bilder im Speicher findet, und einem, das für jeden Schritt
+zurück eine ganze Bildgruppe neu dekodiert. Ein Medium, dessen Proxy fehlt, geht genauso wie vor den
+Proxies, und **Originale benutzen** in der Bibliothek schaltet die Vorschau jederzeit zurück auf das
+Material.
+
 Der Export schreibt MP4 mit H.264 und AAC oder WebM mit VP9 und Opus, in einem Worker, durch denselben
 Compositor wie die Vorschau. Der Fortschritt wird gemeldet, und ein Abbruch stoppt wirklich. Ein
 Browser, der das Bild eines Formats kodieren kann und seinen Ton nicht, schreibt eine stumme Datei,
