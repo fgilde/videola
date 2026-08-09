@@ -1,0 +1,89 @@
+/* Closed by default and out of the way: the ruler already shows where the markers are, and this is
+   for reading and editing them once there are enough that the ruler no longer answers. */
+.v-markers {
+  border-bottom: 1px solid var(--v-border);
+  background: var(--v-bg-elevated);
+}
+
+.v-markers__summary {
+  padding: var(--v-space-2) var(--v-space-3);
+  min-height: var(--v-touch-target);
+  display: flex;
+  align-items: center;
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+  cursor: pointer;
+}
+
+.v-markers__empty {
+  margin: 0;
+  padding: 0 var(--v-space-3) var(--v-space-2);
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+}
+
+.v-markers__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--v-space-3) var(--v-space-2);
+  /* A project can carry a hundred of them; the panel does not grow to a hundred rows. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.v-markers__item {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  padding: var(--v-space-1) 0;
+}
+
+.v-markers__color {
+  flex: none;
+  inline-size: 32px;
+  block-size: 28px;
+  padding: 0;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  background: none;
+}
+
+.v-markers__time {
+  flex: none;
+  border: none;
+  background: none;
+  padding: var(--v-space-1) var(--v-space-2);
+  border-radius: var(--v-radius-sm);
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--v-text);
+  cursor: pointer;
+}
+
+.v-markers__time:hover {
+  background: var(--v-surface-hover);
+}
+
+.v-markers__label {
+  flex: 1 1 8ch;
+  min-width: 0;
+}
+
+.v-markers__note {
+  flex: 2 1 12ch;
+  min-width: 0;
+}
+
+@media (pointer: coarse) {
+  .v-markers__item {
+    flex-wrap: wrap;
+  }
+
+  .v-markers__color,
+  .v-markers__time,
+  .v-markers__label,
+  .v-markers__note {
+    min-height: var(--v-touch-target);
+  }
+}

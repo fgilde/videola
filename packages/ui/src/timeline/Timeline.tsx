@@ -36,6 +36,7 @@ import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyframeLane, KeyframeLaneHeaders, paramLabel, type KeyframeSelection } from "./KeyframeLane";
 import { laneRows, offeredFor, type LaneRow } from "./keyframes";
+import { MarkerList } from "./MarkerList";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
 import {
@@ -356,6 +357,13 @@ export function Timeline({
           </select>
         </div>
       </div>
+
+      <MarkerList
+        markers={project.markers}
+        fps={project.settings.fps}
+        dispatch={dispatch}
+        onSeek={onSeek}
+      />
 
       {/* Only while a keyframe is picked, and outside the scrolling area on purpose: what a
           keyframe is set to has to stay reachable while the lane it lives on is scrolled. */}

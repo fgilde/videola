@@ -20,6 +20,10 @@ const OUTLINED = {
   // fills is what a switch looks like when a tint alone has to carry pressed and disabled as well.
   keyframe: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
   trash: "M4.5 7h15M10 7V4.8h4V7M6.5 7l1 12.2h9L17.5 7M10.2 10.5v5.4M13.8 10.5v5.4",
+  // "Take a range out of this medium." The blades are what says the entry is material to cut from
+  // rather than a file to open.
+  scissors:
+    "M9 9 19 19M9 15 19 5M7.6 7.6a2.6 2.6 0 1 1-3.7 3.7 2.6 2.6 0 0 1 3.7-3.7M7.6 16.4a2.6 2.6 0 1 0-3.7-3.7 2.6 2.6 0 0 0 3.7 3.7",
 } as const;
 
 // Filled rather than stroked: a transport symbol is a solid shape at every size, and a 1.8 px
@@ -32,6 +36,12 @@ const FILLED = {
   stepBack: "M13 6v12l-8-6zM15 6h2.4v12H15z",
   stepForward: "M11 6v12l8-6zM6.6 6H9v12H6.6z",
   keyframeSet: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
+  // J and L. Two triangles, which is what every deck and every editor has drawn on those keys.
+  rewind: "M11 6v12l-8-6zM21 6v12l-8-6z",
+  fastForward: "M13 6v12l8-6zM3 6v12l8-6z",
+  // The two brackets an in and an out point are drawn as everywhere they are drawn at all.
+  markIn: "M6 5h2.6v14H6zM8.6 5H18v2.6H8.6zM8.6 16.4H18V19H8.6z",
+  markOut: "M15.4 5H18v14h-2.6zM6 5h9.4v2.6H6zM6 16.4h9.4V19H6z",
 } as const;
 
 export type IconName = keyof typeof OUTLINED | keyof typeof FILLED;

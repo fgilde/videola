@@ -32,7 +32,13 @@ export type {
 } from "./export/run";
 export { audibleClips, leafClips } from "./nesting";
 export type { Voice } from "./nesting";
-export { clipHashes, Playback, WAVEFORM_BUCKETS } from "./playback";
+export {
+  clipHashes,
+  nextShuttleRate,
+  Playback,
+  SHUTTLE_RATES,
+  WAVEFORM_BUCKETS,
+} from "./playback";
 export type { AudioTransport, FrameSource, PlaybackOptions } from "./playback";
 export { createContext } from "./render/context";
 export type { GlContext } from "./render/context";

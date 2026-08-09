@@ -59,22 +59,26 @@ import {
   Inspector,
   MediaLibrary,
   Mixer,
+  markerAfter,
   PanelTabs,
   pickFiles,
   Preview,
   projectEnd,
+  SourceBar,
   TemplateGallery,
   TemplateWizard,
   Timeline,
   Transport,
   useI18n,
   useLayoutMode,
+  type EditMode,
   type EditorPanel,
   type ExportFormatChoice,
   type ExportProgress,
   type ExportSelection,
   type MediaDrop,
   type MediaGrab,
+  type SourceRange,
 } from "@videola/ui";
 
 import { effectTiles, revokeTiles } from "./effectTiles";
@@ -113,6 +117,11 @@ export function App(): ReactElement {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [playhead, setPlayhead] = useState<Time>(0);
   const [playing, setPlaying] = useState(false);
+  const [rate, setRate] = useState(0);
+  const [resolution, setResolution] = useState(1);
+  // The medium a range is being marked in. One at a time: the source bar shows one, and a second
+  // set of in and out points would belong to nothing on screen.
+  const [armed, setArmed] = useState<MediaId>();
   const [missing, setMissing] = useState(NOTHING_MISSING);
   const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
   const [loudness, setLoudness] = useState<number>();
@@ -288,6 +297,7 @@ export function App(): ReactElement {
     return playback.onTime((at) => {
       setPlayhead(at);
       setPlaying(playback.isPlaying);
+      setRate(playback.rate);
     });
   }, [playback]);
 
@@ -707,6 +717,53 @@ export function App(): ReactElement {
   const step = useCallback((direction: 1 | -1) => playback?.stepFrame(direction), [playback]);
   const repaint = useCallback(() => playback?.refresh(), [playback]);
 
+  // J and L. The rate is read back off the transport rather than kept here as well: the clock is
+  // the one that knows how fast it is running, and a second copy could disagree with it.
+  const shuttle = useCallback(
+    (direction: 1 | -1) => {
+      playback?.shuttle(direction);
+      setRate(playback?.rate ?? 0);
+      setPlaying(playback?.isPlaying === true);
+    },
+    [playback],
+  );
+
+  const jumpMarker = useCallback(
+    (direction: 1 | -1) => {
+      const marker = markerAfter(project?.markers ?? [], playhead, direction);
+      if (marker !== undefined) seek(marker.time);
+    },
+    [project?.markers, playhead, seek],
+  );
+
+  // The three-point edit, from the side that knows where it lands: the source bar marked the
+  // range, the playhead says where, and the track is the one the selection is on -- or the first
+  // one the material belongs on, the same rule an import follows.
+  const threePoint = useCallback(
+    (mode: EditMode, range: SourceRange) => {
+      if (doc === undefined || armed === undefined) return;
+      const track = editTarget(doc, armed, selection[0]);
+      if (track === undefined) return;
+      const source = { kind: "media", media: armed } as const;
+      try {
+        doc.dispatch(
+          mode === "insert"
+            ? cmd.clipInsert(track, source, playhead, range.duration, range.inPoint)
+            : cmd.clipOverwrite(track, source, playhead, range.duration, range.inPoint),
+        );
+        // The playhead lands behind what was just placed, so a run of edits stacks up rather than
+        // laying every take over the one before it.
+        seek(playhead + range.duration);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, armed, playhead, selection, seek, reportError],
+  );
+
+  const armedAsset = project?.library.find((entry) => entry.id === armed);
+
   return (
     <AppShell
       onNew={() => window.location.reload()}
@@ -753,6 +810,7 @@ export function App(): ReactElement {
                 key={epoch}
                 width={project.settings.width}
                 height={project.settings.height}
+                resolution={resolution}
                 onCanvas={setCanvas}
                 onResize={repaint}
               />
@@ -761,9 +819,22 @@ export function App(): ReactElement {
                 time={playhead}
                 duration={projectEnd(project)}
                 fps={project.settings.fps}
+                rate={rate}
                 onPlayPause={playPause}
                 onSeek={seek}
                 onStep={step}
+                onShuttle={shuttle}
+                onMarkerJump={jumpMarker}
+                resolution={resolution}
+                onResolution={setResolution}
+              />
+              {/* Between the picture and the panels, because that is where the work is: the range
+                  is marked here and lands on the timeline below. */}
+              <SourceBar
+                asset={armedAsset}
+                fps={project.settings.fps}
+                onEdit={threePoint}
+                onClose={() => setArmed(undefined)}
               />
               {layout === "phone" && <PanelTabs panel={panel} onSelect={setPanel} />}
               {/* Unmounted rather than hidden while another panel shows: the timeline windows
@@ -785,6 +856,8 @@ export function App(): ReactElement {
                   onAdd={addToTimeline}
                   onRelink={(media) => void relink(media)}
                   onGrab={setGrab}
+                  armed={armed}
+                  onArm={(media) => setArmed((current) => (current === media ? undefined : media))}
                 />
               )}
               {(layout !== "phone" || panel === "mixer") && (
@@ -914,6 +987,25 @@ function appendClip(doc: VideolaDocument, media: MediaId): void {
   // occupy something on the timeline, and five seconds is the length every editor gives a still.
   const duration = asset.duration ?? STILL_DURATION;
   doc.dispatch(cmd.clipAdd(track.id, { kind: "media", media }, start, duration));
+}
+
+// Where a three-point edit lands. The track a selected clip is on is the one the editor is
+// working on and says so without a second control; failing that it is the first track the material
+// belongs on, which is the rule an import already follows -- and if there is none, one is made.
+function editTarget(
+  doc: VideolaDocument,
+  media: MediaId,
+  selected: ClipId | undefined,
+): string | undefined {
+  const onSelection = doc.state.timeline.tracks.find((track) =>
+    track.clips.some((clip) => clip.id === selected),
+  );
+  if (onSelection !== undefined) return onSelection.id;
+  const asset = doc.state.library.find((entry) => entry.id === media);
+  const kind: TrackKind = asset?.kind === "audio" ? "audio" : "video";
+  const existing = doc.state.timeline.tracks.find((track) => track.kind === kind);
+  if (existing !== undefined) return existing.id;
+  return added(doc, kind, `${kind === "audio" ? "A" : "V"}1`)?.id;
 }
 
 // The first medium of an untouched project decides its format, which is what every editor does

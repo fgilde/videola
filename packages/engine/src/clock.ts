@@ -15,6 +15,7 @@ export class Clock {
   #startContextTime = 0;
   #startProjectTime: Time = 0;
   #playing = false;
+  #rate = 1;
   #listeners = new Set<(t: Time) => void>();
   #raf = 0;
   #emitting = false;
@@ -28,9 +29,32 @@ export class Clock {
     return this.#playing;
   }
 
+  /**
+   * How fast project time runs against the clock it is read from, and in which direction. This is
+   * the transport's rate and has nothing to do with a clip's: a clip's speed is a property of the
+   * material that travels with it into the export, while this one exists only while somebody is
+   * shuttling. Nothing in the project ever reads it.
+   */
+  get rate(): number {
+    return this.#rate;
+  }
+
+  // Re-anchored, not merely stored: what has elapsed so far was elapsed at the old rate, so it is
+  // banked into the start position before the new one takes over. Without that, doubling the rate
+  // would double everything played since the last seek and jump the playhead.
+  setRate(rate: number): void {
+    if (rate === this.#rate) return;
+    this.#startProjectTime = this.now();
+    this.#startContextTime = this.#ctx.currentTime;
+    this.#rate = rate;
+  }
+
+  // Clamped at zero rather than left negative: there is no timeline in front of the head, and a
+  // rewind that ran past it would report positions nothing can be drawn at.
   now(): Time {
     if (!this.#playing) return this.#startProjectTime;
-    return this.#startProjectTime + secondsToTime(this.#ctx.currentTime - this.#startContextTime);
+    const elapsed = secondsToTime((this.#ctx.currentTime - this.#startContextTime) * this.#rate);
+    return Math.max(0, this.#startProjectTime + elapsed);
   }
 
   play(): void {
