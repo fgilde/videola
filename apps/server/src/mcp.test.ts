@@ -77,14 +77,16 @@ interface Fixture {
   clip: string;
   neighbour: string;
   clipJson: Record<string, unknown>;
+  caption: string;
   marker: string;
   media: string;
 }
 
 // One project carrying everything the commands need to address: two tracks so a reorder has
 // somewhere to go, two clips butted together so a roll has a cut and a slide has a neighbour, a
-// group to dissolve, a marker to rename, an effect with a keyframe on it. Built with the same
-// commands under test, so the fixture cannot describe a project the core would not accept.
+// group to dissolve, a marker to rename, an effect with a keyframe on it, and one subtitle -- the
+// only clip in the project that has a generator to set. Built with the same commands under test, so
+// the fixture cannot describe a project the core would not accept.
 async function fixture(): Promise<Fixture> {
   const { id } = await api.create();
   api.apply(id, [
@@ -107,6 +109,19 @@ async function fixture(): Promise<Fixture> {
   const placed = api.state(id).timeline.tracks[0]?.clips ?? [];
   const clip = placed[0]?.id ?? "";
   const neighbour = placed[1]?.id ?? "";
+  // Appended last, so the two track indices above keep meaning what they meant.
+  api.apply(id, [cmd.trackAdd("caption", "C1")]);
+  const captionTrack = api.state(id).timeline.tracks[2]?.id ?? "";
+  api.apply(id, [
+    cmd.clipAdd(
+      captionTrack,
+      { kind: "generator", generator: { type: "text", content: "Hello there", style: {} } },
+      0,
+      secondsToTime(1),
+    ),
+  ]);
+  const caption =
+    api.state(id).timeline.tracks[2]?.clips[0]?.id ?? "";
   api.apply(id, [
     cmd.effectAdd(on.clip(clip), "brightness"),
     cmd.keyframeAdd(on.clip(clip), "brightness", "amount", 0, { kind: "float", value: 1 }),
@@ -125,6 +140,7 @@ async function fixture(): Promise<Fixture> {
     clipJson: JSON.parse(
       JSON.stringify(state.timeline.tracks[0]?.clips[0] ?? {}),
     ) as Record<string, unknown>,
+    caption,
     marker: state.markers[0]?.id ?? "",
     media: MEDIA_ID,
   };
@@ -178,6 +194,12 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
       opacity: 0.5,
       crop: { left: 0, top: 0, right: 0, bottom: 0 },
     },
+  }),
+  // The only clip in the fixture with a generator to replace, and deliberately so: a media clip is
+  // refused, which is the rule this payload would otherwise walk past.
+  "clip.setGenerator": (f) => ({
+    clip: f.caption,
+    generator: { type: "text", content: "Corrected words", style: { y: 0.84 } },
   }),
   "clip.setTransition": (f) => ({
     clip: f.clip,
