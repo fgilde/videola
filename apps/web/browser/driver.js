@@ -835,7 +835,7 @@ async function announce() {
     await openShelf("Übergänge durchsuchen");
     check("the transition shelf offers transitions and nothing else",
       all(".v-fx__tile").map((node) => node.dataset.effectId).sort().join(),
-      ["crossfade", "dip", "slide", "wipe", "zoom"].join());
+      ["blur-dissolve", "crossfade", "dip", "iris", "slide", "wipe", "zoom"].join());
     checkAtLeast("and a dissolve halfway through is a real picture",
       pixelsOf(tileOf("crossfade")).length, 4);
     labelled("Schließen").click();

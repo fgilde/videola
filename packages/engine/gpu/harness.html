@@ -1019,6 +1019,76 @@ test("a colour parameter reaches the shader as a colour", () => {
     crossing("dip", 500, { params: { colour: 0.5 } }).at(2, 2), [0, 0, 0, 255]);
 });
 
+// A round shape is the one thing about this that a unit test cannot see: an iris that came out an
+// axis-aligned square, or an ellipse on a wide frame, satisfies every claim about progress.
+test("an iris opens a circle and not a box", () => {
+  const half = crossing("iris", 500, { params: { softness: 0 } });
+  check("the middle is the incoming clip", half.at(8, 8), BLUE);
+  check("straight out from the centre, still inside the circle", half.at(3, 8), BLUE);
+  // The same distance again along the other axis. Inside a square of that half-width this point is
+  // covered; inside a circle of that radius it is not, and that is the whole difference.
+  check("the same distance out diagonally, already outside it", half.at(3, 3), RED);
+  check("and the corner is the outgoing clip", half.at(0, 0), RED);
+});
+
+// The reason the reach is measured rather than assumed: on anything but a centred circle on a square
+// frame, a fixed diagonal ends the transition with wedges of the outgoing clip still standing.
+test("an iris has finished when it says it has", () => {
+  const wide = crossing("iris", 999, { size: 16, params: { softness: 0 } });
+  check("a centred iris leaves no corner behind",
+    [...wide.at(0, 0), ...wide.at(15, 15)], [...BLUE, ...BLUE]);
+  const corner = crossing("iris", 999, { params: { softness: 0, centerX: 0.05, centerY: 0.05 } });
+  check("and neither does one opening from a corner",
+    [...corner.at(15, 15), ...corner.at(0, 15)], [...BLUE, ...BLUE]);
+});
+
+// The one claim about an iris a square frame cannot answer. `crossing` only builds square rigs, so
+// this goes through the tile renderer, which is the other place the same shader runs.
+test("an iris stays a circle on a frame that is not square", () => {
+  const wide = new R.EffectPreview(96, 48);
+  const inside = R.referencePicture(96, 48);
+  const outside = R.referencePicture(96, 48, 180);
+  const round = Object.assign({}, R.effect("iris"), { preview: { progress: 0.5, softness: 0 } });
+  wide.render(round, inside, outside);
+  const at = reader(wide.readPixels(), 96, 48);
+  const incoming = flat(inside);
+  const outgoing = flat(outside);
+  const near = (one, other) =>
+    Math.abs(one[0] - other[0]) + Math.abs(one[1] - other[1]) + Math.abs(one[2] - other[2]) < 16;
+  // Twenty pixels out from the middle, once across and once down. In an ellipse -- which is what a
+  // circle measured in `v_uv` is on a wide frame -- one of the two is inside and the other is not.
+  check("twenty pixels across is inside", near(at(28, 24), incoming(28, 24)), true);
+  check("and twenty pixels down is inside too", near(at(48, 4), incoming(48, 4)), true);
+  check("thirty across is outside", near(at(18, 24), outgoing(18, 24)), true);
+  wide.dispose();
+});
+
+test("a blur dissolve is soft in the middle and sharp at the ends", () => {
+  const edge = { lower: (x) => (x < 8 ? RED : YELLOW), upper: (x) => (x < 8 ? RED : YELLOW) };
+  // The same picture on both sides, so what changes across the transition is the softness alone and
+  // not the mix -- a dissolve between two different pictures is blurred and mixed at once.
+  const middle = crossing("blur-dissolve", 500, edge);
+  const late = crossing("blur-dissolve", 999, edge);
+  const green = (reading) => reading(7, 8)[1];
+  check("halfway across, the hard edge has been smeared over",
+    green(middle.at) > 12 && green(middle.at) < 243, true);
+  check("and at the end it is hard again", green(late.at) < 12, true);
+  check("with the amount at nought it is a plain dissolve all the way through",
+    green(crossing("blur-dissolve", 500, Object.assign({ params: { amount: 0 } }, edge)).at) < 12,
+    true);
+});
+
+// One effect with a knob rather than two shaders: at nought the outgoing picture stands still and
+// the incoming one slides over it, at one it is shoved out of the frame.
+test("a slide can shove the outgoing clip or leave it standing", () => {
+  const shoved = crossing("slide", 500, SPLIT);
+  const held = crossing("slide", 500, Object.assign({ params: { push: 0 } }, SPLIT));
+  check("shoved, the outgoing picture has moved off its own boundary", shoved.at(12, 8), RED);
+  check("held, the same fragment still shows what stands there", held.at(12, 8), YELLOW);
+  check("and the incoming clip arrives the same way either way",
+    [...shoved.at(4, 8), ...held.at(4, 8)], [...BLUE, ...BLUE]);
+});
+
 // Effect and transition crossed on a transition that is not the cross dissolve: the incoming clip's
 // own chain runs before the wipe uncovers it, so what appears is the contrasted grey, not the grey.
 test("a clip runs its own effects before a wipe uncovers it", () => {

@@ -1,9 +1,11 @@
 import { blur } from "./blur";
+import { blurDissolve } from "./blur-dissolve";
 import { brightness } from "./brightness";
 import { chromaKey } from "./chroma-key";
 import { contrast } from "./contrast";
 import { crossfade } from "./crossfade";
 import { dip } from "./dip";
+import { iris } from "./iris";
 import { maskEllipse } from "./mask-ellipse";
 import { maskRect } from "./mask-rect";
 import { saturation } from "./saturation";
@@ -119,8 +121,10 @@ const MANIFESTS: readonly EffectManifest[] = [
   crossfade,
   wipe,
   slide,
+  iris,
   zoom,
   dip,
+  blurDissolve,
 ];
 
 export function effect(type: string): EffectManifest | undefined {
