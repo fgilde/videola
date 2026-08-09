@@ -111,6 +111,15 @@ Loudness is measured to EBU R128 and verified against the Tech 3341 conformance 
 knob is called **threshold**, not ceiling: the browser's compressor applies its own makeup gain, so
 it is not a brickwall, and the documentation says so rather than implying otherwise.
 
+Every strip carries a **level meter** — peak, effective value and a falling hold marker, read
+from an analyser that sits in the signal path rather than beside it. **Normalising** moves the
+master fader onto a target of −14, −16 or −23 LUFS and then measures again, so what is reported
+is a reading and not the target. **Ducking** pulls the music down under a voice track by writing
+keyframes onto a gain insert on the music bus — visible corners you can drag afterwards, not an
+invisible automatic, and the only choice the Web Audio API leaves open since it has no sidechain.
+**Cutting silence** finds the pauses in a track from the peaks already on screen and takes them
+out, leaving a gap rather than rippling the picture out of sync. See [Audio](./audio.md).
+
 ## Playback and export
 
 The audio clock leads and the picture follows, because audio drift is audible and a dropped frame is

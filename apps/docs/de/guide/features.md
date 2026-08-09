@@ -119,6 +119,16 @@ Die Lautheit wird nach EBU R128 gemessen und gegen die Tech-3341-Fälle geprüft
 Limiters heißt **Schwelle**, nicht Ceiling: der Kompressor des Browsers legt eigenen Ausgleichspegel
 drauf, ist also keine Brickwall — und die Doku sagt das, statt etwas anderes anzudeuten.
 
+Jeder Streifen trägt eine **Pegelanzeige** — Spitze, Effektivwert und eine fallende Haltemarke,
+gelesen aus einem Analyser, der in der Signalführung sitzt und nicht daneben. **Normalisieren**
+bringt den Summenregler auf einen Zielwert von −14, −16 oder −23 LUFS und misst danach erneut, was
+dasteht, ist also ein Messwert und nicht der Zielwert. **Ducking** senkt die Musik unter einer
+Sprachspur ab, indem es Keyframes auf einen Verstärkungs-Insert des Musikbusses schreibt —
+sichtbare Ecken zum Nachziehen statt einer unsichtbaren Automatik, und der einzige Weg, den die
+Web-Audio-API lässt, denn eine Seitenkette hat sie nicht. **Stille schneiden** findet die Pausen
+einer Spur aus den Spitzenwerten, die ohnehin auf dem Schirm sind, und nimmt sie heraus — als
+Lücke, nicht als Ripple, damit das Bild synchron bleibt. Siehe [Ton](./audio.md).
+
 ## Wiedergabe und Export
 
 Der Ton führt und das Bild folgt, weil Audio-Drift hörbar ist und ein ausgelassenes Bild nicht.
