@@ -147,6 +147,21 @@ screen — are lists of commands sent under one coalesce key, not entries in the
 makes each of them one press of undo without a line of inversion code, and reachable from an agent
 by sending the same commands. See [Editing](./editing.md#presets).
 
+## Subtitles
+
+A subtitle is a clip with a text generator on a caption track — its own track kind, because only
+that can answer "which of these clips are subtitles". A lower third sits on a text track and would
+otherwise be written into every SRT.
+
+**SRT and WebVTT go in and come out.** A millisecond is exactly 705 600 flicks, so the round trip is
+lossless by arithmetic rather than by rounding luck — and it is checked byte for byte, twice: once
+through the parser alone, once through the real Rust core and a save-and-reopen. The test times are
+deliberately none of them a whole second, a tenth, or a frame at any rate on offer.
+
+Captions can be retyped, split and merged on the timeline like any clip. They render into the
+picture through the same text generator the templates use, and the export can carry them as a track
+where the container allows it.
+
 ## Sound
 
 ![The editor on a tablet: the properties panel in two columns, three complete mixer strips along the bottom](/editor-tablet.webp)

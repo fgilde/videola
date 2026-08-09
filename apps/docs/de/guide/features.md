@@ -163,6 +163,22 @@ Bildschirm — sind Listen von Befehlen unter einem gemeinsamen Sammelschlüssel
 Projektdatei. Damit ist jede von ihnen ein einziger Undo-Schritt ohne eine Zeile Umkehrcode und für
 einen Agenten erreichbar, indem er dieselben Befehle schickt. Siehe [Schneiden](./editing.md#voreinstellungen).
 
+## Untertitel
+
+Ein Untertitel ist ein Clip mit Textgenerator auf einer Untertitelspur — einer eigenen Spurart, weil
+nur die beantworten kann, welche Clips Untertitel sind. Eine Bauchbinde liegt auf einer Textspur und
+stünde sonst in jedem exportierten SRT.
+
+**SRT und WebVTT gehen hinein und kommen heraus.** Eine Millisekunde sind exakt 705.600 Flicks, der
+Ringschluss ist also rechnerisch verlustfrei und nicht durch Rundungsglück — und er wird zweimal
+Zeichen für Zeichen geprüft: einmal durch den Parser allein, einmal durch den echten Rust-Kern samt
+Speichern und Wiederöffnen. Die Prüfzeiten sind bewusst keine ganze Sekunde, kein Zehntel und kein
+Bild bei irgendeiner angebotenen Rate.
+
+Untertitel lassen sich auf der Zeitleiste neu tippen, teilen und zusammenfassen wie jeder Clip. Ins
+Bild kommen sie über denselben Textgenerator wie die Vorlagen, und der Export kann sie als Spur
+mitschreiben, wo der Behälter es zulässt.
+
 ## Ton
 
 ![Der Editor auf einem Tablet: die Eigenschaften zweispaltig, drei vollständige Mischpult-Streifen am Boden](/editor-tablet.webp)

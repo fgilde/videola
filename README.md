@@ -25,9 +25,23 @@ sharpen and chroma key; cross dissolve, wipe, slide, zoom and dip-to-colour. A t
 styling and in/out/loop animation. Every parameter can be keyframed, and the interpolation happens
 in the Rust core so the preview and the export read the same values.
 
-**Audio.** Per-track volume, pan, mute and solo in a mixer, fades as scheduled automation rather
-than per-frame arithmetic, waveforms drawn from the buffers the graph already decoded, and EBU R128
-loudness measured against the Tech 3341 conformance cases.
+**Audio.** A mixer with live meters, per-track volume, pan, mute and solo, EQ, compressor and
+limiter as inserts ahead of the fader, fades as scheduled automation rather than per-frame
+arithmetic, waveforms drawn from the buffers the graph already decoded. EBU R128 loudness measured
+against the Tech 3341 conformance cases — and a button that normalises to a target and measures
+again rather than trusting the arithmetic. Ducking writes keyframes you can see and edit; silence
+detection cuts the pauses out.
+
+**Colour.** Waveform, vectorscope and histogram read off the preview. Curves as a first-class
+parameter type, keyframable point by point, plus lift/gamma/gain wheels.
+
+**Subtitles.** SRT and WebVTT in and out, on a caption track of their own. A millisecond is exactly
+705,600 flicks, so the round trip is lossless by arithmetic — and checked byte for byte through the
+real core.
+
+**Classical editing.** In and out points, insert and overwrite, J/K/L shuttle, adjustment tracks
+whose effects run over everything below them, markers with colours and notes, speed ramps where the
+map from project time to source time is an integral rather than a multiplication.
 
 **Export.** MP4 with H.264 and AAC, or WebM with VP9 and Opus where the browser cannot encode
 H.264. It runs in a worker through the same compositor as the preview, with progress and a cancel

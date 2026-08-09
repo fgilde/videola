@@ -135,7 +135,7 @@ function isCaptionFile(file: File): boolean {
 const AUTOSAVE_MS = 30_000;
 
 // Stamped into every .videola this build writes.
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.4.0";
 // The size the preview is shrunk to before it is counted. Sixteen by nine, so the waveform's
 // columns line up with the picture's, and small enough that the read is 147 kB rather than eight
 // megabytes -- see the note on the timer below.
