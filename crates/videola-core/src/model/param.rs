@@ -11,6 +11,14 @@ pub enum ParamValue {
     Color([f32; 4]),
     Vec2([f32; 2]),
     Choice(String),
+    /// A tone curve, as the control points a person drags: `[input, output]` pairs, both in 0..1,
+    /// x ascending. The renderer samples them; what is stored is what the editor put on screen, so
+    /// a curve that has been keyframed can still be picked up and moved afterwards.
+    ///
+    /// Deliberately not the sampled table the shader wants. A table is derivable from the points
+    /// and the points are not derivable from a table, and a keyframe between two tables is not a
+    /// keyframe between two curves -- it is a keyframe between two of their shadows.
+    Curve(Vec<[f32; 2]>),
 }
 
 impl ParamValue {
@@ -26,6 +34,16 @@ impl ParamValue {
                 mix(a[2], b[2], t),
                 mix(a[3], b[3], t),
             ])),
+            // Point for point, which is the only reading of "halfway between two curves" that is
+            // still a curve. Two curves with different point counts have no pairing at all, and
+            // guessing one -- resampling the shorter onto the longer -- would make the midpoint
+            // depend on which of the two was authored first.
+            (Self::Curve(a), Self::Curve(b)) if a.len() == b.len() => Some(Self::Curve(
+                a.iter()
+                    .zip(b)
+                    .map(|(p, q)| [mix(p[0], q[0], t), mix(p[1], q[1], t)])
+                    .collect(),
+            )),
             _ => None,
         }
     }
@@ -82,5 +100,40 @@ mod tests {
         let a = ParamValue::Vec2([0.0, 10.0]);
         let b = ParamValue::Vec2([10.0, 0.0]);
         assert_eq!(a.lerp(&b, 0.5), Some(ParamValue::Vec2([5.0, 5.0])));
+    }
+
+    #[test]
+    fn curves_interpolate_point_by_point() {
+        let flat = ParamValue::Curve(vec![[0.0, 0.0], [0.5, 0.5], [1.0, 1.0]]);
+        let lifted = ParamValue::Curve(vec![[0.0, 0.0], [0.5, 0.9], [1.0, 1.0]]);
+        assert_eq!(
+            flat.lerp(&lifted, 0.5),
+            Some(ParamValue::Curve(vec![
+                [0.0, 0.0],
+                [0.5, 0.7],
+                [1.0, 1.0]
+            ]))
+        );
+    }
+
+    // Both components move, not only the output: a keyframe that drags a control point sideways
+    // moves the tone it acts on, and lerping y alone would leave the knee standing still.
+    #[test]
+    fn a_curve_keyframe_moves_the_point_along_both_axes() {
+        let left = ParamValue::Curve(vec![[0.25, 0.25]]);
+        let right = ParamValue::Curve(vec![[0.75, 0.5]]);
+        assert_eq!(
+            left.lerp(&right, 0.5),
+            Some(ParamValue::Curve(vec![[0.5, 0.375]]))
+        );
+    }
+
+    // No pairing exists, so there is no midpoint. `interpolate` turns this into a hold on the left
+    // key, which is the same answer a bool or a choice gets.
+    #[test]
+    fn curves_of_different_lengths_do_not_interpolate() {
+        let two = ParamValue::Curve(vec![[0.0, 0.0], [1.0, 1.0]]);
+        let three = ParamValue::Curve(vec![[0.0, 0.0], [0.5, 0.6], [1.0, 1.0]]);
+        assert_eq!(two.lerp(&three, 0.5), None);
     }
 }
