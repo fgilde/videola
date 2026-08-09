@@ -15,7 +15,7 @@ localStorage.setItem("videola.theme", "dark");
 // -- so the fixture follows what this browser can actually read. Both files hold the same two
 // seconds of colour bars; only the container differs.
 // Resolved once inside the run: this file is a classic script, so there is no top-level await.
-let FIXTURE = { name: "fixture.mp4", type: "video/mp4" };
+let FIXTURE = { name: "fixture.mp4", type: "video/mp4", width: 640, height: 360 };
 
 // The two numbers the keyframe lane's geometry is read against, spelled the way the core and the
 // timeline spell them: a flick per second, and the timeline's own default zoom.
@@ -33,7 +33,7 @@ async function pickFixture() {
   } catch {
     // No decoder at all answers the question the same way a refusal does.
   }
-  FIXTURE = { name: "fixture.webm", type: "video/webm" };
+  FIXTURE = { name: "fixture.webm", type: "video/webm", width: 640, height: 360 };
 }
 
 // Printed on every run, not only a failing one: which container the browser could read, and
@@ -572,6 +572,51 @@ async function announce() {
   // picture, a grade that moves it, and the instrument following. Nothing below this line is
   // reachable from a unit test -- jsdom has no WebGL2 to read a frame back from and no canvas to
   // draw a trace onto.
+  /**
+   * The geometry of a shot, on the shot. The corners of the box are computed from the very matrix
+   * the compositor is handed -- that agreement is a unit test -- so what a browser has to add is
+   * the half that no unit test can reach: that the box lands on the picture at the size the pane
+   * happens to have, that a drag across it moves the picture by the project pixels it should, and
+   * that the panel beside it reads the same number afterwards.
+   */
+  async function stage() {
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    const box = await until("the geometry overlay", () => q(".v-stage__box"));
+    const picture = q(".v-preview__canvas").getBoundingClientRect();
+    const drawn = box.getBoundingClientRect();
+
+    // The box is the picture, not something near it. The fixture is 640x360 in a 640x360 project,
+    // so the untouched clip fills the frame and the two rectangles are the same one.
+    checkAtMost("the box sits on the picture and not beside it",
+      Math.round(Math.max(
+        Math.abs(drawn.left - picture.left), Math.abs(drawn.top - picture.top),
+        Math.abs(drawn.right - picture.right), Math.abs(drawn.bottom - picture.bottom))), 2);
+
+    const before = Number(rowSlider("Position X").value);
+    // A quarter of the way across the picture, which in project pixels is a quarter of the frame's
+    // width whatever the pane was scaled to -- that conversion is the whole of what this drag is
+    // asking about.
+    const travel = picture.width / 4;
+    const middle = { x: picture.left + picture.width / 2, y: picture.top + picture.height / 2 };
+    pointer("pointerdown", box, { clientX: middle.x, clientY: middle.y });
+    pointer("pointermove", q(".v-stage__svg"), { clientX: middle.x + travel, clientY: middle.y });
+    pointer("pointerup", q(".v-stage__svg"), { clientX: middle.x + travel, clientY: middle.y });
+    await sleep(300);
+
+    const after = Number(rowSlider("Position X").value);
+    checkNear("dragging the picture moves it by the project pixels the pointer covered",
+      Math.round(after - before), Math.round(FIXTURE.width / 4), 2);
+    check("and the panel beside the picture reads the same number", banner(), "");
+
+    // One drag, one step. The coalescing key is minted on the way down and dropped on the way up,
+    // so the picture goes back where it was in a single undo -- not one per pointer move.
+    button("Rückgängig").click();
+    await sleep(300);
+    checkNear("and the whole drag is one step to undo", Number(rowSlider("Position X").value),
+      before, 1);
+  }
+
   async function colour() {
     // Off until asked for: the instruments take a hundred and fifty pixels out of the middle
     // column, and the picture is meant to be the largest thing in the window.
@@ -744,6 +789,10 @@ async function announce() {
     checkAtMost("no empty rows are held open under the last track",
       Math.round(q(".v-timeline__body").getBoundingClientRect().bottom -
         all(".v-track").at(-1).getBoundingClientRect().bottom), 40);
+
+    // On the wall clock and before anything else has been done to the clip: under a virtual budget
+    // layout lags behind the DOM, and every claim the box makes is about a rectangle.
+    if (!virtual) await stage();
 
     if (virtual) {
       checkAtLeast("the preview shows a decoded frame",

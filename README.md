@@ -37,6 +37,12 @@ in/out/loop animation. They are picked from a browser grouped by category in whi
 that effect's own shader over the frame at the playhead** — a tile that fails to change the picture
 it was drawn from fails the build.
 
+Select a clip and its geometry is on the frame: a box with a handle on every corner and one to turn
+by, moving, scaling and rotating the shot on the picture itself. The corners come from the same
+matrix the compositor hands the GPU — the two are checked against each other over translation,
+uneven scale, rotation, an off-centre anchor and every combination with a crop — so the handles sit
+on the picture rather than near it, and the whole drag is one undo step.
+
 Every parameter can be keyframed, including a clip's position, scale and rotation, and a `position`
 track turns a series of keys into a motion path. Keyframes are edited on a lane on the timeline's own
 axis. The interpolation happens in the Rust core, so the preview and the export cannot read different

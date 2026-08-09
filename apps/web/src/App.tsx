@@ -32,6 +32,7 @@ import {
   audioEffectManifests,
   AudioGraph,
   AudioSource,
+  clipQuad,
   cutSilence,
   duckCommands,
   effectManifests,
@@ -40,10 +41,14 @@ import {
   formatSupport,
   measure as measureScopes,
   measureLoudness,
+  movedBy,
   normalizeToTarget,
   Playback,
   probe,
   ProxyQueue,
+  quadCentre,
+  rotatedTo,
+  scaledBy,
   silentSpans,
   speechSpans,
   startExport,
@@ -88,6 +93,7 @@ import {
   projectEnd,
   Scopes,
   SourceBar,
+  Stage,
   TemplateGallery,
   TemplateWizard,
   Timeline,
@@ -102,6 +108,8 @@ import {
   type MediaDrop,
   type MediaGrab,
   type SourceRange,
+  type StageGrab,
+  type StagePoint,
 } from "@videola/ui";
 
 import { effectTiles, revokeTiles } from "./effectTiles";
@@ -161,6 +169,10 @@ const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 const NO_TEMPLATES: readonly Template[] = [];
 
 const NO_PROXIES: ReadonlyMap<string, ProxyState> = new Map();
+
+// Held down, a rotation goes in whole steps. Fifteen degrees is the step every editor uses, and it
+// is what makes an upright picture reachable by hand.
+const ROTATE_STEP = 15;
 
 // The ceiling on how finely a track is scanned for a duck or for its pauses. Twenty milliseconds a
 // bucket is what the detector wants; over a long timeline that is more buckets than a peak reader
@@ -871,6 +883,60 @@ export function App(): ReactElement {
       ? undefined
       : project.timeline.tracks.flatMap((track) => track.clips).find((c) => c.id === selection[0]);
 
+  // The geometry of the selected clip, on the picture. The corners come out of the engine, where
+  // the very matrix the compositor is handed is built, so the box is on the picture rather than
+  // near it. Resolved at the playhead like everything else the preview shows: a keyframed scale
+  // means the box is the size the frame on screen actually is.
+  const staged = useMemo(() => {
+    if (selectedClip === undefined || project === undefined || doc === undefined) return undefined;
+    const transform = doc.transformsAt(playhead).get(selectedClip.id);
+    if (transform === undefined) return undefined;
+    // What the compositor draws the clip at: a medium's own resolution, and the frame for anything
+    // that has no picture of its own to be sized by.
+    const source_ = selectedClip.source;
+    const asset =
+      source_.kind === "media"
+        ? project.library.find((entry) => entry.id === source_.media)
+        : undefined;
+    const source =
+      asset?.width == null || asset.height == null
+        ? { width: project.settings.width, height: project.settings.height }
+        : { width: asset.width, height: asset.height };
+    return {
+      clip: selectedClip,
+      name: asset?.originalName ?? selectedClip.id,
+      transform,
+      source,
+      quad: clipQuad(transform, source),
+    };
+  }, [doc, project, playhead, selectedClip]);
+
+  // One drag is one step. The key is minted when the drag begins and dropped when it ends, so a
+  // hundred pointer moves coalesce into a single entry in the history -- the same bargain the
+  // timeline's own drags make.
+  const stageKey = useRef<string | undefined>(undefined);
+  const onStageDrag = useCallback(
+    (grab: StageGrab, drag: { at: StagePoint; pointer: StagePoint; delta: StagePoint; even: boolean }) => {
+      if (staged === undefined) return;
+      stageKey.current ??= `stage-${staged.clip.id}-${grab}-${playhead}`;
+      const { transform, source } = staged;
+      const centre = quadCentre(staged.quad);
+      const next =
+        grab === "move"
+          ? movedBy(transform, drag.delta)
+          : grab === "rotate"
+            ? rotatedTo(
+                transform,
+                { x: drag.at.x - centre.x, y: drag.at.y - centre.y },
+                { x: drag.pointer.x - centre.x, y: drag.pointer.y - centre.y },
+                drag.even ? ROTATE_STEP : 0,
+              )
+            : scaledBy(transform, grab, drag.delta, source, !drag.even);
+      edit(cmd.clipSetTransform(staged.clip.id, next), stageKey.current);
+    },
+    [edit, playhead, staged],
+  );
+
   // The tiles are drawn when the shelf opens and thrown away when it closes. Nothing is kept: the
   // frame they are drawn from is the one at the playhead, so a cache would be showing the picture
   // from wherever the playhead used to be -- and the whole grid costs less than one frame of
@@ -1173,6 +1239,19 @@ export function App(): ReactElement {
                 resolution={resolution}
                 onCanvas={setCanvas}
                 onResize={repaint}
+                overlay={
+                  staged === undefined ? undefined : (
+                    <Stage
+                      frame={{ width: project.settings.width, height: project.settings.height }}
+                      quad={staged.quad}
+                      label={staged.name}
+                      onDrag={onStageDrag}
+                      onDrop={() => {
+                        stageKey.current = undefined;
+                      }}
+                    />
+                  )
+                }
               />
               <Transport
                 playing={playing}

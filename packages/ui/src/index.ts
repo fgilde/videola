@@ -10,6 +10,7 @@ export * from "./primitives/Icon";
 export * from "./media/DropZone";
 export * from "./library/MediaLibrary";
 export * from "./preview/Preview";
+export * from "./preview/Stage";
 export * from "./preview/Transport";
 export * from "./inspector/Inspector";
 export * from "./inspector/TextPanel";

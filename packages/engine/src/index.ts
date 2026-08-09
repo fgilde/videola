@@ -12,6 +12,8 @@ export { AudioGraph, hasAudibleClips, MASTER_METER, measureLoudness } from "./au
 export { integratedLufs, levelFrom, LOUDNESS_BLOCK_SECONDS, peakDbfs, SILENT_LEVEL } from "./audio/loudness";
 export type { Level } from "./audio/loudness";
 export type { AudioBufferSource } from "./audio/graph";
+export { clipQuad, movedBy, quadCentre, rotatedTo, scaledBy } from "./render/stage";
+export type { Point } from "./render/stage";
 export { Clock } from "./clock";
 export type { ClockSource } from "./clock";
 export { AudioSource } from "./decode/audio-source";

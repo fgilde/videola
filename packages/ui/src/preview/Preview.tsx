@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type CSSProperties, type ReactElement } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from "react";
 
 import { useI18n } from "../i18n/useI18n";
 import "./Preview.css";
@@ -18,6 +18,11 @@ export interface PreviewProps {
   onCanvas: (canvas: HTMLCanvasElement | null) => void;
   /** The drawing buffer was resized, which empties it. Whoever draws has to draw again. */
   onResize?: () => void;
+  /**
+   * Drawn over the picture, in a box exactly the size of the canvas. The geometry overlay lives
+   * here rather than beside the preview because it has to line up with the frame to the pixel.
+   */
+  overlay?: ReactNode;
 }
 
 export function Preview({
@@ -26,6 +31,7 @@ export function Preview({
   resolution = 1,
   onCanvas,
   onResize,
+  overlay,
 }: PreviewProps): ReactElement {
   const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -69,18 +75,23 @@ export function Preview({
 
   return (
     <div className="v-preview" data-testid="preview">
-      <canvas
-        ref={canvasRef}
-        className="v-preview__canvas"
-        role="img"
-        aria-label={t("preview.label")}
+      <div
+        className="v-preview__stage"
         style={
           {
             aspectRatio: `${width} / ${height}`,
             "--v-preview-aspect": `${width / height}`,
           } as CSSProperties
         }
-      />
+      >
+        <canvas
+          ref={canvasRef}
+          className="v-preview__canvas"
+          role="img"
+          aria-label={t("preview.label")}
+        />
+        {overlay}
+      </div>
     </div>
   );
 }

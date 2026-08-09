@@ -9,19 +9,28 @@
   container-type: size;
 }
 
-/* Fit and centre without letterboxing the canvas itself: the drawing buffer is sized from the
-   element, so an element wider than the picture would hand the compositor the wrong aspect and
-   the frame would come out stretched. Taking the smaller of "as wide as the pane" and "as wide
-   as the pane is tall, times the aspect" makes the element exactly the picture. */
-.v-preview__canvas {
+/* The picture's own box: fitted and centred without letterboxing the canvas itself, because the
+   drawing buffer is sized from the element and one wider than the picture would hand the
+   compositor the wrong aspect. Taking the smaller of "as wide as the pane" and "as wide as the
+   pane is tall, times the aspect" makes the box exactly the picture -- and the canvas and the
+   geometry overlay both fill it, so the two are the same rectangle by construction rather than by
+   two rules that have to agree. */
+.v-preview__stage {
+  position: relative;
   display: block;
   width: min(100cqw, calc(100cqh * var(--v-preview-aspect)));
   /* The width above is computed from the container's size, and a container query unit is read
      from the layout of the previous frame. Open the instruments and the pane loses two thirds of
-     its height in one pass, and for that pass the canvas is still as tall as it was -- it hung out
+     its height in one pass, and for that pass the box is still as tall as it was -- it hung out
      of the top of its own pane and over the toolbar above. This is the clamp that holds whatever
      the query units happen to say: height stays auto, so the picture keeps its aspect. */
   max-height: 100%;
+}
+
+.v-preview__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
   /* The checkerboard behind a transparent composite: without it an alpha hole and a black
      background look the same, and the compositor's premultiplied output is meant to be seen. */
   background: repeating-conic-gradient(
@@ -116,4 +125,59 @@
   .v-transport__resolution {
     min-height: var(--v-touch-target);
   }
+}
+
+/* ------------------------------------------------------------------- the geometry overlay */
+
+.v-stage {
+  position: absolute;
+  inset: 0;
+  /* Only the handles and the box take the pointer. Everything between them is the picture, which
+     is still a picture: a click in the letterbox must not be swallowed by an invisible sheet. */
+  pointer-events: none;
+}
+
+.v-stage__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Drawn in project units and stroked in screen ones. Without the non-scaling stroke the outline of
+   a 4K frame would be four pixels wide and the same box on a 720p project one. */
+.v-stage__box {
+  fill: none;
+  stroke: var(--v-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  /* The whole picture, not only its outline: dragging a shot to reframe it is aimed at the face
+     in the middle, and `fill: none` with `pointer-events: fill` would leave a 1.5 px target. */
+  pointer-events: all;
+  cursor: move;
+}
+
+.v-stage__tether {
+  stroke: var(--v-accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+}
+
+.v-stage__handle {
+  fill: var(--v-accent-contrast);
+  stroke: var(--v-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: fill;
+  cursor: nwse-resize;
+}
+
+.v-stage__handle--rotate {
+  cursor: grab;
+}
+
+.v-stage__handle:hover {
+  fill: var(--v-accent);
 }

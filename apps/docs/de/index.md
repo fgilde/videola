@@ -84,6 +84,8 @@ features:
   den Compound zuerst auf eine eigene Fläche, damit alle fünf die fertige Gruppe treffen und nicht
   jeden Clip darin.
 - **Wiedergabe** — WebCodecs in einen WebGL2-Compositor, die Audio-Uhr führt, bildgenauer Transport.
+- **Geometrie auf dem Bild** — ein Rahmen auf dem Bild mit Ecken- und Drehgriffen, dessen Ecken aus
+  genau der Matrix stammen, die der Compositor der GPU übergibt.
 - **Effekte und Übergänge** — acht Effekte, sieben Übergänge, Masken, ein Textgenerator,
   Farbkurven und Lift/Gamma/Gain-Räder, ausgewählt in einem Browser, dessen jede Kachel der Shader
   des Effekts über dem aktuellen Bild ist. Jeder Parameter keyframebar, auch Position, Skalierung
@@ -112,7 +114,9 @@ Kein Motion-Blur, keine Rauschreduktion, keine Beat-Erkennung. Die Keyframe-Glä
 Kurvenfeld mit ziehbaren Anfassern, aber ein Anfasser außerhalb des Einheitsquadrats — das
 Überschwingen, aus dem ein Abprall gemacht ist — wird an dessen Rand geklemmt, und eine Kurve lässt
 sich nicht von einem Parameter auf einen anderen übertragen. Kein Editor für einen Bewegungspfad auf
-dem Bild. Die Magnetic-Timeline fehlt bewusst, und das
+dem Bild: der Geometrie-Rahmen verschiebt, skaliert und dreht eine Einstellung, aber die Bahn, die
+eine Reihe von Positions-Keys beschreibt, lässt sich auf dem Bild nicht ziehen. Die
+Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

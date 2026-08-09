@@ -102,9 +102,12 @@ describe("Preview", () => {
     expect(onResize).toHaveBeenCalledTimes(1);
   });
 
+  // On the box the canvas fills, which is also the box the geometry overlay fills: the two are the
+  // same rectangle by construction, and the aspect is what makes it the picture's rectangle.
   it("carries the project's aspect ratio, not the drawing buffer's", () => {
     show({ width: 1440, height: 1080 });
 
-    expect(canvas().style.aspectRatio).toBe("1440 / 1080");
+    const stage = document.querySelector<HTMLElement>(".v-preview__stage");
+    expect(stage?.style.aspectRatio).toBe("1440 / 1080");
   });
 });

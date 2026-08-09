@@ -136,6 +136,37 @@ die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter 
 wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
 Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
 
+## Das Bild ist ein Bedienelement
+
+Einen Clip auswählen, und auf dem Bild erscheint ein Rahmen mit einem Griff an jeder Ecke und einem
+zum Drehen. Ziehen im Rahmen verschiebt die Einstellung, eine Ecke skaliert sie, der Griff über der
+Oberkante dreht sie — auf dem Bild, denn dort steht die Antwort: eine Zahl im Bedienfeld sagt 1,4,
+und nur das Bild sagt, ob das Gesicht noch drauf ist.
+
+Die Ecken sind keine Näherung. `clipQuad` in der Engine und `quadMatrix` — die Matrix, die der
+Compositor der GPU übergibt — werden gegeneinander geprüft, über Verschiebung, ungleiche Skalierung,
+Drehung, versetzten Ankerpunkt und jede Kombination mit einem Zuschnitt. Die Griffe sitzen also auf
+dem Bild und nicht daneben.
+
+| Geste | Wirkung |
+|---|---|
+| Ziehen im Rahmen | verschiebt den Clip, in Projektpixeln, gleich wie groß der Bereich gerade ist |
+| Ziehen an einer Ecke | skaliert ihn, die gegenüberliegende Ecke bleibt genau stehen |
+| Ziehen an einer Ecke mit <kbd>Umschalt</kbd> | skaliert jede Achse für sich statt das Seitenverhältnis zu halten |
+| Ziehen am Griff über der Oberkante | dreht ihn um die Bildmitte |
+| Drehen mit <kbd>Umschalt</kbd> | rastet in ganzen 15°-Schritten ein |
+
+Die Ecke eines gedrehten Clips wächst entlang seiner eigenen Kante und nicht entlang des
+Bildschirms, und eine Drehung ist der Winkel zwischen dem Griff beim Zupacken und dem Zeiger jetzt —
+kein aufsummierter Zuwachs. Ein Zeiger, der das Fenster verlässt und zurückkommt, landet dort, wo er
+ist.
+
+Der ganze Zug ist ein Schritt in der Historie, dieselbe Abmachung wie bei den Zügen in der
+Zeitleiste: der Coalescing-Schlüssel wird beim Drücken erzeugt und beim Loslassen fallen gelassen,
+also sind hundert Zeigerbewegungen ein <kbd>Strg</kbd>+<kbd>Z</kbd>. Jede davon läuft über
+`clip.setTransform`, also wandern die Felder im Eigenschaften-Bereich mit dem Rahmen mit, und ein
+Keyframe von der einen wie von der anderen Seite bedeutet dasselbe.
+
 ## Gesperrte Spuren
 
 Das Schloss neben dem Spurnamen ist ein Versprechen: auf dieser Spur bewegt sich nichts, bis sie

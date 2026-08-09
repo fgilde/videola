@@ -131,6 +131,35 @@ insert opens the gap on **every** track, so skipping the locked one would move t
 under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
 unlock the track and edit, or leave it alone.
 
+## The picture is a control
+
+Select a clip and a box appears on the frame with a handle on every corner and one to turn by.
+Dragging inside it moves the shot, a corner scales it and the handle above the top edge rotates it —
+on the picture, because that is where the answer is: a number in a panel says 1.4, and only the
+picture says whether the face is still in shot.
+
+The corners are not an approximation of where the clip lands. `clipQuad` in the engine and
+`quadMatrix` — the matrix the compositor hands the GPU — are checked against each other over
+translation, uneven scale, rotation, an off-centre anchor and every combination with a crop, so the
+handles sit on the picture rather than near it.
+
+| Gesture | Result |
+|---|---|
+| Drag inside the box | moves the clip, in project pixels whatever the pane is scaled to |
+| Drag a corner | scales it, with the opposite corner staying exactly where it is |
+| Drag a corner with <kbd>Shift</kbd> | scales each axis on its own instead of keeping the aspect |
+| Drag the handle above the top edge | turns it about the middle of the picture |
+| Turn with <kbd>Shift</kbd> | snaps to whole 15° steps |
+
+A corner of a turned clip grows along the edge it is on rather than along the screen, and a rotation
+is the angle between where the handle was grabbed and where the pointer is now — not a delta anyone
+accumulates, so a pointer that leaves the window and comes back lands where it is.
+
+The whole drag is one step in the history, the same bargain the timeline's own drags make: the
+coalescing key is minted on the way down and dropped on the way up, so a hundred pointer moves are
+one <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Every one of them goes through `clip.setTransform`, so the fields
+in the properties panel move with the box and a keyframe set from either side means the same thing.
+
 ## Locked tracks
 
 The padlock beside a track's name is a promise: nothing on that track moves until it is unlocked

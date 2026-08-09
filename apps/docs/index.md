@@ -81,6 +81,8 @@ features:
   blend, grade, crop or dissolve the compound and it is isolated on a surface of its own first, so
   all five meet the composed group once rather than each clip in it.
 - **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
+- **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
+  computed from the very matrix the compositor hands the GPU.
 - **Effects and transitions** — eight effects, seven transitions, masks, a text generator, colour
   curves and lift/gamma/gain wheels, chosen from a browser whose every tile is that effect's own
   shader over the current frame. Every parameter keyframable, including a clip's position, scale and
@@ -107,7 +109,8 @@ features:
 No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
 handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
 to its edge, and a curve cannot be copied from one parameter to another. No on-canvas editor for a
-motion path. The magnetic timeline is deliberately absent,
+motion path: the geometry box moves, scales and turns a shot, but the trajectory a series of
+position keys traces is not draggable on the frame. The magnetic timeline is deliberately absent,
 and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
 browser's own encoders.
 
