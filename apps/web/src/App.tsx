@@ -43,6 +43,7 @@ import {
   normalizeToTarget,
   Playback,
   probe,
+  ProxyQueue,
   silentSpans,
   speechSpans,
   startExport,
@@ -51,6 +52,7 @@ import {
   type ExportHandle,
   type ExportRange,
   type Level,
+  type ProxyState,
   type ScopeReading,
 } from "@videola/engine";
 import {
@@ -61,6 +63,9 @@ import {
   missingMedia,
   readSession,
   relinkMedia,
+  // Not a React hook, whatever the name reads like on this side: the one switch that tells the
+  // decoders whether the preview may read proxies. Aliased so nothing here looks like one.
+  useProxies as setProxyUse,
   worthSaving,
   writeSession,
 } from "@videola/media";
@@ -147,6 +152,8 @@ const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 // A stable empty array, so the poster hook is not handed a fresh one on every render.
 const NO_TEMPLATES: readonly Template[] = [];
 
+const NO_PROXIES: ReadonlyMap<string, ProxyState> = new Map();
+
 // The ceiling on how finely a track is scanned for a duck or for its pauses. Twenty milliseconds a
 // bucket is what the detector wants; over a long timeline that is more buckets than a peak reader
 // should be asked for, and past this the analysis is coarser than ideal rather than slow.
@@ -173,6 +180,11 @@ export function App(): ReactElement {
   // set of in and out points would belong to nothing on screen.
   const [armed, setArmed] = useState<MediaId>();
   const [missing, setMissing] = useState(NOTHING_MISSING);
+  // Keyed by content hash, which is what the queue works in. The library shows media ids, and the
+  // translation happens where it is drawn rather than being kept twice.
+  const [proxies, setProxies] = useState<ReadonlyMap<string, ProxyState>>(NO_PROXIES);
+  const [useOriginals, setUseOriginals] = useState(false);
+  const proxyQueue = useRef<ProxyQueue>(undefined);
   const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
   // A reading carries the project it was taken from, so "is this still about this timeline"
   // is answered by comparing rather than by a second effect racing to clear it. It used to be
@@ -328,6 +340,63 @@ export function App(): ReactElement {
       cancelled = true;
     };
   }, [libraryIds]);
+
+  // One queue for the whole session rather than one per document. Proxies belong to this disk and
+  // not to a project: a medium used in two projects is transcoded once, and opening another
+  // project must not throw away work that is already half done.
+  useEffect(() => {
+    const queue = new ProxyQueue({
+      onChange: () => setProxies(new Map(queue.states)),
+    });
+    proxyQueue.current = queue;
+    return () => {
+      queue.dispose();
+      proxyQueue.current = undefined;
+      setProxies(NO_PROXIES);
+    };
+  }, []);
+
+  // Asked for on the same key the missing check uses, so an import is what starts a transcode and
+  // a drag across the timeline is not.
+  useEffect(() => {
+    const hashes = (libraryIds === "" ? [] : libraryIds.split(" "))
+      .map((id) => mediaHash(id))
+      .filter((hash): hash is string => hash !== undefined);
+    void proxyQueue.current?.want(hashes);
+  }, [libraryIds]);
+
+  // A source that is already open holds a handle on the file it chose, and a proxy arriving does
+  // not reach back into it. Keyed on which media are ready rather than on the whole map, or every
+  // "building" would reopen every decoder for nothing.
+  const proxiesReady = [...proxies]
+    .filter(([, state]) => state === "ready")
+    .map(([hash]) => hash)
+    .sort()
+    .join(" ");
+
+  useEffect(() => {
+    playback?.reopen();
+  }, [playback, proxiesReady, useOriginals]);
+
+  // The library speaks media ids and the queue speaks content hashes. Translated here, where both
+  // are already to hand, rather than kept as a second map that can fall out of step.
+  const proxiesByMedia = useMemo(() => {
+    const byMedia = new Map<MediaId, ProxyState>();
+    for (const asset of project?.library ?? []) {
+      const hash = mediaHash(asset.id);
+      const state = hash === undefined ? undefined : proxies.get(hash);
+      if (state !== undefined) byMedia.set(asset.id, state);
+    }
+    return byMedia;
+  }, [project?.library, proxies]);
+
+  // The switch has to change what is decoded, not what is displayed. It sets the one flag the
+  // decoders read; the effect above then reopens every source, because one already open is holding
+  // the file it chose when it opened.
+  const switchToOriginals = useCallback((wanted: boolean) => {
+    setProxyUse(!wanted);
+    setUseOriginals(wanted);
+  }, []);
 
   // One transport per document: the batch queries are bound to the document they came from, and
   // opening another project has to leave the old audio context behind rather than steer two.
@@ -1106,6 +1175,9 @@ export function App(): ReactElement {
                   missing={missing}
                   fps={project.settings.fps}
                   thumbnails={thumbnails}
+                  proxies={proxiesByMedia}
+                  useOriginals={useOriginals}
+                  onUseOriginals={switchToOriginals}
                   // Only where the timeline is on screen at the same time. On a phone the two take
                   // turns behind the tab bar, so there is nowhere to drag to.
                   draggable={layout !== "phone"}
