@@ -4,6 +4,7 @@ import type {
   Command,
   EffectTarget,
   Interp,
+  Keyframe,
   MediaAsset,
   ParamValue,
   ProjectSettings,
@@ -53,15 +54,83 @@ export const MAX_COMPOUND_DEPTH = 8;
 //
 // Always project time towards the source, never the other way round -- and always the same
 // rounding as the core, which the differential test in packages/core/src/roundtrip.test.ts pins
-// against the real Rust build rather than against a second reading of this file.
+// against the real Rust build rather than against a second reading of this file. That pinning is
+// what earns the second implementation: the mapping is an integral now, so a disagreement
+// accumulates across a clip instead of stopping at one rounding.
+
+// The keyframe track a speed ramp lives on, mirrored from `SPEED_TRACK` in the core. It is the one
+// track read by area rather than by value, so the name has to be the same on both sides or a ramp
+// authored here would be a track the picture walks past.
+export const SPEED_TRACK = "speed";
+
 export function consumedSource(clip: Clip): Time {
-  return Math.round(clip.duration * clip.speed.rate);
+  return sourceOffset(clip, clip.duration);
 }
 
 export function sourceTimeAt(clip: Clip, at: Time): Time | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
-  const offset = Math.round((at - clip.start) * clip.speed.rate);
+  const offset = sourceOffset(clip, at - clip.start);
   return clip.speed.reverse ? clip.inPoint + consumedSource(clip) - offset : clip.inPoint + offset;
+}
+
+// `Clip::source_offset`. A constant rate makes this a multiplication; a rate track makes it the
+// area under that track, and that is the whole of what a speed ramp is -- project time maps to
+// source time through an integral, not through a factor.
+function sourceOffset(clip: Clip, delta: Time): Time {
+  const area = integrate(clip.keyframes[SPEED_TRACK] ?? [], clip.start, clip.start + delta);
+  return Math.round(area ?? delta * clip.speed.rate);
+}
+
+// `keyframe::integrate`, flick for flick. `undefined` where the track cannot be integrated exactly
+// -- a bezier key or a value that is not a number -- and the caller then falls back to the static
+// rate, the same as the core does. Both shapes are refused at the load boundary, so this only
+// answers `undefined` for a project a later version wrote.
+function integrate(track: readonly Keyframe[], from: Time, to: Time): number | undefined {
+  if (track.length === 0) return undefined;
+  for (const keyframe of track) {
+    if (keyframe.interp === "bezier" || keyframe.value.kind !== "float") return undefined;
+  }
+  if (to <= from) return 0;
+  let total = 0;
+  let cursor = from;
+  for (const keyframe of track) {
+    if (keyframe.time <= cursor || keyframe.time >= to) continue;
+    total += spanArea(track, cursor, keyframe.time);
+    cursor = keyframe.time;
+  }
+  return total + spanArea(track, cursor, to);
+}
+
+// One interval inside a single segment: `integrate` cuts at every key, so this never straddles two.
+// Outside the keys the curve is flat, the same clamp evaluation makes at both ends.
+function spanArea(track: readonly Keyframe[], from: Time, to: Time): number {
+  const width = to - from;
+  let right = 0;
+  while (right < track.length && track[right]!.time <= from) right += 1;
+  const left = track[right - 1];
+  if (left === undefined) return rateOf(track[0]) * width;
+  const next = track[right];
+  const span = next === undefined ? 0 : next.time - left.time;
+  if (next === undefined || span <= 0 || left.interp === "hold") return rateOf(left) * width;
+  const alpha = (from - left.time) / span;
+  const beta = (to - left.time) / span;
+  const start = rateOf(left);
+  return (
+    width * start +
+    span * (rateOf(next) - start) * (easeArea(left.interp, beta) - easeArea(left.interp, alpha))
+  );
+}
+
+// The definite integral of the easing from 0 to `s`. `bezier` never arrives; `hold` is settled in
+// `spanArea`. Both are here only so every `Interp` has an answer.
+function easeArea(interp: Interp, s: number): number {
+  if (interp === "linear") return (s * s) / 2;
+  if (interp === "ease") return s * s * s - (s * s * s * s) / 2;
+  return 0;
+}
+
+function rateOf(keyframe: Keyframe | undefined): number {
+  return keyframe?.value.kind === "float" ? keyframe.value.value : 0;
 }
 
 // What may be handed on: the head of a reversed clip maps one flick past the end of the range it

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { cmd, FLICKS_PER_SECOND, MAX_COMPOUND_DEPTH, on, readableSourceTimeAt } from "./commands";
 import { VideolaDocument } from "./document";
-import type { Clip, Project } from "./generated";
+import type { Clip, Interp, Project } from "./generated";
 import { createProjectBackend, createWasmBackend } from "./wasm-backend";
 import { initSync } from "./wasm/videola_core.js";
 
@@ -358,6 +358,60 @@ describe("the source-time mapping on both sides of the boundary", () => {
         clip.start + clip.duration,
       ];
       const sweep = Array.from({ length: 15 }, (_, step) => step * 333_667);
+      for (const at of [...edges, ...sweep]) {
+        expect(readableSourceTimeAt(clip, at)).toBe(doc.sourceTimesAt(at).get(clip.id));
+      }
+    });
+  }
+
+  // The same pinning for the shape the mapping stops being proportional in. Two implementations of
+  // one integral is a worse hazard than two of one multiplication was: a disagreement accumulates
+  // over the clip instead of being a single rounding, and a reversed ramp reads the *total* to
+  // place its head, so an error in the last segment moves the first frame. Every rate here rounds
+  // exactly to f32, so both sides start from the same bits and any drift is arithmetic.
+  const ramps: [string, [number, number, Interp][], boolean][] = [
+    ["a linear ramp", [[0, 0.5, "linear"], [3, 2, "linear"]], false],
+    ["an eased ramp", [[0, 0.25, "ease"], [3, 4, "linear"]], false],
+    ["a ramp run backwards", [[0, 0.5, "linear"], [3, 2, "linear"]], true],
+    ["an eased ramp run backwards", [[0, 3, "ease"], [3, 0.25, "linear"]], true],
+    ["a frame hold from the middle", [[0, 1, "hold"], [1.5, 0, "hold"]], false],
+    [
+      "four keys of mixed easing",
+      [[0, 2, "linear"], [1, 0.5, "ease"], [2, 4, "hold"], [3, 1, "linear"]],
+      false,
+    ],
+    // The keys sit inside the clip, so the flat stretch outside them has to agree at both ends too.
+    ["a ramp shorter than its clip", [[1.5, 0.5, "linear"], [2.5, 2, "linear"]], false],
+  ];
+
+  for (const [name, keys, reverse] of ramps) {
+    it(`agrees flick for flick on ${name}`, async () => {
+      const doc = await timeline();
+      doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, SECOND, 3 * SECOND));
+      const id = clipOn(doc, 0).id;
+      doc.dispatch(cmd.clipSetSpeed(id, 1, reverse));
+      for (const [seconds, rate, interp] of keys) {
+        doc.dispatch(
+          cmd.keyframeAdd(
+            on.clip(id),
+            null,
+            "speed",
+            SECOND + Math.round(seconds * SECOND),
+            { kind: "float", value: rate },
+            interp,
+          ),
+        );
+      }
+      const clip = clipOn(doc, 0);
+
+      const edges = [
+        clip.start - 1,
+        clip.start,
+        clip.start + 1,
+        clip.start + clip.duration - 1,
+        clip.start + clip.duration,
+      ];
+      const sweep = Array.from({ length: 31 }, (_, step) => step * 100_800_000);
       for (const at of [...edges, ...sweep]) {
         expect(readableSourceTimeAt(clip, at)).toBe(doc.sourceTimesAt(at).get(clip.id));
       }
