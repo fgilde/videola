@@ -37,6 +37,13 @@ drag — two hundred pointer moves — is **one** undo step.
 
 ## Effects, transitions and text
 
+![The effect browser: tiles by category, each rendered through the effect it offers](/editor-effects.webp)
+
+They are picked from a browser grouped by category and searchable in both languages, and **every
+tile is the effect's own shader over the frame at the playhead** — not a painted illustration. A
+tile that failed to change the picture it was drawn from fails the build, which is what stops an
+effect from advertising itself with its own default value.
+
 Brightness, contrast, saturation, colour temperature, vignette, blur, sharpen and chroma key.
 Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
 masks with feather and invert; two masks in one chain intersect. A text generator with styling and

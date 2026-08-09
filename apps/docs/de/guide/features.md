@@ -40,6 +40,13 @@ Zug über zweihundert Bewegungen ist **ein** Undo-Schritt.
 
 ## Effekte, Übergänge und Text
 
+![Der Effekt-Browser: Kacheln nach Kategorien, jede durch den Effekt gerendert, den sie anbietet](/editor-effects.webp)
+
+Ausgewählt werden sie in einem Browser nach Kategorien, durchsuchbar in beiden Sprachen, und **jede
+Kachel ist der Shader des Effekts über dem Bild am Playhead** — kein gemaltes Beispiel. Eine Kachel,
+die das Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Genau das
+verhindert, dass ein Effekt mit seinem eigenen Standardwert für sich wirbt.
+
 Helligkeit, Kontrast, Sättigung, Farbtemperatur, Vignette, Weichzeichnen, Schärfen und
 Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
 über eine frei gewählte Farbe. Rechteckige und elliptische Masken mit weicher Kante und
