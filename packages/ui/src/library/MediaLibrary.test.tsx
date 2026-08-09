@@ -127,3 +127,88 @@ describe("MediaLibrary", () => {
     expect(onRelink.mock.calls).toEqual([[gone.id]]);
   });
 });
+
+// A proxy costs minutes of a fan spinning. Which media have one, and which one the machine is busy
+// with, is the difference between an explained wait and an unexplained one.
+describe("MediaLibrary and proxies", () => {
+  function showProxies(
+    library: MediaAsset[],
+    proxies: Map<MediaId, "building" | "ready">,
+    over: Partial<{ useOriginals: boolean; onUseOriginals: Mock<(on: boolean) => void> }> = {},
+  ): void {
+    render(
+      <I18nProvider>
+        <MediaLibrary
+          library={library}
+          missing={new Set()}
+          fps={PROJECT_FPS}
+          proxies={proxies}
+          onImport={vi.fn()}
+          onAdd={vi.fn()}
+          onRelink={vi.fn()}
+          {...over}
+        />
+      </I18nProvider>,
+    );
+  }
+
+  it("says which medium has a proxy and which one is being given one", () => {
+    const ready = video("a");
+    const building = video("b", { originalName: "b.mp4" });
+    const neither = video("c", { originalName: "c.mp4" });
+    showProxies(
+      [ready, building, neither],
+      new Map([
+        [ready.id, "ready"],
+        [building.id, "building"],
+      ]),
+    );
+
+    expect(within(entry(ready)).getByText("Proxy")).toBeTruthy();
+    expect(within(entry(building)).getByText("Proxy wird erzeugt")).toBeTruthy();
+    expect(within(entry(neither)).queryByText(/Proxy/)).toBeNull();
+    expect(entry(neither).dataset.proxy).toBe("none");
+  });
+
+  // A medium without a proxy is not a broken medium. Nothing about the entry may say otherwise.
+  it("leaves a medium without a proxy exactly as usable as one with", () => {
+    const neither = video("c", { originalName: "c.mp4" });
+    showProxies([neither], new Map());
+
+    expect(
+      within(entry(neither)).getByRole("button", { name: "Auf die Zeitleiste" }),
+    ).toHaveProperty("disabled", false);
+  });
+
+  it("offers no switch where nothing can be switched", () => {
+    showProxies([video("a")], new Map());
+
+    expect(screen.queryByRole("button", { name: "Originale benutzen" })).toBeNull();
+  });
+
+  // The button names the state it is in, not the one it would go to: pressed means the preview is
+  // on the originals.
+  it("shows the switch as pressed while the preview is on the originals", () => {
+    const onUseOriginals = vi.fn<(on: boolean) => void>();
+    showProxies([video("a")], new Map(), { useOriginals: true, onUseOriginals });
+    const button = screen.getByRole("button", { name: "Originale benutzen" });
+
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(button);
+
+    expect(onUseOriginals.mock.calls).toEqual([[false]]);
+  });
+
+  it("asks for the originals when the switch is off and pressed", () => {
+    const onUseOriginals = vi.fn<(on: boolean) => void>();
+    showProxies([video("a")], new Map(), { useOriginals: false, onUseOriginals });
+    const button = screen.getByRole("button", { name: "Originale benutzen" });
+
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(button);
+
+    expect(onUseOriginals.mock.calls).toEqual([[true]]);
+  });
+});

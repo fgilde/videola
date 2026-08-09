@@ -145,6 +145,23 @@
   font-family: var(--v-font-ui);
 }
 
+/* Its own row across the toolbar: it is a state of the whole panel, not one more way in. */
+.v-library__proxies {
+  grid-column: 1 / -1;
+}
+
+/* A fact among the facts: quiet once the proxy is there, in the accent while it is being made.
+   A ready proxy is the ordinary state and must not shout; one being built is the reason the
+   machine is busy, and that is worth a colour. */
+.v-library__proxy {
+  font-family: var(--v-font-ui);
+  color: var(--v-text-muted);
+}
+
+.v-library__proxy[data-state="building"] {
+  color: var(--v-accent);
+}
+
 .v-library__actions {
   display: flex;
   align-items: center;
