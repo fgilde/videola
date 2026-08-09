@@ -6,7 +6,14 @@ import type {
   SourceTimes,
   Transforms,
 } from "./backend";
-import type { Command, DispatchResult, LoadWarning, MediaKind, Project } from "./generated";
+import type {
+  ClipId,
+  Command,
+  DispatchResult,
+  LoadWarning,
+  MediaKind,
+  Project,
+} from "./generated";
 
 type Listener = (project: Project) => void;
 
@@ -83,8 +90,12 @@ export class VideolaDocument {
     return this.#backend.save(options, media);
   }
 
-  saveAsTemplate(options: SaveOptions, id: string): Uint8Array<ArrayBuffer> {
-    return this.#backend.saveAsTemplate(options, id);
+  saveAsTemplate(
+    options: SaveOptions,
+    id: string,
+    marked?: readonly ClipId[],
+  ): Uint8Array<ArrayBuffer> {
+    return this.#backend.saveAsTemplate(options, id, marked);
   }
 
   #absorb(result: DispatchResult): DispatchResult {

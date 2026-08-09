@@ -631,13 +631,17 @@ export function App(): ReactElement {
           locale: navigator.language,
         },
         project.meta.id,
+        // The selection is the marking. Selecting clips in the timeline is already how someone
+        // says "these ones", and a second way to mark a clip would be a second thing to explain.
+        // Nothing selected means "decide for me", which is what the button said before this.
+        selection.length > 0 ? selection : undefined,
       );
       downloadBlob(bytes, `${project.meta.title || project.meta.id}.videolat`);
       setTemplateError(undefined);
     } catch (err) {
       setTemplateError(templateReason(err, "error.templateSaveFailed"));
     }
-  }, [doc, project]);
+  }, [doc, project, selection]);
 
   const playPause = useCallback(() => {
     if (playback === undefined) return;

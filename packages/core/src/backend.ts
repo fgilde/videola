@@ -1,4 +1,5 @@
 import type {
+  ClipId,
   Dispatch,
   DispatchResult,
   LoadWarning,
@@ -61,7 +62,17 @@ export interface DocumentBackend {
   save(options: SaveOptions, media: MediaBytes): Uint8Array<ArrayBuffer>;
   // A `.videolat` of this project: every medium it uses becomes a slot and the bytes stay behind,
   // so unlike `save` there is nothing for the caller to gather first.
-  saveAsTemplate(options: SaveOptions, id: string): Uint8Array<ArrayBuffer>;
+  /**
+   * This project as a `.videolat`. `marked` is the author's own choice of which clips become
+   * questions -- the editor's selection. Omitted means "decide for me": every title becomes one.
+   * Media clips are questions either way; the footage does not travel with a template, so a shot
+   * that was not a question would point at material no copy of the file carries.
+   */
+  saveAsTemplate(
+    options: SaveOptions,
+    id: string,
+    marked?: readonly ClipId[],
+  ): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
   // What the core itself holds for a medium: the entry a `.videola` brought with it, or the bytes
   // `importMedia` was handed. `undefined` where the library names a medium whose bytes only ever

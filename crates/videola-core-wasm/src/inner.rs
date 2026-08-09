@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 
 use serde::de::value::{Error as DeError, StrDeserializer};
@@ -240,8 +240,13 @@ impl DocumentHost {
     // `Template::from_project` leaves the material behind, so the library it writes is empty and
     // the store never has to hand anything over -- no media parameter, and no way for this call to
     // fail on bytes the host would have had to re-read.
-    pub fn save_as_template(&self, options: SaveOptions, id: &str) -> Result<Vec<u8>> {
-        let template = Template::from_project(self.document.project(), id)?;
+    pub fn save_as_template(
+        &self,
+        options: SaveOptions,
+        id: &str,
+        marked: Option<&BTreeSet<ClipId>>,
+    ) -> Result<Vec<u8>> {
+        let template = Template::from_project(self.document.project(), id, marked)?;
         let mut sink = Cursor::new(Vec::new());
         writer::write_template(&mut sink, &template, &MemoryMediaStore::default(), &options)?;
         Ok(sink.into_inner())

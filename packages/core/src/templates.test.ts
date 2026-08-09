@@ -353,6 +353,45 @@ describe("saving a project as a template", () => {
     expect(clips(baked)[0]?.duration).toBe(4 * SECOND);
   });
 
+  // Author mode: the editor's selection is the marking. Nothing selected means every title becomes
+  // a question; a selection narrows it to those clips. What it cannot narrow is the footage -- the
+  // material does not travel, so a media clip that were not a question would draw nothing.
+  it("turns the marked clips into questions and leaves the rest alone", async () => {
+    const doc = new VideolaDocument(await createWasmBackend());
+    doc.dispatch({ type: "track.add", kind: "text", name: "T1", index: null });
+    const track = doc.state.timeline.tracks[0]!.id;
+    for (const [index, words] of ["Kopfzeile", "Fusszeile"].entries()) {
+      doc.dispatch({
+        type: "clip.add",
+        track,
+        source: { kind: "generator", generator: { type: "text", content: words, style: {} } },
+        start: index * 2 * SECOND,
+        duration: 2 * SECOND,
+      });
+    }
+    const [head, foot] = doc.state.timeline.tracks[0]!.clips.map((clip) => clip.id);
+    const options = {
+      appVersion: "0.0.0-test",
+      created: "2026-08-08T10:00:00Z",
+      modified: "2026-08-08T10:00:00Z",
+      locale: "de",
+    };
+
+    const everything = await readTemplateFile(doc.saveAsTemplate(options, "all"));
+    const only = await readTemplateFile(doc.saveAsTemplate(options, "one", [head!]));
+
+    const textSlots = (template: Template): number =>
+      template.manifest.slots.filter((slot) => slot.kind === "text").length;
+    // Two titles plus the project's own name, against one title plus the project's own name.
+    expect(textSlots(everything)).toBe(3);
+    expect(textSlots(only)).toBe(2);
+    expect(only.manifest.slots[0]?.bindings).toEqual([{ target: "generatorText", clip: head }]);
+
+    // And the unmarked title keeps its words rather than becoming an empty rectangle.
+    const baked = new VideolaDocument(await createTemplateBackend(only, {})).state;
+    expect(textOf(baked, foot!)).toBe("Fusszeile");
+  });
+
   it("does not mistake an ordinary project file for a template", async () => {
     const doc = new VideolaDocument(await createWasmBackend());
     const bytes = doc.save(

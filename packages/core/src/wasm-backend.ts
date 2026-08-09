@@ -9,6 +9,7 @@ import type {
   TransformSnapshot,
 } from "./backend";
 import type {
+  ClipId,
   Dispatch,
   DispatchResult,
   Frame,
@@ -95,8 +96,8 @@ function wrap(handle: WasmDocument): DocumentBackend {
     // the declared type to what the implementation already guarantees.
     save: (options: SaveOptions, media: MediaBytes) =>
       handle.save(options, media) as Uint8Array<ArrayBuffer>,
-    saveAsTemplate: (options: SaveOptions, id: string) =>
-      handle.saveAsTemplate(options, id) as Uint8Array<ArrayBuffer>,
+    saveAsTemplate: (options: SaveOptions, id: string, marked?: readonly ClipId[]) =>
+      handle.saveAsTemplate(options, id, marked ?? null) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
     mediaBytes: (id: string) => handle.mediaBytes(id) as Uint8Array<ArrayBuffer> | undefined,

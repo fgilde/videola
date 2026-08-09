@@ -1,6 +1,6 @@
 pub mod inner;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -9,7 +9,7 @@ use wasm_bindgen::JsCast;
 use inner::DocumentHost;
 use videola_core::command::Dispatch;
 use videola_core::format::SaveOptions;
-use videola_core::model::{MediaId, ProjectSettings, Time};
+use videola_core::model::{ClipId, MediaId, ProjectSettings, Time};
 use videola_core::template::{builtin, Frame, SlotAnswer, Template};
 use videola_core::DispatchResult;
 
@@ -206,14 +206,22 @@ impl WasmDocument {
 
     /// This project as a `.videolat`. Every medium it uses becomes a slot and stays behind, which
     /// is why there is no media map here.
+    ///
+    /// `marked` is the editor's selection: the clips the author wants to turn into questions. Null
+    /// means "decide for me". Media clips are questions either way -- the footage does not travel,
+    /// so a shot that was not a question would draw nothing.
     #[wasm_bindgen(js_name = saveAsTemplate)]
     pub fn save_as_template(
         &self,
         options: JsValue,
         id: String,
+        marked: JsValue,
     ) -> std::result::Result<Vec<u8>, JsError> {
+        let marked: Option<BTreeSet<ClipId>> = serde_wasm_bindgen::from_value(marked)?;
         let parsed: SaveOptions = serde_wasm_bindgen::from_value(options)?;
-        self.host.save_as_template(parsed, &id).map_err(to_js)
+        self.host
+            .save_as_template(parsed, &id, marked.as_ref())
+            .map_err(to_js)
     }
 }
 

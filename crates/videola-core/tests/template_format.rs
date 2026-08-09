@@ -192,7 +192,7 @@ fn a_project_saved_as_a_template_comes_back_and_bakes_with_new_material() {
     track.clips.push(clip);
     project.timeline.tracks.push(track);
 
-    let template = Template::from_project(&project, "wanderung").unwrap();
+    let template = Template::from_project(&project, "wanderung", None).unwrap();
     let reopened = reader::read_template(Cursor::new(to_videolat(&template))).unwrap();
     let replacement = asset("replacement");
     let mut answers = answers_for(&reopened);
