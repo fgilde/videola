@@ -1,6 +1,14 @@
-import { canEncodeAudio, canEncodeVideo } from "mediabunny";
+import { canEncodeAudio, canEncodeVideo, Mp4OutputFormat, WebMOutputFormat } from "mediabunny";
 
-import type { AudioCodec, VideoCodec } from "mediabunny";
+import type { AudioCodec, OutputFormat, SubtitleCodec, VideoCodec } from "mediabunny";
+
+// The one subtitle codec mediabunny writes, and the one the caption exporter speaks.
+export const SUBTITLE_CODEC: SubtitleCodec = "webvtt";
+
+/** The container mediabunny writes for a format. One definition, so encode.ts and the menu agree. */
+export function container(format: ExportFormat): OutputFormat {
+  return format.id === "mp4" ? new Mp4OutputFormat() : new WebMOutputFormat();
+}
 
 export type ContainerId = "mp4" | "webm";
 
@@ -80,4 +88,15 @@ async function attempt(probe: () => Promise<boolean>): Promise<boolean> {
     console.error(error);
     return false;
   }
+}
+
+// Whether a container can carry subtitles as a track of their own rather than burned into the
+// picture. Asked of mediabunny rather than answered from a table here, for the same reason the
+// codec probes are: it is the thing that will refuse the track, and it already knows.
+//
+// Today both containers say yes, MP4 carrying WebVTT through ISO/IEC 23003-5. That is not a thing
+// to hard-code: reading the WebM writer alone suggests MP4 cannot, and a table written from that
+// reading would have taken a working switch off the menu.
+export function carriesSubtitles(format: ExportFormat): boolean {
+  return container(format).getSupportedSubtitleCodecs().includes(SUBTITLE_CODEC);
 }

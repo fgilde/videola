@@ -89,6 +89,13 @@ describe("drawList edges", () => {
     expect(ids([track("t", [clip()], { kind: "adjustment" })], 0)).toEqual([]);
   });
 
+  // A caption is drawn like any other title. Its own track kind exists so a subtitle file can be
+  // written from it without the lower thirds coming too -- not so that it stops being a picture.
+  it("paints a caption track, and stops when it is hidden", () => {
+    expect(ids([track("t", [clip()], { kind: "caption" })], 0)).toEqual(["clp_1"]);
+    expect(ids([track("t", [clip()], { kind: "caption", hidden: true })], 0)).toEqual([]);
+  });
+
   it("passes an opacity above one straight through without clamping", () => {
     const loud = clip({ transform: transform({ opacity: 4 }) });
     expect(list(project([track("t", [loud])]), 0).items[0]?.opacity).toBe(4);

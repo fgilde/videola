@@ -19,10 +19,11 @@ export type { TextMove, TextStyle } from "./generate/text";
 export { VideoSource } from "./decode/video-source";
 export { audioChunks, runExport } from "./export/encode";
 export type { ExportAudio, ExportFrame, ExportHooks, ExportRequest } from "./export/encode";
-export { EXPORT_FORMATS, formatSupport } from "./export/format";
+export { carriesSubtitles, EXPORT_FORMATS, formatSupport, SUBTITLE_CODEC } from "./export/format";
 export type { ContainerId, EncodeProbe, ExportFormat, FormatSupport } from "./export/format";
 export { EXPORT_CANCELLED, exportFrames, frameTimes, startExport } from "./export/run";
 export type {
+  CaptionMode,
   ExportHandle,
   ExportInput,
   ExportMessage,

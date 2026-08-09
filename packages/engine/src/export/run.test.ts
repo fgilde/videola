@@ -3,7 +3,7 @@ import { AudioBuffer, OfflineAudioContext } from "node-web-audio-api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AudioGraph } from "../audio/graph";
-import { EXPORT_FORMATS } from "./format";
+import { carriesSubtitles, EXPORT_FORMATS } from "./format";
 import { EXPORT_CANCELLED, exportFrames, frameTimes, startExport } from "./run";
 
 import type { Effect, EffectParams, Keyframe, Project, Time, Transform } from "@videola/core";
@@ -434,5 +434,111 @@ describe("startExport, the mastering chain", () => {
     // ignored the keyframes and rendered the same wrong thing.
     const held = await exported({ project: mastered([limiter()]) });
     expect(file[SAMPLE_RATE - 1]!).toBeGreaterThan(held[SAMPLE_RATE - 1]! * 1.2);
+  });
+});
+
+// A project with one caption on a caption track, one title on a text track, and no media at all --
+// enough to say which of the two reaches a subtitle file and which does not.
+const CAPTIONED = {
+  settings: { sampleRate: 48000 },
+  library: [],
+  timeline: {
+    tracks: [
+      {
+        id: "trk_cap",
+        kind: "caption",
+        hidden: false,
+        clips: [
+          {
+            id: "clp_cap",
+            start: 1001 * 705_600,
+            duration: 1499 * 705_600,
+            source: { kind: "generator", generator: { type: "text", content: "Hello there", style: {} } },
+          },
+        ],
+      },
+      {
+        id: "trk_txt",
+        kind: "text",
+        hidden: false,
+        clips: [
+          {
+            id: "clp_txt",
+            start: 0,
+            duration: 705_600_000,
+            source: { kind: "generator", generator: { type: "text", content: "A lower third", style: {} } },
+          },
+        ],
+      },
+    ],
+  },
+} as unknown as Project;
+
+function captioned(captions: "burned" | "separate" | "none", formatId = "webm") {
+  const format = EXPORT_FORMATS.find((entry) => entry.id === formatId)!;
+  return withWorker({
+    project: CAPTIONED,
+    options: { ...input().options, format, captions },
+  });
+}
+
+describe("captions in an export", () => {
+  // The default, and what every export did before there was a choice: the caption track paints like
+  // any other, so the words are in the picture and the file carries no subtitle track.
+  it("burns the captions into the picture by default", async () => {
+    const { worker, handle } = withWorker({ project: CAPTIONED });
+    const request = await untilPosted(worker);
+    expect(request.subtitles).toBeUndefined();
+    expect(request.project.timeline.tracks.find((t) => t.kind === "caption")?.hidden).toBe(false);
+    handle.cancel();
+    await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  });
+
+  it("writes a subtitle track and takes the words out of the picture when asked to separate them", async () => {
+    const { worker, handle } = captioned("separate");
+    const request = await untilPosted(worker);
+    expect(request.subtitles).toBe("WEBVTT\n\n00:00:01.001 --> 00:00:02.500\nHello there\n");
+    expect(request.project.timeline.tracks.find((t) => t.kind === "caption")?.hidden).toBe(true);
+    handle.cancel();
+    await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  });
+
+  // The one that would be a lie if it were not checked: a lower third is a text clip on a text
+  // track, and sweeping every text clip into the subtitle track would put it in the file.
+  it("leaves the titles out of the subtitle track", async () => {
+    const { worker, handle } = captioned("separate");
+    const request = await untilPosted(worker);
+    expect(request.subtitles).not.toContain("A lower third");
+    handle.cancel();
+    await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  });
+
+  it("writes neither the picture nor a track when the captions are switched off", async () => {
+    const { worker, handle } = captioned("none");
+    const request = await untilPosted(worker);
+    expect(request.subtitles).toBeUndefined();
+    expect(request.project.timeline.tracks.find((t) => t.kind === "caption")?.hidden).toBe(true);
+    handle.cancel();
+    await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  });
+
+  // The editor's own project must come back untouched: hiding a track for the file and leaving it
+  // hidden on screen is the kind of side effect that only shows up after the export finishes.
+  it("leaves the project the editor is holding exactly as it was", async () => {
+    const before = JSON.stringify(CAPTIONED);
+    const { worker, handle } = captioned("separate");
+    await untilPosted(worker);
+    expect(JSON.stringify(CAPTIONED)).toBe(before);
+    handle.cancel();
+    await expect(handle.result).rejects.toThrow(EXPORT_CANCELLED);
+  });
+
+  // A switch the container cannot honour must not be offered, so the menu asks mediabunny rather
+  // than carrying a table of its own -- a table that would have said MP4 could not, because that is
+  // what reading the WebM writer suggested, and it is wrong.
+  it("asks the writer which containers carry a subtitle track, rather than assuming", () => {
+    for (const format of EXPORT_FORMATS) {
+      expect(carriesSubtitles(format)).toBe(true);
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { frameDuration, timeToSeconds } from "@videola/core";
+import { captionCues, frameDuration, timeToSeconds, toVtt } from "@videola/core";
 
 import type { EffectParams, Project, Rate, SourceTimes, Time, Transforms } from "@videola/core";
 
@@ -14,6 +14,19 @@ export interface ExportRange {
   to: Time;
 }
 
+/**
+ * What becomes of the project's captions in the file.
+ *
+ * `burned` draws them into the picture, which every player shows and none can switch off. It is the
+ * default because it is the one that needs nothing of the player, and because it is what every
+ * export did before there was a choice.
+ *
+ * `separate` writes them as a subtitle track the viewer turns on and off, and leaves the picture
+ * without them; whether the chosen container can carry one is `carriesSubtitles`, asked of the
+ * writer rather than assumed. `none` writes neither.
+ */
+export type CaptionMode = "burned" | "separate" | "none";
+
 export interface ExportOptions {
   format: ExportFormat;
   width: number;
@@ -22,6 +35,8 @@ export interface ExportOptions {
   videoBitrate: number;
   audioBitrate: number;
   range: ExportRange;
+  /** Defaults to `burned`, which is what every export did before there was a choice. */
+  captions?: CaptionMode;
 }
 
 export interface ExportResult {
@@ -121,18 +136,41 @@ export function startExport(input: ExportInput): ExportHandle {
 }
 
 async function run(worker: Worker, input: ExportInput): Promise<ExportResult> {
+  const mode = input.options.captions ?? "burned";
+  // Read before the tracks are hidden, because hiding one is exactly what takes its cues out of
+  // `captionCues` -- the same rule that keeps a track nobody was shown out of a sidecar file.
+  const cues = mode === "separate" ? captionCues(input.project) : [];
   const request: ExportRequest = {
-    project: input.project,
+    project: mode === "burned" ? input.project : withoutCaptions(input.project),
     format: input.options.format,
     width: input.options.width,
     height: input.options.height,
     fps: input.options.fps,
     videoBitrate: input.options.videoBitrate,
     audioBitrate: input.options.audioBitrate,
+    // Unchanged by the mode: it resolves times and parameters per instant and never asks which
+    // clips are on screen. A snapshot carrying a caption the draw list then skips costs nothing.
     frames: exportFrames(input),
     audio: await renderAudio(input),
+    subtitles: cues.length > 0 ? toVtt(cues) : undefined,
   };
   return exchange(worker, request, input.onProgress);
+}
+
+// Captions out of the picture, by the one switch the renderer already reads. Nothing in the draw
+// list needed a second way to say "not this track": `paints` has skipped a hidden track since it
+// was written, and an export that reached into the renderer instead would be a second answer to
+// which clips are on screen.
+//
+// A clone rather than a spread: `Project` carries the open index signature that lets a file from a
+// later version keep its unknown fields, so no object literal satisfies the type, and a shallow
+// copy would hand the worker track objects the editor is still holding.
+function withoutCaptions(project: Project): Project {
+  const copy = structuredClone(project);
+  for (const track of copy.timeline.tracks) {
+    if (track.kind === "caption") track.hidden = true;
+  }
+  return copy;
 }
 
 function exchange(

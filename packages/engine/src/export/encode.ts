@@ -4,10 +4,9 @@ import {
   AudioSampleSource,
   BufferTarget,
   CanvasSource,
-  Mp4OutputFormat,
   Output,
   Quality,
-  WebMOutputFormat,
+  TextSubtitleSource,
 } from "mediabunny";
 
 import type {
@@ -17,7 +16,7 @@ import type {
   Time,
   TransformSnapshot,
 } from "@videola/core";
-import type { AudioEncodingConfig, OutputFormat, VideoEncodingConfig } from "mediabunny";
+import type { AudioEncodingConfig, VideoEncodingConfig } from "mediabunny";
 
 import { VideoSource } from "../decode/video-source";
 import { GeneratorFrames } from "../generate/generator";
@@ -26,6 +25,7 @@ import { Compositor } from "../render/compositor";
 import { createContext } from "../render/context";
 import { drawList } from "../render/draw-list";
 import type { FrameSource } from "../playback";
+import { carriesSubtitles, container, SUBTITLE_CODEC } from "./format";
 import type { ExportFormat } from "./format";
 
 // One output frame: where it sits on the project's ruler, and where every visible clip reads from
@@ -54,6 +54,12 @@ export interface ExportRequest {
   audioBitrate: number;
   frames: readonly ExportFrame[];
   audio?: ExportAudio;
+  /**
+   * The project's captions as WebVTT, to be written as a subtitle track of their own rather than
+   * drawn into the picture. Left out where the captions are burned in, which is the default and
+   * the only thing MP4 can do at all.
+   */
+  subtitles?: string;
 }
 
 export interface ExportHooks {
@@ -85,6 +91,11 @@ export async function runExport(
   output.addVideoTrack(video, { frameRate: request.fps.numerator / request.fps.denominator });
   const audio = request.audio && new AudioSampleSource(audioEncoding(request));
   if (audio !== undefined) output.addAudioTrack(audio);
+  // Added before the run starts, like every other track: mediabunny refuses one afterwards. A
+  // format that cannot carry subtitles gets none rather than an exception -- the interface has
+  // already said so, and this is where that stays true.
+  const subtitles = subtitleTrack(request);
+  if (subtitles !== undefined) output.addSubtitleTrack(subtitles);
 
   try {
     await output.start();
@@ -97,6 +108,9 @@ export async function runExport(
     });
     if (audio !== undefined && request.audio !== undefined) {
       await writeAudio(audio, request.audio);
+    }
+    if (subtitles !== undefined && request.subtitles !== undefined) {
+      await subtitles.add(request.subtitles);
     }
     await output.finalize();
   } catch (error) {
@@ -250,8 +264,11 @@ export class SourcePool {
   }
 }
 
-function container(format: ExportFormat): OutputFormat {
-  return format.id === "mp4" ? new Mp4OutputFormat() : new WebMOutputFormat();
+function subtitleTrack(request: ExportRequest): TextSubtitleSource | undefined {
+  const wanted = request.subtitles !== undefined && request.subtitles.length > 0;
+  return wanted && carriesSubtitles(request.format)
+    ? new TextSubtitleSource(SUBTITLE_CODEC)
+    : undefined;
 }
 
 function videoEncoding(request: ExportRequest): VideoEncodingConfig {

@@ -236,9 +236,14 @@ export function blendState(mode: BlendMode): BlendState {
 // ponytail: adjustment tracks paint nothing yet. They apply their effects to everything below,
 // which needs the track's intermediate target from the frame graph -- the seam is here, the
 // machinery arrives with the effect chain in Task 16.
+// A caption is drawn like any other title, and the whole of what its own kind buys is that a
+// subtitle file can be written from it without sweeping up the lower thirds. Hiding the track is
+// what turns burned-in subtitles off, and it is the same flag that keeps them out of the file.
+const DRAWN: readonly Track["kind"][] = ["video", "overlay", "text", "caption"];
+
 function paints(track: Track): boolean {
   if (track.hidden) return false;
-  return track.kind === "video" || track.kind === "overlay" || track.kind === "text";
+  return DRAWN.includes(track.kind);
 }
 
 function drawItem(
