@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { FLICKS_PER_SECOND, type Clip, type Effect, type Interp, type Keyframe } from "@videola/core";
 
-import { keyframeSpan, laneRows, offeredFor, POSITION_TRACK } from "./keyframes";
+import {
+  isSpeedRow,
+  keyframeSpan,
+  laneRows,
+  offeredFor,
+  OFFERED_ON_SPEED,
+  POSITION_TRACK,
+} from "./keyframes";
 import { makeClip } from "./Timeline.test";
 
 const SECOND = FLICKS_PER_SECOND;
@@ -129,12 +136,30 @@ describe("keyframeSpan", () => {
 });
 
 describe("offeredFor", () => {
-  it("offers the three this surface can author", () => {
-    expect(offeredFor("linear")).toEqual(["linear", "hold", "ease"]);
+  // The three presets stay one click and the curve joins them, rather than replacing them.
+  it("offers the three presets and the curve", () => {
+    expect(offeredFor("linear")).toEqual(["linear", "hold", "ease", "bezier"]);
   });
 
+  // The one track a curve may not go on: `integrate` has no exact area under a bezier, and the
+  // additivity `consumed_source` stands on would go with it. The core refuses the change, so the
+  // entry is not there to click.
+  it("leaves the curve off a rate track", () => {
+    expect(offeredFor("linear", OFFERED_ON_SPEED)).toEqual(["linear", "hold", "ease"]);
+  });
+
+  // And a rate track that arrived carrying one anyway, from a file written by hand. Dropping it
+  // from the list would make the picker read "Linear" for a keyframe that is not linear.
   it("keeps an interpolation it cannot author on the list, so the select stays truthful", () => {
-    expect(offeredFor("bezier")).toEqual(["bezier", "linear", "hold", "ease"]);
+    expect(offeredFor("bezier", OFFERED_ON_SPEED)).toEqual(["bezier", "linear", "hold", "ease"]);
+  });
+});
+
+describe("isSpeedRow", () => {
+  it("knows the clip's own rate track from an effect parameter of the same name", () => {
+    expect(isSpeedRow({ effectType: null, key: "speed" })).toBe(true);
+    expect(isSpeedRow({ effectType: "warp", key: "speed" })).toBe(false);
+    expect(isSpeedRow({ effectType: null, key: "opacity" })).toBe(false);
   });
 });
 

@@ -66,16 +66,39 @@ export function keyframeSpan(clip: Clip): { from: Time; to: Time } {
 }
 
 /**
- * The interpolations this surface can author. Bezier is missing because nothing here can drag a
- * handle, and a curve shape that cannot be undone from the surface that set it is worse than one
- * that was never offered. A keyframe loaded from a file may still carry it -- see `offeredFor`.
+ * The keyframe track a speed ramp lives on, spelled as `clip::SPEED_TRACK` spells it.
  */
-export const OFFERED: readonly Interp[] = ["linear", "hold", "ease"];
+export const SPEED_TRACK = "speed";
 
 /**
- * A keyframe loaded from a file may carry an interpolation this build cannot author. Listing it
- * keeps a select truthful about what is set instead of displaying the first option instead.
+ * The interpolations this surface can author. The three presets are the common cases and stay a
+ * single click; `bezier` joins them now that a handle can be dragged, and a shape that cannot be
+ * undone from the surface that set it is exactly what kept it out before.
  */
-export function offeredFor(interp: Interp): readonly Interp[] {
-  return OFFERED.includes(interp) ? OFFERED : [interp, ...OFFERED];
+export const OFFERED: readonly Interp[] = ["linear", "hold", "ease", "bezier"];
+
+/**
+ * The same list without the curve, for the one track that cannot carry one. A rate track is
+ * integrated to say how much source a clip has consumed, and a bezier has no elementary
+ * antiderivative -- an inexact area would break the additivity the whole time mapping stands on, so
+ * the core refuses it. Offering it here and having the core say no is a menu entry that draws the
+ * wrong frame.
+ */
+export const OFFERED_ON_SPEED: readonly Interp[] = ["linear", "hold", "ease"];
+
+/**
+ * Whether this row is the one a speed ramp lives on. A speed track hangs off the clip itself, so an
+ * effect parameter that happens to be called `speed` is not it.
+ */
+export function isSpeedRow(row: { effectType: string | null; key: string }): boolean {
+  return row.effectType === null && row.key === SPEED_TRACK;
+}
+
+/**
+ * A keyframe loaded from a file may carry an interpolation this row cannot author -- a `bezier` on
+ * a rate track, written by hand. Listing it keeps a select truthful about what is set instead of
+ * displaying the first option instead.
+ */
+export function offeredFor(interp: Interp, allowed: readonly Interp[] = OFFERED): readonly Interp[] {
+  return allowed.includes(interp) ? allowed : [interp, ...allowed];
 }

@@ -412,8 +412,8 @@ export const cmd = {
     effectType: string | null,
     key: string,
     time: Time,
-    handleIn: readonly [number, number] | null,
-    handleOut: readonly [number, number] | null,
+    handleIn: [number, number] | null,
+    handleOut: [number, number] | null,
   ) => ({ type: "keyframe.setHandles", target, effectType, key, time, handleIn, handleOut }),
 
   markerAdd: (time: Time, label: string) => ({ type: "marker.add", time, label }),

@@ -757,9 +757,10 @@ describe("the inspector", () => {
     });
   });
 
-  // A .videola written elsewhere may carry a bezier keyframe. Dropping it from the list would
-  // make the picker show "Linear" for a keyframe that is not linear.
-  it("names an interpolation it cannot author rather than misreporting it", () => {
+  // Three presets and the curve, and the picker reads what the keyframe actually carries rather
+  // than the first option. The shape itself is dragged in the timeline's curve field, which is
+  // where there is room for a value axis; this row only says which of the four is in force.
+  it("names the interpolation the keyframe carries", () => {
     show({
       clip: clipWithMedia(withBrightness({ amount: [key(SECOND, 1, "bezier")] })),
       playhead: SECOND,
@@ -769,10 +770,10 @@ describe("the inspector", () => {
     const picker = screen.getByLabelText("Verlauf ab dem Keyframe von Stärke") as HTMLSelectElement;
     expect(picker.value).toBe("bezier");
     expect([...picker.options].map((option) => option.value)).toEqual([
-      "bezier",
       "linear",
       "hold",
       "ease",
+      "bezier",
     ]);
   });
 

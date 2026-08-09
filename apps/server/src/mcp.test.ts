@@ -261,6 +261,14 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
     time: 0,
     interp: "hold",
   }),
+  "keyframe.setHandles": (f) => ({
+    target: { kind: "clip", clip: f.clip },
+    effectType: "brightness",
+    key: "amount",
+    time: 0,
+    handleIn: null,
+    handleOut: [0.9, 0.05],
+  }),
   // A plain number, not a BigInt: this is what `JSON.parse` produces for `sizeBytes` on the wire,
   // whatever the generated TypeScript type says about a Rust `u64`.
   "media.import": () => ({

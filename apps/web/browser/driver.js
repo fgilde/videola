@@ -462,6 +462,78 @@ async function announce() {
     check("and says which one of them is picked",
       laneKeys().map((node) => node.getAttribute("aria-pressed")).join(), "false,true");
     await sleep(300);
+
+    await curveField();
+  }
+
+  /**
+   * The curve editor, end to end and through nothing but the surface: the earlier of the two keys
+   * picked, switched to a curve, its handle dragged, and the picture read out of the drawing
+   * buffer before and after -- at an instant neither key sits at, because that is the only place a
+   * curve and a straight line differ at all.
+   *
+   * It runs last and leaves the field open, so the screenshot at the end of the budget is a picture
+   * of a bent curve rather than of the panel that could have drawn one.
+   */
+  async function curveField() {
+    // Frame 22 of thirty: past the first key at 0.5 s and short of the second at 1 s. At either
+    // key every easing agrees with every other, and a run reading there would pass with no curve.
+    toStart();
+    forward(22);
+    const straight = await repainted();
+
+    pointer("pointerdown", laneKeys()[0]);
+    pointer("pointerup", laneKeys()[0]);
+    // The pick has to land before the bar is read: React schedules its re-render on a task, and
+    // the select still carries the previous key's handler until it has run. Without this wait the
+    // curve went onto the key that was picked a moment ago, and every check downstream agreed.
+    await sleep(300);
+    check("the press moved the pick to the earlier of the two keys",
+      laneKeys().map((node) => node.getAttribute("aria-pressed")).join(), "true,false");
+
+    const interp = q('[data-testid="keyframe-bar"] select');
+    check("the curve is on offer beside the three presets",
+      [...interp.options].map((option) => option.value).join(), "linear,hold,ease,bezier");
+
+    setValue(interp, "bezier");
+    await sleep(300);
+    const disclosure = q('[data-testid="keyframe-curve-disclosure"]');
+    check("a picked key with travel after it offers a curve", disclosure !== null, true);
+    // Through the summary, the way a person opens one. Set on the element instead, it would be
+    // undone by the next render -- which is every pointer move of the drag below.
+    q(".v-keycurve__summary").click();
+    await sleep(300);
+    check("the disclosure opened on the field", disclosure.open, true);
+
+    check("the key really took the curve", laneKeys()[0].dataset.interp, "bezier");
+    const handles = all("[data-curve-handle]");
+    check("both ends of the segment can be grabbed", handles.length, 2);
+
+    // The box is measured once and the whole drag is aimed inside it. The field has been on screen
+    // for a beat by now, so its rect is settled -- unlike the playhead's, two seeks after a seek.
+    const box = q(".v-curve").getBoundingClientRect();
+    const out = handles.find((node) => node.dataset.curveHandle === "out");
+    const startBox = out.getBoundingClientRect();
+    const from = { clientX: startBox.left + startBox.width / 2, clientY: startBox.top + startBox.height / 2 };
+    const to = { clientX: box.left + box.width * 0.95, clientY: box.top + box.height * 0.95 };
+    pointer("pointerdown", out, from);
+    for (let i = 1; i <= 20; i += 1) {
+      pointer("pointermove", out, {
+        clientX: from.clientX + ((to.clientX - from.clientX) * i) / 20,
+        clientY: from.clientY + ((to.clientY - from.clientY) * i) / 20,
+      });
+    }
+    pointer("pointerup", out, to);
+
+    const curved = await repainted();
+    check("dragging a handle raised nothing", banner(), "");
+    // Opacity runs from 1 down to 0.4 across the segment. A handle pulled to the bottom right
+    // holds the travel back, so most of the way through the picture is still near the first key --
+    // brighter than the straight ramp put it, at the very same instant.
+    check("the curve moved the picture at an instant no keyframe sits at",
+      curved > straight * 1.1, true);
+    check("and did not disturb the keys themselves", laneKeys().length, 2);
+    await sleep(300);
   }
 
 
@@ -533,8 +605,10 @@ async function announce() {
     // And the curve, which is the control this library grew a parameter kind for. A point dragged
     // upwards is a brighter picture, measured on the canvas rather than asserted on the model.
     await addEffect("curves");
-    const field = await until("the curve field", () => q(".v-curve"));
-    const points = all(".v-curve__point");
+    // Scoped to the inspector: the timeline's keyframe curve field is built out of the very same
+    // classes -- deliberately, so the two read as one control -- and it is standing open by now.
+    const field = await until("the curve field", () => q(".v-inspector .v-curve"));
+    const points = all(".v-inspector .v-curve__point");
     checkAtLeast("the curve opens with the two ends of the range", points.length, 2);
     const box = field.getBoundingClientRect();
 
@@ -542,7 +616,7 @@ async function announce() {
     // A point added a quarter of the way across, then dragged up to four fifths of the output.
     pointer("pointerdown", field, { clientX: box.left + box.width * 0.25, clientY: box.top + box.height * 0.75 });
     await sleep(200);
-    const added = all(".v-curve__point");
+    const added = all(".v-inspector .v-curve__point");
     checkAtLeast("tapping the field adds a point", added.length, points.length + 1);
     const grabbed = added[1];
     pointer("pointerdown", grabbed, { clientX: box.left + box.width * 0.25, clientY: box.top + box.height * 0.75 });

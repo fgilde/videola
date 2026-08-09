@@ -21,6 +21,7 @@ import {
   type Clip as ClipModel,
   type ClipId,
   type Command,
+  type CurveShape,
   type Interp,
   type Keyframe,
   type MediaId,
@@ -36,8 +37,15 @@ import type { EffectDescriptor } from "../inspector/Inspector";
 import { IconButton } from "../primitives/Icon";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { KeyframeCurve } from "./KeyframeCurve";
 import { KeyframeLane, KeyframeLaneHeaders, paramLabel, type KeyframeSelection } from "./KeyframeLane";
-import { laneRows, offeredFor, type LaneRow } from "./keyframes";
+import {
+  isSpeedRow,
+  laneRows,
+  offeredFor,
+  OFFERED_ON_SPEED,
+  type LaneRow,
+} from "./keyframes";
 import { MarkerList } from "./MarkerList";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
@@ -96,6 +104,12 @@ export interface TimelineProps {
    */
   effects?: readonly EffectDescriptor[];
   /**
+   * The core's own easing, sampled: what the curve editor plots. Absent means no curve editor at
+   * all, only the presets -- a curve drawn from a second easing written on this side would look
+   * like one thing and animate like another, and offering it without the core is exactly that.
+   */
+  curveShape?: CurveShape;
+  /**
    * Must throw when the core refuses a command, and must not report it itself. Hitting a clip's
    * limit is ordinary during a drag and the timeline swallows it; a caller that catches first
    * produces one error banner per pointer movement.
@@ -120,6 +134,7 @@ export function Timeline({
   playhead,
   waveforms,
   effects = [],
+  curveShape,
   dispatch,
   onSeek,
   onSelectionChange,
@@ -134,6 +149,10 @@ export function Timeline({
   const [flicksPerPixel, setFlicksPerPixel] = useState(DEFAULT_FLICKS_PER_PIXEL);
   const [selected, setSelected] = useState<ReadonlySet<ClipId>>(() => new Set());
   const [keyframe, setKeyframe] = useState<KeyframeSelection>();
+  // Kept here rather than left to the element: a `<details>` that owns its own state closes every
+  // time the bar around it is rebuilt -- which is on every pointer move of a handle drag, and on
+  // every change of picked key. Somebody shaping one curve after another opens it once.
+  const [curveOpen, setCurveOpen] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [edgeMode, setEdgeMode] = useState<EdgeMode>("trim");
   const [dragMode, setDragMode] = useState<DragMode>("move");
@@ -373,33 +392,65 @@ export function Timeline({
           keyframe is set to has to stay reachable while the lane it lives on is scrolled. */}
       {picked !== undefined && laneClip !== undefined && (
         <div className="v-timeline__keybar" data-testid="keyframe-bar">
-          <span className="v-timeline__keybarName">
-            {paramLabel(picked.row, effects, locale, t)}
-          </span>
-          <select
-            aria-label={t("keyframe.interp")}
-            value={picked.entry.interp}
-            onChange={(event) =>
-              dispatch(
-                cmd.keyframeSetInterp(
-                  on.clip(laneClip.id),
-                  picked.row.effectType,
-                  picked.row.key,
-                  picked.entry.time,
-                  event.target.value as Interp,
-                ),
-              )
-            }
-          >
-            {offeredFor(picked.entry.interp).map((interp) => (
-              <option key={interp} value={interp}>
-                {t(`interp.${interp}`)}
-              </option>
-            ))}
-          </select>
-          {/* A finger has no Delete key, and this is the only way to reach the one thing a picked
-              keyframe can have done to it without one. */}
-          <IconButton icon="trash" label={t("keyframe.delete")} onClick={removeKeyframe} />
+          <>
+            <span className="v-timeline__keybarName">
+              {paramLabel(picked.row, effects, locale, t)}
+            </span>
+            <select
+              aria-label={t("keyframe.interp")}
+              value={picked.entry.interp}
+              onChange={(event) =>
+                dispatch(
+                  cmd.keyframeSetInterp(
+                    on.clip(laneClip.id),
+                    picked.row.effectType,
+                    picked.row.key,
+                    picked.entry.time,
+                    event.target.value as Interp,
+                  ),
+                )
+              }
+            >
+              {/* The three presets stay one click, and the curve is the fourth entry rather than a
+                  mode that replaces them. A rate track never gets it: `integrate` has no exact
+                  answer for a bezier, and the core refuses the change -- an entry that could only
+                  produce a refusal is worse than one that is not there. */}
+              {offeredFor(
+                picked.entry.interp,
+                isSpeedRow(picked.row) ? OFFERED_ON_SPEED : undefined,
+              ).map((interp) => (
+                <option key={interp} value={interp}>
+                  {t(`interp.${interp}`)}
+                </option>
+              ))}
+            </select>
+            {/* A finger has no Delete key, and this is the only way to reach the one thing a picked
+                keyframe can have done to it without one. */}
+            <IconButton icon="trash" label={t("keyframe.delete")} onClick={removeKeyframe} />
+          </>
+          {/* A native disclosure that opens over the tracks, exactly like the marker list beside it
+              and for the same reason: the field is square, the timeline is the shortest panel on
+              this screen, and a curve nobody has opened must not take a row away from it.
+              Only where there is a segment to shape -- the last key of a track has none, and its own
+              arriving handle belongs to the field of the key before it. */}
+          {curveShape !== undefined && curveNeighbour(picked) !== undefined && (
+            <details
+              className="v-keycurve__disclosure"
+              data-testid="keyframe-curve-disclosure"
+              open={curveOpen}
+              onToggle={(event) => setCurveOpen(event.currentTarget.open)}
+            >
+              <summary className="v-keycurve__summary">{t("keyframe.curve")}</summary>
+              <KeyframeCurve
+                clip={laneClip.id}
+                row={picked.row}
+                left={picked.entry}
+                right={curveNeighbour(picked) as Keyframe}
+                curveShape={curveShape}
+                dispatch={dispatch}
+              />
+            </details>
+          )}
         </div>
       )}
 
@@ -666,6 +717,16 @@ function pickedKeyframe(
   const row = rows.find((candidate) => candidate.id === selection.row);
   const entry = row?.track.find((candidate) => candidate.time === selection.time);
   return row === undefined || entry === undefined ? undefined : { row, entry };
+}
+
+/**
+ * The key after the picked one on the same row, which is the other end of the segment a curve field
+ * shapes. Nothing where the picked key is the last: there is no travel after it to time, and its own
+ * incoming handle is reached from the field of the key before it.
+ */
+function curveNeighbour(picked: { row: LaneRow; entry: Keyframe }): Keyframe | undefined {
+  const index = picked.row.track.findIndex((entry) => entry.time === picked.entry.time);
+  return index < 0 ? undefined : picked.row.track[index + 1];
 }
 
 // One clip out of every group the selection touches, so a command that acts on a whole group is

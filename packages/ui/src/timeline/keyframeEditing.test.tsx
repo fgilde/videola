@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect, useState, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -99,6 +99,9 @@ function Harness({ doc }: { doc: VideolaDocument }): ReactElement {
         project={project}
         playhead={playhead}
         effects={[BRIGHTNESS]}
+        // The real one, out of the same wasm module the history above runs on: the curve field's
+        // whole claim is that it draws the core's easing, and a stub here would prove a stub.
+        curveShape={doc.curveShape}
         // Deliberately not caught: the timeline decides which refusals are ordinary, and every one
         // it does not swallow reaches the test as a throw the way it reaches the shell as a banner.
         dispatch={(command: Command, key?: string) => doc.dispatch(command, key)}
@@ -506,5 +509,295 @@ describe("a motion path in the lane", () => {
       ["Position X (px)", true],
     ]);
     expect(rows[1]?.textContent).toContain("vom Pfad überschrieben");
+  });
+});
+
+// --------------------------------------------------------------------------- the curve field
+
+function openCurve(): HTMLElement {
+  const disclosure = document.querySelector<HTMLDetailsElement>(
+    "[data-testid='keyframe-curve-disclosure']",
+  );
+  if (disclosure === null) throw new Error("no curve disclosure beside the picked keyframe");
+  disclosure.open = true;
+  const field = document.querySelector<HTMLElement>("[data-testid='keyframe-curve']");
+  if (field === null) throw new Error("the disclosure opened on nothing");
+  return field;
+}
+
+function handle(end: "in" | "out"): HTMLElement {
+  const element = document.querySelector<HTMLElement>("[data-curve-handle='" + end + "']");
+  if (element === null) throw new Error("no " + end + " handle in the curve field");
+  return element;
+}
+
+// The y of every plotted step, in the 0..100 box the viewBox declares -- which runs downwards, so a
+// low number is a high value.
+function plotted(): number[] {
+  const path = document.querySelector<SVGPathElement>(".v-curve__line");
+  if (path === null) throw new Error("nothing plotted");
+  return (path.getAttribute("d") ?? "")
+    .split(/[ML]/)
+    .filter((step) => step.trim() !== "")
+    .map((step) => Number(step.trim().split(/\s+/)[1]));
+}
+
+// The field is a square box on a page that does not lay out in jsdom, so a pointer position has to
+// be given something to be measured against. The real geometry is measured in the browser run.
+function stubField(field: HTMLElement, size: number): void {
+  const target = field.querySelector<HTMLElement>(".v-curve");
+  if (target === null) throw new Error("no curve box");
+  target.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      top: 0,
+      width: size,
+      height: size,
+      right: size,
+      bottom: size,
+      x: 0,
+      y: 0,
+      toJSON: () => "",
+    }) as DOMRect;
+}
+
+async function pickedBezier(): Promise<Scene> {
+  const scene = await sceneWithKeyframes([1, 5]);
+  scene.doc.dispatch(cmd.keyframeSetInterp(on.clip(scene.clip), null, "opacity", SECOND, "bezier"));
+  return scene;
+}
+
+function pick(time: number): void {
+  down(clipElement(), { clientX: 100 });
+  down(keyAt(time), { clientX: 10 });
+  up({ clientX: 10 });
+}
+
+describe("the curve field", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  // Where it is, and where it is not. The lane rides the timeline's own time axis and has no value
+  // axis to put a curve on; the field sits in the bar beside what the key is set to, which is
+  // outside the scrolling area for the same reason that bar is.
+  it("sits beside the picked keyframe rather than in the lane", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+
+    const field = openCurve();
+    expect(screen.getByTestId("keyframe-bar").contains(field)).toBe(true);
+    expect(screen.getByTestId("keyframe-lane").contains(field)).toBe(false);
+  });
+
+  // The last key of a track has no travel after it to shape. Its own arriving handle belongs to the
+  // field of the key before it, which is where it is reachable.
+  it("is not offered on the last keyframe of a track", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(5 * SECOND);
+
+    expect(screen.queryByTestId("keyframe-curve-disclosure")).toBeNull();
+  });
+
+  // The claim the whole thing rests on. Read a quarter of the way along, because at the two ends
+  // every easing ever written agrees with every other -- a field drawing straight lines passes a
+  // run that only looks there.
+  it("plots the shape the core resolves, not a straight line", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    // A bezier with no handles is ease-in-out, which lags the diagonal's 75 at a quarter.
+    const opened = plotted();
+    expect(opened[16]).toBeGreaterThan(80);
+
+    // Through `act`, because this one command comes from outside a React event: without it the
+    // subscriber has fired but the tree has not been asked to redraw yet, and the two readings
+    // below would be the same drawing twice.
+    act(() => {
+      doc.dispatch(
+        cmd.keyframeSetHandles(on.clip(onlyClip(doc).id), null, "opacity", SECOND, null, [
+          0.9, 0.05,
+        ]),
+      );
+    });
+
+    const bent = plotted();
+    expect(bent[0]).toBeCloseTo(100, 1);
+    expect(bent[bent.length - 1]).toBeCloseTo(0, 1);
+    // Bent far below what it drew a moment ago: with that handle, nothing has happened yet a
+    // quarter of the way through.
+    expect(bent[16]).toBeGreaterThan((opened[16] ?? 0) + 5);
+    expect(bent[16]).toBeGreaterThan(93);
+  });
+
+  // A hold does not ease, it waits. `ease` answers a straight line for it -- `interpolate` never
+  // asks it -- so drawing that would be a curve field showing a ramp where the picture jumps.
+  it("draws a hold as a step rather than as a ramp", async () => {
+    const { doc, clip } = await sceneWithKeyframes([1, 5]);
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", SECOND, "hold"));
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    const shape = plotted();
+    expect(shape[32]).toBeCloseTo(100, 1);
+    expect(shape[shape.length - 1]).toBeCloseTo(0, 1);
+  });
+
+  // Presets stay one click and the curve is the fourth entry, not a mode that replaces them.
+  it("shows no handles until the key is set to bezier", async () => {
+    const { doc } = await sceneWithKeyframes([1, 5]);
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    const field = openCurve();
+
+    expect(field.querySelector("[data-curve-handle]")).toBeNull();
+    expect(field.textContent).toContain("Bezier");
+
+    fireEvent.change(screen.getByLabelText("Verlauf ab diesem Keyframe"), {
+      target: { value: "bezier" },
+    });
+
+    expect(document.querySelectorAll("[data-curve-handle]")).toHaveLength(2);
+  });
+
+  it("keeps the three presets on offer beside the curve", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+
+    const select = screen.getByLabelText("Verlauf ab diesem Keyframe") as HTMLSelectElement;
+    expect([...select.options].map((option) => option.value)).toEqual([
+      "linear",
+      "hold",
+      "ease",
+      "bezier",
+    ]);
+  });
+
+  // A rate track is integrated to say how much source a clip has consumed, and a bezier has no
+  // exact area. The core refuses the change, so an entry offering it could only ever produce a
+  // refusal -- which is worse than an entry that is not there.
+  it("does not offer bezier on a speed ramp", async () => {
+    const { doc, clip } = await sceneWithKeyframes([]);
+    for (const [seconds, rate] of [
+      [1, 0.5],
+      [5, 2],
+    ] as const) {
+      doc.dispatch(
+        cmd.keyframeAdd(on.clip(clip), null, "speed", seconds * SECOND, {
+          kind: "float",
+          value: rate,
+        }),
+      );
+    }
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+
+    const select = screen.getByLabelText("Verlauf ab diesem Keyframe") as HTMLSelectElement;
+    expect([...select.options].map((option) => option.value)).toEqual(["linear", "hold", "ease"]);
+  });
+
+  // Dragging one handle writes the pair the keyframe carries, so the other one survives. Sending
+  // only the one under the hand would clear the other back to the default -- the very fault the
+  // upsert was fixed for.
+  it("writes a dragged handle and leaves its partner alone", async () => {
+    const { doc, clip } = await pickedBezier();
+    doc.dispatch(cmd.keyframeSetHandles(on.clip(clip), null, "opacity", SECOND, [0.1, 0.2], null));
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    stubField(openCurve(), 200);
+
+    const watch = watchWindowErrors();
+    fireEvent.pointerDown(handle("out"), { pointerId: 7, clientX: 20, clientY: 180 });
+    for (let step = 1; step <= 10; step += 1) {
+      fireEvent.pointerMove(handle("out"), {
+        pointerId: 7,
+        clientX: 20 + step * 12,
+        clientY: 180 - step * 12,
+      });
+    }
+    fireEvent.pointerUp(handle("out"), { pointerId: 7, clientX: 140, clientY: 60 });
+    watch.stop();
+
+    expect(watch.errors.map((error) => error.message)).toEqual([]);
+    const key = trackOf(doc)[0];
+    expect(key?.handleOut?.[0]).toBeCloseTo(0.7, 2);
+    expect(key?.handleOut?.[1]).toBeCloseTo(0.7, 2);
+    // Still the pair it was given, to the precision an f32 keeps it in.
+    expect(key?.handleIn?.[0]).toBeCloseTo(0.1, 5);
+    expect(key?.handleIn?.[1]).toBeCloseTo(0.2, 5);
+  });
+
+  // One gesture, one entry on the undo stack -- and what it takes back is the shape the curve had
+  // before the drag, not the one the second-to-last pointer move left.
+  it("makes one drag one undo step", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    stubField(openCurve(), 200);
+
+    fireEvent.pointerDown(handle("out"), { pointerId: 8, clientX: 20, clientY: 180 });
+    for (let step = 1; step <= 20; step += 1) {
+      fireEvent.pointerMove(handle("out"), { pointerId: 8, clientX: 20 + step * 6, clientY: 100 });
+    }
+    fireEvent.pointerUp(handle("out"), { pointerId: 8, clientX: 140, clientY: 100 });
+    expect(trackOf(doc)[0]?.handleOut ?? null).not.toBeNull();
+
+    doc.undo();
+
+    expect(trackOf(doc)[0]?.handleOut ?? null).toBeNull();
+  });
+
+  // The far end of the segment belongs to the next key. A field that wrote both onto the key under
+  // the hand would move a handle the drawing says belongs somewhere else.
+  it("writes the arriving handle onto the next keyframe", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    stubField(openCurve(), 200);
+
+    fireEvent.pointerDown(handle("in"), { pointerId: 9, clientX: 116, clientY: 0 });
+    fireEvent.pointerMove(handle("in"), { pointerId: 9, clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(handle("in"), { pointerId: 9, clientX: 50, clientY: 50 });
+
+    const track = trackOf(doc);
+    expect(track[0]?.handleIn ?? null).toBeNull();
+    expect(track[1]?.handleIn?.[0]).toBeCloseTo(0.25, 2);
+    expect(track[1]?.handleIn?.[1]).toBeCloseTo(0.75, 2);
+  });
+
+  // The precedence rule, said on the surface that would otherwise be the most convincing of all
+  // about an edit with no effect on any picture.
+  it("says so when the motion path overrides the track being curved", async () => {
+    const { doc, clip } = await sceneWithKeyframes([]);
+    for (const [seconds, value] of [
+      [1, 10],
+      [5, 90],
+    ] as const) {
+      doc.dispatch(
+        cmd.keyframeAdd(on.clip(clip), null, "x", seconds * SECOND, { kind: "float", value }),
+      );
+      doc.dispatch(
+        cmd.keyframeAdd(on.clip(clip), null, "position", seconds * SECOND, {
+          kind: "vec2",
+          value: [value, value],
+        }),
+      );
+    }
+    render(<Harness doc={doc} />);
+    down(clipElement(), { clientX: 100 });
+    const xKey = keys().find(
+      (candidate) =>
+        candidate.dataset.keyframeKey === "x" && candidate.dataset.keyframeTime === String(SECOND),
+    );
+    if (xKey === undefined) throw new Error("no x keyframe drawn");
+    down(xKey, { clientX: 10 });
+    up({ clientX: 10 });
+
+    expect(openCurve().textContent).toContain("Bewegungspfad überschreibt");
   });
 });
