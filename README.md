@@ -40,7 +40,8 @@ again rather than trusting the arithmetic. Ducking writes keyframes you can see 
 detection cuts the pauses out.
 
 **Colour.** Waveform, vectorscope and histogram read off the preview. Curves as a first-class
-parameter type, keyframable point by point, plus lift/gamma/gain wheels.
+parameter type, keyframable point by point, plus lift/gamma/gain wheels and `.cube` lookup tables
+that travel inside the .videola.
 
 **Subtitles.** SRT and WebVTT in and out, on a caption track of their own. A millisecond is exactly
 705,600 flicks, so the round trip is lossless by arithmetic — and checked byte for byte through the
@@ -88,7 +89,7 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No motion blur, no LUT import, no noise reduction, no beat detection. No curve editor for keyframe
+No motion blur, no noise reduction, no beat detection. No curve editor for keyframe
 easing: a project carrying bezier handles keeps them and keeps its shape, but nothing here can drag
 one. A compound clip is flattened rather than isolated, so opacity, effects and blend apply per
 nested clip instead of once over the composed picture — an adjustment track sits under the same

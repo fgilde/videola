@@ -92,7 +92,7 @@ features:
 
 ## What is not there yet
 
-No masks, motion paths, motion blur or LUT import. No EQ or compressor: the model now holds track
+No motion blur, and no on-canvas editor for a motion path. No EQ or compressor: the model now holds track
 and project effect chains, but nothing renders or sounds them yet. A compound clip is flattened
 rather than isolated. The magnetic timeline is deliberately absent, and the
 [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the browser's

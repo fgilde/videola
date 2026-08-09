@@ -1,8 +1,8 @@
 # Effekte und Übergänge
 
-**Zwölf Effekte, sieben Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
+**Dreizehn Effekte, sieben Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
 in einer Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an
-einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 349
+einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 384
 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
 
 ## Ein Effekt ist ein Manifest und ein Fragment-Shader
@@ -45,7 +45,9 @@ Worauf eine Fragment-Quelle sich verlassen darf:
 | `in vec2 v_uv` | die Stelle im Bild, **y läuft nach oben** |
 | `uniform sampler2D u_source` | die Kette bis hierher, premultipliziert |
 | `uniform sampler2D u_second` | der zweite Eingang, premultipliziert, nur bei `inputs` gleich 2 |
-| `uniform float u_<key>` | einer je deklariertem Parameter |
+| `uniform float u_<key>` | einer je deklarierter Zahl |
+| `uniform vec4 u_<key>` | einer je deklarierter Farbe, **premultipliziert** |
+| `uniform highp sampler3D u_<key>` | einer je deklarierter Tabelle, auf Textureinheit 2 |
 | `uniform float u_pass` | welcher Durchgang das ist, nur bei `passes` gleich 2 |
 | `textureSize(u_source, 0)` | die Texelgröße, für jeden Kern, der eine braucht |
 
@@ -60,9 +62,9 @@ stand und von unten kam. Ein Effekt, dem die Richtung wichtig ist, rechnet um st
 Richtung, die auf dem Schirm im Uhrzeigersinn lesen soll — dieselbe Konvention wie die Drehung der
 Transformation — ist innerhalb eines Durchgangs `vec2(cos a, -sin a)`.
 
-### Ein Parameter ist eine Fließkommazahl, eine Farbe oder eine Kurve
+### Ein Parameter ist eine Zahl, eine Farbe, eine Kurve oder eine Tabelle
 
-Bis vor kurzem trug jedes Manifest ausschließlich Fließkommazahlen, und genau daran war
+Jedes Manifest trug einmal ausschließlich Fließkommazahlen, und genau daran war
 eine LUT gescheitert. `ParamValue` im Rust-Kern trägt `Color`, `Int`, `Bool`, `Vec2` und `Choice`,
 seit das Modell geschrieben wurde; was fehlte, war irgendetwas zwischen Projektdatei und Uniform,
 das hätte sagen können, welche Sorte ein Parameter ist.
@@ -145,6 +147,123 @@ erreicht sie mit der Tastatur, das Fingerziel kommt aus demselben `--v-touch-tar
 Bedienelement, und eine Browserprüfung kann das Rechteck messen, das ein Finger treffen muss. Ein
 Kreis in einer skalierten `viewBox` hat einen Radius in Nutzereinheiten, und vierundvierzig Pixel
 sind keine feste Anzahl davon.
+
+```ts
+{ kind: "lut", key: "table", name: { de: "Tabelle", en: "Table" } }
+```
+
+Eine Farbtabelle ist der eine Parameter hier, der **überhaupt keinen Wert** trägt. Was in der
+Projektdatei steht, ist die Kennung eines Bibliothekseintrags; die Tabelle sind dessen Bytes. Einen
+Vorgabewert gibt es nicht: ein nicht gesetzter Parameter zeichnet durch die Identität, also das
+unveränderte Bild, und eine Vorgabe, die irgendeinen bestimmten Look benennt, wäre eine Korrektur,
+die niemand bestellt hat, auf jedem Clip.
+
+Das ist die ganze Ablage-Entscheidung, und sie ist einen eigenen Absatz wert. Ein 33er-Gitter sind
+35 937 Tripel. Das gehört nicht in `project.json` neben eine Zahl — und auch nicht in eine zweite,
+eigene Ablage, denn alles, was eine Tabelle braucht, bekommt ein Bibliothekseintrag ohnehin schon.
+Sie liegt inhaltsadressiert in OPFS unter `media/<hash>`, dieselbe `.cube` in zwei Projekten ist also
+eine Datei auf der Platte. Sie wandert durch `write_media` in die `.videola`, das die Bibliothek
+abläuft und von Tabellen nichts weiß — **ein Projekt, das reist, bringt seine Farbkorrektur also
+mit**, ohne dass dem Schreiber eine Zeile hinzugefügt wurde. Und der Export-Worker findet sie so, wie
+er ein Video findet: indem er OPFS nach diesem Hash fragt. Über `postMessage` geht von einer Tabelle
+nichts.
+
+`MediaKind` hat dafür eine Sorte `Lut` bekommen, statt eine `.cube` als Bild durchgehen zu lassen.
+Die Bibliothek muss sie von der Zeitleiste fernhalten können — sie hat kein Bild, keine Länge und
+nichts, was eine Spur zeigen könnte — und eine Tabelle, die als Bild in die Zeichenliste geriete,
+würde als Bild gezeichnet. Im Panel hat eine Tabelle darum weder die Schaltfläche „Auf die
+Zeitleiste“ noch die Bereichsmarke, und wo ein Clip seine Länge nennt, steht *Farbtabelle*.
+
+## Eine Farbtabelle, von der Datei bis zum Pixel
+
+### Die `.cube` lesen
+
+`parseCube` in `@videola/media` ist eine Vertrauensgrenze und liest sich wie eine: Gittergröße,
+Zeilenzahl und jede einzelne Zahl werden geprüft und nicht geglaubt. Das Gitter muss zwischen 2 und
+64 liegen — 33 liefert jeder Kamerahersteller, 64 ist das Größte, das überhaupt jemand verkauft; bei
+256 wäre die Textur vierundsechzig Megabyte, je Effekt hochgeladen, aus einem Budget, das sich jedes
+Bild der Zeitleiste teilt. Die Zeilenzahl muss `size³` **genau** treffen, und zwar in beide
+Richtungen: zu wenige ließen das Ende der Tabelle schwarz, zu viele heißen, dass die Datei etwas
+anderes sagt als ihr eigener Kopf. Werte außerhalb 0 bis 1 werden geklemmt, und diese Klemme ist
+unsere — die Prüfung dazu liest die geparsten Bytes und nicht die Textur, denn ein RGBA8-Ziel hätte
+ohnehin geklemmt und eine Prüfung am Pixel würde nichts beweisen.
+
+Zweierlei wird abgelehnt statt geraten:
+
+- **`LUT_1D_SIZE`.** Eine eindimensionale Tabelle ist eine Tonwertkurve je Kanal, und dieser Editor
+  hat einen Kurveneffekt, der genau das mit Stützpunkten bearbeitet, die man hinterher noch ziehen
+  kann. Sie in ein 3D-Gitter aufzublasen kostete ein Megabyte Textur für das, was vier Splines sagen.
+- **Ein Definitionsbereich außer 0 bis 1.** `DOMAIN_MIN`/`DOMAIN_MAX` sagen, über welchen
+  Eingangsbereich die Tabelle indiziert wird. Der Shader indiziert sie über den Einheitsbereich, ein
+  weiterer Bereich korrigierte also stillschweigend die falschen Tonwerte — ein leise falsches Bild
+  statt einer Ablehnung, mit der jemand etwas anfangen kann.
+
+Eine Datei, die nicht parst, erreicht die Bibliothek nie. Das Parsen geschieht *vor* dem Schreiben
+der Bytes und vor der Meldung an den Kern, ein Bibliothekseintrag hat also immer eine lesbare Tabelle
+hinter sich.
+
+### Die dritte Textureinheit
+
+Die Tabelle ist ein `sampler3D` auf Einheit 2, nach dem Bild des Clips auf 0 und dem zweiten Eingang
+eines Übergangs auf 1. `LUT_UNIT` ist eine Konstante in `render/lut.ts`, und jeder Weg, der zeichnet,
+importiert sie — der Compositor, die Kacheln im Browser und, über den Compositor, der Export-Worker.
+Der Sampler wird beim Linken gebunden, und zwar bedingungslos: ein Programm, das `u_table` nie
+deklariert, hat dafür keine Stelle, `getUniformLocation` antwortet null, und eine Null-Stelle ist ein
+Nichts-Tun, das die Spezifikation zusichert.
+
+Der Shader ist sechs Zeilen lang, weil der trilineare Filter der Hardware *die* Interpolation
+zwischen den Gitterpunkten ist. Die Gittergröße kommt aus `textureSize` und nicht aus einer Uniform —
+zwei Quellen für dieselbe Zahl sind der Weg, auf dem ein 17er-Gitter als 33er abgetastet wird. Die
+Adressierung trägt einen halben Texel Versatz: eine Tabelle mit `n` Einträgen hat ihren ersten
+Eintrag in der *Mitte* des ersten Texels, ein Eingang von 0 muss also bei `0,5 / n` landen. Ohne das
+ist jede Korrektur um einen halben Gitterschritt Richtung Schwarz verschoben, was wie eine leicht
+falsche Tabelle aussieht und nicht wie ein Fehler — und die Pixelprüfung fängt es als drei Ausfälle.
+
+**Nachgeschlagen wird auf der geraden Farbe, nicht auf der premultiplizierten.** Das ist keine
+Optimierung, das ist, was eine Farbabbildung bedeutet. Eine Tabelle, die nach `a · c` gefragt wird,
+antwortet für eine Farbe, die das Bild nicht enthält, und ein Pixel mit einem Drittel Deckung käme in
+einem anderen Farbton zurück als dasselbe Pixel bei voller Deckung — ein farbiger Schleier an jeder
+weichen Kante. Die Premultiplikation wird vor dem Nachschlagen aufgehoben und danach wieder gesetzt,
+genau wie es die Kurven tun, und ein zu Blau getauschtes halbdeckendes Rot ist die Messung, die das
+so hält: 128, wo die premultiplizierte Lesart 64 ergibt.
+
+**Nichts gewählt ist die Identität, nicht eine leere Einheit.** Ein `sampler3D`, an den nichts
+gebunden ist, liest sich als deckendes Schwarz — eine Korrektur ohne Tabelle wäre also ein schwarzer
+Clip statt eines unkorrigierten. Der Compositor hält eine Identitätstabelle — zwei Einträge je Achse,
+deren acht Ecken ihre eigenen Koordinaten sind — und bindet sie, sobald die benannte Tabelle fehlt
+oder nicht geladen werden konnte. Ein kaputter Import kostet seinen eigenen Clip den Look und die
+übrige Zeitleiste nichts.
+
+### Die Kachel
+
+Ein Effekt, dessen ganzer Gegenstand eine Datei ist, die noch niemand importiert hat, ist der
+schwerste Fall für die Regel, dass **eine Kachel ein echter Lauf des echten Shaders** ist. Eine durch
+die Identität gezeichnete Kachel wäre das Quellbild mit dem Namen eines Korrektureffekts darunter.
+Das Manifest benennt deshalb eine Tabelle *als Wert* — ein kleiner Teal-und-Orange-Look, also das,
+was die Hälfte aller je verkauften Look-Pakete tut — und sie geht durch denselben Parser wie eine
+fallen gelassene `.cube`, ein kaputter Parser nimmt die Kachel also mit, statt sie gut aussehen zu
+lassen.
+
+„Um mehr als acht Stufen anders als die Quelle“ reicht für diese eine nicht, und die Gegenprobe hat
+das bewiesen: eine Kachel, deren Sampler an der falschen Einheit hing, las eine leere, kam als
+deckendes Schwarz heraus und bestand jene Prüfung mühelos. Die Kachel wird darum **gegen die Tabelle
+gemessen, die das Manifest benennt**, auf der CPU ausgewertet. Diese Prüfung fand dann einen zweiten
+echten Fehler: `UNPACK_FLIP_Y_WEBGL` gilt für einen `ArrayBufferView` genauso wie für ein Bild, und
+die Kacheln lassen es an, weil ein Standbild passend zu `v_uv` gedreht werden muss — die Tabelle kam
+also mit umgedrehter Grünachse an. `uploadLut` schaltet beide Unpack-Schalter jetzt um den Upload
+herum ab und danach wieder ein.
+
+### Farbraum
+
+Die Tabelle wird gegen das Bild gelesen, wie es steht: **nicht-lineares sRGB**, der Raum, in dem in
+dieser Pipeline alles gemischt wird (siehe `BROWSER_DEFAULT_WEBGL` weiter oben). Für eine `.cube` ist
+das die richtige Antwort und kein Kompromiss — ein Look-Paket oder die kreative LUT eines
+Kameraherstellers ist display-referred und erwartet gammakodierte Codewerte, also genau das, was sie
+bekommt. Eine für lineares Licht gebaute Tabelle erwartet ihren eigenen Eingang und wird hier nicht
+eines Besseren belehrt; für sie umzurechnen hieße, die ganze Pipeline auf lineares Licht zu stellen,
+also dieselbe Änderung, die der `ponytail:`-Vermerk an der Hintergrundfarbe beschreibt. Eine
+Log-LUT funktioniert, wenn das Material Log ist und stromaufwärts unangetastet blieb, denn dann
+*sind* die Codewerte die Log-Kodierung, für die sie gemacht wurde.
 
 
 ## Zwei Durchgänge für einen separablen Kern
@@ -657,12 +776,14 @@ Projekt wirklich einen Effekt trägt.
   Leiste.
 - **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
   dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
-- **LUT-Import** fehlt weiterhin, und die Parametersorte ist nicht mehr das, was im Weg steht: ein
-  Manifestparameter nennt jetzt eine, und eine Farbe legt den ganzen Weg von der Projektdatei bis zu
-  einer `vec4`-Uniform zurück. Übrig sind die anderen drei Viertel — ein `.cube`-Parser, ein Ort für
-  eine Tabelle, die für eine Projektdatei bei weitem zu groß ist, und eine dritte Textureinheit,
-  gebunden durch Compositor, Vorschau und Export-Worker gleichermaßen. Das ist eine Änderung am
-  Bildgraphen, nicht an einem Manifest.
+- **Eine `.cube` mit einem Definitionsbereich außer 0 bis 1 wird abgelehnt**, eine eindimensionale
+  ebenso. Beides mit Absicht (siehe oben); ein weiterer Bereich wollte den Bereich als zwei weitere
+  Uniforms in den Shader tragen, ein kleiner Schritt, sobald eine echte Datei danach fragt.
+- **Eine Tabelle lässt sich nicht keyframen.** `ParamValue` interpoliert nicht zwischen zwei Namen
+  und der Kern versucht es nicht, die Auswahl trägt deshalb keine Keyframe-Schalter — eine Zeile,
+  die nur ein Halten erzeugen kann, verspräche eine Animation, die nichts zeichnet. Der Lader liest
+  eine Keyframe-Spur trotzdem, damit ein handgeschriebenes Projekt, das mitten im Clip die Tabelle
+  wechselt, beide geladen bekommt.
 - **Form- und Countdown-Generatoren malen nichts.** Sie stehen im Modell, sie stehen nicht im Menü,
   und ein Clip, dessen Generator dieser Renderer nicht malen kann, fällt aus der Zeichenliste, statt
   als leeres Rechteck gezeichnet zu werden.

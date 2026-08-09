@@ -95,7 +95,7 @@ features:
 
 ## Was noch fehlt
 
-Keine Masken, Bewegungspfade, kein Motion-Blur, kein LUT-Import. Kein EQ und kein Kompressor: das
+Kein Motion-Blur und kein Editor für einen Bewegungspfad auf dem Bild. Kein EQ und kein Kompressor: das
 Modell hält jetzt Effektketten für Spuren und Projekt, aber noch nichts zeichnet oder klingt sie.
 Ein verschachtelter Clip wird flachgelegt statt isoliert. Die Magnetic-Timeline fehlt bewusst, und
 das [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der

@@ -1,8 +1,8 @@
 # Effects and transitions
 
-**Twelve effects, seven transitions, two masks, three measuring instruments and a text engine —
+**Thirteen effects, seven transitions, two masks, three measuring instruments and a text engine —
 chosen from a browser that shows you each one at work.** Every colour on this page was measured
-against a real driver rather than asserted: `pnpm --filter @videola/engine test:gpu` runs 349 pixel
+against a real driver rather than asserted: `pnpm --filter @videola/engine test:gpu` runs 384 pixel
 checks through headless Chrome, and each claim below is one of them.
 
 ## An effect is a manifest and a fragment shader
@@ -47,6 +47,7 @@ What a fragment source may rely on:
 | `uniform sampler2D u_second` | the second input, premultiplied, only when `inputs` is 2 |
 | `uniform float u_<key>` | one per declared float parameter |
 | `uniform vec4 u_<key>` | one per declared colour parameter, **premultiplied** |
+| `uniform highp sampler3D u_<key>` | one per declared table parameter, on texture unit 2 |
 | `uniform float u_pass` | which sweep this is, only when `passes` is 2 |
 | `textureSize(u_source, 0)` | the texel size, for any kernel that needs one |
 
@@ -61,9 +62,9 @@ from the bottom. An effect that cares about direction converts rather than assum
 to read clockwise on screen, the same convention as the transform's rotation, is
 `vec2(cos a, -sin a)` inside a pass.
 
-### A parameter is a float, a colour or a curve
+### A parameter is a float, a colour, a curve or a table
 
-Until recently every manifest carried floats and nothing else, and that was the wall a LUT ran into.
+Every manifest once carried floats and nothing else, and that was the wall a LUT ran into.
 `ParamValue` in the Rust core has carried `Color`, `Int`, `Bool`, `Vec2` and `Choice` since the model
 was written; what was missing was anything between the project file and the uniform that could say
 which one a parameter is.
@@ -141,6 +142,112 @@ target is sized from the same `--v-touch-target` as every other control, and a b
 measure the rectangle a finger has to hit. A circle in a scaled `viewBox` has a radius in user units,
 and forty-four pixels is not a fixed number of those.
 
+```ts
+{ kind: "lut", key: "table", name: { de: "Tabelle", en: "Table" } }
+```
+
+A lookup table is the one parameter here that has **no value at all**. What the project file carries
+is the id of a library asset, and the table is that asset's bytes. There is no default: an unset
+parameter draws through the identity, which is the untouched picture, and a default that named some
+particular look would be a grade nobody asked for on every clip.
+
+That is the whole storage decision, and it is worth its own paragraph. A 33-cube is 35 937 triplets.
+It has no business sitting in `project.json` beside a number, and it has no business in a second
+store of its own either — because everything a table needs is what a library asset already gets. It
+is content-addressed in OPFS under `media/<hash>`, so the same `.cube` imported into two projects is
+one file on disk. It is packed into the `.videola` by `write_media`, which walks the library and
+knows nothing about tables, so **a project that travels brings its grade with it** without a line of
+code being added to the writer. And the export worker finds it the way it finds a video: by asking
+OPFS for that hash. Nothing about a table crosses `postMessage`.
+
+`MediaKind` grew a `Lut` variant for it, rather than passing a `.cube` off as an image. The library
+has to be able to keep it off the timeline — it has no picture, no length and nothing a track could
+show — and a table that reached the draw list as a picture would be drawn as one. In the panel a
+table therefore has neither the "add to timeline" button nor the range marker, and says *Lookup
+table* where a clip says its length.
+
+## A lookup table, from the file to the pixel
+
+### Reading the `.cube`
+
+`parseCube` in `@videola/media` is a trust boundary and reads like one: the size, the row count and
+every number are checked rather than believed. The grid must be between 2 and 64 — 33 is what every
+camera manufacturer ships and 64 is the largest anyone sells; at 256 the texture would be sixty-four
+megabytes, uploaded per effect, on a budget shared with every frame on the timeline. The row count
+must match `size³` **exactly**, in both directions: too few would leave the tail of the table black,
+too many mean the file says something other than its own header does. Values outside 0 to 1 are
+clamped, and that clamp is ours — the check that proves it reads the parsed bytes, not the texture,
+because an RGBA8 target would have clamped them anyway and a check on the pixel would prove nothing.
+
+Two things are refused rather than guessed at:
+
+- **`LUT_1D_SIZE`.** A one-dimensional table is a tone curve per channel, and this editor has a
+  curves effect that edits exactly that with control points you can drag afterwards. Expanding one
+  into a 3D grid would spend a megabyte of texture to say what four splines say.
+- **A domain other than 0 to 1.** `DOMAIN_MIN`/`DOMAIN_MAX` say what input range the table is indexed
+  by. The shader indexes it over the unit range, so a wider domain would silently grade the wrong
+  tones — a quiet wrong picture instead of a refusal anybody can act on.
+
+A file that does not parse never reaches the library. The parse happens *before* the bytes are
+written and before the core is told, so a library entry always has a readable table behind it.
+
+### The third texture unit
+
+The table is a `sampler3D` on unit 2, after the clip's picture on 0 and a transition's second input
+on 1. `LUT_UNIT` is one constant in `render/lut.ts` and every path that draws imports it — the
+compositor, the browser's tiles and, through the compositor, the export worker. The sampler is bound
+at link time and unconditionally: a program that never declares `u_table` has no location for it,
+`getUniformLocation` answers null, and a null location is a no-op the specification promises.
+
+The shader is six lines, because the hardware's trilinear filter *is* the interpolation between grid
+points. `textureSize` supplies the grid size rather than a uniform — two sources of truth for the
+same number is how a 17-cube comes to be sampled as a 33. The addressing carries a half-texel
+offset: a table of `n` entries has its first entry at the *centre* of the first texel, so an input of
+0 has to land at `0.5 / n`. Without it every grade is shifted half a grid step towards black, which
+looks like a slightly wrong table rather than like a bug — and the pixel harness catches it as three
+failures.
+
+**The lookup is on the straight colour, not the premultiplied one.** That is not an optimisation, it
+is what a colour mapping means. A table asked what to do with `a · c` answers for a colour the
+picture does not contain, and a pixel at a third coverage would come back a different hue from the
+same pixel at full coverage — a coloured haze along every soft edge. The premultiplication is undone
+before the lookup and put back after, exactly as the curves do it, and a half-covered red traded for
+blue is the measurement that keeps it that way: 128, where the premultiplied reading gives 64.
+
+**Nothing chosen is the identity, not an empty unit.** A `sampler3D` bound to nothing reads as opaque
+black, so a grade with no table would be a black clip rather than an ungraded one. The compositor
+keeps an identity table — two entries an axis, whose eight corners are their own coordinates — and
+binds it whenever the named table is absent or failed to load. One broken import costs its own clip
+the look and the rest of the timeline nothing.
+
+### The tile
+
+An effect whose whole subject is a file nobody has imported yet is the hardest case for the rule that
+**a tile is a real run of the real shader**. A tile drawn through the identity would be the source
+picture with a grading effect's name under it. So the manifest nominates a table *by value* — a small
+teal-and-orange look, which is what half the look packs ever sold do — and it goes through the same
+parser a dropped `.cube` goes through, so a broken parser takes the tile out with it rather than
+leaving it looking fine.
+
+"Different from the source by more than eight levels" is not enough for this one, and the
+counter-check proved it: a tile whose sampler was bound to the wrong unit read an empty one, came out
+opaque black, and passed that check comfortably. The tile is therefore measured **against the table
+the manifest names**, evaluated on the CPU. That check then found a second real bug:
+`UNPACK_FLIP_Y_WEBGL` applies to an `ArrayBufferView` as readily as to a picture, and the browser's
+tiles keep it on because a still image has to be turned to match `v_uv` — so the table arrived with
+its green axis reversed. `uploadLut` now turns both unpack flags off around the upload and puts them
+back.
+
+### Colour space
+
+The table is read against the picture as it stands: **non-linear sRGB**, the space everything in this
+pipeline mixes in (see `BROWSER_DEFAULT_WEBGL` above). For a `.cube` that is the right answer rather
+than a compromise — a look pack or a camera manufacturer's creative LUT is display-referred and
+expects gamma-encoded code values, which is exactly what it gets. A table authored against linear
+light expects its own input and will not be told otherwise here; converting for it would need the
+whole pipeline in linear light, which is the same change the `ponytail:` note on the background
+colour describes. A log LUT works if the material is log and untouched upstream, because then the
+code values *are* the log encoding it was made for.
 
 ## Two passes for a separable kernel
 
@@ -633,13 +740,14 @@ project actually carries an effect.
   parameter kind, so a `vec2` row is a smaller step than it was; what a path really wants is a handle
   on the picture rather than two more numbers in a panel.
 - **Motion blur** needs more than one moment per output frame, which means more than one decoded
-  frame per output frame. That is a change to the gather, not to a shader.
-- **LUT import** is still missing, and the parameter kind is no longer what stands in the way — a
-  manifest parameter now declares one, and a colour travels the whole path from the project file to
-  a `vec4` uniform. What is left is the other three quarters of it: a `.cube` parser, somewhere to
-  keep a table far too large to sit in a project file, and a third texture unit bound through the
-  compositor, the preview and the export worker alike. That is a change to the frame graph rather
-  than to a manifest.
+  frame per output frame. That is a change to the gather, not to a shader — see below.
+- **A `.cube` with a domain other than 0 to 1 is refused**, and so is a one-dimensional one. Both
+  are deliberate (see above); a wider domain would want the domain carried into the shader as two
+  more uniforms, which is a small step whenever a real file asks for it.
+- **A table cannot be keyframed.** `ParamValue` will not interpolate between two names and the core
+  will not try, so the picker carries no keyframe switches — a row that could only ever produce a
+  hold would promise an animation nothing draws. The loader does read a keyframe track, so a
+  hand-authored project that swaps table halfway through a clip still gets both tables loaded.
 - **Shape and countdown generators paint nothing.** They are in the model, they are not in the menu,
   and a clip whose generator this renderer cannot paint is dropped from the draw list rather than
   drawn as an empty rectangle.
