@@ -118,10 +118,24 @@ describe("parseCube", () => {
     expect(() => parseCube(text)).toThrow("error.lutInvalid");
   });
 
-  // A tone curve, which this editor already has a whole effect for. Refused by name so the
-  // message can say so rather than reporting a missing 3D size.
-  it("refuses a one-dimensional table", () => {
+  // A tone curve, which this editor already has a whole effect for. Refused *by name*, and the
+  // cause is what says so: every refusal here carries the same catalogue key, so a check on the
+  // message alone passes just as happily when the keyword is ignored and the file falls through to
+  // "no size at all" -- which is what a counter-check on this very test found.
+  it("refuses a one-dimensional table for being one, not for lacking a 3D size", () => {
     expect(() => parseCube("LUT_1D_SIZE 4\n0 0 0\n0 0 0\n0 0 0\n1 1 1")).toThrow("error.lutInvalid");
+    expect(causeOf("LUT_1D_SIZE 4\n0 0 0\n0 0 0\n0 0 0\n1 1 1")).toBe("oneDimensional");
+  });
+
+  // The same distinction over the whole set: one key reaches the user, and the cause is what tells
+  // the refusals apart for anyone reading a report.
+  it("says which rule a file broke", () => {
+    expect(causeOf(swapRows().join("\n"))).toBe("noSize");
+    expect(causeOf("LUT_3D_SIZE 1\n0 0 0")).toBe("gridSize");
+    expect(causeOf(["LUT_3D_SIZE 2", ...swapRows(), "0 0 0"].join("\n"))).toBe("rowCount");
+    expect(causeOf(["LUT_3D_SIZE 2", "DOMAIN_MAX 4 4 4", ...swapRows()].join("\n"))).toBe("domain");
+    expect(causeOf(["LUT_3D_SIZE 2", "0 0", ...swapRows().slice(1)].join("\n"))).toBe("row");
+    expect(causeOf("#".repeat(40_000_000))).toBe("size");
   });
 
   it("refuses a file too large to be a lookup table", () => {
@@ -167,6 +181,15 @@ describe("importLut", () => {
     expect(await getMedia(await contentHash(broken))).toBeUndefined();
   });
 });
+
+function causeOf(text: string): unknown {
+  try {
+    parseCube(text);
+  } catch (error) {
+    return (error as Error).cause;
+  }
+  return "no throw";
+}
 
 // Red and blue traded, at the smallest size the format allows. Eight rows, red fastest.
 function swapRows(): string[] {

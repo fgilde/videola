@@ -289,6 +289,11 @@ export interface LutRowProps {
  * There are no keyframe switches. `ParamValue` will not interpolate between two names, so a
  * keyframe on this key could only ever hold -- and a row of switches that can only produce a hold
  * promises an animation the renderer will not give.
+ *
+ * A name the library no longer holds -- what a removed medium leaves behind -- shows as nothing
+ * chosen, and that is the platform's own doing: a `select` whose value matches no option has a
+ * selected index of -1 and reports the empty string. A guard of ours for it was written, then
+ * deleted, because a counter-check could not make it fail.
  */
 export function LutRow({ label, value, tables, onChange }: LutRowProps): ReactElement {
   const { t } = useI18n();
@@ -304,7 +309,7 @@ export function LutRow({ label, value, tables, onChange }: LutRowProps): ReactEl
         <select
           id={id}
           className="v-param__select"
-          value={tables.some((table) => table.id === value) ? value : ""}
+          value={value}
           onChange={(event) => onChange(event.target.value)}
         >
           <option value="">{t("inspector.lutUnset")}</option>

@@ -1200,16 +1200,14 @@ describe("the inspector", () => {
       expect(picker().value).toBe("med_swap");
     });
 
-    // Both halves of the same rule. A project file may carry any kind on this key, and a name the
-    // library no longer holds is what a removed medium leaves behind -- neither is a table, and a
-    // picker standing on either would report a grade the renderer is not applying.
-    it("stands on nothing for a value that is not a table this project holds", () => {
+    // A project file may carry any kind on this key, and a float is not a medium. `shownLut` is
+    // the guard, and it is the same one `lutMedia` applies in the engine before the compositor
+    // looks a texture up -- a picker standing on a name the renderer ignores would be a lie about
+    // the one thing this row displays.
+    it("stands on nothing for a value that is not the name of a table", () => {
       withLibrary(float(0.5), [TABLE]);
-      expect(picker().value).toBe("");
 
-      screen.getByLabelText("Tabelle").remove();
-      withLibrary({ kind: "choice", value: "med_gone" }, [TABLE]);
-      expect((screen.getAllByLabelText("Tabelle").at(-1) as HTMLSelectElement).value).toBe("");
+      expect(picker().value).toBe("");
     });
 
     // A menu whose only entry means "no" is a control that cannot do anything, and this panel
