@@ -4,13 +4,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { EffectBrowser, type EffectOffer } from "./EffectBrowser";
 
+// Deliberately out of the order they are meant to be read in: a fixture that arrives sorted lets a
+// browser that never sorts pass every claim about its headings.
 const OFFERS: readonly EffectOffer[] = [
   {
-    id: "brightness",
-    name: { de: "Helligkeit", en: "Brightness" },
-    blurb: { de: "Hebt oder senkt das Bild.", en: "Lifts or lowers the picture." },
-    category: "color",
-    inputs: 1,
+    id: "crossfade",
+    name: { de: "Überblendung", en: "Cross dissolve" },
+    blurb: { de: "Blendet über.", en: "Dissolves into this one." },
+    category: "transition",
+    inputs: 2,
   },
   {
     id: "blur",
@@ -20,11 +22,11 @@ const OFFERS: readonly EffectOffer[] = [
     inputs: 1,
   },
   {
-    id: "crossfade",
-    name: { de: "Überblendung", en: "Cross dissolve" },
-    blurb: { de: "Blendet über.", en: "Dissolves into this one." },
-    category: "transition",
-    inputs: 2,
+    id: "brightness",
+    name: { de: "Helligkeit", en: "Brightness" },
+    blurb: { de: "Hebt oder senkt das Bild.", en: "Lifts or lowers the picture." },
+    category: "color",
+    inputs: 1,
   },
 ];
 

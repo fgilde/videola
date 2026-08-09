@@ -1504,6 +1504,18 @@ test("a tile carries premultiplied alpha like everything else downstream", () =>
   }
   check("the feather really produced partial coverage", inBand > 200, true);
   check("and no texel in it carries more colour than coverage", invalid, 0);
+
+  // A frame that is itself half transparent -- a masked clip, or a gap over a transparent
+  // background. The tile's own source has to arrive premultiplied, because everything downstream of
+  // it expects that; unpremultiplied, a half-covered white reads 255 instead of 128, which is the
+  // reflex answer for straight alpha and the one thing this whole pipeline is not.
+  const veil = canvasOf(TILE, TILE);
+  const paint = veil.getContext("2d");
+  paint.fillStyle = "rgba(255, 255, 255, 0.502)";
+  paint.fillRect(0, 0, TILE, TILE);
+  const untouched = Object.assign({}, R.effect("crossfade"), { preview: { progress: 1 } });
+  check("a half-covered white frame reaches the tile as half a white",
+    tile(preview, untouched, veil, veil)(32, 32), [128, 128, 128, 128]);
   preview.dispose();
 });
 

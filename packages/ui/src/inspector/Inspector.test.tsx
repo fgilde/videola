@@ -34,6 +34,18 @@ const CROSSFADE: EffectDescriptor = {
   ],
 };
 
+// Where the first non-float parameter in the library lives. What it proves here is not the dip but
+// the kind: a manifest parameter that is not a slider gets a control that is not one.
+const DIP: EffectDescriptor = {
+  id: "dip",
+  name: { de: "Blende über Farbe", en: "Dip to colour" },
+  inputs: 2,
+  params: [
+    { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
+    { kind: "color", key: "colour", name: { de: "Farbe", en: "Colour" }, default: [0, 0, 0, 1] },
+  ],
+};
+
 interface Rig {
   sent: { command: Command; key?: string }[];
   seeks: Time[];
@@ -50,6 +62,10 @@ interface Scene {
   amountAt?: (at: Time) => number | undefined;
   /** For the kinds `amountAt` cannot express -- a project may carry any `ParamValue` here. */
   rawAmountAt?: (at: Time) => ParamValue;
+  /** What this build can draw. The default is the pair the keyframe and transition rows need. */
+  effects?: readonly EffectDescriptor[];
+  /** The whole resolved batch, for a parameter `amountAt` has no shape for. */
+  resolved?: EffectParamSnapshot;
   dispatch?: (command: Command, key?: string) => void;
 }
 
@@ -64,6 +80,7 @@ function show(scene: Scene = {}): Rig {
 
   const effectParamsAt = (at: Time): EffectParamSnapshot => {
     rig.asked.push(at);
+    if (scene.resolved !== undefined) return scene.resolved;
     const raw = scene.rawAmountAt?.(at);
     const amount = scene.amountAt?.(at);
     if (raw === undefined && amount === undefined) return new Map();
@@ -77,7 +94,7 @@ function show(scene: Scene = {}): Rig {
         project={project}
         clip={clip.id}
         playhead={scene.playhead ?? 0}
-        effects={[BRIGHTNESS, CROSSFADE]}
+        effects={scene.effects ?? [BRIGHTNESS, CROSSFADE]}
         effectParamsAt={effectParamsAt}
         dispatch={rig.dispatch}
         onSeek={(time) => rig.seeks.push(time)}
@@ -123,6 +140,16 @@ function withBrightness(keyframes: Record<string, unknown[]> = {}, amount = 1): 
       },
     ],
   };
+}
+
+function withDip(): Overrides {
+  return {
+    effects: [{ id: "eff_1", effectType: "dip", enabled: true, params: {}, keyframes: {} }],
+  };
+}
+
+function colourAt(value: unknown): EffectParamSnapshot {
+  return new Map([["eff_1", new Map<string, ParamValue>([["colour", value as ParamValue]])]]);
 }
 
 function key(time: Time, value: number, interp: Interp = "linear"): unknown {
@@ -685,6 +712,66 @@ describe("the inspector", () => {
     window.removeEventListener("error", onError);
     expect(escaped).toEqual([]);
     expect(screen.queryAllByRole("alert")).toHaveLength(0);
+  });
+  // The parameter kind reaching the surface. A colour is not a slider, and a row that rendered one
+  // anyway would put a number between 0 and 1 where a picker belongs.
+  describe("a colour parameter", () => {
+    const showDip = (value: unknown): Rig =>
+      show({ clip: clipWithMedia(withDip()), effects: [DIP], resolved: colourAt(value) });
+    const picker = (): HTMLInputElement => screen.getByLabelText("Farbe") as HTMLInputElement;
+
+    it("gets a picker rather than a slider", () => {
+      showDip({ kind: "color", value: [1, 0, 0, 1] });
+
+      expect(picker().type).toBe("color");
+      expect(picker().value).toBe("#ff0000");
+      expect(screen.queryByRole("slider", { name: "Farbe" })).toBeNull();
+    });
+
+    it("sends what was picked as a colour, not as a number", () => {
+      const rig = showDip({ kind: "color", value: [0, 0, 0, 1] });
+
+      act(() => void fireEvent.change(picker(), { target: { value: "#3366ff" } }));
+
+      expect(rig.sent).toHaveLength(1);
+      expect(rig.sent[0]!.command).toEqual({
+        type: "effect.setParam",
+        target: { kind: "clip", clip: "clp_1" },
+        effectType: "dip",
+        key: "colour",
+        value: { kind: "color", value: [0.2, 0.4, 1, 1] },
+      });
+      // One key for the whole picker: dragging round a colour wheel is one gesture, and thirty
+      // undo steps for it are thirty ways to lose the one that mattered.
+      expect(rig.sent[0]!.key).toBe("color:eff_1:colour");
+    });
+
+    // A hand-authored project can put anything on a colour key, and a picker fed a channel outside
+    // the unit interval shows a colour no shader would ever produce.
+    it("shows a value from outside the unit cube pulled back into it", () => {
+      showDip({ kind: "color", value: [4, -1, 0.5, 1] });
+
+      expect(picker().value).toBe("#ff0080");
+    });
+
+    it("falls back to the declared default for a value of the wrong kind", () => {
+      showDip(float(0.5));
+
+      expect(picker().value).toBe("#000000");
+    });
+
+    // The picker has no alpha of its own, so it carries back whatever the model held -- which on a
+    // hand-authored project is whatever was written there. Unguarded, editing the colour is how an
+    // impossible alpha gets stored a second time, this time by the application itself.
+    it("carries the alpha back inside the unit interval, not as it was found", () => {
+      const rig = showDip({ kind: "color", value: [0, 0, 0, 5] });
+
+      act(() => void fireEvent.change(picker(), { target: { value: "#3366ff" } }));
+
+      expect(rig.sent[0]!.command).toMatchObject({
+        value: { kind: "color", value: [0.2, 0.4, 1, 1] },
+      });
+    });
   });
 });
 
