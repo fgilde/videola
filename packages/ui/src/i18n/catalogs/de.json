@@ -351,6 +351,7 @@
   "source.overwrite": "Überschreiben (.)",
   "markers.label": "Marker ({count})",
   "markers.empty": "Noch keine Marker. M setzt einen am Abspielkopf.",
+  "markers.split": "An jedem Marker schneiden",
   "markers.color": "Markerfarbe",
   "markers.name": "Markername",
   "markers.note": "Notiz",

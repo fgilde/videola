@@ -13,6 +13,8 @@ import {
   parseCaptions,
   readTemplateFile,
   toSrt,
+  markerTimes,
+  splitAtTimes,
   timeToSeconds,
   VideolaDocument,
   type ClipId,
@@ -629,6 +631,19 @@ export function App(): ReactElement {
     },
     [analysisPeaks, doc, project, reportError],
   );
+
+  // Where the markers become an edit. Every clip a marker passes through is cut, on every track
+  // that is not locked, in one step of the history -- which is what makes cutting to a beat one
+  // press rather than one press per bar.
+  const splitAtMarkers = useCallback(() => {
+    if (doc === undefined) return;
+    try {
+      splitAtTimes(doc, markerTimes(doc.state), `markers-split-${(actionSequence += 1)}`);
+      setError(undefined);
+    } catch (err) {
+      reportError("error.actionFailed", err);
+    }
+  }, [doc, reportError]);
 
   // Every beat on a track becomes a marker, in one step of the history: a beat is a suggestion to
   // cut against, and a hundred cuts nobody asked for would be a hundred clips to take back one at
@@ -1358,6 +1373,7 @@ export function App(): ReactElement {
                   curveShape={doc?.curveShape}
                   dispatch={edit}
                   onSeek={seek}
+                  onSplitAtMarkers={splitAtMarkers}
                   onSelectionChange={setSelection}
                   grab={grab}
                   onDropMedia={dropMedia}

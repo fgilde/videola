@@ -131,6 +131,21 @@ insert opens the gap on **every** track, so skipping the locked one would move t
 under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
 unlock the track and edit, or leave it alone.
 
+## Cutting at the markers
+
+The marker list carries one action of its own: cut every clip the markers pass through. With beats
+marked on a music track that is "cut on the beat" in one press — and one step in the history,
+however many cuts it made.
+
+It is applied one cut at a time against the live document, because a list of commands built up front
+cannot be right: a split mints two clips out of one, so the second cut through the same clip would
+name an id the first has already retired. Each clip is found again by where it sits, immediately
+before it is cut.
+
+A marker sitting exactly on an existing cut has nothing to do and is passed over rather than asked
+about, and so is a locked track — the core would refuse it either way, and one locked track must not
+take the other five with it.
+
 ## The picture is a control
 
 Select a clip and a box appears on the frame with a handle on every corner and one to turn by.

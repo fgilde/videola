@@ -11,6 +11,8 @@ export interface MarkerListProps {
   fps: Rate;
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
+  /** Cut every clip the markers pass through. Absent where there is nothing to cut. */
+  onSplitAtMarkers?: () => void;
 }
 
 /**
@@ -21,7 +23,13 @@ export interface MarkerListProps {
  * A native `<details>` rather than a panel of its own: it is closed most of the time, and the
  * browser already knows how to open and close a disclosure with a keyboard.
  */
-export function MarkerList({ markers, fps, dispatch, onSeek }: MarkerListProps): ReactElement {
+export function MarkerList({
+  markers,
+  fps,
+  dispatch,
+  onSeek,
+  onSplitAtMarkers,
+}: MarkerListProps): ReactElement {
   const { t, formatTimecode } = useI18n();
   const ordered = [...markers].sort((a, b) => a.time - b.time);
 
@@ -30,6 +38,14 @@ export function MarkerList({ markers, fps, dispatch, onSeek }: MarkerListProps):
       <summary className="v-markers__summary">
         {t("markers.label", { count: ordered.length })}
       </summary>
+      {/* Where the beats a track was scanned for become an edit. It is the list's own action and
+          not the mixer's, because what it acts on is every marker there is however they got there
+          -- a beat, a note, or a pin somebody dropped by hand. */}
+      {ordered.length > 0 && onSplitAtMarkers !== undefined && (
+        <button type="button" className="v-markers__cut" onClick={onSplitAtMarkers}>
+          {t("markers.split")}
+        </button>
+      )}
       {ordered.length === 0 ? (
         <p className="v-markers__empty">{t("markers.empty")}</p>
       ) : (

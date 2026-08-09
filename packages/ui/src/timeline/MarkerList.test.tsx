@@ -22,13 +22,20 @@ function marker(over: Partial<Marker> = {}): Marker {
 interface Rig {
   dispatch: ReturnType<typeof vi.fn<(command: Command, key?: string) => void>>;
   seek: ReturnType<typeof vi.fn<(time: number) => void>>;
+  split: ReturnType<typeof vi.fn<() => void>>;
 }
 
-function show(markers: Marker[]): Rig {
-  const rig: Rig = { dispatch: vi.fn(), seek: vi.fn() };
+function show(markers: Marker[], offerSplit = true): Rig {
+  const rig: Rig = { dispatch: vi.fn(), seek: vi.fn(), split: vi.fn() };
   render(
     <I18nProvider>
-      <MarkerList markers={markers} fps={NTSC} dispatch={rig.dispatch} onSeek={rig.seek} />
+      <MarkerList
+        markers={markers}
+        fps={NTSC}
+        dispatch={rig.dispatch}
+        onSeek={rig.seek}
+        onSplitAtMarkers={offerSplit ? rig.split : undefined}
+      />
     </I18nProvider>,
   );
   // Closed by default, so nothing inside it is reachable until it is opened -- which is also what
@@ -152,5 +159,28 @@ describe("markerAfter", () => {
     expect(markerAfter(markers, 9 * FLICKS_PER_SECOND, 1)).toBeUndefined();
     expect(markerAfter(markers, 0, -1)).toBeUndefined();
     expect(markerAfter([], 0, 1)).toBeUndefined();
+  });
+});
+
+// Where a list of beats becomes an edit. It acts on every marker there is, so it is the list's own
+// action rather than a control on one of the rows.
+describe("cutting at the markers", () => {
+  it("asks its host to cut, once per press", () => {
+    const rig = show([marker({ id: "mrk_1", time: FLICKS_PER_SECOND, label: "1" })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "An jedem Marker schneiden" }));
+
+    expect(rig.split).toHaveBeenCalledTimes(1);
+    expect(rig.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("is not offered where there is no marker to cut at", () => {
+    show([]);
+    expect(screen.queryByRole("button", { name: "An jedem Marker schneiden" })).toBeNull();
+  });
+
+  it("is not offered where the host has no such edit", () => {
+    show([marker({ id: "mrk_1", time: FLICKS_PER_SECOND, label: "1" })], false);
+    expect(screen.queryByRole("button", { name: "An jedem Marker schneiden" })).toBeNull();
   });
 });

@@ -136,6 +136,21 @@ die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter 
 wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
 Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
 
+## An den Markern schneiden
+
+Die Markerliste hat eine eigene Aktion: jeden Clip schneiden, durch den ein Marker läuft. Mit den
+Beats einer Musikspur markiert ist das „auf den Schlag schneiden“ in einem Tastendruck — und ein
+Schritt in der Historie, gleich wie viele Schnitte daraus wurden.
+
+Angewendet wird Schnitt für Schnitt am lebenden Dokument, denn eine vorab gebaute Liste von Commands
+kann nicht stimmen: ein Schnitt macht aus einem Clip zwei, der zweite Schnitt durch denselben Clip
+nennte also eine Id, die der erste bereits ausrangiert hat. Jeder Clip wird unmittelbar vor seinem
+Schnitt neu über seine Lage gefunden.
+
+Ein Marker, der genau auf einem bestehenden Schnitt sitzt, hat nichts zu tun und wird übergangen
+statt gefragt — und eine gesperrte Spur ebenso: der Kern lehnte sie ohnehin ab, und eine gesperrte
+Spur darf die anderen fünf nicht mitnehmen.
+
 ## Das Bild ist ein Bedienelement
 
 Einen Clip auswählen, und auf dem Bild erscheint ein Rahmen mit einem Griff an jeder Ecke und einem

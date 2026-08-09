@@ -56,7 +56,8 @@ arithmetic, waveforms drawn from the buffers the graph already decoded. EBU R128
 against the Tech 3341 conformance cases — and a button that normalises to a target and measures
 again rather than trusting the arithmetic. Ducking writes keyframes you can see and edit; silence
 detection cuts the pauses out; beat detection puts a marker on every hit, found as a rise against a
-threshold that moves with the music rather than against a fixed one.
+threshold that moves with the music rather than against a fixed one — and one press cuts every clip
+the markers pass through, which is "cut on the beat" in a single undo step.
 
 **Colour.** Waveform, vectorscope and histogram read off the preview. Curves as a first-class
 parameter type, keyframable point by point, plus lift/gamma/gain wheels and `.cube` lookup tables

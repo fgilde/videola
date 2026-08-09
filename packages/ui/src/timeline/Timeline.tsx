@@ -116,6 +116,8 @@ export interface TimelineProps {
    */
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
+  /** Cut every clip the markers pass through. Absent where the host offers no such edit. */
+  onSplitAtMarkers?: () => void;
   onSelectionChange?: (clips: readonly ClipId[]) => void;
   /**
    * A medium the media library has under a pointer. The timeline judges the whole gesture from
@@ -137,6 +139,7 @@ export function Timeline({
   curveShape,
   dispatch,
   onSeek,
+  onSplitAtMarkers,
   onSelectionChange,
   grab,
   onDropMedia,
@@ -356,6 +359,7 @@ export function Timeline({
             fps={project.settings.fps}
             dispatch={dispatch}
             onSeek={onSeek}
+            onSplitAtMarkers={onSplitAtMarkers}
           />
         </div>
         {/* Two plain selects rather than modifier keys: a finger has no modifiers, and the mode a

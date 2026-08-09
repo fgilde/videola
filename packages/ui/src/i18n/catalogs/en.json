@@ -351,6 +351,7 @@
   "source.overwrite": "Overwrite (.)",
   "markers.label": "Markers ({count})",
   "markers.empty": "No markers yet. M sets one at the playhead.",
+  "markers.split": "Cut at every marker",
   "markers.color": "Marker colour",
   "markers.name": "Marker name",
   "markers.note": "Note",

@@ -1,5 +1,7 @@
 export * from "./backend";
 export * from "./captions";
+export { markerTimes, splitAtTimes } from "./edits";
+export type { EditTarget } from "./edits";
 export * from "./commands";
 export * from "./curve";
 export * from "./document";
