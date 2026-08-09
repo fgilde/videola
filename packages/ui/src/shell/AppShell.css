@@ -119,8 +119,11 @@
   grid-template-columns: minmax(190px, 250px) minmax(0, 1fr) minmax(0, 300px);
   /* The mixer's cap is the larger one, and deliberately: since the desk is opened on request, its
      row is only ever there because someone asked for it, and a strip cut in half is not what they
-     asked for. On a short editor -- a CI runner lays this out in less height than a desktop window
-     -- 38% was under the 190 px a strip needs and the row scrolled instead of showing. */
+     asked for.
+
+     It is not what cuts the strip on a CI runner, and raising it from 38% did not move that number
+     by a pixel: the row there is squeezed well under its cap, so something upstream of the cap is
+     taking the height. That is still open -- see .superpowers/STATE.md. */
   grid-template-rows: auto minmax(0, 1fr) auto auto fit-content(30%) fit-content(46%);
   grid-template-areas:
     "banners  banners   banners"
