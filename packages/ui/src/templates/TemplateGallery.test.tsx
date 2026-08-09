@@ -267,6 +267,24 @@ describe("TemplateGallery", () => {
     expect(box?.style.aspectRatio).toBe("1920 / 1080");
   });
 
+  // The shape it offers first, not the shape it happens to have been authored at -- that is the
+  // frame its picture is rendered in, and an upright template has to look upright on the card.
+  it("takes its shape from the frame it offers first, not from the project behind it", () => {
+    showGallery({
+      templates: [
+        template({
+          aspectRatios: [
+            { width: 1080, height: 1920 },
+            { width: 1920, height: 1080 },
+          ],
+        }),
+      ],
+    });
+
+    const box = card("twofold").querySelector<HTMLElement>(".v-template__poster");
+    expect(box?.style.aspectRatio).toBe("1080 / 1920");
+  });
+
   it("filters by category and says so when a category is empty", () => {
     const other = template({ id: "other", category: "intro", name: { de: "Auftakt", en: "Open" } });
     render(

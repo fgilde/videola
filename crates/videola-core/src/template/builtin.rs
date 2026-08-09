@@ -1796,6 +1796,45 @@ mod tests {
         assert!(shown.scale_x < 1.0, "the inset is not inset");
     }
 
+    // Why the stand-in is exactly the size of the frame and not some fixed 1920x1080: a generator
+    // is drawn at the frame's size, so the fit arithmetic only lands the grey rectangle where the
+    // footage goes if the stand-in claims to be that size too. A clip fitted to the whole frame
+    // must therefore come out at scale 1 and dead centre in *every* frame a template offers -- the
+    // one assertion that fails the moment the stand-in stops following the frame.
+    #[test]
+    fn a_full_frame_stand_in_fills_every_frame_a_template_offers_exactly() {
+        for template in templates() {
+            let id = &template.manifest.id;
+            let full: Vec<ClipId> = template
+                .manifest
+                .slots
+                .iter()
+                .flat_map(|slot| &slot.bindings)
+                .filter_map(|binding| match binding {
+                    SlotBinding::ClipMedia { clip, fit }
+                        if fit.width == 1.0 && fit.height == 1.0 =>
+                    {
+                        Some(clip.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+
+            for frame in &template.manifest.aspect_ratios {
+                let preview = template.preview(Some(*frame)).unwrap();
+                for clip in &full {
+                    let transform = &find(&preview, clip.as_str()).transform;
+                    assert_eq!(
+                        (transform.scale_x, transform.scale_y),
+                        (1.0, 1.0),
+                        "{id} at {frame:?}: {clip} does not fill the frame"
+                    );
+                    assert_eq!((transform.x, transform.y), (0.0, 0.0));
+                }
+            }
+        }
+    }
+
     #[test]
     fn a_preview_carries_no_material_and_no_placeholder() {
         for template in templates() {
