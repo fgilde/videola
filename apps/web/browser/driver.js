@@ -17,6 +17,11 @@ localStorage.setItem("videola.theme", "dark");
 // Resolved once inside the run: this file is a classic script, so there is no top-level await.
 let FIXTURE = { name: "fixture.mp4", type: "video/mp4" };
 
+// The two numbers the keyframe lane's geometry is read against, spelled the way the core and the
+// timeline spell them: a flick per second, and the timeline's own default zoom.
+const SECOND = 705600000;
+const DEFAULT_FLICKS_PER_PIXEL = SECOND / 100;
+
 async function pickFixture() {
   try {
     const support = await VideoDecoder.isConfigSupported({
@@ -337,6 +342,108 @@ async function announce() {
     check("the whole session is six undo steps, not eighteen", steps, 6);
     checkNear("and undoing it puts the picture back where it started",
       (await pictureAfter(0)) / base0, 1, 0.02);
+    return { base0: base0, base15: base15, base30: base30 };
+  }
+
+  const laneRow = (name) =>
+    all(".v-keylane__header").findIndex(
+      (node) => node.querySelector(".v-keylane__headerName").textContent === name);
+  const laneKeys = () => all(".v-keylane__key");
+  // A transform row carries no aria-label -- it is a <label for>, like every native pairing. Found
+  // through the label so the check goes the way a screen reader and a click both go.
+  const rowSlider = (text) =>
+    all(".v-inspector .v-param").find(
+      (row) => row.querySelector(".v-param__label").textContent.startsWith(text))
+      ?.querySelector('input[type="range"]');
+
+  /**
+   * The lane, end to end and through nothing but the surface: a transform field put on the clock
+   * from the properties panel, its keys drawn on the timeline's own axis, and one of them dragged
+   * -- with the picture read back out of the drawing buffer before and after, because a lane that
+   * moves a dot but not a pixel is a lane that does nothing.
+   *
+   * It runs last and leaves its work standing, so the screenshot at the end of the budget is a
+   * picture of the thing this milestone is about.
+   */
+  async function keyframeLane(base) {
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    await until("the properties panel", () => rowSlider("Deckkraft"));
+    check("a transform row says nothing is animated yet",
+      q(".v-inspector .v-param[data-animated]"), null);
+
+    // Not at the very start: a keyframe drawn at time zero sits half under the sticky header
+    // column, which is a poor thing to look at and a poor thing to aim at.
+    toStart();
+    forward(15);
+    await repainted();
+    button("Keyframe für Deckkraft am Playhead").click();
+    await sleep(200);
+    check("a transform field can be put on the clock at all",
+      button("Keyframe für Deckkraft am Playhead").getAttribute("aria-pressed"), "true");
+    check("and the row now says it is animated",
+      q(".v-inspector .v-param[data-animated]") !== null, true);
+
+    forward(30);
+    await repainted();
+    dragSlider(rowSlider("Deckkraft"), [0.9, 0.7, 0.5, 0.4]);
+    await repainted();
+
+    check("the lane shows the parameter under the name the panel gives it",
+      laneRow("Deckkraft") >= 0, true);
+    check("with one point per keyframe", laneKeys().length, 2);
+    check("nothing was reported for any of it", banner(), "");
+
+    // Halfway between a key at 1 and a key at 0.4 is 0.7 of the picture that would be there.
+    toStart();
+    await repainted();
+    forward(30);
+    const before = await repainted();
+    // Where the playhead actually stands, said out loud. Without it "0.7 of the picture" is a
+    // ratio between two frames of moving material and would sit true at instants nobody aimed at:
+    // this fixture's frame 0 happens to be about 0.7 of its frame 30 all on its own.
+    check("the playhead really is halfway between the two keys", position(), "00:00:01.00");
+    checkNear("the picture halfway between two keys is interpolated, not switched",
+      before / base.base30, 0.7, 0.08);
+
+    // Half a second's worth of pixels to the left, which is where the playhead is standing. No
+    // rect is read for the target: under a virtual-time budget layout lags the DOM, and the
+    // playhead's own box still reports where it was two seeks ago.
+    const last = laneKeys()[1];
+    check("the key about to be dragged is the later of the two",
+      last.dataset.keyframeTime, String(1.5 * SECOND));
+    const box = last.getBoundingClientRect();
+    const from = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const travel = SECOND / 2 / DEFAULT_FLICKS_PER_PIXEL;
+    pointer("pointerdown", last, { clientX: from, clientY: y });
+    for (let i = 1; i <= 20; i += 1) {
+      pointer("pointermove", q(".v-timeline__scroll"), { clientX: from - (travel * i) / 20, clientY: y });
+    }
+    pointer("pointerup", q(".v-timeline__scroll"), { clientX: from - travel, clientY: y });
+
+    const after = await repainted();
+    check("dragging a keyframe raised nothing", banner(), "");
+    check("and did not create or lose one", laneKeys().length, 2);
+    check("the key landed on the instant the pointer travelled to",
+      laneKeys().map((node) => node.dataset.keyframeTime).join(),
+      [SECOND / 2, SECOND].join());
+    checkNear("the dragged key's own value is what the picture now shows",
+      after / base.base30, 0.4, 0.08);
+    check("which is darker than it was before the drag", after < before * 0.85, true);
+
+    // The playhead off both keys and the second one picked, so the screenshot at the end of the
+    // budget shows a picked keyframe as something other than "the one under the red line".
+    toStart();
+    forward(6);
+    await sleep(300);
+    pointer("pointerdown", laneKeys()[1]);
+    pointer("pointerup", laneKeys()[1]);
+    check("a picked keyframe brings up what it is set to",
+      q('[data-testid="keyframe-bar"]') !== null, true);
+    check("and says which one of them is picked",
+      laneKeys().map((node) => node.getAttribute("aria-pressed")).join(), "false,true");
+    await sleep(300);
   }
 
   async function run() {
@@ -453,7 +560,7 @@ async function announce() {
     // Reading pixels back needs the stopped frame clock, so the keyframe run belongs here -- and
     // it undoes itself at the end, which is what leaves the playback section below an untouched
     // project to work with.
-    if (virtual) await keyframes();
+    if (virtual) await keyframeLane(await keyframes());
 
     key(" ", document.body);
     await until("the transport to report playing", () => button("Anhalten") !== null, 8000);

@@ -447,8 +447,10 @@
   width: 11px;
   height: 11px;
   margin: -6px 0 0 -6px;
-  background: var(--v-bg-elevated);
-  border: 1.5px solid currentcolor;
+  /* The lane sits on the sunken ground, so an "elevated" fill is barely a shade off it and an
+     unpicked diamond read as a hole rather than as a shape. */
+  background: var(--v-surface);
+  border: 2px solid currentcolor;
   transform: rotate(45deg);
   border-radius: 2px;
 }
