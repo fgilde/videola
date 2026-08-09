@@ -4,11 +4,8 @@ import type { Interp, Keyframe, Time } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
 import { Icon } from "../primitives/Icon";
+import { offeredFor } from "../timeline/keyframes";
 import "./Inspector.css";
-
-// Bezier is missing on purpose: M1 has no curve editing, and a handle nobody can drag is a
-// setting that cannot be undone from the same surface that made it.
-const OFFERED: readonly Interp[] = ["linear", "hold", "ease"];
 
 export interface KeyframeStrip {
   at: Time;
@@ -52,7 +49,7 @@ export function ParamRow({
   onChange,
   keyframes,
 }: ParamRowProps): ReactElement {
-  const { formatNumber } = useI18n();
+  const { formatNumber, t } = useI18n();
   const id = useId();
   // One drag is one undo step: every change under one grab carries one key, and the next grab
   // mints another. There is deliberately no release on pointerup -- between two grabs the only
@@ -60,10 +57,24 @@ export function ParamRow({
   // never reports back anyway, so ending the run is the keystroke's job and not the release's.
   const coalesceKey = useRef<string | undefined>(undefined);
 
+  const animated = keyframes !== undefined && keyframes.track.length > 0;
+
   return (
-    <div className="v-param">
+    <div className="v-param" data-animated={animated || undefined}>
       <label className="v-param__label" htmlFor={id}>
         {label}
+        {/* What the row of switches below cannot say: they only ever report the playhead, so a
+            parameter animated somewhere else looked exactly like one that is not animated at all.
+            An image with a name rather than a bare tint, because "this is on the clock" is the
+            fact, and a colour is only how it is drawn. */}
+        {animated && (
+          <span
+            className="v-param__animated"
+            role="img"
+            aria-label={t("inspector.animated", { count: keyframes.track.length })}
+            title={t("inspector.animated", { count: keyframes.track.length })}
+          />
+        )}
       </label>
       <input
         id={id}
@@ -146,12 +157,6 @@ function Keys({ strip, name }: { strip: KeyframeStrip; name: string }): ReactEle
       )}
     </span>
   );
-}
-
-// A keyframe loaded from a file may carry an interpolation this milestone cannot author. Listing
-// it keeps the select truthful about what is set instead of displaying the first option instead.
-function offeredFor(interp: Interp): readonly Interp[] {
-  return OFFERED.includes(interp) ? OFFERED : [interp, ...OFFERED];
 }
 
 export function keyframeAt(track: readonly Keyframe[], at: Time): Keyframe | undefined {

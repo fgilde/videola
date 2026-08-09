@@ -10,6 +10,7 @@ import {
   type ParamValue,
   type Project,
   type Time,
+  type Transform,
 } from "@videola/core";
 
 import { I18nProvider } from "../i18n/I18nProvider";
@@ -38,6 +39,7 @@ interface Rig {
   sent: { command: Command; key?: string }[];
   seeks: Time[];
   asked: Time[];
+  askedTransforms: Time[];
   dispatch: Mock;
 }
 
@@ -49,13 +51,18 @@ interface Scene {
   amountAt?: (at: Time) => number | undefined;
   /** For the kinds `amountAt` cannot express -- a project may carry any `ParamValue` here. */
   rawAmountAt?: (at: Time) => ParamValue;
+  /**
+   * What the core resolves the clip's placement to. Absent means "nothing is keyframed", which the
+   * core answers with the static transform -- so the fake answers the same thing.
+   */
+  transformAt?: (at: Time) => Record<string, number>;
   dispatch?: (command: Command, key?: string) => void;
 }
 
 function show(scene: Scene = {}): Rig {
   const clip = scene.clip ?? clipWithMedia();
   const project = scene.project ?? makeProject([makeTrack("trk_1", [clip])], [MEDIA]);
-  const rig: Rig = { sent: [], seeks: [], asked: [], dispatch: vi.fn() };
+  const rig: Rig = { sent: [], seeks: [], asked: [], askedTransforms: [], dispatch: vi.fn() };
   rig.dispatch.mockImplementation((command: Command, key?: string) => {
     rig.sent.push({ command, key });
     scene.dispatch?.(command, key);
@@ -70,6 +77,11 @@ function show(scene: Scene = {}): Rig {
     return new Map([["eff_1", new Map<string, ParamValue>([["amount", value]])]]);
   };
 
+  const transformsAt = (at: Time) => {
+    rig.askedTransforms.push(at);
+    return new Map([[clip.id, { ...clip.transform, ...scene.transformAt?.(at) } as Transform]]);
+  };
+
   render(
     <I18nProvider>
       <Inspector
@@ -78,6 +90,7 @@ function show(scene: Scene = {}): Rig {
         playhead={scene.playhead ?? 0}
         effects={[BRIGHTNESS, CROSSFADE]}
         effectParamsAt={effectParamsAt}
+        transformsAt={transformsAt}
         dispatch={rig.dispatch}
         onSeek={(time) => rig.seeks.push(time)}
       />
@@ -165,6 +178,7 @@ describe("the inspector", () => {
           playhead={0}
           effects={[BRIGHTNESS]}
           effectParamsAt={() => new Map()}
+          transformsAt={() => new Map()}
           dispatch={vi.fn()}
           onSeek={vi.fn()}
         />

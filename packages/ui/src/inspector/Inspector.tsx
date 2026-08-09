@@ -17,11 +17,13 @@ import {
   type ProjectSettings,
   type Time,
   type Transform,
+  type TransformSnapshot,
   type Transition,
 } from "@videola/core";
 
 import { useI18n, type Locale } from "../i18n/useI18n";
 import { AddEffect } from "../primitives/AddEffect";
+import { POSITION_TRACK } from "../timeline/keyframes";
 import { findClip } from "../timeline/useTimelineGestures";
 import { keyframeAt, ParamRow, shownValue } from "./ParamRow";
 import "./Inspector.css";
@@ -53,6 +55,13 @@ export interface InspectorProps {
   playhead: Time;
   effects: readonly EffectDescriptor[];
   effectParamsAt: (at: Time) => EffectParamSnapshot;
+  /**
+   * Where the core says the clip actually stands. `clip.transform` is the value at rest only; once
+   * a field is keyframed it is the one thing on screen that is no longer true, and a slider reading
+   * the static number while the picture is somewhere else is exactly the divergence the resolution
+   * lives in the core to prevent.
+   */
+  transformsAt: (at: Time) => TransformSnapshot;
   /** Throws when the core refuses, like the timeline's. Nothing here is an ordinary refusal. */
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
@@ -66,6 +75,7 @@ export function Inspector({
   playhead,
   effects,
   effectParamsAt,
+  transformsAt,
   dispatch,
   onSeek,
 }: InspectorProps): ReactElement {
@@ -78,7 +88,14 @@ export function Inspector({
         <p className="v-inspector__empty">{t("inspector.empty")}</p>
       ) : (
         <>
-          <Transform_ clip={found.clip} project={project} send={dispatch} />
+          <Transform_
+            clip={found.clip}
+            project={project}
+            playhead={playhead}
+            transformsAt={transformsAt}
+            send={dispatch}
+            onSeek={onSeek}
+          />
           <Playback clip={found.clip} send={dispatch} />
           <Transitions clip={found.clip} effects={effects} send={dispatch} />
           <Effects
@@ -123,54 +140,123 @@ function transformFields(settings: ProjectSettings): readonly TransformField[] {
   ];
 }
 
-/**
- * The keyframe track that carries a motion path, spelled as `clip::POSITION_TRACK` spells it. Where
- * one exists the core resolves x and y from the path and ignores what the transform holds, so the
- * two sliders below it are settings that no picture obeys.
- */
-const POSITION_TRACK = "position";
-
 // Named with a trailing underscore because `Transform` is the model type this section edits.
 function Transform_({
   clip,
   project,
+  playhead,
+  transformsAt,
   send,
+  onSeek,
 }: {
   clip: Clip;
   project: Project;
+  playhead: Time;
+  transformsAt: (at: Time) => TransformSnapshot;
   send: Send;
+  onSeek: (time: Time) => void;
 }): ReactElement {
   const { t } = useI18n();
   const source = sourceSize(clip, project.library);
   const path = (clip.keyframes[POSITION_TRACK] ?? []).length > 0;
+  const inside = playhead >= clip.start && playhead < clip.start + clip.duration;
+  // The same window `Effects` asks in, for the same reason: the core answers for a moment the clip
+  // covers, and working the interpolation out here instead would be the divergence between preview
+  // and export that the core exists to prevent.
+  const at = Math.min(Math.max(playhead, clip.start), clip.start + clip.duration - 1);
+  // `clip` is in the dependencies because it is a fresh object on every state the core hands out.
+  const resolved = useMemo(() => transformsAt(at).get(clip.id), [transformsAt, at, clip]);
   const set = (patch: Partial<Transform>, coalesceKey?: string): void =>
     send(cmd.clipSetTransform(clip.id, { ...clip.transform, ...patch }), coalesceKey);
 
   return (
     <Group title={t("inspector.transform")}>
       {path && <p className="v-inspector__note">{t("inspector.motionPath")}</p>}
-      {transformFields(project.settings).map((field) => (
-        <ParamRow
-          key={field.key}
-          label={t(`inspector.${field.key}`)}
-          value={clip.transform[field.key]}
-          min={field.min}
-          max={field.max}
-          // M1 authors no path, but a project can carry one, and a slider that moves a number the
-          // renderer never reads is worse than one that says it is not in charge.
-          disabled={path && (field.key === "x" || field.key === "y")}
-          onChange={(value, coalesceKey) => set({ [field.key]: value }, coalesceKey)}
-        />
-      ))}
+      {transformFields(project.settings).map((field) => {
+        const track = clip.keyframes[field.key] ?? [];
+        // A path resolves last and overwrites both, so a switch on either of those two rows would
+        // write a keyframe that never reaches a pixel. No switch at all is the honest answer; the
+        // note above the group says why, and the lane shows the keys that are there.
+        const overridden = path && (field.key === "x" || field.key === "y");
+        return (
+          <ParamRow
+            key={field.key}
+            label={t(`inspector.${field.key}`)}
+            // What the core resolves, not what the clip holds at rest. The two differ on every
+            // keyframed field, and the static one is the number no picture is drawn from.
+            value={resolved?.[field.key] ?? clip.transform[field.key]}
+            min={field.min}
+            max={field.max}
+            // A slider that moves a number the renderer never reads is worse than one that says it
+            // is not in charge. Keyframed and the playhead elsewhere is the same case: the static
+            // value is ignored once a track exists, so there is nothing it could truthfully do.
+            disabled={overridden || (track.length > 0 && !inside)}
+            onChange={(value, coalesceKey) =>
+              send(
+                track.length > 0
+                  ? // Not a plain "linear": the upsert must not turn a held keyframe into a ramp.
+                    cmd.keyframeAdd(
+                      on.clip(clip.id),
+                      null,
+                      field.key,
+                      playhead,
+                      float(value),
+                      keyframeAt(track, playhead)?.interp ?? "linear",
+                    )
+                  : cmd.clipSetTransform(clip.id, { ...clip.transform, [field.key]: value }),
+                coalesceKey,
+              )
+            }
+
+            keyframes={
+              overridden
+                ? undefined
+                : {
+                    at: playhead,
+                    track,
+                    settable: inside,
+                    onAdd: () =>
+                      send(
+                        cmd.keyframeAdd(
+                          on.clip(clip.id),
+                          null,
+                          field.key,
+                          playhead,
+                          float(resolved?.[field.key] ?? clip.transform[field.key]),
+                        ),
+                      ),
+                    onRemove: () =>
+                      send(cmd.keyframeRemove(on.clip(clip.id), null, field.key, playhead)),
+                    onGoTo: onSeek,
+                    onInterp: (interp) =>
+                      send(
+                        cmd.keyframeSetInterp(on.clip(clip.id), null, field.key, playhead, interp),
+                      ),
+                  }
+            }
+          />
+        );
+      })}
       <button
         type="button"
         className="v-button"
-        disabled={source === undefined}
+        // Fitting writes the four static fields, and every one of them that is keyframed -- or
+        // replaced by a path -- is a field the renderer no longer reads. The same rule that leaves
+        // the two path rows without a switch: no control that does nothing.
+        disabled={source === undefined || placementIsAnimated(clip)}
         onClick={() => source !== undefined && set(fitted(source, project.settings))}
       >
         {t("inspector.fit")}
       </button>
     </Group>
+  );
+}
+
+// Whether anything the fit button would write is already on the clock. `position` counts because it
+// is what the two placement fields resolve from once it exists.
+function placementIsAnimated(clip: Clip): boolean {
+  return [POSITION_TRACK, "x", "y", "scaleX", "scaleY"].some(
+    (key) => (clip.keyframes[key] ?? []).length > 0,
   );
 }
 

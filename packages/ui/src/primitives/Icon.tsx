@@ -19,6 +19,7 @@ const OUTLINED = {
   // The empty diamond is "no keyframe here"; the filled one below is "there is one". A shape that
   // fills is what a switch looks like when a tint alone has to carry pressed and disabled as well.
   keyframe: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
+  trash: "M4.5 7h15M10 7V4.8h4V7M6.5 7l1 12.2h9L17.5 7M10.2 10.5v5.4M13.8 10.5v5.4",
 } as const;
 
 // Filled rather than stroked: a transport symbol is a solid shape at every size, and a 1.8 px

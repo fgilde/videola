@@ -741,6 +741,7 @@ export function App(): ReactElement {
                   project={project}
                   playhead={playhead}
                   waveforms={waveforms}
+                  effects={effectManifests()}
                   dispatch={edit}
                   onSeek={seek}
                   onSelectionChange={setSelection}
@@ -756,6 +757,7 @@ export function App(): ReactElement {
                   playhead={playhead}
                   effects={effectManifests()}
                   effectParamsAt={doc.effectParamsAt}
+                  transformsAt={doc.transformsAt}
                   dispatch={edit}
                   onSeek={seek}
                 />

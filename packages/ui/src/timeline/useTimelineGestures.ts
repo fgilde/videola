@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent, type RefOb
 
 import {
   cmd,
+  on,
   type Clip,
   type ClipId,
   type Command,
+  type Keyframe,
   type MarkerId,
   type Project,
   type Time,
@@ -21,6 +23,7 @@ import {
   type TimeRange,
   type ZoomBy,
 } from "./geometry";
+import { keyframeSpan, occupied } from "./keyframes";
 import {
   snapCandidates,
   snapSpan,
@@ -68,6 +71,8 @@ export interface GestureConfig {
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
   onSelect: (clip: ClipId | undefined, how?: SelectHow) => void;
+  /** Which keyframe the lane has under the hand, kept where the timeline keeps its selections. */
+  onSelectKeyframe: (keyframe: KeyframeHit) => void;
   selection: ReadonlySet<ClipId>;
   zoom: ZoomBy;
   snapEnabled: boolean;
@@ -88,6 +93,10 @@ interface Held {
 type Drag =
   | { mode: "move"; pointerId: number; clip: ClipId; track: TrackId; clientX: number; clientY: number; start: Time; held: Held[]; key: string; live: boolean; additive: boolean }
   | { mode: "trim"; pointerId: number; clip: ClipId; edge: TrimEdge; clientX: number; clientY: number; edgeTime: Time; duration: Time; key: string; live: boolean; additive: boolean }
+  // `at` is where the core last put the keyframe, not where the pointer wants it. Every move sends
+  // the step from there, the same way a trim reads the clip's edge back -- a step the core refused
+  // (a neighbour already sits there) then cannot desynchronise the rest of the drag.
+  | { mode: "keyframe"; pointerId: number; keyframe: KeyframeHit; at: Time; clientX: number; key: string; live: boolean }
   | { mode: "scrub"; pointerId: number }
   | { mode: "pinch" ; distance: number; flicksPerPixel: number };
 
@@ -162,6 +171,21 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         longPress.current = setTimeout(() => {
           openMenu({ kind: "marker", marker }, event.clientX, event.clientY);
         }, LONG_PRESS_MS);
+        return;
+      }
+      if (hit.kind === "keyframe") {
+        // The press picks it, so the bar above the lane is already aimed at this keyframe before
+        // the drag begins -- and a press that never moves is how a keyframe is picked at all.
+        config.onSelectKeyframe(hit.keyframe);
+        drag.current = {
+          mode: "keyframe",
+          pointerId: event.pointerId,
+          keyframe: hit.keyframe,
+          at: hit.keyframe.time,
+          clientX: event.clientX,
+          key: `timeline-${(gestureSequence += 1)}`,
+          live: false,
+        };
         return;
       }
 
@@ -241,7 +265,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       }
 
       const dx = event.clientX - active.clientX;
-      const dy = event.clientY - active.clientY;
+      const dy = active.mode === "keyframe" ? 0 : event.clientY - active.clientY;
       if (!active.live) {
         if (Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
         // A press that turns into a drag is no longer a press.
@@ -250,6 +274,10 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       }
 
       const options = snapOptions(config, event.altKey);
+      if (active.mode === "keyframe") {
+        setSnapLine(applyKeyframe(config, active, dx, options)?.time);
+        return;
+      }
       setSnapLine(
         active.mode === "move"
           ? applyMove(config, active, dx, dy, options)?.time
@@ -286,7 +314,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       // A press that never became a drag was a click, and a click narrows a multiple selection to
       // the clip it landed on -- the press itself had to keep the rest, to be able to drag it. A
       // modifier click is the one that just widened the selection, so it is exempt.
-      else if (active.mode !== "scrub" && !active.live && !active.additive) {
+      else if (active.mode !== "scrub" && active.mode !== "keyframe" && !active.live && !active.additive) {
         latest.current.onSelect(active.clip, { collapse: true });
       }
       drag.current = undefined;
@@ -310,7 +338,9 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const onContextMenu = useCallback(
     (event: { clientX: number; clientY: number; preventDefault(): void; target: EventTarget | null }) => {
       const hit = hitTest(event.target);
-      if (hit === undefined || hit.kind === "ruler") return;
+      // A keyframe has no menu: the bar above the lane is always showing, and everything it could
+      // offer is already there under a finger as well as under a right button.
+      if (hit === undefined || hit.kind === "ruler" || hit.kind === "keyframe") return;
       event.preventDefault();
       if (hit.kind === "marker") {
         openMenu({ kind: "marker", marker: hit.marker }, event.clientX, event.clientY);
@@ -348,6 +378,7 @@ export interface SelectHow {
 
 type MoveDrag = Extract<Drag, { mode: "move" }>;
 type TrimDrag = Extract<Drag, { mode: "trim" }>;
+type KeyframeDrag = Extract<Drag, { mode: "keyframe" }>;
 
 function applyMove(
   config: GestureConfig,
@@ -412,6 +443,54 @@ function applyTrim(
   return snapped.candidate;
 }
 
+/**
+ * One step of a keyframe drag. The target is derived from where the gesture began, like every other
+ * drag here, and clamped into the clip: outside it the parameter is never evaluated, so a key
+ * dragged past the edge would be a key that does nothing -- and a clamp is also what keeps a drag
+ * held against that edge from producing a refusal, and an error banner, on every pointer move.
+ */
+function applyKeyframe(
+  config: GestureConfig,
+  active: KeyframeDrag,
+  dx: number,
+  options: SnapOptions,
+): SnapCandidate | undefined {
+  const found = findClip(config.project, active.keyframe.clip);
+  if (found === undefined) return undefined;
+  const span = keyframeSpan(found.clip);
+  const wanted = active.keyframe.time + xToTime(dx, config.flicksPerPixel);
+  const snapped = snapTime(wanted, candidatesFor(config, []), options);
+  const to = Math.min(Math.max(snapped.time, span.from), span.to);
+  if (to === active.at) return snapped.candidate;
+  // Asked before it is sent, not caught after: landing on a neighbour is the one refusal an
+  // ordinary drag across a track produces, and `attempt` swallowing it would leave the drag stuck
+  // against it rather than sliding past.
+  if (occupied(trackOf(found.clip, active.keyframe), to, active.at)) return snapped.candidate;
+  const command = cmd.keyframeMove(
+    on.clip(active.keyframe.clip),
+    active.keyframe.effectType,
+    active.keyframe.key,
+    active.at,
+    to,
+  );
+  attempt(() => {
+    config.dispatch(command, active.key);
+    active.at = to;
+    config.onSelectKeyframe({ ...active.keyframe, time: to });
+  });
+  return snapped.candidate;
+}
+
+// The track the drag is on, read back out of the project rather than held from the press: the core
+// re-sorts on every move, so the array the press saw is not the array the next step writes to.
+function trackOf(clip: Clip, at: KeyframeHit): readonly Keyframe[] {
+  const tracks =
+    at.effectType === null
+      ? clip.keyframes
+      : (clip.effects.find((effect) => effect.effectType === at.effectType)?.keyframes ?? {});
+  return tracks[at.key] ?? [];
+}
+
 // A ripple trim of the head leaves the clip's start where it is, so the edge on screen never moves
 // and a step measured against it would be dispatched again on every pointer move. What does move is
 // the length, and that is what the step is measured against instead.
@@ -449,6 +528,7 @@ function slipStep(clip: Clip, active: MoveDrag, delta: Time): Time {
 function revertDrag(config: GestureConfig, active: Drag): void {
   if (active.mode === "move" && active.live) applyMove(config, active, 0, 0, NO_SNAP);
   if (active.mode === "trim" && active.live) applyTrim(config, active, 0, NO_SNAP);
+  if (active.mode === "keyframe" && active.live) applyKeyframe(config, active, 0, NO_SNAP);
 }
 
 const NO_SNAP: SnapOptions = { radiusPx: 0, flicksPerPixel: 1 };
@@ -550,7 +630,18 @@ function seekTo(
 type Hit =
   | { kind: "ruler" }
   | { kind: "marker"; marker: MarkerId }
+  | { kind: "keyframe"; keyframe: KeyframeHit }
   | { kind: "clip"; clip: ClipId; edge?: TrimEdge };
+
+/** Everything a keyframe command needs, read off the element the pointer landed on. */
+export interface KeyframeHit {
+  row: string;
+  clip: ClipId;
+  /** `null` addresses the clip's own transform, which is what the commands mean by no effect. */
+  effectType: string | null;
+  key: string;
+  time: Time;
+}
 
 // The DOM already knows what was hit; re-deriving it from coordinates would be a second,
 // competing geometry. The trim zones are real elements, so their width is the hit area.
@@ -558,12 +649,29 @@ function hitTest(target: EventTarget | null): Hit | undefined {
   if (!(target instanceof Element)) return undefined;
   const marker = target.closest<HTMLElement>("[data-marker-id]")?.dataset.markerId;
   if (marker !== undefined) return { kind: "marker", marker };
+  const keyframe = keyframeHit(target);
+  if (keyframe !== undefined) return { kind: "keyframe", keyframe };
   if (target.closest("[data-timeline-ruler]") !== null) return { kind: "ruler" };
   const clip = target.closest<HTMLElement>("[data-clip-id]");
   const id = clip?.dataset.clipId;
   if (id === undefined) return undefined;
   const edge = target.closest<HTMLElement>("[data-edge]")?.dataset.edge;
   return { kind: "clip", clip: id, edge: edge === "start" || edge === "end" ? edge : undefined };
+}
+
+// The dataset carries the whole address rather than a row id the hook would have to look up: a
+// second table mapping rows back to clips and parameters is a second place for the two to disagree.
+// `data-keyframe-time` is written as an integer number of flicks and parsed back as one -- anything
+// that is not is a hand-edited DOM, and no command may be built from it.
+function keyframeHit(target: Element): KeyframeHit | undefined {
+  const element = target.closest<HTMLElement>("[data-keyframe-time]");
+  const data = element?.dataset;
+  if (data === undefined) return undefined;
+  const { keyframeRow: row, keyframeClip: clip, keyframeEffect: effect, keyframeKey: key } = data;
+  const time = Number(data.keyframeTime);
+  if (row === undefined || clip === undefined || key === undefined) return undefined;
+  if (!Number.isSafeInteger(time)) return undefined;
+  return { row, clip, effectType: effect === undefined || effect === "" ? null : effect, key, time };
 }
 
 export function findClip(project: Project, id: ClipId): { clip: Clip; track: TrackId } | undefined {
