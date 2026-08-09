@@ -78,6 +78,8 @@ features:
   markers, snapping and zoom, with one pointer path for mouse, pen and finger.
 - **Compound clips** — fold a selection into one clip; the picture is proven not to change.
 - **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
+- **Proxies** — anything taller than 720 pixels is transcoded once into a 720p copy the preview
+  decodes; the export always reads the original, proven on the written file by ffprobe and ffmpeg.
 - **Effects and transitions** — eight effects, five transitions, a text generator; every parameter
   keyframable, including a clip's position, scale and rotation, all resolved in the Rust core so
   the preview and the export read the same values.

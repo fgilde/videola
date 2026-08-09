@@ -201,6 +201,15 @@ not to the material: a clip's own speed, ramp and all, is untouched by it and re
 it was authored. The preview can be drawn at half or a quarter resolution, which is the cheapest
 performance there is on a large project and never reaches the exported file.
 
+Material taller than 720 pixels gets a **proxy**: a 720p H.264 copy with a key frame every second,
+made once in a worker of its own and kept in OPFS beside the original under the original's content
+hash. The preview decodes the proxy; the export decodes the original. A decoded frame costs width ×
+height × 4 bytes whatever the file was compressed to, so the same 256 MiB frame cache holds 8 frames
+of 4K and 72 at 720p — which is the difference between a scrub that finds its frames in memory and
+one that decodes a whole group of pictures for every step back. A medium whose proxy is missing
+works exactly as it did before there were proxies, and **Use originals** in the library switches the
+preview back to the material at any time.
+
 Export writes MP4 with H.264 and AAC, or WebM with VP9 and Opus, in a worker, through the same
 compositor the preview uses. Progress is reported and cancelling really stops it. A browser that can
 encode a format's picture but not its sound writes a silent file rather than failing halfway — Chrome

@@ -41,6 +41,40 @@ Relinking asks for the file and checks it: the id of a medium *is* the SHA-256 o
 only the same file is accepted. Another file would be a different medium wearing this one's name,
 and every clip pointing at it would quietly show the wrong picture.
 
+### Proxies
+
+Material taller than 720 pixels is transcoded once, in a worker of its own, into a smaller copy
+that the preview decodes instead of the original. The entry says **Building proxy** while that is
+happening and **Proxy** once it is there. One medium at a time: three at once would take three
+times as long to deliver the first, and the first is the one being waited for.
+
+The copy is 720 pixels tall, H.264, with a key frame every second, and carries no sound. Each of
+those is one number rather than a preference:
+
+| Choice | Why |
+|---|---|
+| 720 pixels tall | A decoded frame costs width × height × 4 bytes whatever the file was compressed to. The 256 MiB frame cache holds 8 frames of 4K, 32 of 1080p and 72 at 720p — so a step back finds the frame in memory instead of decoding a whole group of pictures again. |
+| H.264 | The one codec with hardware decoding on every machine that runs a browser. A machine that cannot *encode* it simply gets no proxy. |
+| A key frame every second | Playback restarts at the key frame before the instant asked for. A camera file with 250 frames between key frames costs 250 decodes for one step backwards; this costs at most a second's worth, whatever the camera did. |
+| No audio track | Sound always comes from the original, decoding it was never the expensive part, and leaving it out makes the proxy quicker to build and smaller to keep. |
+
+The frame rate and the length are deliberately untouched. A proxy on another timebase would put
+every source time the timeline hands out on the wrong picture.
+
+**The export never reads a proxy.** Neither does a still, nor anything else that produces a file:
+what is written is decoded from the original at full resolution, whatever is on screen while you
+cut. That is checked on a real written file by `ffprobe` and `ffmpeg`, with a deliberately wrong
+proxy sitting on disk while the file is written.
+
+A proxy is stored beside the original in OPFS, under the original's own content hash, and never
+enters the library: it has no media id, is never written into a `.videola`, and cannot be relinked
+to. A medium whose proxy is missing behaves exactly like one that never had a proxy — the original
+is decoded, and only the speed is gone.
+
+**Use originals** in the library toolbar switches the preview back to the material. It changes what
+is decoded, not what is displayed: every open decoder is closed and reopened on the file the switch
+now names.
+
 ## In and out points
 
 The classical cut is three points: where the material starts, where it ends, and where on the

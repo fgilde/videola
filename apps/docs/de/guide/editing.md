@@ -42,6 +42,40 @@ SHA-256 seines Inhalts, also wird nur dieselbe Datei angenommen. Eine andere wä
 Medium unter dem Namen dieses einen, und jeder Clip, der darauf zeigt, zeigte still das falsche
 Bild.
 
+### Proxies
+
+Material, das höher als 720 Pixel ist, wird einmal in einem eigenen Worker in eine kleinere Kopie
+umgewandelt, die die Vorschau statt des Originals dekodiert. Der Eintrag sagt **Proxy wird erzeugt**,
+solange das läuft, und danach **Proxy**. Immer nur ein Medium auf einmal: drei gleichzeitig
+bräuchten dreimal so lange bis zum ersten, und auf das erste wartet jemand.
+
+Die Kopie ist 720 Pixel hoch, H.264, mit einem Keyframe pro Sekunde, und trägt keinen Ton. Jede
+dieser Zahlen hat einen Grund und ist keine Einstellung:
+
+| Entscheidung | Warum |
+|---|---|
+| 720 Pixel hoch | Ein dekodiertes Bild kostet Breite × Höhe × 4 Bytes, ganz gleich, worauf die Datei komprimiert war. Der 256-MiB-Bildpuffer hält 8 Bilder in 4K, 32 in 1080p und 72 in 720p — ein Schritt zurück findet das Bild also im Speicher, statt eine ganze Bildgruppe erneut zu dekodieren. |
+| H.264 | Der eine Codec, den jede Maschine, auf der ein Browser läuft, in Hardware dekodiert. Eine Maschine, die ihn nicht *kodieren* kann, bekommt schlicht keinen Proxy. |
+| Ein Keyframe pro Sekunde | Die Wiedergabe setzt am Keyframe vor dem gefragten Augenblick neu an. Eine Kameradatei mit 250 Bildern zwischen zwei Keyframes kostet 250 Dekodierungen für einen Schritt zurück; das hier kostet höchstens eine Sekunde davon, was auch immer die Kamera getan hat. |
+| Keine Tonspur | Der Ton kommt immer aus dem Original, Ton zu dekodieren war nie das Teure, und ohne ihn ist der Proxy schneller erzeugt und kleiner. |
+
+Bildrate und Länge bleiben bewusst unangetastet. Ein Proxy auf einer anderen Zeitachse würde jede
+Quellzeit, die die Zeitleiste ausgibt, auf das falsche Bild legen.
+
+**Der Export liest nie einen Proxy.** Ein Standbild auch nicht, und nichts anderes, was eine Datei
+erzeugt: geschrieben wird, was aus dem Original in voller Auflösung dekodiert wurde, ganz gleich,
+was beim Schneiden auf dem Schirm stand. Das wird an einer echt geschriebenen Datei mit `ffprobe`
+und `ffmpeg` geprüft, während ein absichtlich falscher Proxy auf der Platte liegt.
+
+Ein Proxy liegt in OPFS neben dem Original, unter dessen eigenem Inhalts-Hash, und kommt nie in die
+Bibliothek: er hat keine Medienkennung, wird nie in eine `.videola` geschrieben und lässt sich nicht
+neu verknüpfen. Ein Medium, dessen Proxy fehlt, verhält sich genau wie eines, das nie einen hatte —
+das Original wird dekodiert, und nur die Geschwindigkeit ist weg.
+
+**Originale benutzen** in der Werkzeugleiste der Bibliothek schaltet die Vorschau zurück auf das
+Material. Der Schalter ändert, was dekodiert wird, nicht, was angezeigt wird: jeder offene Dekoder
+wird geschlossen und auf der Datei wieder geöffnet, die der Schalter jetzt nennt.
+
 ## In- und Out-Punkte
 
 Der klassische Schnitt hat drei Punkte: wo das Material anfängt, wo es aufhört, und wo auf der

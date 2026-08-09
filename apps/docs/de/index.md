@@ -81,6 +81,9 @@ features:
 - **Verschachtelte Clips** — eine Auswahl zu einem Clip zusammenfassen; dass das Bild sich dabei
   nicht ändert, ist nachgewiesen.
 - **Wiedergabe** — WebCodecs in einen WebGL2-Compositor, die Audio-Uhr führt, bildgenauer Transport.
+- **Proxies** — alles, was höher als 720 Pixel ist, wird einmal in eine 720p-Kopie umgewandelt, die
+  die Vorschau dekodiert; der Export nimmt immer das Original, an der geschriebenen Datei mit
+  ffprobe und ffmpeg nachgewiesen.
 - **Effekte und Übergänge** — acht Effekte, fünf Übergänge, ein Textgenerator; jeder Parameter
   keyframebar, auch Position, Skalierung und Drehung eines Clips, alles im Rust-Kern aufgelöst,
   damit Vorschau und Export dasselbe rechnen.
