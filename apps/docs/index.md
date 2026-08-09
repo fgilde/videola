@@ -80,9 +80,15 @@ features:
   blend, grade, crop or dissolve the compound and it is isolated on a surface of its own first, so
   all five meet the composed group once rather than each clip in it.
 - **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
-- **Effects and transitions** — eight effects, five transitions, a text generator; every parameter
-  keyframable, including a clip's position, scale and rotation, all resolved in the Rust core so
-  the preview and the export read the same values.
+- **Effects and transitions** — eight effects, seven transitions, masks, a text generator, colour
+  curves and lift/gamma/gain wheels, chosen from a browser whose every tile is that effect's own
+  shader over the current frame. Every parameter keyframable, including a clip's position, scale and
+  rotation, all resolved in the Rust core so the preview and the export read the same values.
+- **Colour and sound finishing** — waveform, vectorscope and histogram; a mixer with live meters,
+  EQ, compressor and limiter, loudness normalisation, ducking and silence detection.
+- **Subtitles** — SRT and WebVTT in and out, on a caption track of their own.
+- **Classical editing** — in and out points, insert and overwrite, J/K/L, adjustment tracks, speed
+  ramps whose time mapping is an integral rather than a multiplication.
 - **Audio** — mixer with volume, pan, mute and solo, fades as automation, waveforms, EBU R128
   loudness checked against the Tech 3341 cases.
 - **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.
@@ -94,11 +100,11 @@ features:
 
 ## What is not there yet
 
-No masks, motion paths, motion blur or LUT import. No EQ or compressor: the model now holds track
-and project effect chains, but nothing renders or sounds them yet. The magnetic timeline is
-deliberately absent, and the
-[editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the browser's
-own encoders.
+No motion blur, no LUT import, no noise reduction, no beat detection, and no curve editor for
+keyframe easing — a project carrying bezier handles keeps them and keeps its shape, but nothing here
+can drag one. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent,
+and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
+browser's own encoders.
 
 The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
 design are built and which are planned.

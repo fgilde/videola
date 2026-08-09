@@ -83,9 +83,15 @@ features:
   den Compound zuerst auf eine eigene Fläche, damit alle fünf die fertige Gruppe treffen und nicht
   jeden Clip darin.
 - **Wiedergabe** — WebCodecs in einen WebGL2-Compositor, die Audio-Uhr führt, bildgenauer Transport.
-- **Effekte und Übergänge** — acht Effekte, fünf Übergänge, ein Textgenerator; jeder Parameter
-  keyframebar, auch Position, Skalierung und Drehung eines Clips, alles im Rust-Kern aufgelöst,
-  damit Vorschau und Export dasselbe rechnen.
+- **Effekte und Übergänge** — acht Effekte, sieben Übergänge, Masken, ein Textgenerator,
+  Farbkurven und Lift/Gamma/Gain-Räder, ausgewählt in einem Browser, dessen jede Kachel der Shader
+  des Effekts über dem aktuellen Bild ist. Jeder Parameter keyframebar, auch Position, Skalierung
+  und Drehung, alles im Rust-Kern aufgelöst.
+- **Farb- und Ton-Feinschliff** — Wellenform, Vektorskop und Histogramm; Mischpult mit
+  Pegelanzeige, EQ, Kompressor und Limiter, Lautheits-Normalisierung, Ducking und Stille-Erkennung.
+- **Untertitel** — SRT und WebVTT hinein und heraus, auf einer eigenen Untertitelspur.
+- **Klassischer Schnitt** — In- und Out-Punkte, Einfügen und Überschreiben, J/K/L,
+  Anpassungsebenen, Geschwindigkeitsrampen mit Integral statt Multiplikation.
 - **Ton** — Mischpult mit Lautstärke, Panorama, Stumm und Solo, Fades als Automation, Waveforms,
   EBU-R128-Lautheit gegen die Tech-3341-Fälle geprüft.
 - **Export** — MP4 oder WebM in einem Worker, mit Fortschritt und einem Abbruch, der wirklich stoppt.
@@ -97,11 +103,11 @@ features:
 
 ## Was noch fehlt
 
-Keine Masken, Bewegungspfade, kein Motion-Blur, kein LUT-Import. Kein EQ und kein Kompressor: das
-Modell hält jetzt Effektketten für Spuren und Projekt, aber noch nichts zeichnet oder klingt sie.
-Die Magnetic-Timeline fehlt bewusst, und
-das [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der
-Export nutzt die Encoder des Browsers.
+Kein Motion-Blur, kein LUT-Import, keine Rauschreduktion, keine Beat-Erkennung, und kein
+Kurveneditor für die Keyframe-Glättung — ein Projekt mit Bezier-Anfassern behält sie und behält
+seine Form, aber ziehen kann sie hier niemand. `track.locked` wird nirgends durchgesetzt. Die
+Magnetic-Timeline fehlt bewusst, und das [Kapitel zum Schneiden](/de/guide/editing) begründet warum.
+FFmpeg ist nicht eingebunden; der Export nutzt die Encoder des Browsers.
 
 Das [Architektur-Kapitel](/de/guide/architecture) hält Entscheidung für Entscheidung fest, welche
 Teile des Entwurfs gebaut und welche geplant sind.
