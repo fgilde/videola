@@ -140,6 +140,12 @@ export class VideoSource {
     try {
       await this.#pump(medium, at);
     } catch (error) {
+      // Closed or reopened while this decode was in flight. Disposing the Input is what makes
+      // mediabunny throw out of the generator, so this is the teardown working, not a decoder
+      // failing -- and `close` has already cleared the window this would otherwise wipe out from
+      // under whatever opened next. Switching to the originals reopens every source at once, so
+      // this is the ordinary case rather than a race.
+      if (this.#medium !== medium) return;
       // A decoder that failed must leave the source usable: drop the dead generator so the next
       // request builds a fresh one. Throwing here instead would break the promise frameAt makes
       // -- a frame it cannot supply is undefined, never an exception -- and would leave every

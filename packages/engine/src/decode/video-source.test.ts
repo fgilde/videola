@@ -105,6 +105,22 @@ describe("VideoSource", () => {
     await expect(inFlight).resolves.toBeUndefined();
     expect(source.bytesHeld).toBe(0);
   });
+
+  // Closing disposes the Input the decode generator is reading, and mediabunny throws out of it.
+  // That is this source being torn down on purpose. Reported as an error it becomes one line of
+  // console noise per open decoder every time the proxy switch is thrown, which is how the browser
+  // harness found it.
+  it("says nothing about a decode that was cut short by its own close", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const source = new VideoSource("preview");
+    await source.open(HASH);
+
+    const inFlight = source.frameAt(0);
+    source.close();
+    await inFlight;
+
+    expect(logged).not.toHaveBeenCalled();
+  });
 });
 
 // jsdom cannot decode, so the resolution of a frame is out of reach here -- but the two files have
