@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use ts_rs::TS;
 
 use super::effect::{Effect, Transition};
-use super::keyframe::{evaluate, evaluate_path, Keyframe};
+use super::keyframe::{evaluate, evaluate_path, integrate, Keyframe};
 use super::{ClipId, GroupId, MediaId, ParamValue, Time};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
@@ -90,9 +90,7 @@ impl Clip {
         if !self.contains(t) {
             return None;
         }
-        let offset = Time::from_flicks(
-            ((t - self.start).as_flicks() as f64 * self.speed.rate as f64).round() as i64,
-        );
+        let offset = self.source_offset(t - self.start);
         Some(if self.speed.reverse {
             // At t == start this returns in_point + consumed_source, the *exclusive* end of the
             // consumed source range — one flick past the last valid source sample. The decode
@@ -113,9 +111,27 @@ impl Clip {
     }
 
     pub fn consumed_source(&self) -> Time {
-        Time::from_flicks(
-            (self.duration.as_flicks() as f64 * self.speed.rate as f64).round() as i64,
-        )
+        self.source_offset(self.duration)
+    }
+
+    // How much source the clip has spent `delta` into its own run. A constant rate makes that a
+    // multiplication; a rate track makes it the area under that track, and that difference is the
+    // whole of what a speed ramp is -- the map from project time to source time stops being
+    // proportional and becomes an integral.
+    //
+    // `consumed_source` is this same call asked for the whole duration, deliberately: the total and
+    // every prefix of it then come out of one piece of arithmetic. A reversed clip reads
+    // `consumed - offset`, so the moment those two were computed differently its head would land
+    // outside the range `readable_source_time_at` clamps to and the clamp would be doing the work
+    // silently instead of catching a bug.
+    fn source_offset(&self, delta: Time) -> Time {
+        let area = self
+            .keyframes
+            .get(SPEED_TRACK)
+            .and_then(|track| integrate(track, self.start, self.start + delta));
+        let flicks =
+            area.unwrap_or_else(|| delta.as_flicks() as f64 * self.speed.rate as f64);
+        Time::from_flicks(flicks.round() as i64)
     }
 
     // What the picture is drawn with; `transform` alone is only the value at rest. A keyframed
@@ -156,6 +172,16 @@ impl Clip {
 // `Transform::x` and `y` use. Named here beside the resolution that reads it and the roster that
 // refuses everything else, so the command layer and the renderer cannot disagree on the spelling.
 pub const POSITION_TRACK: &str = "position";
+
+// The keyframe track that carries a speed ramp: playback rate over time, in the same factor
+// `Speed::rate` uses, and the one track the picture reads by area rather than by value. It names no
+// `Transform` field, so `transform_at` walks past it without a special case -- `field_mut` is still
+// the whole roster of what geometry a keyframe may move.
+//
+// Zero is a legal value here and not on `Speed::rate`: a rate that reads zero is a frame hold,
+// which is an authored thing, while a static zero is a clip that consumes no source at all and that
+// the compound mapping in nesting.ts divides by.
+pub const SPEED_TRACK: &str = "speed";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -611,6 +637,150 @@ mod tests {
         assert!(clip
             .readable_source_time_at(Time::from_seconds(5.0))
             .is_none());
+    }
+
+    fn rate_track(clip: &mut Clip, points: &[(f64, f32, Interp)]) {
+        clip.keyframes.insert(
+            SPEED_TRACK.to_string(),
+            points
+                .iter()
+                .map(|(seconds, rate, interp)| Keyframe {
+                    time: Time::from_seconds(*seconds),
+                    value: ParamValue::Float(*rate),
+                    interp: *interp,
+                    handle_in: None,
+                    handle_out: None,
+                })
+                .collect(),
+        );
+    }
+
+    // The claim that makes a ramp a ramp. A clip running from half speed to double over two seconds
+    // has spent 0.875s of source after one -- the area under the rate, not the rate times anything.
+    // Every proportional reading of the same moment lands somewhere else: the rate at that instant
+    // says 1.25, the average rate says 1.25, the static rate says 1.0.
+    #[test]
+    fn a_speed_ramp_maps_project_time_by_the_area_under_the_rate() {
+        let mut clip = media_clip(0.0, 2.0);
+        rate_track(&mut clip, &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)]);
+
+        let at = clip.source_time_at(Time::from_seconds(1.0)).unwrap();
+        assert!((at.as_seconds() - 0.875).abs() < 1e-6, "{}", at.as_seconds());
+        assert!((clip.consumed_source().as_seconds() - 2.5).abs() < 1e-6);
+    }
+
+    // A ramp starts where the clip does, not where the timeline does: keyframe times are project
+    // time, the same base a transform track uses, so a ramped clip dragged along the timeline keeps
+    // the shape it was authored against only if the arithmetic reads both ends from `start`.
+    #[test]
+    fn a_ramp_is_measured_from_the_clip_head_not_from_time_zero() {
+        let mut clip = media_clip(10.0, 2.0);
+        clip.in_point = Time::from_seconds(4.0);
+        rate_track(
+            &mut clip,
+            &[(10.0, 0.5, Interp::Linear), (12.0, 2.0, Interp::Linear)],
+        );
+
+        assert_eq!(clip.source_time_at(Time::from_seconds(10.0)).unwrap(), clip.in_point);
+        let at = clip.source_time_at(Time::from_seconds(11.0)).unwrap();
+        assert!((at.as_seconds() - 4.875).abs() < 1e-6, "{}", at.as_seconds());
+    }
+
+    // The two axes the brief says must cross somewhere: a ramp *and* reverse. Backwards, the clip
+    // reads `consumed - area`, so it opens on the far end of a range whose size the ramp itself
+    // decided -- and a constant-rate mapping would put the same instant somewhere else entirely.
+    #[test]
+    fn a_reversed_ramp_reads_the_same_area_backwards_from_the_out_point() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.in_point = Time::from_seconds(10.0);
+        clip.speed.reverse = true;
+        rate_track(&mut clip, &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)]);
+
+        assert_eq!(clip.out_point(), clip.in_point + clip.consumed_source());
+        let head = clip.source_time_at(Time::ZERO).unwrap();
+        assert_eq!(head, clip.out_point());
+        let mid = clip.source_time_at(Time::from_seconds(1.0)).unwrap();
+        assert!((mid.as_seconds() - (12.5 - 0.875)).abs() < 1e-6, "{}", mid.as_seconds());
+    }
+
+    // The clamp the brief names, now that the size of the consumed range is the ramp's own doing.
+    // Nothing else in the model would notice if the head fell a flick past the end.
+    #[test]
+    fn a_reversed_ramp_still_hands_the_decoder_a_time_inside_the_range() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.in_point = Time::from_seconds(10.0);
+        clip.speed.reverse = true;
+        rate_track(&mut clip, &[(0.0, 3.0, Interp::Ease), (2.0, 0.25, Interp::Linear)]);
+
+        for step in 0..40 {
+            let t = Time::from_seconds(step as f64 * 0.05);
+            let at = clip.readable_source_time_at(t).unwrap();
+            assert!(at >= clip.in_point && at < clip.out_point(), "{at:?} at step {step}");
+        }
+    }
+
+    // A frame hold is a rate of zero, and nothing else: no second kind of clip, no still-image
+    // generator, no branch anywhere downstream. The first half runs, the second half stands.
+    #[test]
+    fn a_rate_of_zero_holds_the_frame_it_was_last_shown() {
+        let mut clip = media_clip(0.0, 4.0);
+        clip.in_point = Time::from_seconds(5.0);
+        rate_track(&mut clip, &[(0.0, 1.0, Interp::Hold), (2.0, 0.0, Interp::Hold)]);
+
+        assert_eq!(clip.source_time_at(Time::from_seconds(1.0)).unwrap().as_seconds(), 6.0);
+        let frozen = clip.source_time_at(Time::from_seconds(2.0)).unwrap();
+        for seconds in [2.0, 2.5, 3.0, 3.999] {
+            assert_eq!(clip.source_time_at(Time::from_seconds(seconds)).unwrap(), frozen);
+        }
+        assert_eq!(clip.consumed_source().as_seconds(), 2.0);
+    }
+
+    // Rate never goes negative, so source time never walks backwards inside a forward clip. A sign
+    // error in `span_area` would show here and nowhere in the totals.
+    #[test]
+    fn source_time_never_walks_backwards_under_a_ramp() {
+        let mut clip = media_clip(0.0, 4.0);
+        rate_track(
+            &mut clip,
+            &[
+                (0.0, 2.0, Interp::Linear),
+                (1.0, 0.0, Interp::Ease),
+                (2.5, 4.0, Interp::Hold),
+                (4.0, 1.0, Interp::Linear),
+            ],
+        );
+        let mut last = Time::ZERO;
+        for step in 0..80 {
+            let at = clip.source_time_at(Time::from_seconds(step as f64 * 0.05)).unwrap();
+            assert!(at >= last, "went backwards at step {step}: {at:?} after {last:?}");
+            last = at;
+        }
+    }
+
+    // Forward compatibility, and the mirror of the transform rule: a rate track this build cannot
+    // integrate leaves the clip running at its static rate rather than stopping dead.
+    #[test]
+    fn a_rate_track_this_build_cannot_integrate_falls_back_to_the_static_rate() {
+        let mut clip = media_clip(0.0, 2.0);
+        clip.speed.rate = 2.0;
+        rate_track(&mut clip, &[(0.0, 0.5, Interp::Bezier), (2.0, 0.5, Interp::Linear)]);
+        assert_eq!(clip.consumed_source().as_seconds(), 4.0);
+
+        clip.keyframes.insert(SPEED_TRACK.into(), Vec::new());
+        assert_eq!(clip.consumed_source().as_seconds(), 4.0);
+    }
+
+    // A rate track moves no geometry, and a transform track consumes no source. They share a map and
+    // must share nothing else.
+    #[test]
+    fn a_rate_track_leaves_the_geometry_alone_and_a_transform_track_leaves_the_rate_alone() {
+        let mut clip = media_clip(0.0, 2.0);
+        rate_track(&mut clip, &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)]);
+        assert_eq!(clip.transform_at(Time::from_seconds(1.0)), clip.transform);
+
+        let mut other = media_clip(0.0, 2.0);
+        ramp(&mut other, "scaleX", 1.0, 4.0, 2.0);
+        assert_eq!(other.consumed_source().as_seconds(), 2.0);
     }
 
     #[test]

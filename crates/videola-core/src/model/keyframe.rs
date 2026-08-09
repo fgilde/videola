@@ -88,6 +88,85 @@ pub fn evaluate_path(track: &[Keyframe], at: Time) -> Option<[f32; 2]> {
     Some(catmull_rom(p0, p1, p2, p3, t))
 }
 
+// The area under a keyframed curve between two instants, in value-units times flicks. `evaluate`
+// answers what a track reads at an instant; this answers what it has spent by then, and that is a
+// different question only one kind of track ever asks. A speed ramp asks it: how much source a clip
+// has consumed is the integral of its rate, not its rate times anything.
+//
+// Exact and additive, which is the property the whole thing rests on: the area over a span equals
+// the sum of the areas over its parts, so `consumed_source` (the whole clip) and `source_time_at`
+// (a prefix of it) come out of one piece of arithmetic. The moment those two disagree the head of a
+// reversed clip lands outside the source range the decoder may read.
+//
+// `None` where the track cannot be integrated exactly: a value that is not a number, or a `Bezier`
+// key, whose easing has no elementary antiderivative in the track's own time. Both are refused by
+// the command layer and by `Project::normalize`, so this only answers `None` for a track written by
+// a later version -- and the caller then falls back to the static rate rather than to a guess.
+pub fn integrate(track: &[Keyframe], from: Time, to: Time) -> Option<f64> {
+    if track.is_empty() {
+        return None;
+    }
+    for keyframe in track {
+        if keyframe.interp == Interp::Bezier || !matches!(keyframe.value, ParamValue::Float(_)) {
+            return None;
+        }
+    }
+    if to <= from {
+        return Some(0.0);
+    }
+    // Cut at every key inside the span, so `span_area` never straddles two segments and never has
+    // to know that it might.
+    let mut total = 0.0;
+    let mut cursor = from;
+    for keyframe in track {
+        if keyframe.time <= cursor || keyframe.time >= to {
+            continue;
+        }
+        total += span_area(track, cursor, keyframe.time);
+        cursor = keyframe.time;
+    }
+    Some(total + span_area(track, cursor, to))
+}
+
+// One interval inside a single segment -- or before the first key or after the last, where the
+// curve is flat for the same reason `evaluate` clamps there.
+fn span_area(track: &[Keyframe], from: Time, to: Time) -> f64 {
+    let width = (to - from).as_flicks() as f64;
+    let right = track.partition_point(|keyframe| keyframe.time <= from);
+    let Some(left) = right.checked_sub(1).and_then(|index| track.get(index)) else {
+        return float(&track[0]) * width;
+    };
+    let Some(next) = track.get(right) else {
+        return float(left) * width;
+    };
+    let span = (next.time - left.time).as_flicks() as f64;
+    if span <= 0.0 || left.interp == Interp::Hold {
+        return float(left) * width;
+    }
+    let alpha = (from - left.time).as_flicks() as f64 / span;
+    let beta = (to - left.time).as_flicks() as f64 / span;
+    let (start, end) = (float(left), float(next));
+    width * start + span * (end - start) * (ease_area(left.interp, beta) - ease_area(left.interp, alpha))
+}
+
+// The definite integral of `ease` from 0 to `s`. `Bezier` never arrives -- `integrate` turns a
+// track carrying one away before any of this runs -- and `Hold` is settled by `span_area` above,
+// so both arms here exist only to keep the match total.
+fn ease_area(interp: Interp, s: f64) -> f64 {
+    match interp {
+        Interp::Hold | Interp::Bezier => 0.0,
+        Interp::Linear => s * s / 2.0,
+        Interp::Ease => s * s * s - s * s * s * s / 2.0,
+    }
+}
+
+fn float(keyframe: &Keyframe) -> f64 {
+    match keyframe.value {
+        ParamValue::Float(value) => value as f64,
+        _ => 0.0,
+    }
+}
+
 fn mirror(through: [f32; 2], point: [f32; 2]) -> [f32; 2] {
     [2.0 * through[0] - point[0], 2.0 * through[1] - point[1]]
 }
@@ -164,7 +243,7 @@ fn bezier_component(c1: f32, c2: f32, t: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::ParamValue;
+    use crate::model::{ParamValue, FLICKS_PER_SECOND};
 
     fn kf(seconds: f64, value: f32, interp: Interp) -> Keyframe {
         Keyframe {
@@ -246,6 +325,96 @@ mod tests {
             mid < 25.0,
             "ease-in-out should lag linear at t=0.25, got {mid}"
         );
+    }
+
+    const SECOND: f64 = FLICKS_PER_SECOND as f64;
+
+    fn area(track: &[Keyframe], from: f64, to: f64) -> f64 {
+        integrate(track, Time::from_seconds(from), Time::from_seconds(to)).unwrap() / SECOND
+    }
+
+    #[test]
+    fn a_flat_track_integrates_to_rate_times_span() {
+        let track = vec![kf(0.0, 2.0, Interp::Linear)];
+        assert_eq!(area(&track, 0.0, 3.0), 6.0);
+    }
+
+    // The trapezoid, and the reason a ramp is not a multiplication: a clip that runs from half speed
+    // to double over two seconds consumes the *average*, 2.5 seconds of source, not 1 or 4.
+    #[test]
+    fn a_linear_ramp_integrates_to_the_trapezoid_under_it() {
+        let track = vec![kf(0.0, 0.5, Interp::Linear), kf(2.0, 2.0, Interp::Linear)];
+        assert!((area(&track, 0.0, 2.0) - 2.5).abs() < 1e-9);
+    }
+
+    // The property everything else rests on. If a prefix plus the remainder were not the whole,
+    // `consumed_source` and `source_time_at` would answer from different arithmetic and the head of
+    // a reversed clip would fall outside the range a decoder may read.
+    #[test]
+    fn the_area_over_a_span_is_the_sum_of_the_areas_over_its_parts() {
+        let track = vec![
+            kf(0.0, 0.25, Interp::Linear),
+            kf(1.0, 4.0, Interp::Ease),
+            kf(2.5, 0.5, Interp::Hold),
+            kf(3.0, 3.0, Interp::Linear),
+        ];
+        let whole = area(&track, 0.0, 4.0);
+        for cut in [0.1, 0.5, 1.0, 1.7, 2.5, 2.9, 3.0, 3.6] {
+            let parts = area(&track, 0.0, cut) + area(&track, cut, 4.0);
+            assert!((whole - parts).abs() < 1e-9, "split at {cut}: {whole} vs {parts}");
+        }
+    }
+
+    // Two easings that are symmetric about the midpoint of their span cover the same ground over the
+    // whole of it, and differ everywhere inside. A run that only checked the total would pass with
+    // `ease_area` returning the linear antiderivative for both.
+    #[test]
+    fn ease_lags_linear_inside_a_ramp_and_catches_up_by_the_end() {
+        let linear = vec![kf(0.0, 1.0, Interp::Linear), kf(2.0, 3.0, Interp::Linear)];
+        let eased = vec![kf(0.0, 1.0, Interp::Ease), kf(2.0, 3.0, Interp::Linear)];
+        assert!((area(&linear, 0.0, 2.0) - area(&eased, 0.0, 2.0)).abs() < 1e-9);
+        assert!(area(&eased, 0.0, 0.5) < area(&linear, 0.0, 0.5));
+    }
+
+    #[test]
+    fn a_held_key_spends_its_own_value_until_the_next_one() {
+        let track = vec![kf(0.0, 3.0, Interp::Hold), kf(2.0, 100.0, Interp::Linear)];
+        assert_eq!(area(&track, 0.0, 2.0), 6.0);
+    }
+
+    // Before the first key and after the last, the curve is flat -- the same clamp `evaluate` makes,
+    // so a rate track shorter than its clip does not silently stop consuming source.
+    #[test]
+    fn the_area_outside_the_keys_extends_the_end_values() {
+        let track = vec![kf(1.0, 2.0, Interp::Linear), kf(2.0, 2.0, Interp::Linear)];
+        assert_eq!(area(&track, 0.0, 1.0), 2.0);
+        assert_eq!(area(&track, 2.0, 5.0), 6.0);
+        assert_eq!(area(&track, 0.0, 5.0), 10.0);
+    }
+
+    #[test]
+    fn a_zero_rate_spends_nothing() {
+        let track = vec![kf(0.0, 0.0, Interp::Hold), kf(9.0, 0.0, Interp::Linear)];
+        assert_eq!(area(&track, 0.0, 4.0), 0.0);
+    }
+
+    #[test]
+    fn an_empty_span_has_no_area_and_an_empty_track_has_no_answer() {
+        let track = vec![kf(0.0, 2.0, Interp::Linear)];
+        assert_eq!(integrate(&track, Time::from_seconds(2.0), Time::ZERO), Some(0.0));
+        assert_eq!(integrate(&[], Time::ZERO, Time::from_seconds(1.0)), None);
+    }
+
+    // The two shapes `integrate` cannot answer exactly. Both are refused at the load boundary and by
+    // the command layer; this is the third guard, for a project a later version wrote.
+    #[test]
+    fn a_bezier_key_or_a_non_numeric_one_has_no_exact_area() {
+        let bezier = vec![kf(0.0, 1.0, Interp::Bezier), kf(2.0, 2.0, Interp::Linear)];
+        assert_eq!(integrate(&bezier, Time::ZERO, Time::from_seconds(2.0)), None);
+
+        let mut wrong = vec![kf(0.0, 1.0, Interp::Linear), kf(2.0, 2.0, Interp::Linear)];
+        wrong[1].value = ParamValue::Bool(true);
+        assert_eq!(integrate(&wrong, Time::ZERO, Time::from_seconds(2.0)), None);
     }
 
     fn at(seconds: f64, x: f32, y: f32) -> Keyframe {
