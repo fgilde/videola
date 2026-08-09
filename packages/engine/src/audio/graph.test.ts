@@ -2,7 +2,7 @@ import { consumedBetween, consumedSource, timeToSeconds } from "@videola/core";
 import { OfflineAudioContext } from "node-web-audio-api";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Clip, MediaAsset, Project, Time, Track } from "@videola/core";
+import type { Clip, Interp, MediaAsset, Project, Time, Track } from "@videola/core";
 
 import { AudioGraph, hasAudibleClips, measureLoudness } from "./graph";
 import { integratedLufs } from "./loudness";
@@ -918,19 +918,19 @@ describe("a compound clip in the audio graph", () => {
 // expectation below is computed from `consumedBetween` in the core rather than written out: if the
 // two ever part company, these fail without anyone having to guess the new number.
 describe("AudioGraph, speed ramps", () => {
-  const rateKeys = (keys: [number, number, string][]): Record<string, unknown> => ({
-    speed: keys.map(([seconds, rate, interp]) => ({
-      time: Math.round(seconds * SECOND),
-      value: { kind: "float", value: rate },
-      interp,
-    })),
-  });
-
-  const ramped = (keys: [number, number, string][], reverse = false): Clip =>
+  const ramped = (keys: [number, number, Interp][], reverse = false): Clip =>
     clip({
       duration: 2 * SECOND,
       speed: { rate: 1, reverse, preservePitch: true },
-      keyframes: rateKeys(keys) as Clip["keyframes"],
+      keyframes: {
+        speed: keys.map(([seconds, rate, interp]) => ({
+          time: Math.round(seconds * SECOND),
+          value: { kind: "float", value: rate },
+          interp,
+          handleIn: null,
+          handleOut: null,
+        })),
+      },
     });
 
   // Where the buffer's own ramp stands when the clip has spent `consumed` of its range.
