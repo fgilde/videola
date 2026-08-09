@@ -173,6 +173,53 @@ describe("merging two captions", () => {
     expect(captionCues(doc.state)).toEqual(before);
   });
 
+  // Someone who restyled a caption meant it, and correcting a typo in the one before it must not
+  // put the default back. Found by a counter-check: replacing the generator wholesale left every
+  // other assertion green.
+  it("keeps the first caption's own style rather than resetting it to the default", async () => {
+    const { doc } = await withCaptions();
+    const first = clipsOf(doc)[0]!;
+    const generator = first.source.kind === "generator" ? first.source.generator : undefined;
+    if (generator?.type !== "text") throw new Error("not a text generator");
+    doc.dispatch(
+      cmd.clipSetGenerator(first.id, {
+        ...generator,
+        style: { ...generator.style, y: 0.2, color: "#ffcc00" },
+      }),
+    );
+
+    for (const command of mergeCaptions(doc.state, first.id)) doc.dispatch(command, "merge");
+
+    const merged = clipsOf(doc)[0];
+    const after = merged?.source.kind === "generator" ? merged.source.generator : undefined;
+    if (after?.type !== "text") throw new Error("not a text generator");
+    expect(after.style.y).toBe(0.2);
+    expect(after.style.color).toBe("#ffcc00");
+  });
+
+  // A lower third is a text clip too, and it is the case a check written against a solid generator
+  // walks straight past: without the track's kind in the question, the entry would be live on every
+  // title in the project and would eat the one after it.
+  it("is not offered on a title, which is a text clip on a text track", async () => {
+    const { doc } = await withCaptions();
+    doc.dispatch(cmd.trackAdd("text", "T1"));
+    const text = doc.state.timeline.tracks[1]!.id;
+    for (const start of [0, 2000 * FLICKS_PER_MILLISECOND]) {
+      doc.dispatch(
+        cmd.clipAdd(
+          text,
+          { kind: "generator", generator: { type: "text", content: "A lower third", style: {} } },
+          start,
+          1000 * FLICKS_PER_MILLISECOND,
+        ),
+      );
+    }
+    const title = doc.state.timeline.tracks[1]!.clips[0]!;
+
+    expect(canMergeCaptions(doc.state, title.id)).toBe(false);
+    expect(mergeCaptions(doc.state, title.id)).toEqual([]);
+  });
+
   it("has nothing to merge the last caption with, and says so instead of dropping it", async () => {
     const { doc } = await withCaptions();
     const last = clipsOf(doc)[2]!;
