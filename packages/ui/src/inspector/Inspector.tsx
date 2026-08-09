@@ -21,7 +21,6 @@ import {
 } from "@videola/core";
 
 import { useI18n, type Locale } from "../i18n/useI18n";
-import { AddEffect } from "../primitives/AddEffect";
 import { findClip } from "../timeline/useTimelineGestures";
 import { keyframeAt, ParamRow, shownValue } from "./ParamRow";
 import "./Inspector.css";
@@ -56,6 +55,11 @@ export interface InspectorProps {
   /** Throws when the core refuses, like the timeline's. Nothing here is an ordinary refusal. */
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
+  /**
+   * Opens the effect browser on one kind or the other. The dialog is modal and belongs to the shell
+   * rather than to a panel inside it, which is why the inspector only asks for it.
+   */
+  onBrowse: (only: 1 | 2) => void;
 }
 
 type Send = (command: Command, coalesceKey?: string) => void;
@@ -68,6 +72,7 @@ export function Inspector({
   effectParamsAt,
   dispatch,
   onSeek,
+  onBrowse,
 }: InspectorProps): ReactElement {
   const { t } = useI18n();
   const found = clip === undefined ? undefined : findClip(project, clip);
@@ -80,7 +85,7 @@ export function Inspector({
         <>
           <Transform_ clip={found.clip} project={project} send={dispatch} />
           <Playback clip={found.clip} send={dispatch} />
-          <Transitions clip={found.clip} effects={effects} send={dispatch} />
+          <Transitions clip={found.clip} effects={effects} send={dispatch} onBrowse={onBrowse} />
           <Effects
             clip={found.clip}
             playhead={playhead}
@@ -88,6 +93,7 @@ export function Inspector({
             effectParamsAt={effectParamsAt}
             send={dispatch}
             onSeek={onSeek}
+            onBrowse={onBrowse}
           />
         </>
       )}
@@ -239,10 +245,12 @@ function Transitions({
   clip,
   effects,
   send,
+  onBrowse,
 }: {
   clip: Clip;
   effects: readonly EffectDescriptor[];
   send: Send;
+  onBrowse: (only: 1 | 2) => void;
 }): ReactElement {
   const { t, locale } = useI18n();
   // A cleared transition is `undefined` rather than `null`: the field carries skip_serializing_if
@@ -259,7 +267,7 @@ function Transitions({
           aria-label={t("inspector.transition")}
           value={current?.transitionType ?? ""}
           onChange={(event) =>
-            send(cmd.clipSetTransition(clip.id, chosen(event.target.value, current)))
+            send(cmd.clipSetTransition(clip.id, chosenTransition(event.target.value, current)))
           }
         >
           <option value="">{t("inspector.transitionNone")}</option>
@@ -284,14 +292,28 @@ function Transitions({
           }
         />
       )}
+      {/* The picker stays because it is the only way to take a transition off again, and because it
+          says at a glance which one is in force. The browser is beside it rather than instead of
+          it: choosing is a different question from finding. */}
+      <button type="button" className="v-button" onClick={() => onBrowse(2)}>
+        {t("inspector.browseTransitions")}
+      </button>
     </Group>
   );
 }
 
-// Aligned to `in` and nowhere else: the window of a centred or trailing transition reaches back
-// before the clip starts, where the clip is not drawn at all, so half the dissolve would never be
-// seen. Playing those out needs handles, and no command in M1 creates them.
-function chosen(type: string, current: Transition | undefined): Transition | null {
+/**
+ * The transition a chosen type means for a clip that may already have one: the duration and the
+ * parameters carry over, so swapping a wipe for a dissolve does not silently reset the length.
+ *
+ * Aligned to `in` and nowhere else: the window of a centred or trailing transition reaches back
+ * before the clip starts, where the clip is not drawn at all, so half the dissolve would never be
+ * seen. Playing those out needs handles, and no command in M1 creates them.
+ *
+ * Exported because the browser sets a transition too, and two places deciding what "in" means is
+ * how the picker and the browser come to author different transitions from the same name.
+ */
+export function chosenTransition(type: string, current: Transition | undefined): Transition | null {
   if (type === "") return null;
   return {
     transitionType: type,
@@ -308,6 +330,7 @@ function Effects({
   effectParamsAt,
   send,
   onSeek,
+  onBrowse,
 }: {
   clip: Clip;
   playhead: Time;
@@ -315,6 +338,7 @@ function Effects({
   effectParamsAt: (at: Time) => EffectParamSnapshot;
   send: Send;
   onSeek: (time: Time) => void;
+  onBrowse: (only: 1 | 2) => void;
 }): ReactElement {
   const { t, locale } = useI18n();
   const inside = playhead >= clip.start && playhead < clip.start + clip.duration;
@@ -358,10 +382,17 @@ function Effects({
           </div>
         );
       })}
-      <AddEffect
-        offers={addable}
-        onAdd={(id) => send(cmd.effectAdd(on.clip(clip.id), id))}
-      />
+      {/* Not a picker of names: a video effect is a thing you look at, and the list of thirteen
+          words this replaced could not tell a vignette from a mask. The mixer keeps the picker,
+          because a compressor has no picture. */}
+      <button
+        type="button"
+        className="v-button v-button--primary"
+        disabled={addable.length === 0}
+        onClick={() => onBrowse(1)}
+      >
+        {t("inspector.browseEffects")}
+      </button>
     </Group>
   );
 }

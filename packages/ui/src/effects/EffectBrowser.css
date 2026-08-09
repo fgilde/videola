@@ -1,0 +1,149 @@
+.v-fx__scrim {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 55%);
+  z-index: 20;
+}
+
+.v-fx {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-4);
+  width: min(60rem, calc(100vw - 2 * var(--v-space-4)));
+  max-height: calc(100dvh - 2 * var(--v-space-4));
+  overflow-y: auto;
+  padding: var(--v-space-4);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-fx__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--v-space-3);
+  /* Stays put while the grid scrolls: with fifteen tiles the search field is otherwise off screen
+     exactly when there is enough to search through for it to matter. */
+  position: sticky;
+  top: calc(-1 * var(--v-space-4));
+  z-index: 1;
+  margin: calc(-1 * var(--v-space-4)) calc(-1 * var(--v-space-4)) 0;
+  padding: var(--v-space-4);
+  background: var(--v-bg-elevated);
+}
+
+.v-fx__title {
+  margin: 0;
+  font-size: var(--v-text-lg);
+}
+
+.v-fx__search {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-3);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  font-size: var(--v-text-sm);
+}
+
+.v-fx__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+}
+
+.v-fx__category {
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-strong);
+  letter-spacing: var(--v-tracking-wide);
+  text-transform: uppercase;
+}
+
+.v-fx__grid {
+  display: grid;
+  /* Wide enough for a 16:9 tile to still read at a glance, and no media query deciding where the
+     columns break -- a German name is longer than its English one and would break a fixed count. */
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--v-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v-fx__tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+  padding: var(--v-space-3);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+/* The checkerboard the preview pane already uses, for the same reason: a mask and a chroma key cut
+   holes, and over a flat panel a hole is indistinguishable from black paint. */
+.v-fx__picture {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background:
+    repeating-conic-gradient(var(--v-checker-a) 0% 25%, var(--v-checker-b) 0% 50%) 0 0 / 16px 16px;
+  border-radius: var(--v-radius-sm);
+}
+
+.v-fx__picture[data-pending] {
+  animation: v-fx-waiting 1.2s ease-in-out infinite;
+}
+
+@keyframes v-fx-waiting {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-fx__picture[data-pending] {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.v-fx__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.v-fx__name {
+  margin: 0;
+  font-size: var(--v-text-md);
+}
+
+.v-fx__blurb {
+  /* Takes the slack so every Add button in a row sits on the same line, whatever the sentence above
+     it does in the longer of the two languages. */
+  flex: 1;
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: var(--v-text-sm);
+  line-height: var(--v-leading);
+}
+
+.v-fx__add {
+  min-height: var(--v-touch-target);
+}
+
+.v-fx__empty {
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: var(--v-text-sm);
+}

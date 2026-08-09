@@ -38,6 +38,7 @@ interface Rig {
   sent: { command: Command; key?: string }[];
   seeks: Time[];
   asked: Time[];
+  browsed: (1 | 2)[];
   dispatch: Mock;
 }
 
@@ -55,7 +56,7 @@ interface Scene {
 function show(scene: Scene = {}): Rig {
   const clip = scene.clip ?? clipWithMedia();
   const project = scene.project ?? makeProject([makeTrack("trk_1", [clip])], [MEDIA]);
-  const rig: Rig = { sent: [], seeks: [], asked: [], dispatch: vi.fn() };
+  const rig: Rig = { sent: [], seeks: [], asked: [], browsed: [], dispatch: vi.fn() };
   rig.dispatch.mockImplementation((command: Command, key?: string) => {
     rig.sent.push({ command, key });
     scene.dispatch?.(command, key);
@@ -80,6 +81,7 @@ function show(scene: Scene = {}): Rig {
         effectParamsAt={effectParamsAt}
         dispatch={rig.dispatch}
         onSeek={(time) => rig.seeks.push(time)}
+        onBrowse={(only) => rig.browsed.push(only)}
       />
     </I18nProvider>,
   );
@@ -144,11 +146,8 @@ function press(name: string): void {
 }
 
 /** The effect types the picker is holding out, or nothing when there is no picker at all. */
-function offered(): string[] {
-  const picker = screen.queryByLabelText("Effekt hinzufügen") as HTMLSelectElement | null;
-  return picker === null
-    ? []
-    : [...picker.options].map((option) => option.value).filter((value) => value !== "");
+function browseButton(): HTMLButtonElement {
+  return screen.getByRole("button", { name: "Effekte durchsuchen" }) as HTMLButtonElement;
 }
 
 function slide(input: HTMLInputElement, value: number): void {
@@ -167,6 +166,7 @@ describe("the inspector", () => {
           effectParamsAt={() => new Map()}
           dispatch={vi.fn()}
           onSeek={vi.fn()}
+          onBrowse={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -403,37 +403,33 @@ describe("the inspector", () => {
 
   // A transition is an effect with two inputs, and the draw list only ever runs a one-input
   // manifest as a clip effect. Offering the other kind would add something nothing draws.
-  it("offers only single-input effects to add to a clip", () => {
+  it("offers only single-input effects as transitions", () => {
     show();
 
-    expect(offered()).toEqual(["brightness"]);
-    // And the other way round: an effect with one input is not a transition either.
+    // An effect with one input is not a transition, and the draw list would never run it as one.
     const select = screen.getByLabelText("Übergang") as HTMLSelectElement;
     expect([...select.options].map((option) => option.value)).toEqual(["", "crossfade"]);
   });
 
-  // The picker is a choice that acts, so what it is worth is the command it sends.
-  it("adds the effect that was picked", () => {
+  // The two ways into the browser ask it for different shelves, which is what makes the label on
+  // each button true rather than decorative.
+  it("opens the browser on effects from the effect list and on transitions from the transition row", () => {
     const rig = show();
 
-    act(
-      () =>
-        void fireEvent.change(screen.getByLabelText("Effekt hinzufügen"), {
-          target: { value: "brightness" },
-        }),
-    );
+    act(() => void fireEvent.click(browseButton()));
+    act(() => void fireEvent.click(screen.getByRole("button", { name: "Übergänge durchsuchen" })));
 
-    expect(rig.sent.map((entry) => entry.command)).toEqual([
-      { type: "effect.add", target: { kind: "clip", clip: "clp_1" }, effectType: "brightness" },
-    ]);
+    expect(rig.browsed).toEqual([1, 2]);
+    // Opening a shelf is not an edit, and nothing about the clip has changed yet.
+    expect(rig.sent).toEqual([]);
   });
 
-  it("stops offering an effect the clip already carries", () => {
+  it("stops offering effects once the clip carries every one this build has", () => {
     show({ clip: clipWithMedia(withBrightness()) });
 
-    // Brightness is the only offer this rig has, so the whole picker goes with it. The row below
-    // is what says the effect landed rather than the control simply having been forgotten.
-    expect(offered()).toEqual([]);
+    // Brightness is the only single-input offer this rig has, so there is nothing left to browse
+    // for. The row below is what says the effect landed rather than the control being forgotten.
+    expect(browseButton().disabled).toBe(true);
     expect(screen.getByLabelText("Stärke")).toBeTruthy();
   });
 
