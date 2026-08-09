@@ -1,6 +1,6 @@
-import { FLICKS_PER_SECOND, millisecondsToTime, timeToMilliseconds } from "./commands";
+import { cmd, FLICKS_PER_SECOND, millisecondsToTime, timeToMilliseconds } from "./commands";
 
-import type { Time } from "./generated";
+import type { Clip, ClipId, Command, Generator, JsonValue, Project, Time, Track } from "./generated";
 
 /**
  * One subtitle: when it comes up, when it goes, and the words. Times are flicks like everything
@@ -143,4 +143,141 @@ function clock(time: Time, separator: string): string {
 
 function pad(value: number, width: number): string {
   return String(value).padStart(width, "0");
+}
+
+/**
+ * How a subtitle looks unless someone changes it: white on a translucent black plate, low and
+ * centred, in the same style keys `textStyle` in packages/engine/src/generate/text.ts already
+ * reads. Nothing new is being drawn -- what was missing was the combination.
+ *
+ * The plate is what makes it readable on a bright sky and on a night interior both. A stroke alone
+ * survives one and not the other, and a stroke wide enough for both eats the counters of the
+ * letters. The stroke is kept as well and narrow, so clearing the plate still leaves an edge.
+ *
+ * `y` is the *centre* of the block, and the generator has no bottom anchor, so a three-line caption
+ * grows down as well as up. 0.84 keeps three lines inside the frame; a fourth would run off, and
+ * subtitles are two lines by convention for exactly that reason.
+ *
+ * No animation on purpose: a subtitle that fades in is unreadable for the first third of a second
+ * it is on screen, and it is on screen for about two.
+ */
+export const CAPTION_STYLE: Readonly<Record<string, JsonValue>> = {
+  fontSize: 0.05,
+  fontWeight: 600,
+  align: "center",
+  x: 0.5,
+  y: 0.84,
+  maxWidth: 0.8,
+  lineHeight: 1.25,
+  color: "#ffffff",
+  background: "#000000b3",
+  padding: 0.35,
+  strokeWidth: 0.03,
+  strokeColor: "#000000",
+};
+
+/** The commands that put `cues` on a track as ordinary clips, one clip per cue. */
+export function captionClips(track: string, cues: readonly Cue[]): Command[] {
+  return cues.map((cue) =>
+    cmd.clipAdd(
+      track,
+      { kind: "generator", generator: { type: "text", content: cue.text, style: { ...CAPTION_STYLE } } },
+      cue.start,
+      cue.end - cue.start,
+    ),
+  );
+}
+
+/**
+ * The cues a project holds, read back off its caption tracks.
+ *
+ * Only caption tracks, and that is the whole reason `TrackKind::Caption` exists: a lower third is a
+ * text clip on a text track, and a subtitle file written from every text clip in the project would
+ * carry the lower thirds as cues.
+ *
+ * A hidden track is left out. It is not in the picture, so it is not in the file either -- the same
+ * rule `paints` applies in the renderer, and the alternative is a subtitle file carrying lines the
+ * viewer was never shown.
+ */
+export function captionCues(project: Project, track?: string): Cue[] {
+  const cues: Cue[] = [];
+  for (const candidate of project.timeline.tracks) {
+    if (!isCaptionTrack(candidate, track)) continue;
+    for (const clip of candidate.clips) {
+      const text = captionText(clip);
+      if (text !== undefined && clip.duration > 0) {
+        cues.push({ start: clip.start, end: clip.start + clip.duration, text });
+      }
+    }
+  }
+  return cues.sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+function isCaptionTrack(candidate: Track, track?: string): boolean {
+  if (candidate.kind !== "caption" || candidate.hidden) return false;
+  return track === undefined || candidate.id === track;
+}
+
+/** The words a clip draws, if it draws words at all. */
+export function captionText(clip: Clip): string | undefined {
+  return textGenerator(clip)?.content;
+}
+
+/**
+ * The clip's text generator, narrowed. The inspector needs the whole thing rather than the words
+ * alone, because `clip.setGenerator` replaces the whole block and a style dropped on the way
+ * through would restyle the caption every time someone corrected a typo in it.
+ */
+export function textGenerator(clip: Clip): Extract<Generator, { type: "text" }> | undefined {
+  if (clip.source.kind !== "generator" || clip.source.generator.type !== "text") return undefined;
+  return clip.source.generator;
+}
+
+/**
+ * Two captions into one: the words joined on their own lines, the span reaching from the first
+ * one's head to the second one's tail, and the second clip gone.
+ *
+ * Three commands the core already has rather than a fourth it would have to grow, dispatched under
+ * one coalesce key so the whole merge is one undo step. Nothing here is new machinery -- which is
+ * the point, because a merge that behaved differently from a retype and a trim would be a fourth
+ * thing to keep in step with the other three.
+ */
+export function mergeCaptions(project: Project, clip: ClipId): Command[] {
+  const pair = mergeable(project, clip);
+  if (pair === undefined) return [];
+  const [first, second] = pair;
+  const held = textGenerator(first);
+  if (held === undefined) return [];
+  // The first caption's own style is kept, not the default: someone who restyled it meant it.
+  const content = `${held.content}\n${captionText(second) ?? ""}`.trim();
+  const generator = { ...held, content };
+  // Never negative: a second caption that ends before the first does would otherwise shorten it.
+  const reach = Math.max(0, second.start + second.duration - (first.start + first.duration));
+  return [
+    cmd.clipSetGenerator(first.id, generator),
+    ...(reach > 0 ? [cmd.clipTrim(first.id, "end", reach)] : []),
+    cmd.clipRemove(second.id),
+  ];
+}
+
+/** Whether there is a next caption on the same track to merge this one with. */
+export function canMergeCaptions(project: Project, clip: ClipId): boolean {
+  return mergeable(project, clip) !== undefined;
+}
+
+// The clip and the caption that follows it on the same track. "Follows" is by start time and not by
+// array position: a track's clips are not kept sorted, and merging with whatever happens to be next
+// in the array would join two captions minutes apart.
+function mergeable(project: Project, clip: ClipId): [Clip, Clip] | undefined {
+  for (const track of project.timeline.tracks) {
+    const first = track.clips.find((candidate) => candidate.id === clip);
+    if (first === undefined) continue;
+    if (track.kind !== "caption" || captionText(first) === undefined) return undefined;
+    const second = track.clips
+      .filter((candidate) => candidate.id !== clip && candidate.start >= first.start)
+      .filter((candidate) => captionText(candidate) !== undefined)
+      .sort((a, b) => a.start - b.start)[0];
+    return second === undefined ? undefined : [first, second];
+  }
+  return undefined;
 }

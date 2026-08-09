@@ -874,3 +874,154 @@ fn the_master_fader_is_clamped_and_refuses_a_non_finite_gain() {
         }))
         .is_err());
 }
+
+#[allow(clippy::unwrap_used)]
+fn doc_with_caption(text: &str) -> (Document, videola_core::model::ClipId) {
+    let mut doc = Document::new();
+    doc.dispatch(Dispatch::new(Command::TrackAdd {
+        kind: TrackKind::Caption,
+        name: "C1".into(),
+        index: None,
+    }))
+    .unwrap();
+    let track = doc.project().timeline.tracks[0].id.clone();
+    doc.dispatch(Dispatch::new(Command::ClipAdd {
+        track,
+        source: ClipSource::Generator {
+            generator: Generator::Text {
+                content: text.into(),
+                style: std::collections::BTreeMap::new(),
+            },
+        },
+        start: Time::ZERO,
+        duration: Time::from_seconds(2.0),
+    }))
+    .unwrap();
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    (doc, clip)
+}
+
+#[allow(clippy::unwrap_used)]
+fn content_of(doc: &Document) -> String {
+    match &doc.project().timeline.tracks[0].clips[0].source {
+        ClipSource::Generator {
+            generator: Generator::Text { content, .. },
+        } => content.clone(),
+        other => panic!("not a text generator: {other:?}"),
+    }
+}
+
+// The whole point of the command: before it there was no way at all to correct the words of a
+// subtitle, because a generator was written by `clip.add` and never again.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_captions_words_can_be_rewritten() {
+    let (mut doc, clip) = doc_with_caption("Wrong words");
+    doc.dispatch(Dispatch::new(Command::ClipSetGenerator {
+        clip,
+        generator: Generator::Text {
+            content: "Right words\nover two lines".into(),
+            style: std::collections::BTreeMap::new(),
+        },
+    }))
+    .unwrap();
+    assert_eq!(content_of(&doc), "Right words\nover two lines");
+}
+
+// Rewriting the words must not disturb where the caption stands or how long it lasts: those are a
+// clip's own fields and the generator is only its material.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn rewriting_a_caption_leaves_its_placement_alone() {
+    let (mut doc, clip) = doc_with_caption("Before");
+    let before = doc.project().timeline.tracks[0].clips[0].clone();
+    doc.dispatch(Dispatch::new(Command::ClipSetGenerator {
+        clip,
+        generator: Generator::Text {
+            content: "After".into(),
+            style: std::collections::BTreeMap::new(),
+        },
+    }))
+    .unwrap();
+    let after = &doc.project().timeline.tracks[0].clips[0];
+    assert_eq!((after.start, after.duration, after.id.clone()), (before.start, before.duration, before.id));
+    assert_eq!(after.transform, before.transform);
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn rewriting_a_caption_is_one_undo_step_that_puts_the_old_words_back() {
+    let (mut doc, clip) = doc_with_caption("Before");
+    doc.dispatch(Dispatch::new(Command::ClipSetGenerator {
+        clip,
+        generator: Generator::Text {
+            content: "After".into(),
+            style: std::collections::BTreeMap::new(),
+        },
+    }))
+    .unwrap();
+    doc.undo().unwrap();
+    assert_eq!(content_of(&doc), "Before");
+    doc.redo().unwrap();
+    assert_eq!(content_of(&doc), "After");
+}
+
+// The same gate `Project::normalize` puts on a generator's colour, applied at dispatch: a colour
+// `hex()` in generator.ts cannot parse becomes black rather than a complaint, so it must not get
+// in through a command either.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_generator_colour_that_is_not_a_hex_colour_is_refused() {
+    let (mut doc, clip) = doc_with_caption("Words");
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipSetGenerator {
+            clip: clip.clone(),
+            generator: Generator::Solid {
+                color: "chartreuse".into(),
+            },
+        }))
+        .is_err());
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipSetGenerator {
+            clip,
+            generator: Generator::Gradient {
+                from: "#112233".into(),
+                to: "#445566".into(),
+                angle: f32::INFINITY,
+            },
+        }))
+        .is_err());
+    assert_eq!(content_of(&doc), "Words");
+}
+
+// A clip whose source is a medium has an in point, a speed and a trim that all address that
+// medium. Handing it a generator instead would leave every one of them pointing at nothing.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_media_clip_has_no_generator_to_set() {
+    let (mut doc, _) = doc_with_clip(0.0, 2.0);
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipSetGenerator {
+            clip,
+            generator: Generator::Text {
+                content: "Words".into(),
+                style: std::collections::BTreeMap::new(),
+            },
+        }))
+        .is_err());
+    assert!(matches!(
+        doc.project().timeline.tracks[0].clips[0].source,
+        ClipSource::Media { .. }
+    ));
+}
+
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_caption_track_survives_a_save_and_a_reload() {
+    let (doc, _) = doc_with_caption("Words");
+    let json = serde_json::to_string(doc.project()).unwrap();
+    let mut back: videola_core::model::Project = serde_json::from_str(&json).unwrap();
+    back.normalize().unwrap();
+    assert_eq!(back.timeline.tracks[0].kind, TrackKind::Caption);
+}

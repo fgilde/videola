@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use super::{bounded, find_clip_mut, finite, EffectTarget, TrimEdge, MAX_VOLUME};
 use crate::model::keyframe::sort_track;
 use crate::model::{
-    Clip, ClipId, ClipSource, Effect, GroupId, Interp, Keyframe, MediaId, ParamValue, Project,
-    Time, TrackId, Transform, Transition, POSITION_TRACK, SPEED_TRACK,
+    Clip, ClipId, ClipSource, Effect, Generator, GroupId, Interp, Keyframe, MediaId, ParamValue,
+    Project, Time, TrackId, Transform, Transition, POSITION_TRACK, SPEED_TRACK,
 };
 use crate::{CoreError, Result};
 
@@ -533,6 +533,29 @@ pub(super) fn set_transform(
     let (track, index) = find_clip_mut(target, clip)?;
     track.clips[index].transform = transform.clone();
     Ok(())
+}
+
+// The counterpart of `set_transform` for a clip's material rather than its geometry, and the only
+// way the words of a title or a subtitle can ever change after the clip exists. Refused on a medium
+// or a compound: a generator is not something a clip can be given, it is something a clip already
+// is, and turning a video clip into a title would leave its in point, speed and trim addressing
+// material that is no longer there.
+pub(super) fn set_generator(
+    target: &mut Project,
+    clip: &ClipId,
+    generator: &Generator,
+) -> Result<()> {
+    crate::model::project::generator_bounded(generator)?;
+    let (track, index) = find_clip_mut(target, clip)?;
+    match &mut track.clips[index].source {
+        ClipSource::Generator { generator: held } => {
+            *held = generator.clone();
+            Ok(())
+        }
+        ClipSource::Media { .. } | ClipSource::Compound { .. } => Err(CoreError::InvalidArgument(
+            "only a generator clip has a generator".into(),
+        )),
+    }
 }
 
 pub(super) fn set_transition(

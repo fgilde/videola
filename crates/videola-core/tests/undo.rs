@@ -526,6 +526,15 @@ fn every_command_undoes_to_the_exact_prior_state() {
          }| Command::ClipNest {
             clips: vec![clip.clone(), neighbour.clone()],
         },
+        // The fixture's clips are generators, so this one has something to rewrite. Undoing it has
+        // to put the whole generator back, style map and all, not merely the words.
+        |Fixture { clip, .. }| Command::ClipSetGenerator {
+            clip: clip.clone(),
+            generator: Generator::Text {
+                content: "a caption".into(),
+                style: std::collections::BTreeMap::new(),
+            },
+        },
         |_| Command::MarkerAdd {
             time: Time::from_seconds(1.0),
             label: "chapter".into(),

@@ -3,6 +3,7 @@ import type {
   ClipSource,
   Command,
   EffectTarget,
+  Generator,
   Interp,
   Keyframe,
   MediaAsset,
@@ -308,6 +309,14 @@ export const cmd = {
     type: "clip.setTransform",
     clip,
     transform,
+  }),
+  // The whole generator, for the same reason `clipSetTransform` takes the whole transform: read the
+  // clip's current one and spread the field that changed. This is the only way a title's or a
+  // subtitle's words change after the clip exists.
+  clipSetGenerator: (clip: string, generator: Generator) => ({
+    type: "clip.setGenerator",
+    clip,
+    generator,
   }),
   // `null` clears it. Only the incoming edge exists as a command because only `transitionIn` is
   // read when the picture is drawn.

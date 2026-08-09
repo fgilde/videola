@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::model::{
-    Clip, ClipId, ClipSource, Interp, MarkerId, MediaAsset, MediaId, ParamValue, Project,
-    ProjectSettings, Time, TrackId, TrackKind, Transform, Transition,
+    Clip, ClipId, ClipSource, Generator, Interp, MarkerId, MediaAsset, MediaId, ParamValue,
+    Project, ProjectSettings, Time, TrackId, TrackKind, Transform, Transition,
 };
 use crate::Result;
 
@@ -151,6 +151,17 @@ pub enum Command {
     /// Replace a clip's whole geometry block. Read the current transform and change one field.
     #[serde(rename = "clip.setTransform")]
     ClipSetTransform { clip: ClipId, transform: Transform },
+    // The whole generator, like `clip.setTransform` takes the whole transform: read the clip's
+    // current generator, change the one field, send it back. Until this existed a generator was
+    // written once by `clip.add` and never again, so the words of a title could not be corrected
+    // without deleting the clip -- and a subtitle nobody can retype is not a subtitle.
+    /// Replace the generator of a generator clip: its words, its colours, its style. Refused on a
+    /// clip whose source is a medium or a nested timeline.
+    #[serde(rename = "clip.setGenerator")]
+    ClipSetGenerator {
+        clip: ClipId,
+        generator: Generator,
+    },
     // A transition belongs to the incoming edge of a clip — the only edge the compositor reads
     // (see `mixPass` in draw-list.ts). `null` clears it, so one command adds, retimes and removes.
     /// Set or clear the transition on a clip's incoming edge; `null` removes it.
@@ -327,6 +338,9 @@ impl Command {
             Self::ClipSetTransform { clip, transform } => {
                 clip::set_transform(target, clip, transform)
             }
+            Self::ClipSetGenerator { clip, generator } => {
+                clip::set_generator(target, clip, generator)
+            }
             Self::ClipSetTransition { clip, transition } => {
                 clip::set_transition(target, clip, transition.as_ref())
             }
@@ -413,6 +427,7 @@ impl Command {
             Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
             Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
+            Self::ClipSetGenerator { .. } => LABEL_CLIP_SET_GENERATOR,
             Self::ClipSetTransition { .. } => LABEL_CLIP_SET_TRANSITION,
             Self::EffectAdd { .. } => LABEL_EFFECT_ADD,
             Self::EffectSetParam { .. } => LABEL_EFFECT_SET_PARAM,
@@ -456,6 +471,7 @@ pub const LABEL_CLIP_NEST: &str = "cmd.clip.nest";
 pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
 pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
+pub const LABEL_CLIP_SET_GENERATOR: &str = "cmd.clip.setGenerator";
 pub const LABEL_CLIP_SET_TRANSITION: &str = "cmd.clip.setTransition";
 pub const LABEL_EFFECT_ADD: &str = "cmd.effect.add";
 pub const LABEL_EFFECT_SET_PARAM: &str = "cmd.effect.setParam";
@@ -497,6 +513,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_CLIP_SET_SPEED,
     LABEL_CLIP_SET_VOLUME,
     LABEL_CLIP_SET_TRANSFORM,
+    LABEL_CLIP_SET_GENERATOR,
     LABEL_CLIP_SET_TRANSITION,
     LABEL_EFFECT_ADD,
     LABEL_EFFECT_SET_PARAM,

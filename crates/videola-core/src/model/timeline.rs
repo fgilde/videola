@@ -29,6 +29,14 @@ pub enum TrackKind {
     Video,
     Audio,
     Text,
+    // A kind of its own rather than a text track by convention, and the reason is a question only
+    // this field can answer: "which of these clips are subtitles". A lower third is a text clip on
+    // a text track too -- the builtin templates put them there -- so a subtitle file written from
+    // every text clip in the project would carry the lower thirds as cues, and one written from
+    // some of them would need a second marking somewhere else to say which. `Text` stays what it
+    // is: titles, cards, credits, anything drawn from words. `Caption` is the spoken word timed to
+    // the picture, and it is the track a `.srt` is read into and written out of.
+    Caption,
     Overlay,
     Adjustment,
 }
@@ -83,6 +91,7 @@ fn default_color(kind: TrackKind) -> &'static str {
         TrackKind::Video => "#5B8CFF",
         TrackKind::Audio => "#2EA043",
         TrackKind::Text => "#F0A030",
+        TrackKind::Caption => "#E0C040",
         TrackKind::Overlay => "#B06BD6",
         TrackKind::Adjustment => "#6BD6FF",
     }
@@ -156,6 +165,26 @@ mod tests {
     fn track_kind_serialises_in_kebab_case() {
         let json = serde_json::to_string(&TrackKind::Adjustment).unwrap();
         assert_eq!(json, "\"adjustment\"");
+        assert_eq!(serde_json::to_string(&TrackKind::Caption).unwrap(), "\"caption\"");
+    }
+
+    // Every kind has to be a colour of its own: the timeline draws the track's stripe from this and
+    // two kinds sharing one would make a caption track indistinguishable from the titles above it.
+    #[test]
+    fn every_track_kind_has_a_colour_no_other_kind_uses() {
+        let kinds = [
+            TrackKind::Video,
+            TrackKind::Audio,
+            TrackKind::Text,
+            TrackKind::Caption,
+            TrackKind::Overlay,
+            TrackKind::Adjustment,
+        ];
+        let mut seen = std::collections::BTreeSet::new();
+        for kind in kinds {
+            assert!(seen.insert(default_color(kind)), "{kind:?} repeats a colour");
+        }
+        assert_eq!(seen.len(), kinds.len());
     }
 
     #[test]

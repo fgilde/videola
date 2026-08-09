@@ -142,23 +142,31 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     speed_track_bounded(clip)?;
     match &mut clip.source {
         ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
-        // A generator's colour is read by `hex()` in generator.ts, which falls back to black or
-        // white for anything it cannot parse — the same silent reinterpretation
-        // `settings.background` is checked against, and now reachable from a template's colour
-        // slot as well as from a hand-written project.json.
-        ClipSource::Generator {
-            generator: Generator::Gradient { from, to, angle },
-        } => {
-            finite(*angle)?;
-            hex_color(from)?;
-            hex_color(to)?;
-        }
-        ClipSource::Generator {
-            generator: Generator::Solid { color } | Generator::Shape { color, .. },
-        } => hex_color(color)?,
-        ClipSource::Generator { .. } | ClipSource::Media { .. } => {}
+        ClipSource::Generator { generator } => generator_bounded(generator)?,
+        ClipSource::Media { .. } => {}
     }
     normalize_effects(&mut clip.effects)
+}
+
+// A generator's colour is read by `hex()` in generator.ts, which falls back to black or white for
+// anything it cannot parse — the same silent reinterpretation `settings.background` is checked
+// against, and reachable from a template's colour slot, from a hand-written project.json and now
+// from `clip.setGenerator` as well. Shared with that command so a generator one route accepts is
+// never one the other would refuse to load back.
+//
+// `Text` is deliberately not checked beyond this: its `style` is an untyped map that `textStyle`
+// in text.ts clamps field by field, and every unusable value there falls back rather than reaching
+// the canvas. A second roster of the same fields here would be one to keep in step for nothing.
+pub(crate) fn generator_bounded(generator: &Generator) -> Result<()> {
+    match generator {
+        Generator::Gradient { from, to, angle } => {
+            finite(*angle)?;
+            hex_color(from)?;
+            hex_color(to)
+        }
+        Generator::Solid { color } | Generator::Shape { color, .. } => hex_color(color),
+        Generator::Text { .. } | Generator::Countdown { .. } => Ok(()),
+    }
 }
 
 // A clip's `params`/keyframes are what `command::clip::set_effect_param` writes one field at a

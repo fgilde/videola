@@ -26,6 +26,7 @@ export const COMMAND_LABELS = [
   "cmd.clip.setSpeed",
   "cmd.clip.setVolume",
   "cmd.clip.setTransform",
+  "cmd.clip.setGenerator",
   "cmd.clip.setTransition",
   "cmd.effect.add",
   "cmd.effect.setParam",

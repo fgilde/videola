@@ -1,4 +1,5 @@
 export * from "./backend";
+export * from "./captions";
 export * from "./commands";
 export * from "./document";
 export * from "./presets";
