@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! The three-point edit: a range marked in the source, a place chosen on the timeline, and the
 //! range either inserted (everything after it moves) or overwritten (nothing moves). These are the
