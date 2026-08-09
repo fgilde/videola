@@ -118,16 +118,25 @@ teilen, und das dekodierte Ergebnis Bild für Bild mit dem verglichen, was hinei
 
 ## Vorlagen
 
-![Galerie und eine gebackene Vorlage: drei Clips auf der Zeitleiste, jeder so lang wie die Vorlage es vorgibt, nicht wie die Datei](/editor-templates.webp)
+![Die Vorlagengalerie: neun Karten in fünf Kategorien, jede ein aus der Vorlage selbst gerendertes Standbild](/editor-templates.webp)
 
 Eine Vorlage ist derselbe Behälter wie ein Projekt mit einem Eintrag mehr — dieselben Bytes öffnen
 sich also weiterhin als Projekt. Auswählen, den Assistenten beantworten, und heraus kommt ein ganz
-normales bearbeitbares Projekt; es gibt keinen Vorlagenmodus, den man verlassen müsste. Die Karte in
-der Galerie zeichnet die Zeitleiste, die die Vorlage bauen wird, aus deren eigenem Projekt gelesen —
-statt eines Bildes, das ein Ergebnis behauptet.
+normales bearbeitbares Projekt; es gibt keinen Vorlagenmodus, den man verlassen müsste.
 
-Vier werden mitgeliefert, keine davon bringt Material mit, und jede zeigt etwas, das wirklich
-funktioniert, statt etwas, das sich auf einem Schirmbild gut macht.
+**Neun werden mitgeliefert, in fünf Kategorien, und keine einzige bringt ein Bild Video mit.** Eine
+Vorlage ist ein Rezept, jede ist deshalb aus dem gebaut, was der Renderer allein aus einer Projektdatei
+zeichnen kann: der Textgenerator mit Ein-, Aus- und Schleifenbewegung, Farbflächen und Verläufe, die
+zehn Effekte, die fünf Übergänge, Masken und keyframebare Transformationen samt Bewegungspfad. Das
+eigene Material kommt über die Platzhalter dazu. Zusammen benutzen die neun jeden Übergang, den der
+Renderer hat.
+
+Die Karte ist kein gemaltes Ergebnis — sie wird **aus der Vorlage gerendert**, über dasselbe Backen,
+das auch eine echte Antwort nimmt, mit einem grauen Platzhalter genau dort, wo Ihr Material landen
+wird. Eine gemalte Karte könnte ein Aussehen zeigen, das der Renderer nie hervorbrächte, und niemand
+fände es heraus, bevor er gewählt hat. Kostet ein kleines Bild pro Vorlage, eines nach dem anderen
+gezeichnet, während die Galerie schon offen ist; ein Vorschauprojekt enthält nur Generatoren, es gibt
+also nichts zu dekodieren und nichts aus dem Speicher zu lesen.
 
 ## Auf dem Telefon
 

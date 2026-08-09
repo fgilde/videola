@@ -9,8 +9,10 @@ import type {
   TransformSnapshot,
 } from "./backend";
 import type {
+  ClipId,
   Dispatch,
   DispatchResult,
+  Frame,
   LoadWarning,
   MediaKind,
   Project,
@@ -58,6 +60,15 @@ export async function readTemplateFile(bytes: Uint8Array): Promise<Template> {
   return WasmDocument.readTemplate(bytes) as Template;
 }
 
+// The project a gallery card is drawn from: the template baked against a stand-in for every piece
+// of material, each one a grey gradient sitting in exactly the rectangle the real answer will land
+// in. A project comes back rather than a picture, because the compositor is on this side of the
+// boundary -- `templatePoster` in @videola/engine is the half that turns it into pixels.
+export async function templatePreview(template: Template, frame?: Frame): Promise<Project> {
+  await ensureReady();
+  return WasmDocument.templatePreview(template, frame ?? null) as Project;
+}
+
 // A baked template is an ordinary document: same backend interface, same commands, same undo. The
 // caller cannot tell it apart from an opened file, and that is the whole point of Bake-to-Project.
 export async function createTemplateBackend(
@@ -85,8 +96,8 @@ function wrap(handle: WasmDocument): DocumentBackend {
     // the declared type to what the implementation already guarantees.
     save: (options: SaveOptions, media: MediaBytes) =>
       handle.save(options, media) as Uint8Array<ArrayBuffer>,
-    saveAsTemplate: (options: SaveOptions, id: string) =>
-      handle.saveAsTemplate(options, id) as Uint8Array<ArrayBuffer>,
+    saveAsTemplate: (options: SaveOptions, id: string, marked?: readonly ClipId[]) =>
+      handle.saveAsTemplate(options, id, marked ?? null) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
     mediaBytes: (id: string) => handle.mediaBytes(id) as Uint8Array<ArrayBuffer> | undefined,

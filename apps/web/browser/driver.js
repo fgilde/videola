@@ -808,7 +808,11 @@ async function announce() {
   // makes the assignment visible to it.
   function setValue(element, value) {
     const prototype =
-      element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+      element instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : element instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(prototype, "value").set.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
     element.dispatchEvent(new Event("change", { bubbles: true }));
@@ -911,113 +915,162 @@ async function announce() {
     const gallery = await until("the gallery", () => q('[data-testid="template-gallery"]'));
 
     const cards = [...gallery.querySelectorAll("[data-template-id]")];
-    check("the gallery shows every template that ships", cards.length, 4);
+    check("the gallery shows every template that ships", cards.length, 9);
     check(
       "and each one under its own name",
-      cards.map((card) => card.querySelector(".v-template__name").textContent),
-      ["Drei Aufnahmen", "Auftakt und Abspann", "Hochformat-Story", "Bild im Bild"],
-    );
-    // The card draws the timeline the template will build, so the count is the template's clip
-    // count -- three for the montage, one per track for the picture in picture.
-    check(
-      "the card draws one block per clip the template will make",
+      cards.map((entry) => entry.querySelector(".v-template__name").textContent),
       [
-        card("three-shots").querySelectorAll(".v-template__block").length,
-        card("picture-in-picture").querySelectorAll(".v-template__block").length,
-        card("picture-in-picture").querySelectorAll(".v-template__lane").length,
+        "Kraftvoller Auftakt",
+        "Blende auf",
+        "Weiche Diaschau",
+        "Im Takt",
+        "Hochkant-Story",
+        "Geteiltes Bild",
+        "Bauchbinde",
+        "Abspann",
+        "Produkt im Blick",
       ],
-      [3, 2, 2],
     );
+
+    // The picture on a card is rendered, not painted: `Template::preview` bakes the template
+    // against a stand-in and the ordinary compositor draws it. Nothing here can pass without the
+    // WASM bake, the generators and WebGL all working, which is exactly the claim a card makes.
+    await until(
+      "every card to have its picture",
+      () => all(".v-template__still").length === 9,
+      120000,
+    );
+    const stills = all(".v-template__still");
+    check("every picture actually loaded",
+      stills.every((image) => image.complete && image.naturalWidth > 0), true);
+    // A blank card, a black frame and a failed render are all one flat colour. A build is not.
+    check("and none of them is a flat rectangle",
+      stills.filter((image) => spread(image) < 40).length, 0);
+
+    // The box holds the template's own shape from the first paint, so the grid cannot reflow under
+    // the pointer when a picture lands -- and an upright template is visibly an upright template.
     check(
-      "and marks the one that dissolves",
-      card("three-shots").querySelectorAll(".v-template__block[data-dissolve]").length,
-      2,
+      "an upright template gets an upright card",
+      card("story-vertical").querySelector(".v-template__poster").style.aspectRatio,
+      "1080 / 1920",
     );
+
+    const chip = (key) => q('[data-category="' + key + '"]');
+    check("there is a chip for every category the catalogue carries",
+      all("[data-category]").map((entry) => entry.textContent),
+      ["Alle", "Auftakt", "Diaschau", "Hochkant", "Titel und Abspann", "Produkte"]);
+    chip("titles").click();
+    await sleep(100);
+    check("choosing one narrows the gallery to it",
+      all("[data-template-id]").map((entry) => entry.dataset.templateId),
+      ["lower-third", "end-card"]);
+    chip("all").click();
+    await sleep(100);
+    check("and going back brings the rest with it", all("[data-template-id]").length, 9);
+
     check("an untouched project is not worth saving as a template",
       labelled("Projekt als Vorlage speichern"), undefined);
 
-    card("three-shots").querySelector("button").click();
+    // The card is the button. A picture with a control under it makes the largest thing on the
+    // screen the one part that does nothing.
+    check("the card itself is what is clicked", card("bold-open").tagName, "BUTTON");
+    card("bold-open").click();
     const wizard = await until("the wizard", () => q('[data-testid="template-wizard"]'));
     check("the wizard opens on the template's own first step",
-      wizard.querySelector('[role="status"]').textContent.includes("Schritt 1 von 2"), true);
+      wizard.querySelector('[role="status"]').textContent.includes("Schritt 1 von 3"), true);
+    check("and shows the whole path rather than a number to count against",
+      [...wizard.querySelector('[data-testid="template-rail"]').children]
+        .map((entry) => entry.textContent),
+      ["Ihr Material", "Ihre Worte", "Ihre Farbe"]);
+    check("the template's own picture stays on the screen while it is filled in",
+      wizard.querySelector(".v-templates__poster .v-template__still") !== null, true);
     check("with one field per placeholder of that step",
       [...wizard.querySelectorAll("[data-slot-id]")].map((slot) => slot.dataset.slotId),
-      ["shot1", "shot2", "shot3"]);
+      ["shot"]);
     check("it says how much material a placeholder wants",
-      wizard.textContent.includes("Braucht mindestens 2,5 s Material."), true);
+      wizard.textContent.includes("Braucht mindestens 3,5 s Material."), true);
 
     const advance = () => labelled("Weiter").closest("button");
-    check("and refuses to go on while the placeholders are empty", advance().disabled, true);
+    check("and refuses to go on while the placeholder is empty", advance().disabled, true);
 
-    await chooseFile(fileInput("shot1"), FIXTURE.name);
-    await until("the first choice to register", () => q('[data-chosen="shot1"]'));
-    await chooseFile(fileInput("shot2"), FIXTURE.name);
-    await until("the second choice to register", () => q('[data-chosen="shot2"]'));
-    check("two out of three is still not enough", advance().disabled, true);
-
-    await chooseFile(fileInput("shot3"), FIXTURE.name);
-    await until("the third choice to register", () => q('[data-chosen="shot3"]'));
-    check("the third one opens the way on", advance().disabled, false);
+    await chooseFile(fileInput("shot"), FIXTURE.name);
+    await until("the choice to register", () => q('[data-chosen="shot"]'));
+    check("material opens the way on", advance().disabled, false);
     check("choosing material raised nothing", banner(), "");
 
     advance().click();
-    await until("the second step", () =>
-      q('[data-testid="template-wizard"] [data-slot-id="title"]'));
-    check("the name field starts on the template's own name",
-      q('[data-slot-id="title"] input[type="text"]').value, "Drei Aufnahmen");
-    setValue(q('[data-slot-id="title"] input[type="text"]'), "Sommer 2026");
-    setValue(q('[data-slot-id="color"] input[type="color"]'), "#1188ff");
+    await until("the words step", () => q('[data-slot-id="title"]'));
+    // A text slot falls back to the words its own generator ships with, not to the template's
+    // name: leaving the field alone has to give the design its author drew, not a hole.
+    check("the title field starts on the words the template was designed with",
+      q('[data-slot-id="title"] textarea').value, "IHR TITEL\nHIER");
+    setValue(q('[data-slot-id="title"] textarea'), "Sommer 2026");
+    setValue(q('[data-slot-id="subtitle"] textarea'), "Ein Sommer in acht Bildern");
+    advance().click();
+    await until("the colour step", () => q('[data-slot-id="brand"]'));
+    setValue(q('[data-slot-id="brand"] input[type="color"]'), "#1188ff");
     await sleep(100);
-    check("what was typed is what the field holds",
+
+    // The last panel says what is about to be made. A wizard that asks across three panels and
+    // then acts on all of them at once is asking for a decision nobody has been shown.
+    const summary = q('[data-testid="template-summary"]');
+    check("the last panel lists every answer, including those from earlier steps",
+      ["shot", "title", "subtitle", "brand"]
+        .map((id) => summary.querySelector('[data-answer="' + id + '"]').textContent),
       [
-        q('[data-slot-id="title"] input[type="text"]').value,
-        q('[data-slot-id="color"] input[type="color"]').value,
-      ],
-      ["Sommer 2026", "#1188ff"]);
+        "Erste Aufnahme" + FIXTURE.name,
+        "TitelSommer 2026",
+        "UntertitelEin Sommer in acht Bildern",
+        "Ihre Farbe#1188ff",
+      ]);
 
     labelled("Projekt erstellen").click();
     await until("the wizard to close", () => q('[data-testid="template-wizard"]') === null);
     check("the gallery closed with it", q('[data-testid="template-gallery"]'), null);
     check("baking raised nothing", banner(), "");
 
-    const clips = [...document.querySelectorAll("[data-clip-id]")];
-    check("the template's three clips are on the timeline", clips.length, 3);
-    // Two and a half seconds is 250 px at the default zoom, and 2.0 s of material is all the
+    const clips = all("[data-clip-id]");
+    // A colour field, the shot, a title and a subtitle: three of the four carry no material at all.
+    check("everything the template builds is on the timeline", clips.length, 4);
+    // Three and a half seconds is 350 px at the default zoom, and 2.0 s of material is all the
     // fixture has. A bake that shortened the clip to what the file holds would give 200 px and a
-    // hole where the dissolve expects a picture; slowing it keeps the rhythm the card promised.
-    check("each one is as long as the template says, not as long as the file",
-      clips.map((clip) => Math.round(clip.getBoundingClientRect().width)), [250, 250, 250]);
-    check("and they overlap by the length of the dissolve",
-      clips.map((clip) => clip.offsetLeft), [0, 200, 400]);
-    check("the same file chosen three times is one medium",
-      document.querySelectorAll("[data-media-id]").length, 1);
+    // hole where the zoom expects a picture; slowing it keeps the rhythm the card promised.
+    check("the shot is as long as the template says, not as long as the file",
+      Math.round(clipBox("clp_shot").width), 350);
+    check("and it starts where the colour field hands over",
+      Math.round(clipBox("clp_shot").left - clipBox("clp_bg").left), 300);
 
-    // The tab is where a project's name is visible in this version, and a passive effect is what
-    // puts it there, so it is waited for rather than read on the same turn.
     await until("the name to reach the tab", () => document.title !== "Videola", 10000);
     check("the typed name is the project's name", document.title, "Sommer 2026 — Videola");
 
-    // A 640x360 clip maps one source pixel to one project pixel unless something fitted it, and in
-    // a 1920x1080 frame that leaves eight ninths of the picture showing the bare background.
-    // Nothing in this version's interface sets a transform, so a frame with no background left in
-    // it can only have come from the bake. Counted against the background rather than against
-    // brightness on purpose: a dark shot is dark either way, but background is background.
-    const blue = [0x11, 0x88, 0xff];
-    // Both counts out of the same read. Two reads would let the second one land after the page
-    // compositor has taken the buffer, and an empty buffer holds no background either -- the
-    // measurement would pass by being blank rather than by being right.
-    const shown = await until("the baked picture", () => {
-      const measured = measure(blue);
+    // At the start there is no material on the screen at all: a gradient, and shortly a title. If
+    // the generators were not drawn the frame would be the flat project background, and `bare`
+    // would be the whole of it. This is the one measurement that says a template carrying no
+    // footage is still a picture.
+    const brand = [0x11, 0x88, 0xff];
+    button("An den Anfang").click();
+    const opening = await until("the opening frame", () => {
+      const measured = measure(brand);
       return measured.lit > 1000 ? measured : null;
-    }, 90000);
-    checkAtLeast("the baked project shows a decoded frame", shown.lit, 1000);
-    check("and the fitted clip leaves no background showing", shown.bare < 0.2, true);
+    }, 60000);
+    checkAtLeast("the colour field is drawn with no material at all", opening.lit, 1000);
+    check("and it is a ramp rather than the flat background behind it", opening.bare < 0.2, true);
+
+    // And then the words. White is what a title is drawn in and what nothing else in this opening
+    // is, so more of it than a moment ago is the letters someone typed arriving on the screen.
+    const white = [0xff, 0xff, 0xff];
+    const before = measure(white).bare;
+    forward(30);
+    const after = await until("the title on the screen", () => {
+      const measured = measure(white).bare;
+      return measured > before ? measured : null;
+    }, 60000);
+    check("the words that were typed are on the screen", after > before, true);
 
     // Past the last clip there is nothing but the background, which is where the colour answer
     // becomes something a person can see. Waited for as "an opaque pixel that is not the one on the
     // clip" rather than as "a blue pixel": a wrong colour has to fail the three checks below, not
-    // time the wait out. The opacity is what rules out a buffer the page compositor has already
-    // taken -- that reads back as four zeroes, which is a change like any other.
+    // time the wait out.
     const onTheClip = centrePixel().join();
     button("Ans Ende").click();
     const behind = await until(
@@ -1033,10 +1086,21 @@ async function announce() {
     checkNear("and in blue", behind[2], 0xff, 3);
     check("nothing was reported along the way", banner(), "");
 
-    // Back onto the first clip, so the picture the screenshot at the end of the budget catches is
-    // the fitted one -- a shot filling the frame is what the whole milestone claims.
+    // Back onto the title, so there is a build made of nothing but text and colour standing behind
+    // what comes next.
     button("An den Anfang").click();
-    await until("the picture again", () => measure(blue).lit > 1000, 20000);
+    forward(30);
+    await until("the picture again", () => measure(brand).lit > 1000, 20000);
+
+    // And then the gallery again, because that is what the screenshot at the end of the budget has
+    // to catch. This whole milestone is a claim about what someone sees before they choose, and the
+    // only way to judge it is to look at it. Every picture is rendered by now, so this costs a
+    // click.
+    openMenu();
+    inMenu("Aus Vorlage").click();
+    await until("the gallery once more", () => q('[data-testid="template-gallery"]'));
+    await until("its pictures still there", () => all(".v-template__still").length === 9, 30000);
+    check("nothing was reported by the end", banner(), "");
   }
 
   // A tablet: both panels at once, a finger for everything, and the one gesture a phone cannot
@@ -1211,6 +1275,7 @@ async function announce() {
 
   const card = (id) => q(`[data-template-id="${id}"]`);
   const fileInput = (slot) => q(`[data-slot-id="${slot}"] input[type="file"]`);
+  const clipBox = (id) => q(`[data-clip-id="${id}"]`).getBoundingClientRect();
 
   async function dropFixture() {
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();

@@ -1,6 +1,6 @@
 pub mod inner;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -9,8 +9,8 @@ use wasm_bindgen::JsCast;
 use inner::DocumentHost;
 use videola_core::command::Dispatch;
 use videola_core::format::SaveOptions;
-use videola_core::model::{MediaId, ProjectSettings, Time};
-use videola_core::template::{builtin, SlotAnswer, Template};
+use videola_core::model::{ClipId, MediaId, ProjectSettings, Time};
+use videola_core::template::{builtin, Frame, SlotAnswer, Template};
 use videola_core::DispatchResult;
 
 // A bare id string would drop the undo/redo flags the import itself just changed, leaving the
@@ -61,6 +61,26 @@ impl WasmDocument {
     #[wasm_bindgen(js_name = builtinTemplates)]
     pub fn builtin_templates() -> std::result::Result<JsValue, JsError> {
         to_js_value(&builtin::templates())
+    }
+
+    /// The project a gallery card is rendered from: the template baked against a stand-in for every
+    /// piece of material, each one a plain gradient sitting exactly where the real answer will
+    /// land. It goes through the same `bake` a real answer does, so a card that is wrong means a
+    /// template that is wrong — which is the only kind of preview worth showing.
+    ///
+    /// A whole `Project` comes back rather than a picture: the compositor lives in JavaScript, and
+    /// returning pixels would mean writing a second one here.
+    #[wasm_bindgen(js_name = templatePreview)]
+    pub fn template_preview(
+        template: JsValue,
+        frame: JsValue,
+    ) -> std::result::Result<JsValue, JsError> {
+        // Untrusted on the way back in, exactly like `fromTemplate`: nothing stops the host from
+        // editing a template between being handed one and asking for its picture.
+        let mut template: Template = serde_wasm_bindgen::from_value(template)?;
+        template.normalize().map_err(to_js)?;
+        let frame: Option<Frame> = serde_wasm_bindgen::from_value(frame)?;
+        to_js_value(&template.preview(frame).map_err(to_js)?)
     }
 
     /// A `.videolat` from disk.
@@ -186,14 +206,22 @@ impl WasmDocument {
 
     /// This project as a `.videolat`. Every medium it uses becomes a slot and stays behind, which
     /// is why there is no media map here.
+    ///
+    /// `marked` is the editor's selection: the clips the author wants to turn into questions. Null
+    /// means "decide for me". Media clips are questions either way -- the footage does not travel,
+    /// so a shot that was not a question would draw nothing.
     #[wasm_bindgen(js_name = saveAsTemplate)]
     pub fn save_as_template(
         &self,
         options: JsValue,
         id: String,
+        marked: JsValue,
     ) -> std::result::Result<Vec<u8>, JsError> {
+        let marked: Option<BTreeSet<ClipId>> = serde_wasm_bindgen::from_value(marked)?;
         let parsed: SaveOptions = serde_wasm_bindgen::from_value(options)?;
-        self.host.save_as_template(parsed, &id).map_err(to_js)
+        self.host
+            .save_as_template(parsed, &id, marked.as_ref())
+            .map_err(to_js)
     }
 }
 

@@ -112,15 +112,23 @@ the decoded result is compared frame by frame against what went in.
 
 ## Templates
 
-![The gallery and a baked template: three clips on the timeline, each the template's duration rather than the file's](/editor-templates.webp)
+![The template gallery: nine cards in five categories, each one a still rendered from the template itself](/editor-templates.webp)
 
 A template is the same container as a project with one extra entry, so the same bytes still open as
 a project. Pick one, answer the wizard, and what you get is an ordinary editable project — there is
-no template mode to leave. The gallery card draws the timeline the template will build, read off its
-own project, rather than a picture that claims a result.
+no template mode to leave.
 
-Four ship, none of them carrying footage, and each demonstrates something that really works rather
-than something that would look good in a screenshot.
+**Nine ship, in five categories, and not one of them carries a frame of video.** A template is a
+recipe, so each is built out of what the renderer can draw from a project file alone: the text
+generator with its entry, exit and loop moves, solids and gradients, the ten effects, the five
+transitions, masks, and keyframed transforms including a motion path. Your own material arrives
+through the placeholders. Between them the nine use every transition the renderer implements.
+
+The card is not a painting of a result — it is **rendered from the template**, through the same bake a
+real answer goes through, with a grey stand-in exactly where your footage will land. A painted card
+could show a look the renderer would never produce, and nobody would find out until after they had
+chosen. Costs one small picture per template, drawn one at a time while the gallery is already open;
+a preview project holds nothing but generators, so there is no decoding and no storage to read.
 
 ## On a phone
 

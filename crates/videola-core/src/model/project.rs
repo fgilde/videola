@@ -142,11 +142,20 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     speed_track_bounded(clip)?;
     match &mut clip.source {
         ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
+        // A generator's colour is read by `hex()` in generator.ts, which falls back to black or
+        // white for anything it cannot parse — the same silent reinterpretation
+        // `settings.background` is checked against, and now reachable from a template's colour
+        // slot as well as from a hand-written project.json.
         ClipSource::Generator {
-            generator: Generator::Gradient { angle, .. },
+            generator: Generator::Gradient { from, to, angle },
         } => {
             finite(*angle)?;
+            hex_color(from)?;
+            hex_color(to)?;
         }
+        ClipSource::Generator {
+            generator: Generator::Solid { color } | Generator::Shape { color, .. },
+        } => hex_color(color)?,
         ClipSource::Generator { .. } | ClipSource::Media { .. } => {}
     }
     normalize_effects(&mut clip.effects)
@@ -1049,6 +1058,38 @@ mod tests {
         let mut p: Project =
             serde_json::from_str(&project_json_with_settings(1920, 1080, 0)).unwrap();
         assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));
+    }
+
+    // A generator's colour is read by `hex()` in generator.ts, which falls back to black or white
+    // for anything it cannot parse -- so a typo becomes a colour rather than a message, exactly as
+    // `settings.background` used to. Reachable from a hand-written project.json and from a
+    // template's colour slot, which is why it is judged at the one gate both go through.
+    #[test]
+    fn a_generator_colour_that_is_not_a_hex_colour_fails_to_load() {
+        for generator in [
+            Generator::Solid {
+                color: "chartreuse".into(),
+            },
+            Generator::Gradient {
+                from: "#112233".into(),
+                to: "rebeccapurple".into(),
+                angle: 0.0,
+            },
+        ] {
+            let mut project = Project::default();
+            let mut track = Track::new(TrackKind::Video, "V1".into());
+            track.clips.push(Clip::new_generator(
+                generator,
+                Time::ZERO,
+                Time::from_seconds(1.0),
+            ));
+            project.timeline.tracks.push(track);
+
+            assert!(matches!(
+                project.normalize(),
+                Err(CoreError::InvalidArgument(_))
+            ));
+        }
     }
 
     #[test]

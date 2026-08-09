@@ -8,8 +8,8 @@ use ts_rs::TS;
 
 use crate::model::project::{dimension_bounded, finite, settings_bounded};
 use crate::model::{
-    Clip, ClipId, ClipSource, MediaAsset, MediaId, Project, ProjectId, ProjectSettings, Time,
-    Transform,
+    Clip, ClipId, ClipSource, Generator, MediaAsset, MediaId, MediaKind, Project, ProjectId,
+    ProjectSettings, Time, Transform,
 };
 use crate::{CoreError, Result};
 
@@ -24,6 +24,33 @@ const MAX_SLOTS: usize = 64;
 // Past four times slower a shot stops reading as slow motion and starts reading as a freeze, and
 // the honest answer is then "this file is too short", not a still that pretends to be a shot.
 const MIN_STRETCH_RATE: f32 = 0.25;
+
+// The material `preview` answers every media slot with, and the two greys it is drawn in. Long
+// enough that no slot can be short of it — a preview that slowed a clip down would be showing a
+// rhythm the template never asked for.
+const STAND_IN: &str = "med_preview_stand_in";
+const STAND_IN_SECONDS: f64 = 3_600.0;
+// Light enough to read as a filled rectangle against the card it sits on, and flat enough that
+// nobody mistakes it for a design decision. A stand-in darker than the surface behind it makes a
+// template whose material fills the frame look like an empty card, which is the worst thing a
+// gallery can do -- it hides the good templates behind the ones that happen to carry more text.
+const STAND_IN_FROM: &str = "#5d6675";
+const STAND_IN_TO: &str = "#343b46";
+const STAND_IN_ANGLES: [f32; 3] = [135.0, 45.0, 200.0];
+
+fn stand_in(frame: Frame) -> MediaAsset {
+    let mut asset = MediaAsset::new(
+        MediaId::from(STAND_IN.to_string()),
+        "preview".into(),
+        "video/mp4".into(),
+        MediaKind::Video,
+        0,
+    );
+    asset.duration = Some(Time::from_seconds(STAND_IN_SECONDS));
+    asset.width = Some(frame.width);
+    asset.height = Some(frame.height);
+    asset
+}
 
 /// A template as it lives in memory: the manifest that describes the questions, and the project
 /// that answers them. The two travel together because neither validates without the other — a
@@ -50,6 +77,11 @@ pub struct TemplateManifest {
     /// chosen at bake time, so a portrait entry costs the author nothing but this line.
     #[serde(default)]
     pub aspect_ratios: Vec<Frame>,
+    /// The instant the gallery draws its card from. An author picks it, because only the author
+    /// knows which second of their build is the one worth showing; there is no arithmetic that
+    /// reliably lands on it. Absent means the start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster_at: Option<Time>,
     pub slots: Vec<Slot>,
     pub steps: Vec<Step>,
 }
@@ -117,6 +149,12 @@ pub enum SlotBinding {
     ClipLabel { clip: ClipId },
     ProjectTitle,
     Background,
+    /// The words a text generator puts on the screen. The one binding that makes a template look
+    /// like the person who filled it in, rather than like the template.
+    GeneratorText { clip: ClipId },
+    /// The colour a generator is drawn in: a solid's fill, the first stop of a gradient, or the
+    /// ink of a title. One answer, one clip, whichever of the three it happens to be.
+    GeneratorColor { clip: ClipId },
 }
 
 /// The rectangle a clip's picture is placed in, as fractions of the frame with the origin at the
@@ -239,13 +277,102 @@ impl Template {
         Ok(project)
     }
 
-    /// The honest first half of the author mode: everything the project already uses becomes a
-    /// slot, and the material itself stays behind. No marking, no second editor mode — a project
-    /// whose footage anyone can swap is what a template is for.
-    pub fn from_project(project: &Project, id: &str) -> Result<Self> {
+    /// What the gallery draws its card from: the template baked against a stand-in for every piece
+    /// of material, where each stand-in is a plain gradient sitting in exactly the rectangle the
+    /// real answer will land in.
+    ///
+    /// Why bake rather than paint a picture of the timeline: a painted card is a promise with
+    /// nothing behind it — it can show a look the renderer would never produce. This one goes
+    /// through the same `bake` a real answer goes through, so if the card is wrong the template is
+    /// wrong. The stand-in is exactly the size of the frame, which is the size a generator is drawn
+    /// at, so the fit arithmetic puts the grey rectangle precisely where the footage goes.
+    pub fn preview(&self, frame: Option<Frame>) -> Result<Project> {
+        let frame = frame
+            .or_else(|| self.manifest.aspect_ratios.first().copied())
+            .unwrap_or(Frame {
+                width: self.project.settings.width,
+                height: self.project.settings.height,
+            });
+        dimension_bounded(frame.width)?;
+        dimension_bounded(frame.height)?;
+        let settings = ProjectSettings {
+            width: frame.width,
+            height: frame.height,
+            ..self.project.settings.clone()
+        };
+
+        let answers = self
+            .manifest
+            .slots
+            .iter()
+            .filter(|slot| slot.kind == SlotKind::Media)
+            .map(|slot| {
+                (
+                    slot.id.clone(),
+                    SlotAnswer::Media {
+                        asset: stand_in(frame),
+                    },
+                )
+            })
+            .collect();
+        let mut project = self.bake(&answers, Some(&settings))?;
+
+        // The ramp is turned a little further for each stand-in in turn. Two pictures side by side
+        // -- a split screen, an inset over a backdrop -- are two different pictures, and drawing
+        // both in exactly the same grey makes the seam between them disappear, which is the one
+        // thing those templates exist to show.
+        let mut nth = 0;
+        for track in &mut project.timeline.tracks {
+            for clip in &mut track.clips {
+                if !matches!(&clip.source, ClipSource::Media { media } if media.as_str() == STAND_IN)
+                {
+                    continue;
+                }
+                clip.source = ClipSource::Generator {
+                    generator: Generator::Gradient {
+                        from: STAND_IN_FROM.into(),
+                        to: STAND_IN_TO.into(),
+                        angle: STAND_IN_ANGLES[nth % STAND_IN_ANGLES.len()],
+                    },
+                };
+                nth += 1;
+                // A stand-in is never too short, so any slowing left over from the bake would be a
+                // rate this preview invented rather than one the template asked for.
+                clip.speed.rate = 1.0;
+            }
+        }
+        project.library.retain(|asset| asset.id.as_str() != STAND_IN);
+        project.normalize()?;
+        Ok(project)
+    }
+
+    /// A project becomes a template. `marked` is the author's own choice of which clips turn into
+    /// questions — the editor's selection, which is marking a clip without inventing a second way
+    /// to mark one. `None` means "decide for me".
+    ///
+    /// What marking can and cannot decide, honestly:
+    ///
+    /// * **Media clips are always slots, marked or not.** The footage stays with whoever made it,
+    ///   so a media clip that was not a question would point at material no copy of the template
+    ///   carries — it would draw nothing at all. There is no version of "leave this shot as it is"
+    ///   that does not mean shipping the shot.
+    /// * **Text generators are a real choice.** An unmarked title simply keeps its words, because a
+    ///   generator is its own material; marking one turns it into a field in the wizard. With
+    ///   nothing marked, every title becomes a field, which is what someone sharing a title
+    ///   sequence wants.
+    /// * **A marked solid or gradient becomes a colour question.** Unmarked ones never do: one
+    ///   colour field per coloured clip would be a wall of questions about a design nobody asked to
+    ///   change.
+    pub fn from_project(
+        project: &Project,
+        id: &str,
+        marked: Option<&BTreeSet<ClipId>>,
+    ) -> Result<Self> {
         let mut stripped = project.clone();
         let mut slots = Vec::new();
         let mut media_slots = Vec::new();
+        let mut text_slots = Vec::new();
+        let mut color_slots = Vec::new();
 
         for (index, media) in used_media(project).into_iter().enumerate() {
             let bindings = clips_using(project, &media)
@@ -270,6 +397,52 @@ impl Template {
             });
         }
 
+        // With nothing marked, every title is a question; with something marked, only what was
+        // marked is. Either way the hint is the words the clip carries today, because "which of my
+        // four titles is this?" is the only question an author of a template ever has about it.
+        for (index, (clip, generator)) in generator_clips(project).into_iter().enumerate() {
+            let wanted = marked.is_none_or(|chosen| chosen.contains(&clip));
+            match generator {
+                Generator::Text { content, .. } if wanted => {
+                    let slot_id = format!("text{}", index + 1);
+                    text_slots.push(slot_id.clone());
+                    slots.push(Slot {
+                        id: slot_id,
+                        kind: SlotKind::Text,
+                        label: Localized::new(
+                            &format!("Text {}", index + 1),
+                            &format!("Text {}", index + 1),
+                        ),
+                        hint: Localized::same(&first_line(content)),
+                        required: false,
+                        bindings: vec![SlotBinding::GeneratorText { clip }],
+                    });
+                }
+                Generator::Solid { .. } | Generator::Gradient { .. }
+                    if wanted && marked.is_some() =>
+                {
+                    let slot_id = format!("colour{}", index + 1);
+                    color_slots.push(slot_id.clone());
+                    slots.push(Slot {
+                        id: slot_id,
+                        kind: SlotKind::Color,
+                        label: Localized::new(
+                            &format!("Farbe {}", index + 1),
+                            &format!("Colour {}", index + 1),
+                        ),
+                        hint: Localized::new(
+                            "Die Farbe dieser Fläche.",
+                            "The colour of this field.",
+                        ),
+                        required: false,
+                        bindings: vec![SlotBinding::GeneratorColor { clip }],
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        text_slots.push("title".into());
         slots.push(Slot {
             id: "title".into(),
             kind: SlotKind::Text,
@@ -278,6 +451,7 @@ impl Template {
             required: false,
             bindings: vec![SlotBinding::ProjectTitle],
         });
+        color_slots.push("background".into());
         slots.push(Slot {
             id: "background".into(),
             kind: SlotKind::Color,
@@ -307,16 +481,18 @@ impl Template {
                     width: project.settings.width,
                     height: project.settings.height,
                 }],
-                steps: vec![
-                    Step {
-                        title: Localized::new("Material", "Footage"),
-                        slots: media_slots,
-                    },
-                    Step {
-                        title: Localized::new("Feinschliff", "Finishing"),
-                        slots: vec!["title".into(), "background".into()],
-                    },
-                ],
+                poster_at: None,
+                // A step per kind of question, and no empty ones: a project with no footage in it
+                // must not open the wizard on a panel with nothing on it.
+                steps: [
+                    (Localized::new("Ihr Material", "Your footage"), media_slots),
+                    (Localized::new("Ihre Worte", "Your words"), text_slots),
+                    (Localized::new("Ihre Farbe", "Your colour"), color_slots),
+                ]
+                .into_iter()
+                .filter(|(_, ids)| !ids.is_empty())
+                .map(|(title, ids)| Step { title, slots: ids })
+                .collect(),
                 slots,
             },
             project: stripped,
@@ -379,6 +555,15 @@ fn check_slot(slot: &Slot, project: &Project) -> Result<()> {
             (SlotKind::Text, SlotBinding::ClipLabel { clip }) => find_clip(project, clip).is_some(),
             (SlotKind::Text, SlotBinding::ProjectTitle) => true,
             (SlotKind::Color, SlotBinding::Background) => true,
+            // Named against the clip's actual generator, not merely against a clip that exists: a
+            // text answer written into a solid colour would vanish without a word, and the wizard
+            // would have asked a question whose answer goes nowhere.
+            (SlotKind::Text, SlotBinding::GeneratorText { clip }) => {
+                matches!(generator_of(project, clip), Some(Generator::Text { .. }))
+            }
+            (SlotKind::Color, SlotBinding::GeneratorColor { clip }) => {
+                generator_of(project, clip).is_some_and(recolourable)
+            }
             _ => false,
         };
         if !allowed {
@@ -412,13 +597,15 @@ fn check_steps(steps: &[Step], slots: &BTreeSet<&str>) -> Result<()> {
     Ok(())
 }
 
-// The rule that keeps a template from being a gallery entry with nothing in it: a clip either
-// takes its material from a slot, or the template brought that material along itself.
+// The rule that keeps a template from being a gallery entry with nothing in it: every clip has to
+// be something a viewer will actually see. A media clip either takes its material from a slot or
+// the template brought that material along itself; a generator clip has to be one the renderer
+// paints.
 //
-// Generator and compound clips are refused outright rather than waved through. `drawList` drops
-// both today (see `sourceSize` in draw-list.ts), so a template built on them would look complete
-// in the timeline and be blank on the screen. The rule relaxes on its own the day generators
-// render; until then this is the difference between a template and a promise.
+// This is the rule that lets a template be a *build* rather than a film. There is no footage in
+// this repository and there is never going to be any, so what a template shows on its own is text,
+// colour and movement — and that is only worth anything if the gate below insists the renderer can
+// draw it.
 fn check_every_clip_has_a_source(project: &Project, slots: &[Slot]) -> Result<()> {
     let filled: BTreeSet<&ClipId> = slots.iter().flat_map(|slot| slot.media_clips()).collect();
     for track in &project.timeline.tracks {
@@ -434,11 +621,20 @@ fn check_every_clip_has_a_source(project: &Project, slots: &[Slot]) -> Result<()
                         )));
                     }
                 }
-                _ => {
-                    return Err(invalid(
-                        "a template may only use media clips; generators and compound clips \
-                         render nothing in this version",
-                    ))
+                ClipSource::Generator { generator } => {
+                    if !paints(generator) {
+                        return Err(invalid(&format!(
+                            "clip {} uses a generator this version draws nothing for",
+                            clip.id
+                        )));
+                    }
+                }
+                // Still refused. A compound clip carries a whole second timeline, and every clip
+                // inside it would need the same slot-or-material proof this loop gives the top
+                // level. Nothing in the shipped set wants one, so the honest answer is no rather
+                // than a check that only looks like it recurses.
+                ClipSource::Compound { .. } => {
+                    return Err(invalid("a template may not use a compound clip"))
                 }
             }
         }
@@ -475,6 +671,12 @@ fn apply(project: &mut Project, slot: &Slot, answer: &SlotAnswer, frame: Frame) 
                             found.label = Some(text.clone());
                         }
                     }
+                    SlotBinding::GeneratorText { clip } => {
+                        if let Some(Generator::Text { content, .. }) = generator_of_mut(project, clip)
+                        {
+                            *content = text.clone();
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -483,7 +685,17 @@ fn apply(project: &mut Project, slot: &Slot, answer: &SlotAnswer, frame: Frame) 
         (SlotKind::Color, SlotAnswer::Color { color }) => {
             // Not checked here: `Project::normalize` at the end of bake is the one place a colour
             // is judged, so a hand-written project.json and a wizard answer cannot disagree.
-            project.settings.background = color.clone();
+            for binding in &slot.bindings {
+                match binding {
+                    SlotBinding::Background => project.settings.background = color.clone(),
+                    SlotBinding::GeneratorColor { clip } => {
+                        if let Some(generator) = generator_of_mut(project, clip) {
+                            recolour(generator, color);
+                        }
+                    }
+                    _ => {}
+                }
+            }
             Ok(())
         }
         _ => Err(invalid(&format!(
@@ -586,6 +798,48 @@ fn drop_clips(project: &mut Project, ids: &BTreeSet<ClipId>) {
     }
 }
 
+fn generator_of<'p>(project: &'p Project, id: &ClipId) -> Option<&'p Generator> {
+    match &find_clip(project, id)?.source {
+        ClipSource::Generator { generator } => Some(generator),
+        _ => None,
+    }
+}
+
+fn generator_of_mut<'p>(project: &'p mut Project, id: &ClipId) -> Option<&'p mut Generator> {
+    match &mut find_clip_mut(project, id)?.source {
+        ClipSource::Generator { generator } => Some(generator),
+        _ => None,
+    }
+}
+
+// Which generators the renderer actually puts on a screen (`paintsGenerator` in generator.ts). A
+// shape or a countdown is dropped from the draw list without a word, so a template built on one
+// would look complete in the timeline and be blank on the screen — the same rule that used to
+// refuse every generator, now applied to the two that are still true of.
+fn paints(generator: &Generator) -> bool {
+    matches!(
+        generator,
+        Generator::Text { .. } | Generator::Solid { .. } | Generator::Gradient { .. }
+    )
+}
+
+// Every generator that paints has exactly one colour a person would call *its* colour: a solid's
+// fill, the stop a gradient starts from, the ink of a title.
+fn recolourable(generator: &Generator) -> bool {
+    paints(generator)
+}
+
+fn recolour(generator: &mut Generator, color: &str) {
+    match generator {
+        Generator::Solid { color: fill } => *fill = color.to_string(),
+        Generator::Gradient { from, .. } => *from = color.to_string(),
+        Generator::Text { style, .. } => {
+            style.insert("color".into(), json!(color));
+        }
+        _ => {}
+    }
+}
+
 fn find_clip<'p>(project: &'p Project, id: &ClipId) -> Option<&'p Clip> {
     project
         .timeline
@@ -627,6 +881,29 @@ fn clips_using(project: &Project, media: &MediaId) -> Vec<ClipId> {
         .filter(|clip| matches!(&clip.source, ClipSource::Media { media: id } if id == media))
         .map(|clip| clip.id.clone())
         .collect()
+}
+
+fn generator_clips(project: &Project) -> Vec<(ClipId, &Generator)> {
+    project
+        .timeline
+        .tracks
+        .iter()
+        .flat_map(|track| &track.clips)
+        .filter_map(|clip| match &clip.source {
+            ClipSource::Generator { generator } => Some((clip.id.clone(), generator)),
+            _ => None,
+        })
+        .collect()
+}
+
+// A hint is one line in a wizard panel. A title over three lines, or one long enough to push the
+// field off the panel, would make the hint the loudest thing about the question it explains.
+fn first_line(content: &str) -> String {
+    let line = content.lines().next().unwrap_or("").trim();
+    match line.char_indices().nth(48) {
+        Some((cut, _)) => format!("{}…", &line[..cut]),
+        None => line.to_string(),
+    }
 }
 
 fn original_name(project: &Project, media: &MediaId) -> String {
@@ -707,6 +984,7 @@ mod tests {
                     width: 1920,
                     height: 1080,
                 }],
+                poster_at: None,
                 slots: vec![Slot {
                     id: "shot".into(),
                     kind: SlotKind::Media,
@@ -1091,6 +1369,179 @@ mod tests {
         ));
     }
 
+    // The two bindings that make a template look like the person who filled it in. Both are checked
+    // against the clip's actual generator rather than merely against a clip that exists: a text
+    // answer written into a solid colour would vanish without a word, and the wizard would have
+    // asked a question whose answer goes nowhere.
+    fn generator_template(generator: Generator) -> Template {
+        let mut template = one_slot_template();
+        template.manifest.slots.clear();
+        template.manifest.steps[0].slots.clear();
+        template.project.timeline.tracks[0].clips[0].source = ClipSource::Generator { generator };
+        template
+    }
+
+    fn with_slot(mut template: Template, kind: SlotKind, binding: SlotBinding) -> Template {
+        template.manifest.slots.push(Slot {
+            id: "answer".into(),
+            kind,
+            label: Localized::same("Answer"),
+            hint: Localized::same(""),
+            required: false,
+            bindings: vec![binding],
+        });
+        template.manifest.steps[0].slots.push("answer".into());
+        template
+    }
+
+    #[test]
+    fn a_text_slot_bound_to_a_text_generator_is_accepted_and_writes_its_words_in() {
+        let mut template = with_slot(
+            generator_template(Generator::Text {
+                content: "shipped words".into(),
+                style: BTreeMap::new(),
+            }),
+            SlotKind::Text,
+            SlotBinding::GeneratorText {
+                clip: ClipId::from("clp_a".to_string()),
+            },
+        );
+        assert!(template.normalize().is_ok());
+
+        let baked = template
+            .bake(
+                &answers(&[(
+                    "answer",
+                    SlotAnswer::Text {
+                        text: "my words".into(),
+                    },
+                )]),
+                None,
+            )
+            .unwrap();
+
+        let ClipSource::Generator {
+            generator: Generator::Text { content, .. },
+        } = &baked.timeline.tracks[0].clips[0].source
+        else {
+            unreachable!()
+        };
+        assert_eq!(content, "my words");
+    }
+
+    #[test]
+    fn a_text_slot_bound_to_a_generator_that_draws_no_words_is_refused() {
+        let mut template = with_slot(
+            generator_template(Generator::Solid {
+                color: "#ff0000".into(),
+            }),
+            SlotKind::Text,
+            SlotBinding::GeneratorText {
+                clip: ClipId::from("clp_a".to_string()),
+            },
+        );
+
+        assert!(matches!(
+            template.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn a_generator_binding_naming_a_media_clip_is_refused() {
+        let mut template = one_slot_template();
+        template.manifest.slots.push(Slot {
+            id: "words".into(),
+            kind: SlotKind::Text,
+            label: Localized::same("Words"),
+            hint: Localized::same(""),
+            required: false,
+            bindings: vec![SlotBinding::GeneratorText {
+                clip: ClipId::from("clp_a".to_string()),
+            }],
+        });
+        template.manifest.steps[0].slots.push("words".into());
+
+        assert!(matches!(
+            template.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn a_colour_answer_reaches_a_solid_and_meets_the_same_gate_a_background_does() {
+        let mut template = with_slot(
+            generator_template(Generator::Solid {
+                color: "#ff0000".into(),
+            }),
+            SlotKind::Color,
+            SlotBinding::GeneratorColor {
+                clip: ClipId::from("clp_a".to_string()),
+            },
+        );
+        assert!(template.normalize().is_ok());
+
+        let baked = template
+            .bake(
+                &answers(&[(
+                    "answer",
+                    SlotAnswer::Color {
+                        color: "#00ff00".into(),
+                    },
+                )]),
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            baked.timeline.tracks[0].clips[0].source,
+            ClipSource::Generator {
+                generator: Generator::Solid {
+                    color: "#00ff00".into()
+                }
+            }
+        );
+
+        // The same colour check `settings.background` meets, because the compositor reads an
+        // unparsable generator colour as black just as silently.
+        assert!(template
+            .bake(
+                &answers(&[(
+                    "answer",
+                    SlotAnswer::Color {
+                        color: "chartreuse".into(),
+                    },
+                )]),
+                None,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn a_preview_falls_back_to_the_projects_own_frame_when_a_template_offers_none() {
+        let mut template = one_slot_template();
+        template.manifest.aspect_ratios.clear();
+        template.project.settings.width = 1234;
+        template.project.settings.height = 720;
+
+        let preview = template.preview(None).unwrap();
+
+        assert_eq!(preview.settings.width, 1234);
+        assert_eq!(preview.settings.height, 720);
+    }
+
+    // A preview is a picture, not a document: it must not leave behind a library entry naming
+    // material that exists nowhere, because that entry would follow the project if anyone saved it.
+    #[test]
+    fn a_preview_keeps_no_stand_in_in_the_library() {
+        let preview = one_slot_template().preview(None).unwrap();
+
+        assert!(preview.library.is_empty());
+        assert!(matches!(
+            preview.timeline.tracks[0].clips[0].source,
+            ClipSource::Generator { .. }
+        ));
+    }
+
     #[test]
     fn a_slot_no_step_asks_about_is_refused() {
         let mut template = one_slot_template();
@@ -1164,15 +1615,55 @@ mod tests {
         assert!(template.normalize().is_ok());
     }
 
+    // A generator needs no slot and no library entry: it *is* its own material. This is what lets
+    // a template show something before anyone has chosen a file, which is the whole of what a
+    // gallery card can honestly be.
     #[test]
-    fn a_generator_clip_is_refused_because_this_version_draws_none() {
+    fn a_generator_clip_the_renderer_paints_needs_neither_a_slot_nor_material() {
         let mut template = one_slot_template();
         template.manifest.slots.clear();
         template.manifest.steps[0].slots.clear();
         template.project.timeline.tracks[0].clips[0].source = ClipSource::Generator {
-            generator: crate::model::Generator::Solid {
+            generator: Generator::Solid {
                 color: "#ff0000".into(),
             },
+        };
+
+        assert!(template.normalize().is_ok());
+    }
+
+    // The half of that rule that has not moved: `paintsGenerator` in generator.ts draws neither a
+    // shape nor a countdown, and `sourceSize` drops the clip out of the draw list without a word.
+    // A template built on one would look complete in the timeline and be blank on the screen.
+    #[test]
+    fn a_generator_clip_the_renderer_draws_nothing_for_is_still_refused() {
+        for generator in [
+            Generator::Shape {
+                shape: "circle".into(),
+                color: "#ff0000".into(),
+            },
+            Generator::Countdown { from_seconds: 5 },
+        ] {
+            let mut template = one_slot_template();
+            template.manifest.slots.clear();
+            template.manifest.steps[0].slots.clear();
+            template.project.timeline.tracks[0].clips[0].source =
+                ClipSource::Generator { generator };
+
+            assert!(matches!(
+                template.normalize(),
+                Err(CoreError::InvalidArgument(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn a_compound_clip_is_still_refused_because_nothing_proves_what_is_inside_it() {
+        let mut template = one_slot_template();
+        template.manifest.slots.clear();
+        template.manifest.steps[0].slots.clear();
+        template.project.timeline.tracks[0].clips[0].source = ClipSource::Compound {
+            timeline: Box::default(),
         };
 
         assert!(matches!(
@@ -1253,7 +1744,7 @@ mod tests {
         }
         project.timeline.tracks.push(track);
 
-        let template = Template::from_project(&project, "mine").unwrap();
+        let template = Template::from_project(&project, "mine", None).unwrap();
 
         assert!(template.project.library.is_empty());
         let media_slots: Vec<&Slot> = template
@@ -1268,6 +1759,134 @@ mod tests {
         assert_eq!(template.manifest.name.de, "Urlaub");
     }
 
+    // Author mode: which clips become questions. What the author can decide, and what they cannot.
+    fn project_with_two_titles() -> Project {
+        let mut project = Project::default();
+        let mut track = Track::new(TrackKind::Text, "T1".into());
+        for (id, words) in [("clp_head", "Kopfzeile"), ("clp_foot", "Fusszeile")] {
+            let mut clip = Clip::new_generator(
+                Generator::Text {
+                    content: words.into(),
+                    style: BTreeMap::new(),
+                },
+                Time::ZERO,
+                Time::from_seconds(2.0),
+            );
+            clip.id = ClipId::from(id.to_string());
+            clip.start = if id == "clp_foot" {
+                Time::from_seconds(2.0)
+            } else {
+                Time::ZERO
+            };
+            track.clips.push(clip);
+        }
+        project.timeline.tracks.push(track);
+        project
+    }
+
+    fn slot_ids(template: &Template, kind: SlotKind) -> Vec<String> {
+        template
+            .manifest
+            .slots
+            .iter()
+            .filter(|slot| slot.kind == kind)
+            .map(|slot| slot.id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn with_nothing_marked_every_title_in_the_project_becomes_a_question() {
+        let template = Template::from_project(&project_with_two_titles(), "mine", None).unwrap();
+
+        // Two titles plus the project's own name.
+        assert_eq!(slot_ids(&template, SlotKind::Text).len(), 3);
+        assert!(slot_ids(&template, SlotKind::Media).is_empty());
+    }
+
+    #[test]
+    fn marking_one_clip_leaves_the_other_ones_words_alone() {
+        let marked = BTreeSet::from([ClipId::from("clp_head".to_string())]);
+
+        let template =
+            Template::from_project(&project_with_two_titles(), "mine", Some(&marked)).unwrap();
+
+        // The marked title and the project name; the unmarked one keeps the words it has, which is
+        // legal precisely because a generator is its own material.
+        assert_eq!(slot_ids(&template, SlotKind::Text), vec!["text1", "title"]);
+        assert_eq!(
+            template.manifest.slots[0].bindings,
+            vec![SlotBinding::GeneratorText {
+                clip: ClipId::from("clp_head".to_string())
+            }]
+        );
+        // And the unanswered one still draws: the gate would refuse it otherwise.
+        let baked = template.bake(&BTreeMap::new(), None).unwrap();
+        let ClipSource::Generator {
+            generator: Generator::Text { content, .. },
+        } = &baked.timeline.tracks[0].clips[1].source
+        else {
+            unreachable!()
+        };
+        assert_eq!(content, "Fusszeile");
+    }
+
+    // The one thing marking cannot decide. The footage does not travel with a template, so a media
+    // clip that was not a question would point at material no copy of the file carries.
+    #[test]
+    fn a_media_clip_is_a_question_whether_it_was_marked_or_not() {
+        let mut project = project_with_two_titles();
+        let asset = asset(5.0, 1920, 1080);
+        project.library.push(asset.clone());
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(asset.id, Time::ZERO, Time::from_seconds(2.0));
+        clip.id = ClipId::from("clp_shot".to_string());
+        track.clips.push(clip);
+        project.timeline.tracks.push(track);
+        let marked = BTreeSet::from([ClipId::from("clp_head".to_string())]);
+
+        let template = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+
+        assert_eq!(slot_ids(&template, SlotKind::Media), vec!["media1"]);
+        assert!(template.project.library.is_empty());
+    }
+
+    #[test]
+    fn a_marked_colour_field_becomes_a_colour_question_and_an_unmarked_one_does_not() {
+        let mut project = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_generator(
+            Generator::Solid {
+                color: "#123456".into(),
+            },
+            Time::ZERO,
+            Time::from_seconds(2.0),
+        );
+        clip.id = ClipId::from("clp_field".to_string());
+        track.clips.push(clip);
+        project.timeline.tracks.push(track);
+
+        let untouched = Template::from_project(&project, "mine", None).unwrap();
+        // Only the background: one colour field per coloured clip would be a wall of questions.
+        assert_eq!(slot_ids(&untouched, SlotKind::Color), vec!["background"]);
+
+        let marked = BTreeSet::from([ClipId::from("clp_field".to_string())]);
+        let chosen = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+        assert_eq!(slot_ids(&chosen, SlotKind::Color), vec!["colour1", "background"]);
+    }
+
+    // A project with no footage at all must not open the wizard on a panel with nothing on it.
+    #[test]
+    fn a_template_made_from_a_project_without_footage_has_no_empty_step() {
+        let template = Template::from_project(&project_with_two_titles(), "mine", None).unwrap();
+
+        assert!(template
+            .manifest
+            .steps
+            .iter()
+            .all(|step| !step.slots.is_empty()));
+        assert_eq!(template.manifest.steps.len(), 2);
+    }
+
     #[test]
     fn a_saved_template_bakes_back_into_a_project_with_the_new_material_in_place() {
         let mut project = Project::default();
@@ -1279,7 +1898,7 @@ mod tests {
         track.clips.push(clip);
         project.timeline.tracks.push(track);
 
-        let template = Template::from_project(&project, "mine").unwrap();
+        let template = Template::from_project(&project, "mine", None).unwrap();
         let replacement = asset(9.0, 640, 480);
         let baked = template
             .bake(
