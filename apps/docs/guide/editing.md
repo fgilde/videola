@@ -1,7 +1,7 @@
 # Editing
 
 This page describes what the editing surface does today. Anything not listed here does not exist
-yet — there is no export in the application.
+yet.
 
 ![The editor with a decoded frame in the preview](/editor-desktop.webp)
 
@@ -26,8 +26,9 @@ Everything the project holds, with its length, its size in pixels and its sample
 timeline** puts a medium behind whatever is already on the first track of its kind — the same place
 an import lands, so a medium can be placed as often as you like without importing it again.
 
-There are no thumbnails and no waveform. `packages/media` computes neither, and a grey rectangle
-where a picture belongs would be a promise the application cannot keep.
+Each entry carries a thumbnail decoded from the file itself, and audio clips draw their waveform
+from the buffers the graph already decoded — no second decode, and a reversed clip shows itself the
+way it plays.
 
 ### When the bytes are gone
 

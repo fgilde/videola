@@ -1,7 +1,6 @@
 # Schneiden
 
-Diese Seite beschreibt, was die Oberfläche heute kann. Was hier nicht steht, gibt es noch nicht —
-es gibt keinen Export in der Anwendung.
+Diese Seite beschreibt, was die Oberfläche heute kann. Was hier nicht steht, gibt es noch nicht.
 
 ![Der Editor mit einem dekodierten Bild in der Vorschau](/editor-desktop.webp)
 
@@ -27,9 +26,9 @@ Alles, was im Projekt liegt, mit Länge, Maßen in Pixeln und Abtastrate. **Auf 
 ein Medium hinter das, was auf der ersten Spur seiner Art schon liegt — dieselbe Stelle, an der ein
 Import landet. Ein Medium lässt sich so beliebig oft platzieren, ohne es erneut zu importieren.
 
-Es gibt keine Vorschaubilder und keine Waveform. `packages/media` rechnet weder das eine noch das
-andere, und ein graues Rechteck an der Stelle eines Bildes wäre ein Versprechen, das die Anwendung
-nicht halten kann.
+Jeder Eintrag trägt ein Vorschaubild, das aus der Datei selbst dekodiert wurde, und Tonclips zeichnen
+ihre Waveform aus den Puffern, die der Graph ohnehin dekodiert hat — kein zweites Dekodieren, und ein
+rückwärts laufender Clip zeigt sich so, wie er klingt.
 
 ### Wenn die Bytes fehlen
 
