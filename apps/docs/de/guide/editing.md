@@ -208,25 +208,77 @@ Command setzt sie — ein Schieber dort würde nichts schreiben.
 
 ### Keyframes
 
-Eine Parameterzeile eines **Effekts** trägt einen Keyframe-Schalter, Pfeile zum vorherigen und
-nächsten Keyframe und — wo einer unter dem Playhead sitzt — eine Auswahl für den Verlauf danach:
-linear, halten oder weich. Der Schalter setzt am Playhead einen Keyframe oder löscht den dortigen.
+Jede Parameterzeile — die eines **Effektparameters** wie die jedes **Transformationsfelds** — trägt
+einen Keyframe-Schalter, Pfeile zum vorherigen und nächsten Keyframe und, wo einer unter dem
+Playhead sitzt, eine Auswahl für den Verlauf danach: linear, halten oder weich. Der Schalter setzt
+am Playhead einen Keyframe oder löscht den dortigen. Eine Zeile, deren Parameter irgendwo auf der
+Zeitleiste Keyframes hat, trägt eine Raute neben der Beschriftung: die drei Schalter melden immer
+nur den Playhead, und eine anderswo animierte Zeile sah aus wie eine nirgends animierte.
 
-Der Wert in der Zeile ist der, den `Effect::param_at` für diesen Zeitpunkt liefert, erfragt über
-`doc.effectParamsAt`, nie eine eigene Rechnung. Eine Interpolation in TypeScript gäbe Vorschau und
-Export zwei verschiedene Antworten auf dieselbe Frage.
+Der Wert in der Zeile ist der, den der Kern für diesen Zeitpunkt liefert — `Effect::param_at` über
+`doc.effectParamsAt`, `Clip::transform_at` über `doc.transformsAt` —, nie eine eigene Rechnung. Eine
+Interpolation in TypeScript gäbe Vorschau und Export zwei verschiedene Antworten auf dieselbe Frage.
+Welchen Befehl eine Transformationszeile schickt, steht unter [Eine Transformation
+keyframen](./commands-and-undo.md#eine-transformation-keyframen).
 
 Sobald ein Parameter gekeyframed ist, schreibt der Schieber Keyframes statt des statischen Werts,
 und zwar am Playhead. `keyframe.add` ist ein Upsert, und genau das macht einen Zug zu einem
-Undo-Schritt. Steht der Playhead außerhalb des Clips, sind die Keyframe-Bedienelemente gesperrt: ein
-dort geschriebener Keyframe wird für diesen Clip nie ausgewertet, der Schalter würde also einen
-Zustand melden, den kein Bild je zeigt.
+Undo-Schritt; es ersetzt Wert und Verlauf des dortigen Keyframes und lässt dessen Bezier-Anfasser
+stehen, denn kein Befehl trägt ein Anfasserpaar, und es zu zerstören wäre das Einzige, was ein
+Upsert damit sonst tun könnte. Steht der Playhead außerhalb des Clips, sind die
+Keyframe-Bedienelemente gesperrt: ein dort geschriebener Keyframe wird für diesen Clip nie
+ausgewertet, der Schalter würde also einen Zustand melden, den kein Bild je zeigt.
 
-**Die Transformation lässt sich ebenfalls keyframen, der Inspector bietet es nur noch nicht an.**
-Der Kern löst `Clip::keyframes` auf, und die Zeichenliste platziert das Bild aus dem aufgelösten
-Wert — der Schalter schriebe also Daten, die ein Bild wirklich zeigt. Es fehlt die Oberfläche: eine
-Zeile je Transformationsfeld mit demselben Schalter, den eine Effektparameterzeile trägt. Die
-Lautstärke bleibt unanimiert, dort fehlt tatsächlich noch die Auswertung.
+Zwei Zeilen tragen gar keinen Schalter. Wo ein Clip einen **Bewegungspfad** hat, löst der Kern `x`
+und `y` aus ihm auf und ignoriert, was die beiden Felder halten — ein dort geschriebener Keyframe
+würde gespeichert, gesichert und wieder geladen, ohne je ein Pixel zu erreichen. Aus demselben Grund
+ist **Ins Bild einpassen** stillgelegt, solange die Platzierung, die es schriebe — `x`, `y`, eine
+der beiden Skalierungen oder der Pfad —, auf der Uhr ist.
+
+Die Lautstärke bleibt unanimiert, dort fehlt tatsächlich noch die Auswertung.
+
+### Die Keyframe-Spur
+
+Unter den Spuren, innerhalb des scrollenden Bereichs der Zeitleiste, liegt eine Spur mit den
+Keyframes des ausgewählten Clips: eine Zeile je Keyframe-Spur, benannt wie die Eigenschaften sie
+benennen, mit einem Punkt je Keyframe und dem Abstand zwischen zwei Punkten in der Form des
+Verlaufs, der ihn zeitlich steuert — durchgezogen für linear, unterbrochen für halten, an beiden
+Enden verblassend für weich.
+
+Sie sitzt in der Zeitleiste und nicht in den Eigenschaften, damit es in der ganzen Anwendung eine
+Umrechnung zwischen Pixeln und Zeit gibt und nicht zwei. Spur, Lineal, Clips und Playhead werden
+alle von `timeToX` aus demselben `flicksPerPixel` und demselben Scroll-Versatz gesetzt, ein Keyframe
+steht also bauartbedingt auf dem Lineal-Strich seiner eigenen Zeit und nicht per Absprache. Eine
+Spur in den Eigenschaften bräuchte eine zweite Achse über die Breite des Bereichs, einen eigenen
+Scroll und einen eigenen Playhead — zwei Antworten auf „wo ist jetzt", und das ist das Einzige, was
+sich ein Keyframe-Editor nicht leisten kann. Keyframe-Zeiten sind im Modell absolute
+Zeitleistenzeit, dieselben Zeitpunkte, die der Playhead meldet; zwischen beiden Enden wird nichts
+umgerechnet.
+
+Ein Druck wählt einen Punkt aus, ein Zug verschiebt ihn. Es ist derselbe Zeigerpfad, den Clips
+benutzen — er funktioniert also mit Maus und Finger ohne zweiten Codepfad, das Einrasten gilt (mit
+<kbd>Alt</kbd> ausgesetzt), und ein Zug ist ein Eintrag im Verlauf. Ein Zug klemmt an den Kanten des
+Clips, weil ein Keyframe außerhalb des Clips für ihn nie ausgewertet wird — und weil die Klemme den
+Kern davon abhält, einmal pro Zeigerbewegung abzulehnen, woraus ein an seiner Grenze gehaltener
+Trimm einmal neun rote Banner in einem einzigen Zug gemacht hat.
+
+Über der Spur steht, solange ein Keyframe ausgewählt ist, eine Leiste mit dem, worauf dieser
+Keyframe eingestellt ist: der Name seines Parameters, der Verlauf des bei ihm beginnenden Abschnitts
+und ein Löschknopf. Die Leiste sitzt außerhalb des scrollenden Bereichs, damit sie bei einem langen
+Projekt erreichbar bleibt, und der Knopf ist da, weil ein Finger keine <kbd>Entf</kbd>-Taste hat.
+Mit ausgewähltem Keyframe löscht <kbd>Entf</kbd> diesen Keyframe und nicht den Clip darunter.
+
+Zeilen, die ein Bewegungspfad übernommen hat, sind durchgestrichen und mit *vom Pfad überschrieben*
+gekennzeichnet. Versteckt werden sie nicht: die Keyframes stehen weiterhin in der Datei, und die
+Spur ist dazu da, zu zeigen, was gespeichert ist.
+
+**Was fehlt, ist ein Kurveneditor.** Das Modell trägt `handle_in` und `handle_out` je Keyframe, und
+`Interp::Bezier` schickt sie durch eine kubische Bezier — aber kein Befehl setzt sie, und hier kann
+niemand einen Anfasser ziehen. Die drei benannten Voreinstellungen sind alles, was diese Oberfläche
+schreibt. Ein Projekt, das mit Anfassern ankommt, behält sie und behält seine Form; es lässt sich
+hier nur nicht umformen. Die Abschnittsformen sagen, welcher Verlauf einen Abstand steuert; sie
+zeichnen die Kurve nicht, und sie zu zeichnen hieße, den Kern nach Abtastwerten zu fragen statt sie
+zu rechnen — aus demselben Grund, aus dem die Zeilen aufgelöste Werte lesen.
 
 ## Wiedergabe
 

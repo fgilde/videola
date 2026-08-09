@@ -434,6 +434,11 @@
   padding: 0;
   background: none;
   border: none;
+  /* A button does not inherit its colour: the user agent hands it `buttontext`, and that beat the
+     row's accent every time. The diamond then drew its outline in near-black on a near-black lane,
+     and only the picked one -- which sets a colour of its own -- could be seen at all. Found by
+     looking at the screenshot; no measurement in any harness had an opinion about it. */
+  color: inherit;
   cursor: pointer;
   touch-action: none;
   z-index: 1;

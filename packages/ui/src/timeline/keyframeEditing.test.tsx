@@ -190,6 +190,17 @@ describe("the keyframe lane", () => {
     ]);
   });
 
+  // Otherwise the lane only ever appears to somebody who has already found the switch that makes
+  // it appear, and there is nothing on screen saying where keyframes come from.
+  it("says where keyframes come from on a clip that has none", async () => {
+    const { doc } = await sceneWithKeyframes([]);
+    render(<Harness doc={doc} />);
+    down(clipElement(), { clientX: 100 });
+
+    expect(keys()).toHaveLength(0);
+    expect(screen.getByTestId("keyframe-lane").textContent).toContain("noch keine Keyframes");
+  });
+
   // The lane windows like the tracks do. One clip's track can hold thousands of keys -- a project
   // written by hand or by an importer -- and a node per key would make the node count a function
   // of the material rather than of the viewport.
