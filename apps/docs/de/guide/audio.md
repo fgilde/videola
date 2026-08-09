@@ -161,6 +161,13 @@ verlorenem Aussteuerungsspielraum.
 
 ## Das Mischpult
 
+Das Pult wird im Transport aufgeklappt, neben dem Schalter für die Messgeräte, und es beginnt
+zugeklappt. Ein Streifen aus zwei beschrifteten Reglern über Stumm, Solo und der Effektauswahl ist
+hundertneunzig Pixel hoch; stand er da, ob jemand mischte oder nicht, und waren die Messgeräte
+ebenfalls offen, blieben dem Bild sechzig von siebenhundert Pixeln. Wer das Bild aufgibt und wann,
+ist eine Entscheidung und keine Voreinstellung. Auf dem Telefon liegt das Pult stattdessen hinter
+einem der Reiter.
+
 Ein Streifen je Spur, in der Reihenfolge, in der die Zeitleiste die Spuren stapelt, und nicht in der,
 in der der Kern sie hält — `tracks[0]` ist unten im Stapel, und ein Mischpult in dieser Reihenfolge
 setzte den Streifen der obersten Spur ans Ende.

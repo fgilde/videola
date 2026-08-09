@@ -5,7 +5,7 @@ A tour of the editor as it stands. Everything below is built and checked; the
 
 ## The editing surface
 
-![The Videola editor on a desktop: media library on the left, a decoded frame filling the preview, the properties panel on the right, the timeline below it and the mixer along the bottom](/editor-desktop.webp)
+![The Videola editor on a desktop: media library on the left, a decoded frame filling the preview, the properties panel on the right, the measuring instruments under the transport and the timeline below them](/editor-desktop.webp)
 
 Four zones, and the picture is the largest of them — a check holds that, because a grid row that
 grows with its contents had twice shrunk the canvas to a stamp before anyone noticed.
@@ -13,7 +13,9 @@ grows with its contents had twice shrunk the canvas to a stamp before anyone not
 **The library** lists what the project holds, each medium with its length, its size in pixels and
 its sample rate, and a thumbnail decoded from the file itself. **The properties panel** shows what
 is adjustable about the selected clip and lets any parameter be animated. **The timeline** is where
-the work happens. **The mixer** carries one strip per track plus a master.
+the work happens. **The mixer** carries one strip per track plus a master; it and the measuring
+instruments are opened from the transport and start folded away, because the picture is the largest
+zone on the screen and neither of them is worth giving that up unasked.
 
 ## Cutting
 

@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { cropHeight } from "./crop.mjs";
+
 // The built application, in a real browser, with a real file dropped on it. Everything the
 // preview and the transport rest on -- OPFS, WebCodecs, WebGL2, Web Audio -- is absent from
 // jsdom, so this is the only place the chain from a dropped file to a decoded frame is checked.
@@ -21,7 +23,7 @@ const tabletShot = join(here, "tablet.png");
 // half-deleted profile in a working tree is worse than one in the temp directory.
 const profiles = join(tmpdir(), `videola-harness-${process.pid}`);
 const PORT = Number(process.env.VIDEOLA_HARNESS_PORT ?? 4399);
-const DEVTOOLS_PORT = PORT + 1;
+let devtoolsPort = PORT + 1;
 // An iPhone 14 in portrait. It cannot be had from --window-size: Chrome on Windows refuses a
 // window narrower than 500 CSS pixels and silently gives 500 instead, which is a small tablet
 // and would have proven nothing about a phone. The device metrics override is the only way to
@@ -93,8 +95,11 @@ const server = createServer((req, res) => {
     return;
   }
   if (url === "/shot") {
-    const name = new URL(req.url, "http://harness").searchParams.get("name") ?? "shot";
-    void capture(name).then(() => send(res, Buffer.from("ok"), "text/plain"));
+    const asked = new URL(req.url, "http://harness").searchParams;
+    const width = Number(asked.get("w") ?? 0);
+    const height = Number(asked.get("h") ?? 0);
+    const box = width > 0 && height > 0 ? { width, height } : undefined;
+    void capture(asked.get("name") ?? "shot", box).then(() => send(res, Buffer.from("ok"), "text/plain"));
     return;
   }
   // Two containers of the same two seconds: a browser without proprietary codecs reads the WebM.
@@ -198,7 +203,11 @@ async function connect(url) {
     const message = JSON.parse(event.data);
     const settle = pending.get(message.id);
     pending.delete(message.id);
-    settle?.(message.result);
+    // A refused command used to resolve as undefined, which is what a command with no result looks
+    // like: a viewport override Chrome rejected left the run measuring the window it happened to
+    // open with and reporting nothing about it.
+    if (message.error !== undefined) settle?.reject(new Error(JSON.stringify(message.error)));
+    else settle?.resolve(message.result);
   };
   await new Promise((resolve, reject) => {
     socket.onopen = resolve;
@@ -206,19 +215,19 @@ async function connect(url) {
   });
   return {
     send: (method, params) =>
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
         nextId += 1;
-        pending.set(nextId, resolve);
+        pending.set(nextId, { resolve, reject });
         socket.send(JSON.stringify({ id: nextId, method, params }));
       }),
     close: () => socket.close(),
   };
 }
 
-async function pageTarget(deadline) {
+async function pageTarget(deadline, port) {
   for (;;) {
     try {
-      const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`)).json();
+      const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
       const page = targets.find((target) => target.type === "page");
       if (page !== undefined) return page;
     } catch {
@@ -233,27 +242,41 @@ async function pageTarget(deadline) {
 // --virtual-time-budget lags behind the DOM: a dragged clip's inline style says it moved while
 // its rect still says it did not, and every claim in these runs is about a rect.
 //
-// The viewport comes from the device metrics override and not from --window-size, which Chrome on
-// Windows refuses to take below 500 CSS pixels: it clips the screenshot instead of scaling it, so
-// a run asking for a phone would measure a small tablet and look entirely convincing doing it.
+// The viewport comes from the device metrics override and not from --window-size. Chrome on
+// Windows refuses a window narrower than 500 CSS pixels, so a run asking for a phone would measure
+// a small tablet and look entirely convincing doing it -- and on every viewport the window is
+// taller than the page inside it, because headless Chrome still reserves the browser's own
+// furniture. --screenshot writes the window, so every desktop picture in the guide carried a
+// hundred and fifty pixels of black under the editor that looked like a layout that had given up.
 async function driveTouch(metrics, query, budgetMs, what) {
+  const url = `http://localhost:${PORT}/?${query}`;
+  // A port of its own per run. One shared port and the run that follows a killed browser reads the
+  // dying one's target list, connects to a page that is on its way out, and waits out its whole
+  // budget for results that were never going to come from there.
+  devtoolsPort += 1;
+  const port = devtoolsPort;
   const child = launch("about:blank", [
     "--window-size=1200,1200",
-    `--remote-debugging-port=${DEVTOOLS_PORT}`,
+    `--remote-debugging-port=${port}`,
   ]);
   try {
-    const page = await pageTarget(Date.now() + 30_000);
+    const page = await pageTarget(Date.now() + 30_000, port);
     const devtools = await connectWithRetries(page.webSocketDebuggerUrl);
-    await devtools.send("Emulation.setDeviceMetricsOverride", metrics);
+      await devtools.send("Emulation.setDeviceMetricsOverride", metrics);
     // Without this the editor still reports a fine pointer, and the timeline would hand a finger
     // the four-pixel trim zone it keeps for a mouse.
     await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
-    capture = async (name) => {
-      const png = await devtools.send("Page.captureScreenshot", { format: "png" });
+    // Clipped to the page and not to the window. Headless Chrome still reserves its own furniture,
+    // so a window of 1440x900 lays the editor out in 744 -- and an unclipped shot carried a hundred
+    // and fifty pixels of black under it that looked like a layout which had given up. The page
+    // says how big it is; nothing here guesses.
+    capture = async (name, box) => {
+      const clip = box === undefined ? undefined : { ...box, x: 0, y: 0, scale: 1 };
+      const png = await devtools.send("Page.captureScreenshot", { format: "png", clip });
       writeFileSync(join(here, `${name}.png`), Buffer.from(png.data, "base64"));
     };
     const results = reported(budgetMs, what);
-    await devtools.send("Page.navigate", { url: `http://localhost:${PORT}/?${query}` });
+    await devtools.send("Page.navigate", { url });
     const out = await results;
     devtools.close();
     return out;
@@ -265,25 +288,27 @@ async function driveTouch(metrics, query, budgetMs, what) {
 await new Promise((resolve) => server.listen(PORT, resolve));
 
 try {
-  const desktop = ["--window-size=1440,900"];
+  const desktop = ["--window-size=1440,900", "--virtual-time-budget=300000"];
   // Wall clock: the frame clock runs, so playback can tick and the transport can be watched.
-  const live = await drive(`http://localhost:${PORT}/`, desktop, 120_000);
+  const live = await drive(`http://localhost:${PORT}/`, ["--window-size=1440,900"], 120_000);
+  // Every desktop run lays the editor out in the same viewport, and the runs that take pictures say
+  // what it was. A picture is the window; this is where it becomes the page.
+  const viewport = (results) => {
+    const note = results.find((entry) => entry.name.startsWith("VIEWPORT "));
+    if (note === undefined) throw new Error("a run took a picture without reporting its viewport");
+    return Number(note.name.split(" ")[1].split("x")[1]);
+  };
   // Virtual clock: the frame clock is stopped, so the drawing buffer survives long enough to be
-  // read back -- and the screenshot is taken once the budget runs out, which is after the run.
-  // The one run whose picture is arranged rather than incidental: it grades a clip and turns the
-  // instruments on, and the shot is taken while that is on screen.
-  const drawn = await drive(
-    `http://localhost:${PORT}/?virtual=1`,
-    [...desktop, "--virtual-time-budget=300000", `--screenshot=${shot}`],
-    300_000,
-  );
+  // read back. The one run whose picture is arranged rather than incidental: it grades a clip and
+  // turns the instruments on, and the shot is taken while that is on screen.
+  const drawn = await drive(`http://localhost:${PORT}/?virtual=1`, [...desktop, `--screenshot=${shot}`], 300_000);
   // The template run needs both halves the other two runs split between them: real decoding time
   // (so the fetch-driven clock) and a drawing buffer nobody has taken away (so virtual time). It is
   // its own launch because it starts from an untouched editor -- a gallery that replaces the
   // document has nothing to prove against a project the run before it already built.
   const baked = await drive(
     `http://localhost:${PORT}/?templates=1&virtual=1`,
-    [...desktop, "--virtual-time-budget=300000", `--screenshot=${templateShot}`],
+    [...desktop, `--screenshot=${templateShot}`],
     300_000,
   );
   // The effect library, for the same reason the template run is its own launch: it opens on a fresh
@@ -291,7 +316,7 @@ try {
   // run before it left on screen.
   const shelved = await drive(
     `http://localhost:${PORT}/?effects=1&virtual=1`,
-    [...desktop, "--virtual-time-budget=300000", `--screenshot=${effectShot}`],
+    [...desktop, `--screenshot=${effectShot}`],
     300_000,
   );
   const pocket = await driveTouch(PHONE, "phone=1", 180_000, "the phone");
@@ -299,6 +324,12 @@ try {
   // drag from the library onto a track can be driven with a finger, because it is the only one
   // where both panels are on screen at the same time.
   const slate = await driveTouch(TABLET, "tablet=1", 180_000, "the tablet");
+  // Last, and not next to the run that took each picture: Chrome writes --screenshot when the
+  // virtual budget runs out, which is after the run has already reported back. Cropped too early
+  // the harness trims the file the run before it left, and the real one lands uncropped on top.
+  for (const [results, path] of [[drawn, shot], [baked, templateShot], [shelved, effectShot]]) {
+    cropHeight(path, viewport(results));
+  }
   const results = [...live, ...drawn, ...baked, ...shelved, ...pocket, ...slate];
   for (const note of results.filter((entry) => entry.name.startsWith("ENV "))) {
     console.log(note.name);

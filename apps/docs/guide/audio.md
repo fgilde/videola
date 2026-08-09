@@ -149,6 +149,12 @@ so mastering louder than the target buys nothing but lost headroom.
 
 ## The mixer
 
+The desk is opened from the transport, next to the switch for the instruments, and it starts folded
+away. A strip of two labelled faders over mute, solo and a chain picker is a hundred and ninety
+pixels; standing there whether or not anyone was mixing, with the instruments open as well, it left
+the picture sixty pixels of a seven-hundred-pixel window. Who gives the picture up, and when, is a
+decision rather than a default. On a phone it is one of the panels behind the tab bar instead.
+
 One strip per track, ordered the way the timeline stacks them rather than the way the core stores
 them — `tracks[0]` is the bottom of the stack, and a mixer listing them in that order would put the
 top track's strip last.

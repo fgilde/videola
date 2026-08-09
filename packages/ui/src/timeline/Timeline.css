@@ -409,7 +409,11 @@
   inline-size: min(216px, 90vw);
   position: absolute;
   z-index: 20;
-  inset-block-start: calc(100% + var(--v-space-1));
+  /* Upwards out of the bar, not down. The bar sits on top of the tracks and the tracks are the
+     bottom of every layout, so downwards is where there is least room: a square field plus its hint
+     is about 280 px and the timeline had 145 left under the bar, which cut the field off at the
+     window's edge. Above it there is the whole picture to open into. */
+  inset-block-end: calc(100% + var(--v-space-1));
   inset-inline-start: 0;
   padding: var(--v-space-2);
   background: var(--v-surface);

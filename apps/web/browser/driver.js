@@ -182,7 +182,11 @@ async function announce() {
 
   // Only the page knows when a moment is worth photographing; Node holds the devtools connection
   // and takes the picture when asked.
-  const photograph = (name) => fetch("/shot?name=" + name).then(() => undefined);
+  // The size goes with it: headless Chrome lays the page out inside a window taller than the page,
+  // and a shot of the window carries a band of black under the editor that reads as a layout which
+  // ran out of room. The page is the only thing that knows how tall it really is.
+  const photograph = (name) =>
+    fetch(`/shot?name=${name}&w=${innerWidth}&h=${innerHeight}`).then(() => undefined);
 
   // A finger, not a mouse: pointerType decides the size of the trim zones, so a drag that claims
   // to be touch is the only one that proves the phone path.
@@ -702,6 +706,15 @@ async function announce() {
     checkAtLeast("and it is the largest zone, not the smallest",
       Math.round(q(".v-preview").getBoundingClientRect().height -
         q(".v-timeline").getBoundingClientRect().height), 1);
+    // The same bargain the instruments make. A desk of two labelled faders over mute, solo and a
+    // chain picker is a hundred and ninety pixels, and it stood there whether or not anyone was
+    // mixing -- with the instruments open as well the picture was left with sixty pixels of a
+    // seven-hundred-pixel window and its canvas hung out over the toolbar above.
+    check("the mixing desk is out of the way until it is wanted", q('[data-testid="mixer"]'), null);
+    button("Mischpult zeigen").click();
+    await until("the mixing desk", () => q('[data-testid="mixer"]'));
+    check("and the switch says it is showing",
+      button("Mischpult zeigen").getAttribute("aria-pressed"), "true");
     checkAtLeast("the mixer costs less of the window than the picture does",
       Math.round(q(".v-preview").getBoundingClientRect().height -
         q('[data-testid="mixer"]').getBoundingClientRect().height), 1);
@@ -717,6 +730,13 @@ async function announce() {
     check("the last control in a strip is inside the mixer",
       q(".v-mixer__strip .v-mixer__chain").getBoundingClientRect().bottom <=
         Math.round(q('[data-testid="mixer"]').getBoundingClientRect().bottom), true);
+    // Away again, and not only to leave the picture the room: an open desk meters every strip ten
+    // times a second off the audio graph, and under a virtual clock that is real work Chrome does
+    // for every virtual millisecond. With it standing open the effect browser below never finished
+    // drawing its tiles inside a minute.
+    button("Mischpult zeigen").click();
+    check("and it folds away again",
+      await until("the desk to fold away", () => (q('[data-testid="mixer"]') === null || null)), true);
 
     // The timeline row was a fixed 30% of the editor whatever it held, because grid maximizes a
     // minmax track before it feeds the flexible one. Under a single 72 px track that is 140 px of
@@ -799,6 +819,10 @@ async function announce() {
       // arrive. Paused, the page has nothing pending and the rest of the budget is consumed at
       // once. The picture is also the better one: a graded clip with its instruments beside it.
       key(" ", document.body);
+      // The curve field floats over the instruments, which is right for a panel someone opened and
+      // wrong for the one picture the guide leads with: overlapping a scope's own heading, it reads
+      // as a layout accident rather than as a disclosure. It has its own place in the tour.
+      q(".v-keycurve__summary")?.click();
       await sleep(300);
       return;
     }
@@ -820,6 +844,8 @@ async function announce() {
 
     // R128 against a real OfflineAudioContext, over a real decode. Wall clock only: a measurement
     // renders the whole timeline, and under a virtual-time budget the decoder never gets a turn.
+    button("Mischpult zeigen").click();
+    await until("the mixing desk", () => q('[data-testid="mixer"]'));
     check("the mixer starts with nothing measured",
       q('[data-testid="mixer-loudness"]').textContent, "Nicht gemessen");
     labelled("Lautheit messen").click();
@@ -1251,8 +1277,7 @@ async function announce() {
       Math.round(moved / before.length * 100) / 100, 0.5);
 
     check("the library raised nothing", banner(), "");
-    // Left open on purpose: the screenshot is taken when the virtual budget runs out, and what it
-    // has to show is this dialog.
+    // Left open on purpose: what the guide's picture of the shelf has to show is this dialog.
     q(".v-fx").scrollTop = 0;
     await sleep(300);
   }
@@ -1612,6 +1637,9 @@ async function announce() {
 
     // The tablet is where the mixer was cut worst: three strips under a 22vh properties panel and
     // a 26% timeline left it 66 px of the 342 a strip needs.
+    check("a tablet keeps the desk out of the way too", q('[data-testid="mixer"]'), null);
+    button("Mischpult zeigen").click();
+    await until("the mixing desk", () => q('[data-testid="mixer"]'));
     checkAtMost("a tablet shows whole mixer strips too",
       q(".v-mixer__strips").scrollHeight - q(".v-mixer__strips").clientHeight, 0);
     checkAtLeast("and every fader in them is a touch target",
@@ -1724,6 +1752,10 @@ async function announce() {
       if (noise.length > 0) {
         results.push({ name: "nothing reached the console", ok: false, got: noise, want: [] });
       }
+      // What the page was actually laid out in. Chrome writes --screenshot at the size of the
+      // window, and the window is taller than the page by the height of its own furniture; without
+      // this the harness has no way to know where the editor stops and the black band starts.
+      results.push({ name: `VIEWPORT ${innerWidth}x${innerHeight}`, ok: true, got: "noted", want: "noted" });
       results.push({
         name: `ENV ${window.__videolaEnv ?? "unknown"}`,
         ok: true,

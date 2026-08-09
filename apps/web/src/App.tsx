@@ -210,6 +210,7 @@ export function App(): ReactElement {
   // On a phone the tab bar already says which panel is showing, so the switch on the
   // transport is for the layouts that have no tabs.
   const [scopesOpen, setScopesOpen] = useState(false);
+  const [mixerOpen, setMixerOpen] = useState(false);
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -1188,6 +1189,8 @@ export function App(): ReactElement {
                 onResolution={setResolution}
                 scopes={layout === "phone" ? undefined : scopesOpen}
                 onToggleScopes={layout === "phone" ? undefined : () => setScopesOpen((on) => !on)}
+                mixer={layout === "phone" ? undefined : mixerOpen}
+                onToggleMixer={layout === "phone" ? undefined : () => setMixerOpen((on) => !on)}
               />
               {/* Between the picture and the panels, because that is where the work is: the range
                   is marked here and lands on the timeline below. */}
@@ -1227,7 +1230,7 @@ export function App(): ReactElement {
               {(layout === "phone" ? panel === "scopes" : scopesOpen) && (
                 <Scopes reading={scopeReading} targets={VECTOR_TARGETS} />
               )}
-              {(layout !== "phone" || panel === "mixer") && (
+              {(layout === "phone" ? panel === "mixer" : mixerOpen) && (
                 <Mixer
                   project={project}
                   loudness={reading?.of === project ? reading.lufs : undefined}

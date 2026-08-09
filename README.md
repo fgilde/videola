@@ -40,7 +40,9 @@ track turns a series of keys into a motion path. Keyframes are edited on a lane 
 axis. The interpolation happens in the Rust core, so the preview and the export cannot read different
 values.
 
-**Audio.** A mixer with live meters, per-track volume, pan, mute and solo, EQ, compressor and
+**Audio.** A mixing desk opened from the transport — folded away until it is asked for, because a
+strip is 190 px and the picture is meant to be the largest thing in the window — with live meters,
+per-track volume, pan, mute and solo, EQ, compressor and
 limiter as inserts ahead of the fader, fades as scheduled automation rather than per-frame
 arithmetic, waveforms drawn from the buffers the graph already decoded. EBU R128 loudness measured
 against the Tech 3341 conformance cases — and a button that normalises to a target and measures
@@ -137,6 +139,10 @@ pnpm --filter @videola/engine test:export   # a real export, verified with ffpro
 pnpm --filter @videola/ui test:browser      # the timeline against real layout
 pnpm --filter videola-web test:browser     # the built application, desktop, tablet and phone
 ```
+
+Every picture in the documentation comes out of the application run above. `pnpm --filter
+videola-docs shots` encodes what it wrote into the guide's `public` directory, so a screenshot in
+the guide is one the layout checks have seen.
 
 `test:export` needs `ffprobe` and `ffmpeg` on the path: it hands the file it produced to a decoder
 that shares no code with this repository.

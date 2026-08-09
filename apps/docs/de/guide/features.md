@@ -6,7 +6,7 @@ stattdessen geplant ist.
 
 ## Die Oberfläche
 
-![Videola am Schreibtisch: Medienbibliothek links, ein dekodiertes Bild in der Vorschau, Eigenschaften rechts, darunter die Zeitleiste und am Boden das Mischpult](/editor-desktop.webp)
+![Videola am Schreibtisch: Medienbibliothek links, ein dekodiertes Bild in der Vorschau, Eigenschaften rechts, unter dem Transport die Messgeräte und darunter die Zeitleiste](/editor-desktop.webp)
 
 Vier Bereiche, und das Bild ist der größte davon — dafür gibt es eine Prüfung, weil eine Rasterzeile,
 die mit ihrem Inhalt wächst, die Leinwand schon zweimal auf Briefmarkengröße geschrumpft hatte,
@@ -15,7 +15,9 @@ ohne dass es jemandem auffiel.
 **Die Bibliothek** zeigt, was im Projekt liegt: Länge, Maße in Pixeln, Abtastrate und ein
 Vorschaubild, das aus der Datei selbst dekodiert wurde. **Die Eigenschaften** zeigen, was am
 gewählten Clip einstellbar ist, und lassen jeden Wert über die Zeit animieren. **Die Zeitleiste** ist
-der Ort der Arbeit. **Das Mischpult** trägt einen Streifen je Spur und einen Master.
+der Ort der Arbeit. **Das Mischpult** trägt einen Streifen je Spur und einen Summenzug; es wird wie
+die Messgeräte im Transport aufgeklappt und beginnt zugeklappt, denn das Bild ist der größte Bereich
+auf dem Schirm, und keines von beidem ist es wert, das ungefragt aufzugeben.
 
 ## Schneiden
 

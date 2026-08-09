@@ -70,6 +70,7 @@
   "transport.stepForward": "Ein Bild vor",
   "transport.position": "Position",
   "transport.scopes": "Messgeräte zeigen",
+  "transport.mixer": "Mischpult zeigen",
   "media.dropHint": "Videodatei hier ablegen",
   "library.label": "Medien",
   "library.empty": "Noch keine Medien. Ziehe eine Videodatei hierher oder nutze „Medien importieren“.",

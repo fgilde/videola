@@ -16,6 +16,12 @@
 .v-preview__canvas {
   display: block;
   width: min(100cqw, calc(100cqh * var(--v-preview-aspect)));
+  /* The width above is computed from the container's size, and a container query unit is read
+     from the layout of the previous frame. Open the instruments and the pane loses two thirds of
+     its height in one pass, and for that pass the canvas is still as tall as it was -- it hung out
+     of the top of its own pane and over the toolbar above. This is the clamp that holds whatever
+     the query units happen to say: height stays auto, so the picture keeps its aspect. */
+  max-height: 100%;
   /* The checkerboard behind a transparent composite: without it an alpha hole and a black
      background look the same, and the compositor's premultiplied output is meant to be seen. */
   background: repeating-conic-gradient(

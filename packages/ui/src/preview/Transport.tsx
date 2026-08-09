@@ -36,6 +36,12 @@ export interface TransportProps {
    */
   scopes?: boolean;
   onToggleScopes?: () => void;
+  /**
+   * Whether the mixing desk is showing. Undefined on a phone for the same reason as the
+   * instruments above: it is behind a tab there.
+   */
+  mixer?: boolean;
+  onToggleMixer?: () => void;
 }
 
 export function Transport({
@@ -53,6 +59,8 @@ export function Transport({
   onResolution,
   scopes,
   onToggleScopes,
+  mixer,
+  onToggleMixer,
 }: TransportProps): ReactElement {
   const { t, formatTimecode } = useI18n();
   useTransportKeys(playing, onPlayPause, onStep, onShuttle, onMarkerJump);
@@ -97,6 +105,18 @@ export function Transport({
           label={t("transport.scopes")}
           pressed={scopes === true}
           onClick={onToggleScopes}
+        />
+      )}
+      {/* The same bargain as the instruments beside it, and the desk costs more: a strip of two
+          labelled faders over mute, solo and a chain picker is 190 px, and it was standing there
+          whether or not anyone was mixing. With the instruments open as well the picture was left
+          with sixty pixels of a seven-hundred-pixel window. */}
+      {onToggleMixer !== undefined && (
+        <IconButton
+          icon="mixer"
+          label={t("transport.mixer")}
+          pressed={mixer === true}
+          onClick={onToggleMixer}
         />
       )}
       <span className="v-transport__time" aria-label={t("transport.position")}>
