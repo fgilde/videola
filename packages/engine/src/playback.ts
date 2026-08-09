@@ -22,6 +22,7 @@ import { createContext } from "./render/context";
 import { drawList } from "./render/draw-list";
 import type { GlContext } from "./render/context";
 import type { AudioGraph } from "./audio/graph";
+import type { Level } from "./audio/loudness";
 
 // Playback steers the audio context as well as reading it. A freshly built one is suspended, its
 // currentTime stands still, and a clock started on it would report a frozen position while
@@ -170,6 +171,12 @@ export class Playback {
   // the clip by its viewBox, so no zoom step can invalidate it.
   waveforms(buckets = WAVEFORM_BUCKETS): Map<string, Peaks> {
     return this.#graph.waveforms(buckets);
+  }
+
+  // Not routed through `onTime`: the clock ticks on the picture's schedule, and the caller has to
+  // say how long its own last frame took because that is what the hold marker falls by.
+  levels(elapsed = 0): ReadonlyMap<string, Level> {
+    return this.#graph.levels(elapsed);
   }
 
   onTime(cb: (t: Time) => void): () => void {
