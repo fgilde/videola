@@ -55,6 +55,18 @@
   color: var(--v-text-muted);
 }
 
+/* A tablet is short of height, not of width. The three instruments still stand side by side, but
+   at less than half the depth: the checks on that viewport measure a preview floor and a mixer
+   that has to show whole strips, and a full-depth strip here took a slice out of both. Less room,
+   smaller instruments -- which is the honest answer rather than a picture squeezed to nothing. */
+.v-shell[data-layout="tablet"] .v-scopes {
+  padding: var(--v-space-1) var(--v-space-2);
+}
+
+.v-shell[data-layout="tablet"] .v-scope__canvas {
+  height: 64px;
+}
+
 /* Under a finger there is no room for three side by side, and a squeezed vectorscope is a squeezed
    circle -- which is a scope that lies about saturation. Stacked instead, and taller. */
 .v-shell[data-layout="phone"] .v-scopes {

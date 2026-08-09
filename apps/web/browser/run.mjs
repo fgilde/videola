@@ -149,7 +149,14 @@ function drive(url, extra, budgetMs) {
     }, budgetMs);
     deliver = (results) => {
       clearTimeout(timer);
-      setTimeout(() => child.kill(), 500);
+      // Long enough for the virtual clock to run out what is left of its budget and write the
+      // screenshot. Chrome takes that picture when the budget expires, not when the run reports
+      // back, and with nothing pending the remainder is consumed in a few milliseconds -- but half
+      // a second of wall clock was nowhere near enough of them: an editor at rest still has timers
+      // in it -- the instruments measure the picture ten times a virtual second -- and every one of
+      // them is real work Chrome does on the way to the end of the budget, and the picture the guide is built
+      // from simply went missing the first time a run grew.
+      setTimeout(() => child.kill(), 20000);
       resolve(results);
     };
     const child = launch(url, extra);
@@ -263,6 +270,8 @@ try {
   const live = await drive(`http://localhost:${PORT}/`, desktop, 120_000);
   // Virtual clock: the frame clock is stopped, so the drawing buffer survives long enough to be
   // read back -- and the screenshot is taken once the budget runs out, which is after the run.
+  // The one run whose picture is arranged rather than incidental: it grades a clip and turns the
+  // instruments on, and the shot is taken while that is on screen.
   const drawn = await drive(
     `http://localhost:${PORT}/?virtual=1`,
     [...desktop, "--virtual-time-budget=300000", `--screenshot=${shot}`],

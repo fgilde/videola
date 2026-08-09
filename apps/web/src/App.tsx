@@ -129,6 +129,9 @@ export function App(): ReactElement {
   const [measuring, setMeasuring] = useState(false);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
   const [reading, setReading] = useState<ScopeReading>();
+  // On a phone the tab bar already says which panel is showing, so the switch on the
+  // transport is for the layouts that have no tabs.
+  const [scopesOpen, setScopesOpen] = useState(false);
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -316,7 +319,7 @@ export function App(): ReactElement {
   // nothing at all.
   useEffect(() => {
     if (playback === undefined || canvas === null) return;
-    if (layout === "phone" && panel !== "scopes") return;
+    if (!(layout === "phone" ? panel === "scopes" : scopesOpen)) return;
     const take = (): void => {
       const pixels = playback.sample(SCOPE_WIDTH, SCOPE_HEIGHT);
       setReading(pixels.length === 0 ? undefined : measureScopes(pixels, SCOPE_WIDTH, SCOPE_HEIGHT));
@@ -324,7 +327,7 @@ export function App(): ReactElement {
     take();
     const timer = window.setInterval(take, SCOPE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [playback, canvas, layout, panel]);
+  }, [playback, canvas, layout, panel, scopesOpen]);
 
   useEffect(() => {
     if (playback === undefined || canvas === null) return;
@@ -799,6 +802,8 @@ export function App(): ReactElement {
                 onPlayPause={playPause}
                 onSeek={seek}
                 onStep={step}
+                scopes={layout === "phone" ? undefined : scopesOpen}
+                onToggleScopes={layout === "phone" ? undefined : () => setScopesOpen((on) => !on)}
               />
               {layout === "phone" && <PanelTabs panel={panel} onSelect={setPanel} />}
               {/* Unmounted rather than hidden while another panel shows: the timeline windows
@@ -822,7 +827,7 @@ export function App(): ReactElement {
                   onGrab={setGrab}
                 />
               )}
-              {(layout !== "phone" || panel === "scopes") && (
+              {(layout === "phone" ? panel === "scopes" : scopesOpen) && (
                 <Scopes reading={reading} targets={VECTOR_TARGETS} />
               )}
               {(layout !== "phone" || panel === "mixer") && (

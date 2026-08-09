@@ -68,6 +68,7 @@
   "transport.stepBack": "One frame back",
   "transport.stepForward": "One frame forward",
   "transport.position": "Position",
+  "transport.scopes": "Show scopes",
   "media.dropHint": "Drop the video file here",
   "library.label": "Media",
   "library.empty": "No media yet. Drop a video file here or use “Import media”.",

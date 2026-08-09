@@ -464,6 +464,101 @@ async function announce() {
     await sleep(300);
   }
 
+
+  // ---------------------------------------------------------------- colour and its instruments
+
+  // Ink on one of the instruments. A scope drawn from a real measurement covers pixels; one drawn
+  // from nothing covers none, and the two look identical from the DOM.
+  function inkOn(canvas) {
+    if (canvas === null || canvas.width === 0) return 0;
+    const two = document.createElement("canvas");
+    two.width = canvas.width;
+    two.height = canvas.height;
+    two.getContext("2d").drawImage(canvas, 0, 0);
+    const data = two.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] > 8) count += 1;
+    return count;
+  }
+
+  function instrument(title) {
+    const figure = all(".v-scope").find((node) =>
+      node.querySelector(".v-scope__title").textContent === title);
+    return figure === undefined ? null : figure.querySelector("canvas");
+  }
+
+  function scopeReading() {
+    const line = q(".v-scopes__range");
+    return line === null ? "" : line.textContent;
+  }
+
+  // The whole chain a colourist works in, in the real application: an instrument reading the
+  // picture, a grade that moves it, and the instrument following. Nothing below this line is
+  // reachable from a unit test -- jsdom has no WebGL2 to read a frame back from and no canvas to
+  // draw a trace onto.
+  async function colour() {
+    // Off until asked for: the instruments take a hundred and fifty pixels out of the middle
+    // column, and the picture is meant to be the largest thing in the window.
+    check("the instruments are out of the way until they are wanted", q(".v-scopes"), null);
+    button("Messgeräte zeigen").click();
+    await until("the instruments", () => q(".v-scopes"));
+    check("and the switch says they are showing",
+      button("Messgeräte zeigen").getAttribute("aria-pressed"), "true");
+
+    const drawn = await until("a measurement of the picture",
+      () => (inkOn(instrument("Wellenform")) > 50 ? inkOn(instrument("Wellenform")) : 0), 30000);
+    checkAtLeast("the waveform is drawn from real pixels", drawn, 50);
+    checkAtLeast("and so is the histogram", inkOn(instrument("Histogramm")), 50);
+    checkAtLeast("and the vectorscope", inkOn(instrument("Vektorskop")), 50);
+    check("the reading says what it measured, in words",
+      /^Helligkeit \d+ bis \d+ von 255$/.test(scopeReading()), true);
+
+    const before = scopeReading();
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    await until("the inspector", () => effectPicker());
+
+    // Colour wheels first: a lift is the one move whose effect on a waveform is a number anybody
+    // can name -- the whole trace comes off the floor.
+    await addEffect("colorWheels");
+    const lift = await until("the shadow strength row", () => rowSlider("Schatten-Stärke"));
+    dragSlider(lift, [0.1, 0.2, 0.3]);
+    await sleep(400);
+    const lifted = await until("the reading to follow the grade",
+      () => (scopeReading() !== before && scopeReading() !== "" ? scopeReading() : null), 20000);
+    check("lifting the shadows moves the reading", lifted !== before, true);
+    const floor = Number(/Helligkeit (\d+)/.exec(lifted)[1]);
+    checkAtLeast("and the whole picture stands off the floor", floor, 20);
+
+    // And the curve, which is the control this library grew a parameter kind for. A point dragged
+    // upwards is a brighter picture, measured on the canvas rather than asserted on the model.
+    await addEffect("curves");
+    const field = await until("the curve field", () => q(".v-curve"));
+    const points = all(".v-curve__point");
+    checkAtLeast("the curve opens with the two ends of the range", points.length, 2);
+    const box = field.getBoundingClientRect();
+
+    const dim = luma();
+    // A point added a quarter of the way across, then dragged up to four fifths of the output.
+    pointer("pointerdown", field, { clientX: box.left + box.width * 0.25, clientY: box.top + box.height * 0.75 });
+    await sleep(200);
+    const added = all(".v-curve__point");
+    checkAtLeast("tapping the field adds a point", added.length, points.length + 1);
+    const grabbed = added[1];
+    pointer("pointerdown", grabbed, { clientX: box.left + box.width * 0.25, clientY: box.top + box.height * 0.75 });
+    pointer("pointermove", grabbed, { clientX: box.left + box.width * 0.25, clientY: box.top + box.height * 0.2 });
+    pointer("pointerup", grabbed, { clientX: box.left + box.width * 0.25, clientY: box.top + box.height * 0.2 });
+    await sleep(500);
+    const bright = await until("the picture to follow the curve",
+      () => (luma() > dim + 4 ? luma() : 0), 20000);
+    checkAtLeast("a curve point dragged upwards brightens the picture", Math.round(bright - dim), 4);
+
+    // One drag, one undo. The whole point of a coalesce key on a field somebody sweeps across.
+    button("Rückgängig").click();
+    await sleep(400);
+    checkAtMost("and one undo takes the whole drag back", Math.round(luma() - dim), 3);
+  }
+
   async function run() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
     check("nothing is wrong before anything happened", banner(), "");
@@ -580,6 +675,10 @@ async function announce() {
     // project to work with.
     if (virtual) await keyframeLane(await keyframes());
 
+    // The instruments and the grade, in that order: a scope is only worth anything if it moves
+    // when the picture does, and only the built application can show both at once.
+    if (virtual) await colour();
+
     key(" ", document.body);
     await until("the transport to report playing", () => button("Anhalten") !== null, 8000);
     check("the space bar starts playback from outside the transport",
@@ -590,6 +689,13 @@ async function announce() {
     if (virtual) {
       checkAtLeast("the picture is still there once playback has started",
         await until("a frame while playing", () => (litPixels() > 1000 ? litPixels() : 0)), 1000);
+      // Stopped again before the run reports back, and that is what makes the screenshot exist:
+      // Chrome writes it when the virtual clock has run out its budget, and a running frame clock
+      // does real decoding work for every virtual millisecond -- three hundred seconds of it never
+      // arrive. Paused, the page has nothing pending and the rest of the budget is consumed at
+      // once. The picture is also the better one: a graded clip with its instruments beside it.
+      key(" ", document.body);
+      await sleep(300);
       return;
     }
 
@@ -642,6 +748,7 @@ async function announce() {
       "Zeitleiste",
       "Eigenschaften",
       "Mischpult",
+      "Messgeräte",
     ]);
     checkAtLeast(
       "and a tab is tall enough for a thumb",
@@ -955,7 +1062,7 @@ async function announce() {
 
     await openShelf("Effekte durchsuchen");
     const tiles = all(".v-fx__tile img");
-    check("every effect this build can draw has a tile", tiles.length, 10);
+    check("every effect this build can draw has a tile", tiles.length, 12);
     check("and each one is a picture at the size the grid asks for",
       [...new Set(tiles.map((img) => `${img.naturalWidth}x${img.naturalHeight}`))], ["192x108"]);
 
