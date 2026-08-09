@@ -215,8 +215,9 @@ Bedeutung hat, und eine Blende mischt das Bild darunter einmal mit — weshalb e
 Compound überhaupt erst anlegbar ist.
 
 Die Fläche kostet je Isolierungsebene ein volles Bild an Speicher — 8,3 MB bei 1080p, also 66 MB für
-ein Projekt, das so tief verschachtelt ist, wie es darf — und sie bleibt bis zum Abbau der Vorschau
-belegt. Ein Compound, der nichts blendet, nichts überlagert, nichts gradet, nichts zuschneidet und
+ein Projekt, das so tief verschachtelt ist, wie es darf, und das Doppelte, wenn auf jeder Ebene auch
+noch eine Effektkette oder eine Blende sitzt — und sie bleibt bis zum Abbau der Vorschau belegt.
+Ein Compound, der nichts blendet, nichts überlagert, nichts gradet, nichts zuschneidet und
 nichts überblendet, wird deshalb weiter flach gezeichnet: die Fläche gäbe genau zurück, was auf sie
 kam, und flach zu zeichnen ist das, was *Verschachteln ändert kein Pixel* byteweise wahr hält statt
 beinahe.

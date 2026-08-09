@@ -205,7 +205,8 @@ dissolve on it and the picture underneath is mixed in once, which is why a trans
 is authorable at all.
 
 The surface costs a full frame of memory per level of isolation — 8.3 MB at 1080p, so 66 MB for a
-project nested as deep as one may be — and it is held until the preview is torn down. A compound
+project nested as deep as one may be, and twice that if every level also carries an effect chain or
+a dissolve — and it is held until the preview is torn down. A compound
 that fades nothing, blends nothing, grades nothing, crops nothing and dissolves nothing is therefore
 drawn flat instead: the surface would hand back exactly what went onto it, and drawing flat is what
 keeps *folding changes no pixel* true byte for byte rather than nearly.

@@ -486,9 +486,11 @@ export class Compositor {
   // held until the context goes. A project without a compound or an adjustment layer never leaves
   // level zero and pays for two, the same as before isolation existed.
   //
-  // ponytail: nothing hands a target back. Eight levels of nesting is eighteen full-frame targets,
-  // 143 MB at 1080p, and it stays allocated for the life of the compositor even after the playhead
-  // has left the deepest compound. A pool keyed by "in use this frame" is the upgrade.
+  // ponytail: nothing hands a target back. A group that only fades takes one target of its level;
+  // one that also grades or dissolves takes the second as well, so eight levels of nesting with a
+  // chain at every one reaches eighteen full-frame targets -- 149 MB at 1080p, held for the life of
+  // the compositor even after the playhead has left the deepest compound. A pool keyed by "in use
+  // this frame" is the upgrade.
   #slot(index: number): RenderTarget {
     const existing = this.#chain[index];
     if (existing !== undefined) return existing;
