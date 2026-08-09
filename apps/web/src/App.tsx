@@ -62,6 +62,7 @@ import {
   mediaHash,
   missingMedia,
   readSession,
+  proxiesInUse,
   relinkMedia,
   // Not a React hook, whatever the name reads like on this side: the one switch that tells the
   // decoders whether the preview may read proxies. Aliased so nothing here looks like one.
@@ -183,7 +184,11 @@ export function App(): ReactElement {
   // Keyed by content hash, which is what the queue works in. The library shows media ids, and the
   // translation happens where it is drawn rather than being kept twice.
   const [proxies, setProxies] = useState<ReadonlyMap<string, ProxyState>>(NO_PROXIES);
-  const [useOriginals, setUseOriginals] = useState(false);
+  // A counter and not a copy of the setting. What the button shows is read back out of the one
+  // flag the decoders consult, so a wiring that changed the button without changing the decoding
+  // would leave the button stuck -- which is a check that fails, rather than a switch that lies.
+  const [proxySwitches, setProxySwitches] = useState(0);
+  const useOriginals = !proxiesInUse();
   const proxyQueue = useRef<ProxyQueue>(undefined);
   const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
   // A reading carries the project it was taken from, so "is this still about this timeline"
@@ -376,7 +381,7 @@ export function App(): ReactElement {
 
   useEffect(() => {
     playback?.reopen();
-  }, [playback, proxiesReady, useOriginals]);
+  }, [playback, proxiesReady, proxySwitches]);
 
   // The library speaks media ids and the queue speaks content hashes. Translated here, where both
   // are already to hand, rather than kept as a second map that can fall out of step.
@@ -395,7 +400,7 @@ export function App(): ReactElement {
   // the file it chose when it opened.
   const switchToOriginals = useCallback((wanted: boolean) => {
     setProxyUse(!wanted);
-    setUseOriginals(wanted);
+    setProxySwitches((count) => count + 1);
   }, []);
 
   // One transport per document: the batch queries are bound to the document they came from, and
