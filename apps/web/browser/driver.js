@@ -80,6 +80,9 @@ async function announce() {
   // is whether a baked template can be *seen*, which means reading the drawing buffer, which means
   // the virtual clock.
   const templates = location.search.includes("templates");
+  // The effect library needs the same two halves the template run does: real decoding time for the
+  // frame the tiles are drawn from, and a drawing buffer nobody has taken away to draw them out of.
+  const shelves = location.search.includes("effects");
   // The tablet is the only viewport where the library and the timeline are on screen together, so
   // it is the only one where a drag between them can be driven at all -- and it had no run of its
   // own until now, only a layout rule nobody had ever seen.
@@ -125,14 +128,29 @@ async function announce() {
   const all = (selector) => Array.from(document.querySelectorAll(selector));
   const button = (label) => document.querySelector('button[aria-label="' + label + '"]');
   const labelled = (text) => all("button").find((node) => node.textContent.trim() === text);
-  // The effects on offer are one picker per chain now, not one button per effect: nine of them
-  // stacked down a 300 px column was what left the properties panel scrolling past its own
-  // sliders and a mixer strip taller than the band it lives in.
-  // Scoped to the properties panel unless a strip is named, because the mixer carries one of these
-  // per chain and on a desktop they are all on screen at once.
-  const effectPicker = (within) =>
-    (within || q(".v-inspector") || document).querySelector('select[aria-label="Effekt hinzufügen"]');
-  const addEffect = (id, within) => setValue(effectPicker(within), id);
+  // The way into the effect library. The mixer still has a picker, because an audio effect has no
+  // picture; a video effect is chosen by looking at one.
+  const browseFor = (label) =>
+    [...(q(".v-inspector") || document).querySelectorAll("button")]
+      .find((node) => node.textContent === label) ?? null;
+  const effectPicker = () => browseFor("Effekte durchsuchen");
+  const shelf = () => q('[data-testid="effect-browser"]');
+  const tileOf = (id) => q(`[data-effect-id="${id}"] img`);
+
+  async function openShelf(label) {
+    browseFor(label).click();
+    await until("the effect browser", () => shelf());
+    // The tiles are drawn one after another off a shared context; the last one to arrive is what
+    // says the grid is finished.
+    return until("every tile to be drawn",
+      () => (all(".v-fx__tile").every((node) => node.querySelector("img")) ? shelf() : null), 60000);
+  }
+
+  async function addEffect(id) {
+    await openShelf("Effekte durchsuchen");
+    q(`[data-effect-id="${id}"] button`).click();
+    return until("the browser to close", () => (shelf() === null ? true : null));
+  }
   // The project actions moved behind the topbar's overflow disclosure. A <summary> carries no
   // button role, so it cannot be looked up as one -- and a person has to open it before reaching
   // anything inside, which is exactly what this does.
@@ -281,7 +299,7 @@ async function announce() {
     await until("the inspector", () => effectPicker());
     check("selecting a clip opens its properties", q(".v-inspector") !== null, true);
 
-    addEffect("brightness");
+    await addEffect("brightness");
     const row = await until("the brightness row", () => amountSlider());
     check("the parameter is named from the manifest, not from its key",
       row.labels[0].textContent, "Stärke");
@@ -662,12 +680,18 @@ async function announce() {
     check("choosing properties puts the timeline away", q('[data-testid="timeline"]'), null);
     check("the picture is still above it", box(".v-preview").bottom <= box(".v-panels").top, true);
 
-    const add = await until("the effect picker", () => effectPicker());
-    checkAtLeast("adding an effect is a thumb-sized target",
+    const add = await until("the way into the effect library", () => effectPicker());
+    checkAtLeast("reaching the effect library is a thumb-sized target",
       add.getBoundingClientRect().height, 44);
-    check("and it offers the effects this build can draw",
-      [...add.options].map((option) => option.value).includes("brightness"), true);
-    addEffect("brightness");
+    await openShelf("Effekte durchsuchen");
+    check("a phone gets the library too, with a picture per effect",
+      tileOf("brightness") !== null && tileOf("vignette") !== null, true);
+    checkAtLeast("and every Add in it is a thumb-sized target",
+      Math.round(Math.min(...all(".v-fx__add").map((n) => n.getBoundingClientRect().height))), 44);
+    checkAtMost("the shelf fits the window rather than running off it",
+      Math.round(shelf().getBoundingClientRect().right - innerWidth), 0);
+    q('[data-effect-id="brightness"] button').click();
+    await until("the browser to close", () => (shelf() === null ? true : null));
     const slider = await until("the parameter row",
       () => q('.v-inspector__effect input[type="range"]'));
     check("a phone can put an effect on a clip and see its parameter",
@@ -790,6 +814,59 @@ async function announce() {
       pixel,
     );
     return [...pixel];
+  }
+
+  // The acceptance point of the effect library: fifteen tiles, each one the effect's own shader over
+  // the frame the editor is showing. jsdom proves the grid is built; only a driver proves the tiles
+  // are pictures -- and only comparing them proves they are fifteen different ones rather than the
+  // same frame reprinted under fifteen names.
+  async function runEffects() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    await dropFixture();
+    // Somewhere with a picture in it: the tiles are drawn from the frame at the playhead, and the
+    // first frame of real material is a fade from black about as often as it is a picture.
+    forward(20);
+    await until("a picture in the preview", () => (luma() > 8 ? true : null), 60000);
+
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    await until("the inspector", () => effectPicker());
+
+    await openShelf("Übergänge durchsuchen");
+    check("the transition shelf offers transitions and nothing else",
+      all(".v-fx__tile").map((node) => node.dataset.effectId).sort().join(),
+      ["crossfade", "dip", "slide", "wipe", "zoom"].join());
+    checkAtLeast("and a dissolve halfway through is a real picture",
+      pixelsOf(tileOf("crossfade")).length, 4);
+    labelled("Schließen").click();
+    await until("the shelf to close", () => (shelf() === null ? true : null));
+
+    await openShelf("Effekte durchsuchen");
+    const tiles = all(".v-fx__tile img");
+    check("every effect this build can draw has a tile", tiles.length, 10);
+    check("and each one is a picture at the size the grid asks for",
+      [...new Set(tiles.map((img) => `${img.naturalWidth}x${img.naturalHeight}`))], ["192x108"]);
+
+    // The check the whole feature rests on. Fifteen tiles of the same frame would look like a
+    // working library from across the room, and every one of them would be a lie.
+    const distinct = tiles.filter((img) => apart(img, tileOf("brightness")) > 6).length;
+    checkAtLeast("and the tiles are pictures of different effects, not one frame reprinted",
+      distinct, tiles.length - 1);
+
+    // Searching is what makes a shelf a library rather than a longer list.
+    setValue(q(".v-fx__search"), "maske");
+    await sleep(150);
+    check("searching narrows the shelf to what was asked for",
+      all(".v-fx__tile").map((node) => node.dataset.effectId).sort().join(),
+      ["mask-ellipse", "mask-rect"].join());
+    setValue(q(".v-fx__search"), "");
+    await sleep(150);
+
+    check("the library raised nothing", banner(), "");
+    // Left open on purpose: the screenshot is taken when the virtual budget runs out, and what it
+    // has to show is this dialog.
+    q(".v-fx").scrollTop = 0;
+    await sleep(300);
   }
 
   // Gallery, wizard, bake, and then the only question that matters: is the result something a
@@ -1079,8 +1156,8 @@ async function announce() {
     // unlike the phone there is nothing to switch to.
     finger("pointerdown", q("[data-clip-id]"), 0, 0);
     finger("pointerup", q("[data-clip-id]"), 0, 0);
-    const add = await until("the effect picker", () => effectPicker());
-    checkAtLeast("with a thumb-sized target to add an effect",
+    const add = await until("the way into the effect library", () => effectPicker());
+    checkAtLeast("with a thumb-sized target to reach the effect library",
       add.getBoundingClientRect().height, 44);
     check("the properties panel is beside the picture, not behind a tab",
       box('[data-testid="inspector"]').right <= innerWidth, true);
@@ -1126,10 +1203,25 @@ async function announce() {
   pickFixture()
     .then(announce)
     .then(() =>
-      templates ? runTemplates() : phone ? runPhone() : tablet ? runTablet() : run(),
+      shelves
+        ? runEffects()
+        : templates
+          ? runTemplates()
+          : phone
+            ? runPhone()
+            : tablet
+              ? runTablet()
+              : run(),
     )
     .catch((error) => {
-      results.push({ name: "the run itself", ok: false, got: String(error), want: "no throw" });
+      // The stack, not only the message: a null that could not be clicked names a control, and
+      // without the line it came from every one of them is a candidate.
+      results.push({
+        name: "the run itself",
+        ok: false,
+        got: String(error?.stack ?? error),
+        want: "no throw",
+      });
     })
     .then(() => {
       if (noise.length > 0) {
