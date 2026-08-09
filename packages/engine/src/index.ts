@@ -1,7 +1,8 @@
 export { audioEffect, audioEffectManifests } from "./audio/effects";
 export type { AudioEffectManifest, AudioEffectNode } from "./audio/effects";
-export { AudioGraph, hasAudibleClips, measureLoudness } from "./audio/graph";
-export { integratedLufs, LOUDNESS_BLOCK_SECONDS, peakDbfs } from "./audio/loudness";
+export { AudioGraph, hasAudibleClips, MASTER_METER, measureLoudness } from "./audio/graph";
+export { integratedLufs, levelFrom, LOUDNESS_BLOCK_SECONDS, peakDbfs, SILENT_LEVEL } from "./audio/loudness";
+export type { Level } from "./audio/loudness";
 export type { AudioBufferSource } from "./audio/graph";
 export { Clock } from "./clock";
 export type { ClockSource } from "./clock";

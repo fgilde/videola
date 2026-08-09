@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { integratedLufs, peakDbfs } from "./loudness";
+import { integratedLufs, levelFrom, peakDbfs, SILENT_LEVEL } from "./loudness";
 
 const RATE = 48_000;
 
@@ -195,5 +195,76 @@ describe("peakDbfs", () => {
   // an absent measurement does instead of as a very quiet one.
   it("has no reading for silence", () => {
     expect(peakDbfs([new Float32Array(8)])).toBe(Number.NEGATIVE_INFINITY);
+  });
+});
+
+describe("levelFrom", () => {
+  // The two numbers a meter shows are not the same number: a sine's peak stands 3.01 dB above its
+  // own effective value, and a meter that drew one bar for both would be lying about one of them.
+  it("reads a full-scale sine as 0 dBFS peak and -3 dBFS effective", () => {
+    const level = levelFrom(stereo(sine(0, 0.1)));
+
+    expect(level.peak).toBeCloseTo(0, 1);
+    expect(level.rms).toBeCloseTo(-3.01, 1);
+  });
+
+  it("follows the signal down", () => {
+    const level = levelFrom(stereo(sine(-20, 0.1)));
+
+    expect(level.peak).toBeCloseTo(-20, 1);
+    expect(level.rms).toBeCloseTo(-23.01, 1);
+  });
+
+  // A square wave has no crest factor at all, which is what separates this from a scaled sine: any
+  // implementation that derived one reading from the other by a fixed 3 dB gets this one wrong.
+  it("reads a half-scale square wave the same peak and effective value", () => {
+    const plane = Float32Array.from({ length: 1000 }, (_, i) => (i % 2 === 0 ? 0.5 : -0.5));
+    const level = levelFrom([plane]);
+
+    expect(level.peak).toBeCloseTo(-6.02, 1);
+    expect(level.rms).toBeCloseTo(-6.02, 1);
+  });
+
+  it("has no reading for silence", () => {
+    expect(levelFrom([new Float32Array(64)])).toEqual(SILENT_LEVEL);
+  });
+
+  it("has no reading for no channels", () => {
+    expect(levelFrom([])).toEqual(SILENT_LEVEL);
+  });
+});
+
+describe("the peak hold marker", () => {
+  const loud = (): readonly Float32Array[] => [Float32Array.from([1])];
+  const quiet = (): readonly Float32Array[] => [Float32Array.from([0.1])];
+
+  it("takes the peak when the peak is the higher of the two", () => {
+    expect(levelFrom(loud(), SILENT_LEVEL, 0.016).hold).toBeCloseTo(0, 6);
+  });
+
+  // The whole point of a hold: the peak has gone and the marker is still where it was, because a
+  // transient that lasts one buffer is a transient nobody sees without one.
+  it("stays above a peak that has already fallen away", () => {
+    const first = levelFrom(loud(), SILENT_LEVEL, 0.016);
+    const second = levelFrom(quiet(), first, 0.016);
+
+    expect(second.peak).toBeCloseTo(-20, 1);
+    expect(second.hold).toBeCloseTo(-0.32, 2);
+  });
+
+  // 20 dB a second, so a full-scale hit is back at the floor inside four seconds rather than
+  // standing there for the rest of the session.
+  it("falls at twenty decibels a second", () => {
+    const held = { peak: 0, rms: 0, hold: 0 };
+
+    expect(levelFrom(quiet(), held, 0.5).hold).toBeCloseTo(-10, 6);
+    expect(levelFrom(quiet(), held, 1).hold).toBeCloseTo(-20, 6);
+  });
+
+  // Falling past the signal underneath it would leave the marker below the bar it marks.
+  it("never falls below the peak it is marking", () => {
+    const held = { peak: 0, rms: 0, hold: 0 };
+
+    expect(levelFrom(quiet(), held, 10).hold).toBeCloseTo(-20, 1);
   });
 });
