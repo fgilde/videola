@@ -34,10 +34,10 @@ either through `--dump-dom` or by posting its results to the small server that s
 
 | Command | What it checks |
 |---|---|
-| `pnpm --filter @videola/engine test:gpu` | 89 pixel checks against ANGLE/SwiftShader: both shaders compile, premultiplied alpha in all nine blend modes, the transform matrix with rotation and an off-centre anchor, context loss and recovery, a closed `VideoFrame` |
+| `pnpm --filter @videola/engine test:gpu` | 351 pixel checks against ANGLE/SwiftShader: both shaders compile, premultiplied alpha in all nine blend modes, every effect and transition at named pixel values, the tone curves and the colour wheels, what a scope reads back off a shrunken frame, the transform matrix with rotation and an off-centre anchor, context loss and recovery, a closed `VideoFrame` |
 | `pnpm --filter @videola/engine test:export` | 27 checks: a real export, then `ffprobe` and `ffmpeg` read the file back — codec, resolution, frame rate, frame count, duration, and a Goertzel filter confirming the tone in the file is the tone that went in |
-| `pnpm --filter @videola/ui test:browser` | 29 checks against real layout: 44-px targets as geometry, hit areas, the virtualisation budget across zoom levels, the scroll width a browser actually honours |
-| `pnpm --filter videola-web test:browser` | 56 checks driving the **built** application: a file dropped on it, decoded into the preview, played back, and the phone viewport through the devtools protocol |
+| `pnpm --filter @videola/ui test:browser` | 200 checks against real layout: 44-px targets as geometry, hit areas, the virtualisation budget across zoom levels, the scroll width a browser actually honours, and the three scopes and the curve field drawn onto a canvas the browser really rasterises |
+| `pnpm --filter videola-web test:browser` | 228 checks driving the **built** application: a file dropped on it, decoded into the preview, graded with a curve and a colour wheel while the scopes follow, played back, and the phone and tablet viewports through the devtools protocol |
 
 They are one job, not four. Together they take well under a minute; a second job would spend more on
 checkout, install and build than the checks themselves cost. Nothing here is deferred to a nightly

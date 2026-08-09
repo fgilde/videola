@@ -44,8 +44,8 @@ tile is the effect's own shader over the frame at the playhead** — not a paint
 tile that failed to change the picture it was drawn from fails the build, which is what stops an
 effect from advertising itself with its own default value.
 
-Brightness, contrast, saturation, colour temperature, vignette, blur, sharpen and chroma key.
-Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
+Brightness, contrast, saturation, colour temperature, curves, colour wheels, vignette, blur, sharpen
+and chroma key. Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
 masks with feather and invert; two masks in one chain intersect. A text generator with styling and
 in, out and loop animation.
 
@@ -72,6 +72,30 @@ run on every build, and every tile in the browser is one of them — a tile that
 picture it was drawn from fails the build. A third-covered pixel over red must read 81, which is
 what premultiplied alpha
 gives; the reflex answer of 255 fails.
+
+## Colour correction, and something to judge it by
+
+Curves and colour wheels, and three measuring instruments to read the result on.
+
+**Curves** on brightness and on each of the three channels, with control points you drag: tap the
+field to add one where you tapped, tap a point to take it away, and the two ends stay. The line is
+a monotone cubic, which cannot overshoot between two points — an overshoot on a tone curve is a
+bright rim along every edge in the picture that crossed that tone. The brightness curve is not the
+three channel curves in step: it scales all three by one ratio, so the colour of a pixel comes out
+exactly as it went in and only its brightness moves.
+
+**Colour wheels** — lift, gamma and gain — each with a tint and a strength, which is what the wheel
+and the ring on a real panel are. Lift says where black goes, gain says where white goes, and gamma
+bends what lies between without moving either end.
+
+**Scopes**: a waveform, a vectorscope and a histogram, in a strip under the picture that a switch on
+the transport opens. They read the preview's own pixels, so what they show is what the export will
+write. They are shrunk on the GPU before they are counted and measured ten times a second: 0.9 ms a
+reading rather than the 33 ms a naive full-frame count costs at 1080p, and nothing at all while the
+strip is closed.
+
+Everything here is keyframable like any other parameter, curves included — a curve keyframe
+interpolates its control points, so a knee slides sideways as well as up.
 
 ## Retiming and presets
 

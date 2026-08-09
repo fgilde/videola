@@ -1,8 +1,8 @@
 # Effekte und Übergänge
 
-**Zehn Effekte, sieben Übergänge, zwei Masken und eine Textmaschine — ausgewählt in einer
-Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an einem
-echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 303
+**Zwölf Effekte, sieben Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
+in einer Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an
+einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 349
 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
 
 ## Ein Effekt ist ein Manifest und ein Fragment-Shader
@@ -60,9 +60,9 @@ stand und von unten kam. Ein Effekt, dem die Richtung wichtig ist, rechnet um st
 Richtung, die auf dem Schirm im Uhrzeigersinn lesen soll — dieselbe Konvention wie die Drehung der
 Transformation — ist innerhalb eines Durchgangs `vec2(cos a, -sin a)`.
 
-### Ein Parameter ist eine Fließkommazahl oder eine Farbe
+### Ein Parameter ist eine Fließkommazahl, eine Farbe oder eine Kurve
 
-Bis zu diesem Meilenstein trug jedes Manifest ausschließlich Fließkommazahlen, und genau daran war
+Bis vor kurzem trug jedes Manifest ausschließlich Fließkommazahlen, und genau daran war
 eine LUT gescheitert. `ParamValue` im Rust-Kern trägt `Color`, `Int`, `Bool`, `Vec2` und `Choice`,
 seit das Modell geschrieben wurde; was fehlte, war irgendetwas zwischen Projektdatei und Uniform,
 das hätte sagen können, welche Sorte ein Parameter ist.
@@ -90,6 +90,62 @@ eine eigene Auswahl hinzufügte, wäre ein zweiter Satz Fehler.
 `ponytail:` die Auswahl kennt kein Alpha, sie ändert also rgb und trägt weiter, welches Alpha das
 Modell hielt — und ein Farbparameter bekommt keinen Keyframe-Schalter, obwohl `ParamValue::lerp`
 einen bereits interpolieren kann.
+
+```ts
+{ kind: "curve", key: "luma", name: { de: "Helligkeit", en: "Brightness" }, default: IDENTITY_CURVE }
+```
+
+Eine Kurve ist eine **Liste von Stützpunkten**, `[Eingang, Ausgang]` mit beidem in 0 bis 1 und
+aufsteigendem Eingang — die Punkte, die jemand zieht, und nicht die Tabelle, die ein Shader liest.
+Dieser Unterschied ist die ganze Entwurfsentscheidung, und sie fiel aus einem Grund so: aus Punkten
+lässt sich eine Tabelle ableiten, aus einer Tabelle keine Punkte. Eine abgetastet gespeicherte Kurve
+ließe sich rendern und nie wieder bearbeiten, und ein Keyframe zwischen zwei Tabellen ist kein
+Keyframe zwischen zwei Kurven — er ist einer zwischen zwei ihrer Schatten. `ParamValue::Curve` trägt
+darum die Punkte, und `ParamValue::lerp` interpoliert sie paarweise in beiden Koordinaten, damit ein
+keyframetes Knie auch seitlich wandert und nicht nur hoch. Zwei Kurven mit verschiedener Punktzahl
+haben überhaupt keine Paarung und interpolieren nicht; der Kern hält dann den früheren Keyframe,
+genau wie bei einem `Bool`.
+
+**Als Uniform-Feld in den Shader, nicht als Textur.** `clampCurve` tastet die Punkte auf 32
+gleichmäßig verteilte Ausgänge ab, `uniform1fv` füllt ein `float[32]`, und der Shader mischt zwischen
+benachbarten Einträgen. Eine LUT-Textur war der andere Kandidat und hätte eine Textureinheit, einen
+Upload-Pfad und eine Lebensdauer in der Compositor-Verwaltung gekostet — die drei Dinge, die lecken —
+und dafür nichts gebracht: eine keyframete Kurve hat in jedem Bild andere Punkte, die Textur wäre
+also ohnehin aus eben diesen Punkten neu gebaut worden. Was eine Textur *brächte*, wäre Interpolation
+in Hardware und eine Tabelle, die lang genug ist, damit die Interpolation nicht zählt; gemessen zählt
+sie auch bei 32 nicht. Der Fehler, den ein linearer Zwischenwert gegenüber der Kurve selbst lässt,
+bleibt unter einer halben 8-Bit-Stufe, und `curve.test.ts` ist die Prüfung, die das sagt.
+
+Diese Wahl brauchte eine zusätzliche Regel in `setUniforms`, und die ist vollständig statt glücklich:
+**ein Feld mit mehr als sechzehn Komponenten kann kein Vektor und keine Matrix sein**, denn GLSL ES
+kennt nichts Breiteres als eine `mat4`. Unter siebzehn bleibt die Form mehrdeutig und wird weiterhin
+abgelehnt.
+
+Zwischen den Punkten ist die Kurve ein **monoton kubischer Spline** — Fritsch–Carlson — und kein
+gewöhnlicher. Ein gewöhnlicher Spline durch drei Punkte, die ein Kolorist wirklich setzt, schießt
+zwischen ihnen über, und ein Überschwinger auf einer Tonwertkurve ist ein heller Saum an jeder Kante
+im Bild, die diesen Tonwert kreuzt. Die monotone Begrenzung gibt etwas Glätte auf und kann dafür nie
+aus dem Kasten heraus, den zwei benachbarte Punkte aufspannen. Außerhalb der äußersten Punkte läuft
+die Kurve flach weiter statt extrapoliert: ein Stützpunkt bei 0,2 sagt, was bei 0,2 geschieht, und
+eine Steigung jenseits des Gezeichneten zu raten ist, wie eine im Editor zahm aussehende Kurve die
+Schatten abschneidet.
+
+Der Abtaster liegt in `@videola/core` und nicht in der Engine, obwohl Pixelarithmetik dort natürlich
+hingehörte. Zwei sehr verschiedene Verbraucher brauchen genau dieselbe Antwort daraus: der Renderer
+tastet sie in die Tabelle des Shaders ab, und das Kurvenfeld zeichnet die Linie unter dem Finger. Eine
+zweite Umsetzung auf der Zeichenseite wäre eine Kurve, die so aussieht und anders korrigiert — der
+eine Fehler, den ein Kurvenwerkzeug nicht haben darf. Keyframe-Auflösung ist das nicht: *welche*
+Punkte die Kurve zu einem Zeitpunkt hat, bleibt die Antwort des Kerns und kommt aus Rust.
+
+An der Oberfläche ist eine Kurve ein quadratisches Feld mit den Punkten als echten Schaltflächen über
+einer SVG-Zeichnung. Punkt ziehen verschiebt ihn, Tippen ins Feld setzt einen neuen dorthin, Tippen
+auf einen Punkt nimmt ihn weg; die beiden Enden bleiben. Schaltflächen statt Kreise in der Zeichnung,
+weil drei Dinge dadurch geschenkt sind, die in SVG keins davon sind: die Plattform fokussiert sie und
+erreicht sie mit der Tastatur, das Fingerziel kommt aus demselben `--v-touch-target` wie jedes andere
+Bedienelement, und eine Browserprüfung kann das Rechteck messen, das ein Finger treffen muss. Ein
+Kreis in einer skalierten `viewBox` hat einen Radius in Nutzereinheiten, und vierundvierzig Pixel
+sind keine feste Anzahl davon.
+
 
 ## Zwei Durchgänge für einen separablen Kern
 
@@ -141,7 +197,7 @@ Auf welcher Seite dieser Linie ein Effekt liegt, entscheidet, wie er geschrieben
 | Helligkeit, Farbtemperatur, Vignettierung | ja | `rgb` skalieren, auf `a` klemmen |
 | Sättigung, Weichzeichnen, Schärfen | ja | eine gewichtete Summe ist *der Grund* für premultipliziert |
 | Überblendung, Wischen, Schieben | ja | ein schlichtes `mix` der beiden Eingänge |
-| Kontrast | **nein** | durch `a` teilen, rechnen, zurück multiplizieren |
+| Kontrast, Kurven, Farbräder | **nein** | durch `a` teilen, rechnen, zurück multiplizieren |
 | Chroma-Keying | schreibt `a` | den ganzen `vec4` skalieren, Farbe und Alpha zusammen |
 | Masken | schreibt `a` | den ganzen `vec4` skalieren; `m` liegt in [0, 1], also klemmt nichts |
 
@@ -154,7 +210,7 @@ Zwei Folgerungen, die man kennen sollte, bevor man einen Shader schreibt:
   eines deckenden.** Das ist der dunkle Saum um jeden weichgezeichneten Freisteller, und
   premultipliziert ist, was ihn wegnimmt.
 
-Kontrast ist der eine Effekt hier, der nicht linear ist, und der Unterschied ist nicht fein: derselbe
+Kontrast war der erste Effekt hier, der nicht linear ist, und der Unterschied ist nicht fein: derselbe
 Regler auf einem halbdurchsichtigen Grau ergibt richtig gerechnet 97 und auf dem premultiplizierten
 Wert 33. Keine Zusicherung über den Text des Shaders könnte die beiden unterscheiden — deshalb ist es
 eine Pixelprüfung.
@@ -177,6 +233,8 @@ Eigenschaft der Aufnahme ist und nicht der Ebene — und genau das ist eine Vign
 | Kontrast | Farbe | `amount` 0–4 | eine Steigung um Mittelgrau; 0 flacht auf dieses Grau ab |
 | Sättigung | Farbe | `amount` 0–2 | mischt zur Luma; **0 ist Schwarzweiß** |
 | Farbtemperatur | Farbe | `amount` −1–1 | Rot gegen Blau, Grün verankert |
+| Kurven | Farbe | `luma`, `red`, `green`, `blue`, je eine Punktliste | zieht einzelne Tonwerte hoch oder herunter |
+| Farbräder | Farbe | `liftTint`/`liftAmount`, `gammaTint`/`gammaAmount`, `gainTint`/`gainAmount` | Schwarzpunkt, Mitten und Weißpunkt |
 | Vignettierung | Farbe | `amount` 0–1, `size` 0–1,4 | dunkelt zu den Ecken hin ab |
 | Weichzeichnen | Detail | `amount` 0–16 | separabler Gauß, Abstand in Bildpixeln |
 | Schärfen | Detail | `amount` 0–4 | Unschärfemaske gegen die vier Nachbarn |
@@ -189,6 +247,38 @@ Es gibt keinen eigenen Schwarzweiß-Effekt: er wäre der Sättigungs-Shader mit 
 Ein Chroma-Keying übergeht Graustufen mit Absicht. Ein Grau hat keinen sinnvollen Farbton und die
 Rechnung liefert dafür Null zurück — ohne eine Untergrenze für die Sättigung würde eine auf Rot
 gestellte Stanze also jedes Grau im Bild wegradieren.
+
+### Vier Kurven, nicht drei
+
+Die drei Kanalkurven sind die gewöhnlichen: Rot hinein, Rot heraus. Die vierte ist nicht diese drei
+auf dieselbe Form gestellt, und genau deshalb gibt es sie. Sie liest das Rec.-709-Luma des Pixels,
+fragt die Kurve, was aus diesem Tonwert werden soll, und skaliert alle drei Kanäle mit dem Verhältnis
+— das Verhältnis zwischen ihnen und damit Farbton und Sättigung kommen also genau so heraus, wie sie
+hineingingen. Gemessen an einem Pixel 180, 90, 30 durch dieselbe S-Kurve: die Helligkeitskurve gibt
+146, 73, 24, weiterhin genau zwei zu eins; dieselbe Form durch die drei Kanalkurven gibt 217, 60, 8,
+und das ist eine Sättigungsänderung, um die niemand gebeten hat.
+
+Was ein Verhältnis nicht kann, ist etwas anheben, das schon schwarz ist. Den Fuß der
+Helligkeitskurve anzuheben öffnet die Schatten und lässt echtes Schwarz stehen — dafür ist Lift an
+den Farbrädern da, dessen ganze Aufgabe das Addieren statt des Skalierens ist.
+
+### Lift, Gamma und Gain sind ein Effekt
+
+Sie sind eine Gerade. Lift sagt, wohin Schwarz geht, Gain sagt, wohin Weiß geht — zusammen legen sie
+eine Gerade durch den Tonwertbereich —, und Gamma biegt, was dazwischen liegt, ohne eines der beiden
+Enden mitzunehmen. In drei Effekte zerlegt liefe die Kette drei Runden
+Unpremultiplizieren/Premultiplizieren und drei Klemmungen für eine Gerade, und die mittlere klemmte
+ein Bild, das die letzte gleich wieder streckt.
+
+Jedes Rad ist ein **Farbstich und eine Stärke**, und genau das sind die zwei Bedienelemente an einem
+echten Pult: das Rad schiebt die drei Kanäle auseinander, der Ring bewegt alle drei zusammen. Ein
+Farbstich ist als Farbe gespeichert, Mittelgrau ist also gar kein Stich, und der Abstand zu
+Mittelgrau ist der Schub. Er kommt premultipliziert an wie jede Farbe, die hier einen Shader
+erreicht, und wird zurückgeteilt — Alpha ist Deckung, und ein Farbstich deckt nichts.
+
+Auseinanderhalten lassen sich die drei auf Schwarz, und nur dort. Ein Mittelgrau kann es nicht: ein
+Lift von 0,25 und ein Gain von 0,25 setzen es beide auf 160. Auf Schwarz gibt Lift 64 und die anderen
+beiden geben 0.
 
 ### Eine Maske ist ein Effekt, kein Feld am Clip
 
@@ -314,6 +404,87 @@ Die Pixelprüfung dahinter ist die, auf der diese ganze Funktion ruht: Die Kache
 muss sich von dem Bild, aus dem sie gezeichnet wurde, um mehr als acht Stufen unterscheiden,
 gemittelt über jeden Kanal jedes Pixels. Eine Kachel, die zurückkam, ist nichts wert; eine Kachel,
 die *verändert* zurückkam, ist die Aussage.
+
+## Die Messgeräte
+
+Ohne Messgerät ist jede Farbentscheidung eine Vermutung über einen Monitor. Drei davon lesen die
+Vorschau: eine **Wellenform**, ein **Vektorskop** und ein **Histogramm**, in einer Leiste unter dem
+Bild, die der Schalter in der Transportleiste öffnet.
+
+Sie lesen die Vorschau, weil die Vorschau die eine Fläche in dieser Anwendung ist, von der überhaupt
+jemand ein Pixel zurückverlangt — `createContext(canvas, { readable: true })`, also
+`preserveDrawingBuffer`. Die Pixel liegen also schon da.
+
+**Was das kostet, gemessen bevor es entschieden wurde.** Auf dem Software-Rasterisierer, auf dem die
+Prüfstände laufen, bei 1080p:
+
+| | pro Messung |
+|---|---|
+| `readPixels` des ganzen Zeichenpuffers, 8,3 MB | 3,4 ms |
+| dasselbe, dann zwei Millionen Pixel gezählt | **33,6 ms** |
+| `sample(256, 144)` — ein Blit, dann ein Lesen von 147 kB | 0,22 ms |
+| dasselbe, dann 36 864 Pixel gezählt | **0,91 ms** |
+
+Dreiunddreißig Millisekunden sind länger als ein Bild, in jedem Bild, für eine Anzeige, an der
+niemand zieht. Das Verkleinern geschieht deshalb auf der GPU: `Compositor.sample` blittet den
+Zeichenpuffer in einen kleinen Framebuffer und liest den zurück, und die Anzeige misst zehnmal in der
+Sekunde statt sechzigmal. Zehn Hertz von 0,91 ms sind unter einem Prozent eines Kerns, und solange
+die Leiste zu ist, wird gar nichts zurückgelesen.
+
+**Der Blit ist NEAREST, und darin liegt der ganze Unterschied zwischen einer Messung und einem
+Bild.** Vier Nachbarn zu mitteln erfindet Werte, die kein Pixel hatte: ein einzelnes ausgefressenes
+Licht in einem dunklen Feld mittelt sich zu einem Mittelton herunter, und das Messgerät berichtet
+genau das nicht mehr, wofür es da ist. Abtasten darf so ein Pixel verfehlen; es darf es nie zu einem
+weichzeichnen, das es nie gab. Der Pixelprüfstand verkleinert ein 32er-Bild mit genau zwei Stufen auf
+dreizehn und prüft, dass genau zwei zurückkommen — dreizehn und nicht sechzehn, weil ein bilineares
+Lesen bei ganzzahligem Verhältnis auf Texelmitten fällt und dieselbe Antwort gäbe wie NEAREST.
+
+`ponytail:` das Lesen ist weiterhin synchron und wartet damit auf die GPU. Ein `PIXEL_PACK_BUFFER`
+mit einem Fence, ein Bild später gelesen, würde gar nicht warten — lohnt sich, sobald ein Messgerät
+der Wiedergabe folgen muss statt einem Menschen, der es ansieht.
+
+Drei weitere Dinge, bei denen die Messgeräte genau sind:
+
+- **Premultipliziert, wie alles hinter dem Clip-Shader.** Ein Messgerät geht über die Farbe und nicht
+  über die Deckung, jedes Pixel wird also durch sein eigenes Alpha zurückgeteilt. Als gerades Alpha
+  gelesen, liest sich ein halbdurchsichtiges Weiß als Mittelgrau.
+- **Ein Pixel ohne Deckung hat keine Farbe zu melden** und fällt ganz heraus, statt als Schwarz
+  gezählt zu werden. Als Schwarz gezählt sieht ein leeres Bild aus wie ein perfekt belichtetes mit
+  Objektivdeckel. Ein leeres Bild ergibt darum eine leere Messung, und die Anzeige sagt das in
+  Worten, statt durch eine Anzahl von null zu teilen.
+- **Das Raster kommt aus derselben Umrechnung wie die Messung.** Die sechs Kästchen sind die
+  Farbbalken bei drei Vierteln Amplitude, gerechnet statt erinnert, damit Punktwolke und Kästchen
+  nicht auseinanderlaufen können.
+
+## Der Farbraum, und was er für die Farbkorrektur bedeutet
+
+Das Bild kommt weit häufiger als nicht als BT.709 mit begrenztem Wertebereich, und der Browser
+rechnet es beim Hochladen aus dem `VideoColorSpace` des Bildes um — `BROWSER_DEFAULT_WEBGL`. Es in
+einem eigenen Shader noch einmal umzurechnen, würde mit einer Umrechnung konkurrieren, welche die
+Metadaten kennt, und zwei Umrechnungen sind schlechter als die eine, die es weiß.
+
+Heraus kommt **nicht-lineares sRGB**, und alles dahinter mischt darin. Für den größten Teil der
+Bibliothek ist das der übliche Kompromiss, den jedes Schnittprogramm eingeht. Für die Farbkorrektur
+ist es eine echte Einschränkung, und die gehört benannt statt übergangen:
+
+- **Ein Gammazug ist kein Belichtungszug.** Eine Blende aufmachen ist im linearen Licht eine
+  Multiplikation; hier ist es eine Multiplikation bereits codierter Werte, die die Schatten stärker
+  anhebt als die Lichter. Es sieht aus, wie Leute es von einem Schnittprogramm erwarten, weil jedes
+  Schnittprogramm es so macht, und es ist nicht, was ein Belichtungsmesser sagen würde.
+- **Sättigung und Helligkeitskurve rechnen Luma, nicht Leuchtdichte.** Die Rec.-709-Gewichte liegen
+  auf den codierten Werten, eine kräftige Entsättigung verschiebt also die empfundene Helligkeit ein
+  wenig. Die Wellenform misst dieselbe Größe, immerhin sind Messgerät und Effekt damit untereinander
+  einig.
+- **Eine Überblendung auf halbem Weg ist nicht das halbe Licht.** Codierte Werte zu mischen verdunkelt
+  die Mitte jeder Blende gegenüber einer linearen Mischung. Sichtbar bei einer Blende zwischen einer
+  hellen und einer dunklen Einstellung.
+- **Eine Quelle mit großem Farbraum oder HDR wird vom Browser beim Hereinkommen tone-gemappt**, und
+  nichts hier kann das rückgängig machen. Diese Kette korrigiert ein SDR-Bild.
+
+`ponytail:` die Abhilfe ist eine Änderung der Kette und nicht eines Shaders: sRGB-Texturformate, ein
+sRGB-Zeichenpuffer und ein Zwischenziel in Half-Float, damit die Kette lineares Licht trägt und die
+Codierung einmal am Ende geschieht. Jede Klemmung auf `[0, a]` in dieser Bibliothek müsste dann gegen
+einen größeren Bereich klemmen, und jede gemessene Zahl auf dieser Seite würde sich verschieben.
 
 ## Übergänge
 
