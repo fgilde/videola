@@ -178,9 +178,29 @@ pub(crate) fn param_value_finite(value: &ParamValue) -> Result<()> {
         ParamValue::Float(v) => finite(*v).map(|_| ()),
         ParamValue::Color(channels) => channels.iter().try_for_each(|c| finite(*c).map(|_| ())),
         ParamValue::Vec2(components) => components.iter().try_for_each(|c| finite(*c).map(|_| ())),
+        ParamValue::Curve(points) => {
+            if points.len() > MAX_CURVE_POINTS {
+                return Err(CoreError::InvalidArgument(format!(
+                    "a curve carries at most {MAX_CURVE_POINTS} points"
+                )));
+            }
+            points
+                .iter()
+                .try_for_each(|point| point.iter().try_for_each(|c| finite(*c).map(|_| ())))
+        }
         ParamValue::Int(_) | ParamValue::Bool(_) | ParamValue::Choice(_) => Ok(()),
     }
 }
+
+// The one variant whose size a project file chooses. Every other kind is a fixed handful of floats,
+// so this is the only place where a loaded document decides how much work the renderer does per
+// frame -- the shader's table is sampled from these points, once per curve per frame. Sixty-four is
+// far past any curve a person drags and far short of a list that costs a frame to walk.
+//
+// Bounded here and not clamped: x out of order, or y outside 0..1, is still a curve that draws, and
+// the sampler at the uniform seam is where a value has always been brought into range. Refusing to
+// open a project over that would be the harsher answer to the milder problem.
+pub(crate) const MAX_CURVE_POINTS: usize = 64;
 
 // `speed.rate` is the one scalar C1 of the M0 review found unbounded here: `Clip::consumed_source`
 // and `out_point` multiply it straight into a `Time`, and a value past this bound overflows the
@@ -456,7 +476,7 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
 //
 // Track and marker colours go through the same check: both end up in an inline style in the
 // timeline, where anything unparsable is dropped without a word.
-fn hex_color(value: &str) -> Result<()> {
+pub(crate) fn hex_color(value: &str) -> Result<()> {
     let digits = value.strip_prefix('#').unwrap_or("");
     let shaped = matches!(digits.len(), 3 | 6 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit());
     if shaped {
@@ -917,6 +937,45 @@ mod tests {
         ));
     }
 
+    fn project_with_curve(points: Vec<[f32; 2]>) -> Project {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        let mut effect = crate::model::Effect::new("curves");
+        effect.params.insert("luma".into(), ParamValue::Curve(points));
+        clip.effects.push(effect);
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+        p
+    }
+
+    // The one parameter whose size the file chooses, so the one that has to be bounded rather than
+    // merely checked: the sampler walks every point, once per curve, once per frame.
+    #[test]
+    fn a_curve_with_more_points_than_anyone_drags_fails_to_load() {
+        let mut inside = project_with_curve(vec![[0.5, 0.5]; MAX_CURVE_POINTS]);
+        assert!(inside.normalize().is_ok());
+
+        let mut over = project_with_curve(vec![[0.5, 0.5]; MAX_CURVE_POINTS + 1]);
+        assert!(matches!(
+            over.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn a_curve_with_a_non_finite_point_fails_to_load() {
+        let mut loaded = project_with_curve(vec![[0.0, 0.0], [f32::NAN, 0.5], [1.0, 1.0]]);
+        assert!(matches!(
+            loaded.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
     #[test]
     fn a_generators_non_finite_gradient_angle_fails_to_load() {
         let mut p = Project::default();
@@ -1139,6 +1198,7 @@ mod tests {
             time: Time::ZERO,
             label: "x".into(),
             color_hex: "rebeccapurple".into(),
+            note: String::new(),
         });
 
         assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));

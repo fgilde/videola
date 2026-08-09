@@ -22,6 +22,7 @@ import { createContext } from "./render/context";
 import { drawList } from "./render/draw-list";
 import type { GlContext } from "./render/context";
 import type { AudioGraph } from "./audio/graph";
+import type { Level } from "./audio/loudness";
 
 // Playback steers the audio context as well as reading it. A freshly built one is suspended, its
 // currentTime stands still, and a clock started on it would report a frozen position while
@@ -42,6 +43,21 @@ export interface FrameSource {
 // Enough detail that a clip filling the screen does not look stepped, cheap enough that fifty of
 // them cost nothing. Raise it if a strip ever looks blocky at full zoom.
 export const WAVEFORM_BUCKETS = 600;
+
+// The rungs a shuttle climbs. Every editor has this ladder and every editor spells it the same
+// way, so it is not a setting.
+export const SHUTTLE_RATES: readonly number[] = [1, 2, 4, 8];
+
+/**
+ * The rate one press of J or L moves to. Pressing in the direction the transport is already going
+ * steps up the ladder; pressing against it drops straight back to the first rung, which is what
+ * makes tapping J out of a fast forward feel like a brake rather than like counting back down.
+ */
+export function nextShuttleRate(current: number, direction: 1 | -1): number {
+  if (Math.sign(current) !== direction) return direction;
+  const faster = SHUTTLE_RATES.find((rate) => rate > Math.abs(current));
+  return direction * (faster ?? SHUTTLE_RATES[SHUTTLE_RATES.length - 1]!);
+}
 
 export interface PlaybackOptions {
   audio: AudioTransport;
@@ -70,6 +86,7 @@ export class Playback {
   #sources = new Map<string, Promise<FrameSource | undefined>>();
   #generated = new GeneratorFrames();
   #rolling = false;
+  #rate = 0;
   #painting = false;
   #due?: Time;
 
@@ -84,11 +101,25 @@ export class Playback {
     // Subscribed before anyone else, so a consumer's listener sees the time the picture is
     // already on its way to. Never unsubscribed: the clock is this object's own, so the listener
     // dies with it -- and a tick that lands after dispose finds no compositor and paints nothing.
-    this.#clock.onTick((at) => this.#show(at));
+    this.#clock.onTick((at) => {
+      // A rewind ends at the head of the timeline. The clock clamps there and would otherwise sit
+      // reporting zero with the transport still claiming to run.
+      if (at === 0 && this.#rate < 0) this.pause();
+      this.#show(at);
+    });
   }
 
   get isPlaying(): boolean {
     return this.#clock.isPlaying;
+  }
+
+  /**
+   * The shuttle rate, where 1 is ordinary play, a negative number is a rewind and 0 is halted.
+   * This is the transport's rate and not a clip's: a clip's speed is a property of the material
+   * and reaches the export, this one exists only while somebody is shuttling.
+   */
+  get rate(): number {
+    return this.#clock.isPlaying ? this.#rate : 0;
   }
 
   now(): Time {
@@ -113,6 +144,46 @@ export class Playback {
   }
 
   play(): void {
+    this.#run(1);
+  }
+
+  /**
+   * J and L. Each press in the same direction steps the shuttle up through 1, 2, 4 and 8; a press
+   * in the other direction starts over at once, which is what makes tapping J out of a fast
+   * forward feel like a brake rather than like counting back down. K is `pause`.
+   */
+  shuttle(direction: 1 | -1): void {
+    this.#run(nextShuttleRate(this.rate, direction));
+  }
+
+  pause(): void {
+    this.#rate = 0;
+    this.#rolling = false;
+    this.#graph.stop();
+    this.#clock.pause();
+  }
+
+  seek(t: Time): void {
+    this.#clock.seek(t);
+    // Rescheduling the whole graph is what a jump costs: an AudioBufferSourceNode cannot be moved
+    // once it is playing, so the voices are built again from the position the clock now reports.
+    if (this.#clock.isPlaying) this.#sound();
+  }
+
+  #run(rate: number): void {
+    if (rate === 0) {
+      this.pause();
+      return;
+    }
+    this.#rate = rate;
+    this.#clock.setRate(rate);
+    // Already rolling: the clock re-anchored itself, so all that is left is to put the sound on or
+    // take it off. Restarting the transport here would drop the position it is already at.
+    if (this.#clock.isPlaying) {
+      this.#sound();
+      return;
+    }
+    // A resume still in flight will reach `#begin`, which reads the rate that was just set.
     if (this.#rolling) return;
     this.#rolling = true;
     if (this.#audio.state === "running") {
@@ -123,22 +194,18 @@ export class Playback {
       () => void (this.#rolling && this.#begin()),
       (error: unknown) => {
         this.#rolling = false;
+        this.#rate = 0;
         console.error(error);
       },
     );
   }
 
-  pause(): void {
-    this.#rolling = false;
-    this.#graph.stop();
-    this.#clock.pause();
-  }
-
-  seek(t: Time): void {
-    this.#clock.seek(t);
-    // Rescheduling the whole graph is what a jump costs: an AudioBufferSourceNode cannot be moved
-    // once it is playing, so the voices are built again from the position the clock now reports.
-    if (this.#clock.isPlaying) this.#graph.startAt(this.#audio.currentTime, this.#clock.now());
+  // Sound at ordinary speed and silence at any other. An AudioBufferSourceNode is scheduled
+  // against real time and cannot follow a shuttle, so the alternative is not fast audio but audio
+  // drifting further from the picture with every second -- which is worse than none.
+  #sound(): void {
+    if (this.#rate === 1) this.#graph.startAt(this.#audio.currentTime, this.#clock.now());
+    else this.#graph.stop();
   }
 
   // Rolling and stepping are two different intents, and a step that leaves the clock running
@@ -172,8 +239,25 @@ export class Playback {
     return this.#graph.waveforms(buckets);
   }
 
+  // Not routed through `onTime`: the clock ticks on the picture's schedule, and the caller has to
+  // say how long its own last frame took because that is what the hold marker falls by.
+  levels(elapsed = 0): ReadonlyMap<string, Level> {
+    return this.#graph.levels(elapsed);
+  }
+
   onTime(cb: (t: Time) => void): () => void {
     return this.#clock.onTick(cb);
+  }
+
+  /**
+   * The picture as it stands, shrunk to `width` by `height` -- what a measuring instrument reads.
+   *
+   * Empty before a canvas is attached and after it has been let go, which is what a panel asking
+   * on a timer will hit sooner or later: measuring a preview that is no longer there has to be an
+   * empty reading, not a throw at whatever rate the timer runs.
+   */
+  sample(width: number, height: number): Uint8Array {
+    return this.#compositor?.sample(width, height) ?? new Uint8Array(0);
   }
 
   dispose(): void {
@@ -185,7 +269,7 @@ export class Playback {
   }
 
   #begin(): void {
-    this.#graph.startAt(this.#audio.currentTime, this.#clock.now());
+    this.#sound();
     this.#clock.play();
   }
 

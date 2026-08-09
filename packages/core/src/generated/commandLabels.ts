@@ -10,6 +10,8 @@ export const COMMAND_LABELS = [
   "cmd.track.setPan",
   "cmd.track.setFlags",
   "cmd.clip.add",
+  "cmd.clip.insert",
+  "cmd.clip.overwrite",
   "cmd.clip.remove",
   "cmd.clip.move",
   "cmd.clip.trim",
@@ -37,6 +39,8 @@ export const COMMAND_LABELS = [
   "cmd.marker.add",
   "cmd.marker.remove",
   "cmd.marker.rename",
+  "cmd.marker.setColor",
+  "cmd.marker.setNote",
   "cmd.media.import",
   "cmd.media.remove",
 ] as const;

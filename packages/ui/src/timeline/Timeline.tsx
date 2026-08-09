@@ -38,6 +38,7 @@ import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyframeLane, KeyframeLaneHeaders, paramLabel, type KeyframeSelection } from "./KeyframeLane";
 import { laneRows, offeredFor, type LaneRow } from "./keyframes";
+import { MarkerList } from "./MarkerList";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
 import {
@@ -327,6 +328,15 @@ export function Timeline({
             icon="flag"
             label={t("timeline.addMarker")}
             onClick={() => dispatch(cmd.markerAdd(playhead, ""))}
+          />
+          {/* Beside the button that sets one, and opening over the tracks rather than above them:
+              the picture is the largest zone on this screen and a list nobody has opened must not
+              take a row of it. */}
+          <MarkerList
+            markers={project.markers}
+            fps={project.settings.fps}
+            dispatch={dispatch}
+            onSeek={onSeek}
           />
         </div>
         {/* Two plain selects rather than modifier keys: a finger has no modifiers, and the mode a

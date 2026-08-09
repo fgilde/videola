@@ -1,0 +1,62 @@
+/* The bar where a range is marked in a medium. It stands between the library and the timeline,
+   which is the order the work happens in: pick the material, mark the range, place it. */
+.v-source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2) var(--v-space-3);
+  background: var(--v-bg-elevated);
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-source__head {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+}
+
+.v-source__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--v-text-sm);
+  color: var(--v-text);
+}
+
+/* Full width and tall enough to catch with a thumb. The native control keeps its own focus ring
+   and its own keyboard stepping, which is most of why it is the native control. */
+.v-source__scrub {
+  width: 100%;
+  min-height: var(--v-touch-target);
+}
+
+.v-source__controls,
+.v-source__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  flex-wrap: wrap;
+}
+
+.v-source__marks {
+  display: flex;
+  align-items: baseline;
+  gap: var(--v-space-3);
+  margin-left: auto;
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--v-text);
+}
+
+.v-source__range {
+  color: var(--v-text-muted);
+}
+
+@media (pointer: coarse) {
+  .v-source .v-button {
+    min-height: var(--v-touch-target);
+  }
+}

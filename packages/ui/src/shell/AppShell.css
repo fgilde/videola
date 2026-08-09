@@ -117,11 +117,12 @@
 .v-editor {
   display: grid;
   grid-template-columns: minmax(190px, 250px) minmax(0, 1fr) minmax(0, 300px);
-  grid-template-rows: auto minmax(0, 1fr) auto fit-content(30%) fit-content(38%);
+  grid-template-rows: auto minmax(0, 1fr) auto auto fit-content(30%) fit-content(38%);
   grid-template-areas:
     "banners  banners   banners"
     "library  preview   inspector"
     "library  transport inspector"
+    "library  scopes    inspector"
     "timeline timeline  timeline"
     "mixer    mixer     mixer";
   height: 100%;
@@ -157,6 +158,13 @@
 
 .v-editor .v-transport {
   grid-area: transport;
+}
+
+/* Directly under the picture and the transport, which is where a grading suite stands its
+   instruments: the eye goes from the frame to the trace without leaving the middle column. Its row
+   is content-sized, so the strip takes the height it declares and the picture keeps the rest. */
+.v-editor > .v-scopes {
+  grid-area: scopes;
 }
 
 .v-editor > .v-inspector {
@@ -209,8 +217,13 @@
 .v-shell[data-layout="phone"] .v-editor .v-library,
 .v-shell[data-layout="phone"] .v-editor .v-timeline,
 .v-shell[data-layout="phone"] .v-editor > .v-mixer,
+.v-shell[data-layout="phone"] .v-editor > .v-scopes,
 .v-shell[data-layout="phone"] .v-editor > .v-inspector {
   grid-area: panel;
+}
+
+.v-shell[data-layout="phone"] .v-editor > .v-scopes {
+  border-top: none;
 }
 
 /* Behind a tab it is the whole screen, and the seam belongs to the tab bar above it. */
@@ -254,11 +267,12 @@
   /* The picture and the properties panel share what the three content-sized rows leave. Both carry
      a floor rather than one of them a fixed share: a canvas has no height of its own to hold its
      row open with, so a bare 1fr on the properties panel collapsed the preview to nothing. */
-  grid-template-rows: auto minmax(200px, 1fr) auto minmax(160px, 1fr) fit-content(26%) fit-content(34%);
+  grid-template-rows: auto minmax(200px, 1fr) auto auto minmax(160px, 1fr) fit-content(26%) fit-content(34%);
   grid-template-areas:
     "banners  banners"
     "library  preview"
     "library  transport"
+    "library  scopes"
     "library  inspector"
     "timeline timeline"
     "mixer    mixer";

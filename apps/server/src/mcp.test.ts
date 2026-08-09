@@ -175,6 +175,20 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
     start: secondsToTime(5),
     duration: secondsToTime(1),
   }),
+  "clip.insert": (f) => ({
+    track: f.otherTrack,
+    source: { kind: "generator", generator: { type: "solid", color: "#ff0000" } },
+    start: secondsToTime(1),
+    duration: secondsToTime(1),
+    inPoint: secondsToTime(0.5),
+  }),
+  "clip.overwrite": (f) => ({
+    track: f.otherTrack,
+    source: { kind: "generator", generator: { type: "solid", color: "#ff0000" } },
+    start: secondsToTime(1),
+    duration: secondsToTime(1),
+    inPoint: secondsToTime(0.5),
+  }),
   "clip.remove": (f) => ({ clip: f.clip }),
   "clip.move": (f) => ({ clip: f.clip, toTrack: f.otherTrack, start: secondsToTime(4) }),
   "clip.trim": (f) => ({ clip: f.clip, edge: "end", delta: -secondsToTime(0.5) }),
@@ -273,6 +287,8 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   "marker.add": () => ({ time: secondsToTime(3), label: "chapter two" }),
   "marker.remove": (f) => ({ marker: f.marker }),
   "marker.rename": (f) => ({ marker: f.marker, label: "renamed" }),
+  "marker.setColor": (f) => ({ marker: f.marker, colorHex: "#2EA043" }),
+  "marker.setNote": (f) => ({ marker: f.marker, note: "the take we kept" }),
 };
 
 describe("the tool catalogue", () => {

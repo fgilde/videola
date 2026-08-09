@@ -12,3 +12,4 @@ export { blendState, drawList } from "../src/render/draw-list";
 export { effect, effectManifests, previewValues } from "../src/effects/registry";
 export { EffectPreview, referencePicture } from "../src/render/preview";
 export { compileProgram, setUniforms } from "../src/render/program";
+export { measure, SCOPE_LEVELS, VECTOR_SIZE } from "../src/render/scopes";

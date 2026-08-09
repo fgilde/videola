@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 
 import {
   builtinTemplates,
@@ -32,16 +32,26 @@ import {
   audioEffectManifests,
   AudioGraph,
   AudioSource,
+  cutSilence,
+  duckCommands,
   effectManifests,
   EXPORT_FORMATS,
   carriesSubtitles,
   formatSupport,
+  measure as measureScopes,
   measureLoudness,
+  normalizeToTarget,
   Playback,
   probe,
+  silentSpans,
+  speechSpans,
   startExport,
+  VECTOR_TARGETS,
+  WAVEFORM_BUCKETS,
   type ExportHandle,
   type ExportRange,
+  type Level,
+  type ScopeReading,
 } from "@videola/engine";
 import {
   clearSession,
@@ -64,22 +74,27 @@ import {
   Inspector,
   MediaLibrary,
   Mixer,
+  markerAfter,
   PanelTabs,
   pickFiles,
   Preview,
   projectEnd,
+  Scopes,
+  SourceBar,
   TemplateGallery,
   TemplateWizard,
   Timeline,
   Transport,
   useI18n,
   useLayoutMode,
+  type EditMode,
   type EditorPanel,
   type ExportFormatChoice,
   type ExportProgress,
   type ExportSelection,
   type MediaDrop,
   type MediaGrab,
+  type SourceRange,
 } from "@videola/ui";
 
 import { effectTiles, revokeTiles } from "./effectTiles";
@@ -121,10 +136,26 @@ const AUTOSAVE_MS = 30_000;
 
 // Stamped into every .videola this build writes.
 const APP_VERSION = "0.3.0";
+// The size the preview is shrunk to before it is counted. Sixteen by nine, so the waveform's
+// columns line up with the picture's, and small enough that the read is 147 kB rather than eight
+// megabytes -- see the note on the timer below.
+const SCOPE_WIDTH = 256;
+const SCOPE_HEIGHT = 144;
+const SCOPE_INTERVAL_MS = 100;
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 // A stable empty array, so the poster hook is not handed a fresh one on every render.
 const NO_TEMPLATES: readonly Template[] = [];
+
+// The ceiling on how finely a track is scanned for a duck or for its pauses. Twenty milliseconds a
+// bucket is what the detector wants; over a long timeline that is more buckets than a peak reader
+// should be asked for, and past this the analysis is coarser than ideal rather than slow.
+const MAX_ANALYSIS_BUCKETS = 60_000;
+
+// Distinguishes one multi-command action from the next under the coalescing key, so two ducks in a
+// row are two entries on the undo stack rather than one. The timeline keeps its own for the same
+// reason.
+let actionSequence = 0;
 
 export function App(): ReactElement {
   const [doc, setDoc] = useState<VideolaDocument>();
@@ -136,11 +167,25 @@ export function App(): ReactElement {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [playhead, setPlayhead] = useState<Time>(0);
   const [playing, setPlaying] = useState(false);
+  const [rate, setRate] = useState(0);
+  const [resolution, setResolution] = useState(1);
+  // The medium a range is being marked in. One at a time: the source bar shows one, and a second
+  // set of in and out points would belong to nothing on screen.
+  const [armed, setArmed] = useState<MediaId>();
   const [missing, setMissing] = useState(NOTHING_MISSING);
   const [waveforms, setWaveforms] = useState<ReadonlyMap<string, Peaks>>();
-  const [loudness, setLoudness] = useState<number>();
+  // A reading carries the project it was taken from, so "is this still about this timeline"
+  // is answered by comparing rather than by a second effect racing to clear it. It used to be
+  // a bare number wiped whenever the project changed -- which worked until a reading arrived
+  // *because* of an edit, and normalising is exactly that: the correction is dispatched and
+  // the number that follows it was about the corrected state all along.
+  const [reading, setReading] = useState<{ lufs: number; of: Project }>();
   const [measuring, setMeasuring] = useState(false);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
+  const [scopeReading, setScopeReading] = useState<ScopeReading>();
+  // On a phone the tab bar already says which panel is showing, so the switch on the
+  // transport is for the layouts that have no tabs.
+  const [scopesOpen, setScopesOpen] = useState(false);
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -311,8 +356,35 @@ export function App(): ReactElement {
     return playback.onTime((at) => {
       setPlayhead(at);
       setPlaying(playback.isPlaying);
+      setRate(playback.rate);
     });
   }, [playback]);
+
+  // What the scopes read, and how often.
+  //
+  // Measured before it was chosen. On the software rasteriser the harness runs, reading the whole
+  // 1080p drawing buffer back and counting all two million pixels costs 33 ms -- longer than a
+  // frame, every frame, for a panel nobody is dragging. Shrinking on the GPU first and counting
+  // 256 by 144 costs 0.9 ms, and a person reading a scope cannot see it change faster than about
+  // ten times a second. Ten hertz of 0.9 ms is under one percent of one core.
+  //
+  // On a timer rather than on the clock's tick, because that is what makes the rate the rate: a
+  // tick fires at whatever the display does and would need a counter of its own to be capped. And
+  // the effect only exists while the panel is on screen, so an editor nobody is grading in pays
+  // nothing at all.
+  useEffect(() => {
+    if (playback === undefined || canvas === null) return;
+    if (!(layout === "phone" ? panel === "scopes" : scopesOpen)) return;
+    const take = (): void => {
+      const pixels = playback.sample(SCOPE_WIDTH, SCOPE_HEIGHT);
+      setScopeReading(
+        pixels.length === 0 ? undefined : measureScopes(pixels, SCOPE_WIDTH, SCOPE_HEIGHT),
+      );
+    };
+    take();
+    const timer = window.setInterval(take, SCOPE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [playback, canvas, layout, panel, scopesOpen]);
 
   useEffect(() => {
     if (playback === undefined || canvas === null) return;
@@ -332,9 +404,6 @@ export function App(): ReactElement {
     // The strips come from the buffers `load` decoded, so they can only be read once it resolves.
     // Dropping a superseded result is what keeps a drag from painting the strips of a project state
     // that two pointer movements have already replaced.
-    // A reading belongs to the project it was taken from. Any edit can change it, so it goes rather
-    // than standing there as a number about a timeline that no longer exists.
-    setLoudness(undefined);
     void playback.load(project).then(() => {
       if (!cancelled) setWaveforms(playback.waveforms());
     });
@@ -361,7 +430,7 @@ export function App(): ReactElement {
     if (project === undefined || doc === undefined) return;
     const seconds = timeToSeconds(projectEnd(project));
     if (seconds <= 0) {
-      setLoudness(Number.NEGATIVE_INFINITY);
+      setReading({ lufs: Number.NEGATIVE_INFINITY, of: project });
       return;
     }
     setMeasuring(true);
@@ -370,9 +439,118 @@ export function App(): ReactElement {
     // The core's resolver goes in for the same reason the export gets it: a reading taken without
     // the mastering chain would report a loudness no listener and no file ever has.
     measureLoudness(ctx, project, new AudioSource(), doc.effectParamsAt)
-      .then(setLoudness, (err: unknown) => reportError("error.actionFailed", err))
+      .then(
+        (lufs) => setReading({ lufs, of: project }),
+        (err: unknown) => reportError("error.actionFailed", err),
+      )
       .finally(() => setMeasuring(false));
   }, [doc, project, reportError]);
+
+  // Rendering the timeline once per correction, which is why this shares `measuring` with the
+  // reading above: both are the same slow thing and neither may run twice at once.
+  //
+  // What lands in the readout afterwards is what the second render measured, not the target that
+  // was asked for. A programme that cannot reach its target -- one already at the fader's ceiling,
+  // or a silent one -- then says so with a number instead of claiming success.
+  const normalize = useCallback(
+    (targetLufs: number) => {
+      if (project === undefined || doc === undefined) return;
+      const seconds = timeToSeconds(projectEnd(project));
+      if (seconds <= 0) return;
+      setMeasuring(true);
+      const rate = project.settings.sampleRate;
+      const source = new AudioSource();
+      const measureOnce = (candidate: Project): Promise<number> =>
+        measureLoudness(
+          new OfflineAudioContext(2, Math.ceil(seconds * rate), rate),
+          candidate,
+          source,
+          doc.effectParamsAt,
+        );
+      normalizeToTarget(project, targetLufs, measureOnce)
+        .then(
+          (result) => {
+            // Dispatched only when it moved: a project already on target must not land an
+            // undo step that changes nothing.
+            if (result.volume !== project.master.volume) {
+              doc.dispatch(cmd.projectSetMasterVolume(result.volume));
+            }
+            // Against `doc.state` and not against `project`: the dispatch above has just
+            // replaced it, and the reading is about what the fader now is.
+            setReading({ lufs: result.loudness, of: doc.state });
+          },
+          (err: unknown) => reportError("error.actionFailed", err),
+        )
+        .finally(() => setMeasuring(false));
+    },
+    [doc, project, reportError],
+  );
+
+  // The strips are read from the peaks the graph already holds, at a resolution fine enough for a
+  // duck rather than the one the timeline draws with: 600 buckets over a ten-minute clip is a
+  // second apiece, and a bed that came down a second late would have swallowed the first sentence.
+  const analysisPeaks = useCallback((): ReadonlyMap<string, Peaks> => {
+    if (playback === undefined || project === undefined) return new Map();
+    const seconds = Math.max(1, timeToSeconds(projectEnd(project)));
+    return playback.waveforms(
+      Math.min(MAX_ANALYSIS_BUCKETS, Math.max(WAVEFORM_BUCKETS, Math.ceil(seconds / 0.02))),
+    );
+  }, [playback, project]);
+
+  const duck = useCallback(
+    (music: string, speech: string) => {
+      if (doc === undefined || project === undefined) return;
+      const peaks = analysisPeaks();
+      const musicTrack = project.timeline.tracks.find((track) => track.id === music);
+      const speechTrack = project.timeline.tracks.find((track) => track.id === speech);
+      if (musicTrack === undefined || speechTrack === undefined) return;
+      try {
+        // One coalesce key for the lot, so a duck comes back off the timeline in a single undo
+        // however many corners it wrote.
+        const key = `mixer-duck-${music}-${(actionSequence += 1)}`;
+        for (const command of duckCommands(musicTrack, speechSpans(speechTrack, peaks))) {
+          doc.dispatch(command, key);
+        }
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [analysisPeaks, doc, project, reportError],
+  );
+
+  const cutQuiet = useCallback(
+    (trackId: string) => {
+      if (doc === undefined || project === undefined) return;
+      const track = project.timeline.tracks.find((candidate) => candidate.id === trackId);
+      if (track === undefined) return;
+      try {
+        const key = `mixer-cut-silence-${trackId}-${(actionSequence += 1)}`;
+        cutSilence(doc, trackId, silentSpans(track, analysisPeaks()), key);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [analysisPeaks, doc, project, reportError],
+  );
+
+  // One reading of the whole desk per animation frame, shared by every strip that asks inside it.
+  // The frame's own timestamp is what tells "the same frame" from "the next one" -- every meter is
+  // asked with the number requestAnimationFrame handed it, so the first ask does the reading and
+  // the rest are answered out of it.
+  const readLevel = useMemo(() => {
+    let taken = 0;
+    let levels: ReadonlyMap<string, Level> = new Map();
+    return (bus: string, nowMs: number): Level | undefined => {
+      if (playback === undefined) return undefined;
+      if (nowMs !== taken) {
+        levels = playback.levels(taken === 0 ? 0 : (nowMs - taken) / 1000);
+        taken = nowMs;
+      }
+      return levels.get(bus);
+    };
+  }, [playback]);
 
   const addTrack = useCallback(() => {
     if (doc === undefined) return;
@@ -791,6 +969,53 @@ export function App(): ReactElement {
   const step = useCallback((direction: 1 | -1) => playback?.stepFrame(direction), [playback]);
   const repaint = useCallback(() => playback?.refresh(), [playback]);
 
+  // J and L. The rate is read back off the transport rather than kept here as well: the clock is
+  // the one that knows how fast it is running, and a second copy could disagree with it.
+  const shuttle = useCallback(
+    (direction: 1 | -1) => {
+      playback?.shuttle(direction);
+      setRate(playback?.rate ?? 0);
+      setPlaying(playback?.isPlaying === true);
+    },
+    [playback],
+  );
+
+  const jumpMarker = useCallback(
+    (direction: 1 | -1) => {
+      const marker = markerAfter(project?.markers ?? [], playhead, direction);
+      if (marker !== undefined) seek(marker.time);
+    },
+    [project?.markers, playhead, seek],
+  );
+
+  // The three-point edit, from the side that knows where it lands: the source bar marked the
+  // range, the playhead says where, and the track is the one the selection is on -- or the first
+  // one the material belongs on, the same rule an import follows.
+  const threePoint = useCallback(
+    (mode: EditMode, range: SourceRange) => {
+      if (doc === undefined || armed === undefined) return;
+      const track = editTarget(doc, armed, selection[0]);
+      if (track === undefined) return;
+      const source = { kind: "media", media: armed } as const;
+      try {
+        doc.dispatch(
+          mode === "insert"
+            ? cmd.clipInsert(track, source, playhead, range.duration, range.inPoint)
+            : cmd.clipOverwrite(track, source, playhead, range.duration, range.inPoint),
+        );
+        // The playhead lands behind what was just placed, so a run of edits stacks up rather than
+        // laying every take over the one before it.
+        seek(playhead + range.duration);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, armed, playhead, selection, seek, reportError],
+  );
+
+  const armedAsset = project?.library.find((entry) => entry.id === armed);
+
   return (
     <AppShell
       onNew={() => window.location.reload()}
@@ -843,6 +1068,7 @@ export function App(): ReactElement {
                 key={epoch}
                 width={project.settings.width}
                 height={project.settings.height}
+                resolution={resolution}
                 onCanvas={setCanvas}
                 onResize={repaint}
               />
@@ -851,9 +1077,24 @@ export function App(): ReactElement {
                 time={playhead}
                 duration={projectEnd(project)}
                 fps={project.settings.fps}
+                rate={rate}
                 onPlayPause={playPause}
                 onSeek={seek}
                 onStep={step}
+                onShuttle={shuttle}
+                onMarkerJump={jumpMarker}
+                resolution={resolution}
+                onResolution={setResolution}
+                scopes={layout === "phone" ? undefined : scopesOpen}
+                onToggleScopes={layout === "phone" ? undefined : () => setScopesOpen((on) => !on)}
+              />
+              {/* Between the picture and the panels, because that is where the work is: the range
+                  is marked here and lands on the timeline below. */}
+              <SourceBar
+                asset={armedAsset}
+                fps={project.settings.fps}
+                onEdit={threePoint}
+                onClose={() => setArmed(undefined)}
               />
               {layout === "phone" && <PanelTabs panel={panel} onSelect={setPanel} />}
               {/* Unmounted rather than hidden while another panel shows: the timeline windows
@@ -875,18 +1116,29 @@ export function App(): ReactElement {
                   onAdd={addToTimeline}
                   onRelink={(media) => void relink(media)}
                   onGrab={setGrab}
+                  armed={armed}
+                  onArm={(media) => setArmed((current) => (current === media ? undefined : media))}
                 />
+              )}
+              {(layout === "phone" ? panel === "scopes" : scopesOpen) && (
+                <Scopes reading={scopeReading} targets={VECTOR_TARGETS} />
               )}
               {(layout !== "phone" || panel === "mixer") && (
                 <Mixer
                   project={project}
-                  loudness={loudness}
+                  loudness={reading?.of === project ? reading.lufs : undefined}
                   measuring={measuring}
+                  readLevel={readLevel}
+                  metering={playing}
                   playhead={playhead}
                   effects={audioEffectManifests()}
                   effectParamsAt={doc?.effectParamsAt}
                   dispatch={edit}
                   onMeasure={measure}
+                  onNormalize={normalize}
+                  normalizing={measuring}
+                  onDuck={duck}
+                  onCutSilence={cutQuiet}
                   onSeek={seek}
                 />
               )}
@@ -1005,6 +1257,25 @@ function appendClip(doc: VideolaDocument, media: MediaId): void {
   // occupy something on the timeline, and five seconds is the length every editor gives a still.
   const duration = asset.duration ?? STILL_DURATION;
   doc.dispatch(cmd.clipAdd(track.id, { kind: "media", media }, start, duration));
+}
+
+// Where a three-point edit lands. The track a selected clip is on is the one the editor is
+// working on and says so without a second control; failing that it is the first track the material
+// belongs on, which is the rule an import already follows -- and if there is none, one is made.
+function editTarget(
+  doc: VideolaDocument,
+  media: MediaId,
+  selected: ClipId | undefined,
+): string | undefined {
+  const onSelection = doc.state.timeline.tracks.find((track) =>
+    track.clips.some((clip) => clip.id === selected),
+  );
+  if (onSelection !== undefined) return onSelection.id;
+  const asset = doc.state.library.find((entry) => entry.id === media);
+  const kind: TrackKind = asset?.kind === "audio" ? "audio" : "video";
+  const existing = doc.state.timeline.tracks.find((track) => track.kind === kind);
+  if (existing !== undefined) return existing.id;
+  return added(doc, kind, `${kind === "audio" ? "A" : "V"}1`)?.id;
 }
 
 // The first medium of an untouched project decides its format, which is what every editor does

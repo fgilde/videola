@@ -88,6 +88,59 @@ export function peakDbfs(channels: readonly Float32Array[]): number {
   return 20 * Math.log10(peak);
 }
 
+/**
+ * What one strip of a meter shows, all three in dBFS. Peak is the loudest sample in the window and
+ * says whether anything clipped; `rms` is the effective value and is what the eye reads as loudness;
+ * `hold` is the falling marker that keeps a transient visible long enough to be seen.
+ */
+export interface Level {
+  peak: number;
+  rms: number;
+  hold: number;
+}
+
+export const SILENT_LEVEL: Level = {
+  peak: Number.NEGATIVE_INFINITY,
+  rms: Number.NEGATIVE_INFINITY,
+  hold: Number.NEGATIVE_INFINITY,
+};
+
+// How fast the hold marker gives up the peak under it. A marker that never falls is a high-water
+// line for the session rather than a meter, and one that falls with the signal is not a hold at all;
+// twenty a second puts a full-scale hit back on the floor in the three seconds an eye needs.
+const HOLD_FALL_DB_PER_SECOND = 20;
+
+/**
+ * One reading, from one window of samples. Pure arithmetic on purpose: where the samples came from
+ * -- an `AnalyserNode` on a live bus or a plane out of an offline render -- decides nothing about
+ * what the numbers mean, which is what makes a running meter checkable at all.
+ *
+ * `elapsed` is the wall time since `previous` was taken and is the only thing the hold's fall is
+ * measured in, so a meter driven at thirty frames and one driven at sixty decay at the same rate.
+ */
+export function levelFrom(
+  channels: readonly Float32Array[],
+  previous: Level = SILENT_LEVEL,
+  elapsed = 0,
+): Level {
+  const peak = peakDbfs(channels);
+  const fallen = previous.hold - HOLD_FALL_DB_PER_SECOND * elapsed;
+  return { peak, rms: rmsDbfs(channels), hold: Math.max(peak, fallen) };
+}
+
+// Across all channels at once rather than per channel and averaged: the meter shows what the bus
+// carries, and two channels of the same signal are as loud as one of it.
+function rmsDbfs(channels: readonly Float32Array[]): number {
+  let sum = 0;
+  let count = 0;
+  for (const plane of channels) {
+    for (const sample of plane) sum += sample * sample;
+    count += plane.length;
+  }
+  if (count === 0 || sum === 0) return Number.NEGATIVE_INFINITY;
+  return 10 * Math.log10(sum / count);
+}
+
 function mean(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }

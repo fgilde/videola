@@ -2,4 +2,4 @@
 import type { MarkerId } from "./MarkerId";
 import type { Time } from "./Time";
 
-export type Marker = { id: MarkerId, time: Time, label: string, colorHex: string, };
+export type Marker = { id: MarkerId, time: Time, label: string, colorHex: string, note: string, };

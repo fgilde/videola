@@ -17,8 +17,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--v-space-1);
-  /* Wide enough for a label, its fader and the readout on one line -- see .v-mixer .v-param. */
-  min-width: 220px;
+  /* Wide enough for a label, its fader and the readout on one line (see .v-mixer .v-param), and
+     for mute, solo, the duck picker and the scissors on the line below without wrapping -- a
+     wrapped flags row is the fifth row that costs the preview its height. Wider strips scroll
+     sideways, which the mixer already does; taller ones do not. */
+  min-width: 244px;
   padding: var(--v-space-2);
   background: var(--v-surface);
   border-radius: var(--v-radius-md);
@@ -47,6 +50,23 @@
   white-space: nowrap;
 }
 
+/* Picker and button on one line under the reading, which is where the master strip has the room a
+   track strip spends on its pan row. Every strip is then the same height and the mixer costs the
+   picture nothing beyond its meters. */
+.v-mixer__normalize {
+  display: flex;
+  gap: var(--v-space-1);
+  align-items: center;
+}
+
+/* Both pickers shrink and nothing else does: they are the only controls whose label may be cut
+   without the control losing its meaning, because the accessible name is on the element itself. */
+.v-mixer__duck,
+.v-mixer__target {
+  flex: 1 1 4rem;
+  min-width: 0;
+}
+
 .v-mixer__chain {
   display: flex;
   flex-direction: column;
@@ -70,6 +90,24 @@
   letter-spacing: var(--v-tracking-wide);
 }
 
+/* Name and meter share the top line. The name takes what it needs up to half the strip and the
+   meter takes the rest, so a mixer with meters is exactly as tall as one without. */
+.v-mixer__head {
+  display: flex;
+  gap: var(--v-space-2);
+  align-items: center;
+}
+
+.v-mixer__head .v-mixer__name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.v-mixer__head .v-meter {
+  flex: 1 1 auto;
+  min-width: 3rem;
+}
+
 .v-mixer__name {
   padding-left: var(--v-space-2);
   border-left: 3px solid var(--v-border-strong);
@@ -80,9 +118,12 @@
   overflow: hidden;
 }
 
+/* Mute, solo, the duck picker and the scissors, on one line and never wrapping. */
 .v-mixer__flags {
   display: flex;
+  flex-wrap: nowrap;
   gap: var(--v-space-1);
+  align-items: center;
 }
 
 /* Two letters at symbol rank, but with a resting outline the other symbols do without: mute and
@@ -91,6 +132,49 @@
 .v-mixer__flag {
   border-color: var(--v-border);
   font-weight: var(--v-weight-strong);
+}
+
+/* Ten pixels and a fixed height, both deliberate: the mixer row is sized to fit its strips, so a
+   meter that grew with its strip would push the row down and take the height out of the preview
+   above it. One bar per strip at ten pixels is two thirds of a line of text. */
+.v-meter {
+  --v-meter-fill: var(--v-accent);
+  position: relative;
+  height: 10px;
+  flex: none;
+  overflow: hidden;
+  background: var(--v-bg-sunken);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+}
+
+/* One colour for the whole bar, swapped in one place, so both themes come from the tokens they
+   already have -- the peak is the same fill turned down rather than a second colour to keep in
+   step with it. */
+.v-meter--hot {
+  --v-meter-fill: var(--v-danger);
+}
+
+/* Peak behind, effective value in front: one bar with a paler tip, which is how a peak that has
+   already passed stays visible over the body of the signal. */
+.v-meter__peak,
+.v-meter__rms {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--v-meter-fill);
+}
+
+.v-meter__peak {
+  opacity: 0.35;
+}
+
+/* The marker the peak left behind. Two pixels, because one disappears against the fill under it. */
+.v-meter__hold {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--v-text);
 }
 
 .v-mixer__loudness {

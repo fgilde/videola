@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 
 import {
   cmd,
@@ -18,7 +18,12 @@ import { useI18n, type Locale } from "../i18n/useI18n";
 import { keyframeAt, ParamRow, shownValue } from "../inspector/ParamRow";
 import type { EffectParamDescriptor } from "../inspector/Inspector";
 import { AddEffect } from "../primitives/AddEffect";
+import { IconButton } from "../primitives/Icon";
+import { LevelMeter, type ReadLevel } from "./LevelMeter";
 import "./Mixer.css";
+
+/** What `readLevel` is asked for the master bus; every other key is a track id. */
+export const MASTER_BUS = "master";
 
 // The accepted maximum for a track gain, as the core states it in `track.setVolume`.
 const MAX_GAIN = 4;
@@ -43,14 +48,41 @@ export interface MixerProps {
    */
   loudness?: number;
   measuring?: boolean;
+  /**
+   * What every strip's meter is asked, with the bus id and the animation frame's own timestamp.
+   * Left out, the strips have no meters -- which is the honest state of a mixer with no transport
+   * behind it rather than a row of bars stuck at silence.
+   */
+  readLevel?: (bus: string, nowMs: number) => { peak: number; rms: number; hold: number } | undefined;
+  /**
+   * False while the transport is stopped. The meters then paint silence and stop asking -- see
+   * `LevelMeter`, where the loop that never ends turns out to be the expensive kind of never.
+   */
+  metering?: boolean;
   /** Where a keyframe written from a strip lands, and what the rows read their values at. */
   playhead?: Time;
   effects?: readonly MixerEffectDescriptor[];
   effectParamsAt?: (at: Time) => EffectParamSnapshot;
   dispatch: (command: Command, coalesceKey?: string) => void;
   onMeasure?: () => void;
+  /**
+   * The three actions that need decoded samples rather than the project alone -- so they are the
+   * caller's, the same way the loudness reading is. The mixer knows where the buttons go and what
+   * they are called; what a duck sounds like is the engine's business.
+   */
+  onNormalize?: (targetLufs: number) => void;
+  normalizing?: boolean;
+  onDuck?: (music: string, speech: string) => void;
+  onCutSilence?: (track: string) => void;
   onSeek?: (time: Time) => void;
 }
+
+/** The targets `LOUDNESS_TARGETS` names, as the rows of the picker -- value and catalogue key. */
+const TARGETS: readonly { lufs: number; key: string }[] = [
+  { lufs: -14, key: "streaming" },
+  { lufs: -16, key: "podcast" },
+  { lufs: -23, key: "broadcast" },
+];
 
 type Send = (command: Command, coalesceKey?: string) => void;
 
@@ -60,11 +92,17 @@ export function Mixer({
   project,
   loudness,
   measuring,
+  readLevel,
+  metering = true,
   playhead = 0,
   effects = [],
   effectParamsAt,
   dispatch,
   onMeasure,
+  onNormalize,
+  normalizing,
+  onDuck,
+  onCutSilence,
   onSeek,
 }: MixerProps): ReactElement {
   const { t } = useI18n();
@@ -76,6 +114,8 @@ export function Mixer({
     [effectParamsAt, playhead, project],
   );
   const chain = { offered: effects, resolved, playhead, send: dispatch, onSeek };
+  const meter = (bus: string): ReadLevel | undefined =>
+    readLevel === undefined ? undefined : (now) => readLevel(bus, now);
 
   return (
     <section className="v-mixer" aria-label={t("mixer.label")} data-testid="mixer">
@@ -83,7 +123,17 @@ export function Mixer({
         {/* Left to right in the order the timeline stacks them from the top, so a strip sits above
             the track it belongs to rather than in the core's bottom-up order. */}
         {[...tracks].reverse().map((track) => (
-          <Strip key={track.id} track={track} dispatch={dispatch} chain={chain} />
+          <Strip
+            key={track.id}
+            track={track}
+            others={tracks.filter((other) => other.id !== track.id)}
+            dispatch={dispatch}
+            chain={chain}
+            read={meter(track.id)}
+            metering={metering}
+            onDuck={onDuck}
+            onCutSilence={onCutSilence}
+          />
         ))}
         {/* Last, where a desk puts it: everything to its left feeds it. */}
         <MasterStrip
@@ -93,6 +143,10 @@ export function Mixer({
           loudness={loudness}
           measuring={measuring}
           onMeasure={onMeasure}
+          onNormalize={onNormalize}
+          normalizing={normalizing}
+          read={meter(MASTER_BUS)}
+          metering={metering}
         />
       </div>
 
@@ -103,20 +157,38 @@ export function Mixer({
 
 function Strip({
   track,
+  others,
   dispatch,
   chain,
+  read,
+  metering,
+  onDuck,
+  onCutSilence,
 }: {
   track: Track;
+  others: readonly Track[];
   dispatch: (command: Command, coalesceKey?: string) => void;
   chain: ChainContext;
+  read?: ReadLevel;
+  metering?: boolean;
+  onDuck?: (music: string, speech: string) => void;
+  onCutSilence?: (track: string) => void;
 }): ReactElement {
   const { t } = useI18n();
 
   return (
     <div className="v-mixer__strip" data-track-id={track.id}>
-      <span className="v-mixer__name" style={{ borderLeftColor: track.colorHex }}>
-        {track.name}
-      </span>
+      {/* Meter beside the name and not under it: a row of its own is ten pixels plus a gap on
+          every strip, the mixer row is sized to fit its strips, and the preview above pays for
+          it -- measured at 223 px against a floor of 230 in the browser harness. */}
+      <div className="v-mixer__head">
+        <span className="v-mixer__name" style={{ borderLeftColor: track.colorHex }}>
+          {track.name}
+        </span>
+        {read !== undefined && (
+          <LevelMeter read={read} active={metering} label={t("mixer.level", { name: track.name })} />
+        )}
+      </div>
       <ParamRow
         label={t("mixer.volumeShort")}
         name={t("mixer.volume", { name: track.name })}
@@ -154,9 +226,68 @@ function Strip({
         >
           S
         </button>
+        <Tools track={track} others={others} onDuck={onDuck} onCutSilence={onCutSilence} />
       </div>
       <Chain {...chain} target={on.track(track.id)} authored={track.effects} />
     </div>
+  );
+}
+
+// The two actions that are about one track and about the samples under it. They sit on the strip
+// rather than in the timeline's clip menu because both are decisions about a whole bus -- a bed
+// ducks as one thing however many clips it was cut into, and a voice track's pauses are the pauses
+// between its phrases and not between its clips.
+//
+// On the mute and solo line rather than on a line of their own, and that is a measurement rather
+// than a preference: a fifth row per strip grew the mixer by sixty pixels, the editor's mixer row
+// is sized to fit its strips, and the preview above lost exactly that. The browser harness caught
+// it -- the picture fell to 223 px against a floor of 230.
+//
+// Ducking is a picker because it needs a second track named and there is no sensible guess: the
+// strip is the music and the choice is which voice it gets out of the way of. Cutting silence is a
+// symbol because the row has no width left for its name -- scissors and not a bin, which beside a
+// track name would read as "delete the track".
+function Tools({
+  track,
+  others,
+  onDuck,
+  onCutSilence,
+}: {
+  track: Track;
+  others: readonly Track[];
+  onDuck?: (music: string, speech: string) => void;
+  onCutSilence?: (track: string) => void;
+}): ReactElement | null {
+  const { t } = useI18n();
+  if (onDuck === undefined && onCutSilence === undefined) return null;
+
+  return (
+    <>
+      {onDuck !== undefined && others.length > 0 && (
+        <select
+          className="v-mixer__duck"
+          aria-label={t("mixer.duckOf", { name: track.name })}
+          value=""
+          onChange={(event) => {
+            if (event.target.value !== "") onDuck(track.id, event.target.value);
+          }}
+        >
+          <option value="">{t("mixer.duck")}</option>
+          {others.map((other) => (
+            <option key={other.id} value={other.id}>
+              {other.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {onCutSilence !== undefined && (
+        <IconButton
+          icon="scissors"
+          label={t("mixer.cutSilenceOf", { name: track.name })}
+          onClick={() => onCutSilence(track.id)}
+        />
+      )}
+    </>
   );
 }
 
@@ -174,6 +305,10 @@ function MasterStrip({
   loudness,
   measuring,
   onMeasure,
+  onNormalize,
+  normalizing,
+  read,
+  metering,
 }: {
   project: Project;
   dispatch: Send;
@@ -181,13 +316,22 @@ function MasterStrip({
   loudness?: number;
   measuring?: boolean;
   onMeasure?: () => void;
+  onNormalize?: (targetLufs: number) => void;
+  normalizing?: boolean;
+  read?: ReadLevel;
+  metering?: boolean;
 }): ReactElement {
   const { t } = useI18n();
   const name = t("mixer.master");
 
   return (
     <div className="v-mixer__strip v-mixer__strip--master" data-testid="mixer-master">
-      <span className="v-mixer__name">{name}</span>
+      <div className="v-mixer__head">
+        <span className="v-mixer__name">{name}</span>
+        {read !== undefined && (
+          <LevelMeter read={read} active={metering} label={t("mixer.level", { name })} />
+        )}
+      </div>
       <ParamRow
         label={t("mixer.volumeShort")}
         name={t("mixer.volume", { name })}
@@ -209,7 +353,52 @@ function MasterStrip({
           {formatLufs(loudness, t)}
         </output>
       </div>
+      {onNormalize !== undefined && <Normalize onNormalize={onNormalize} busy={normalizing} />}
       <Chain {...chain} target={on.project} authored={project.master.effects} />
+    </div>
+  );
+}
+
+// Picker and button rather than a button per target: three of them across a strip 220 pixels wide
+// would each be four characters and a guess. The target is remembered in the strip and not in the
+// project, because it is a fact about where the file is going rather than about the film.
+//
+// What comes back after this is a fresh reading in the readout above, and it is a reading and not
+// the target: the master fader sits behind the mastering chain, so the correction is a plain gain
+// over it -- but the loudness gates are level-dependent all the same, and the number shown is
+// always one that was measured.
+function Normalize({
+  onNormalize,
+  busy,
+}: {
+  onNormalize: (targetLufs: number) => void;
+  busy?: boolean;
+}): ReactElement {
+  const { t } = useI18n();
+  const [target, setTarget] = useState(TARGETS[0]!.lufs);
+
+  return (
+    <div className="v-mixer__normalize">
+      <select
+        className="v-mixer__target"
+        aria-label={t("mixer.target")}
+        value={target}
+        onChange={(event) => setTarget(Number(event.target.value))}
+      >
+        {TARGETS.map((entry) => (
+          <option key={entry.key} value={entry.lufs}>
+            {t(`mixer.target.${entry.key}`)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="v-button"
+        disabled={busy === true}
+        onClick={() => onNormalize(target)}
+      >
+        {t(busy === true ? "mixer.normalizing" : "mixer.normalize")}
+      </button>
     </div>
   );
 }

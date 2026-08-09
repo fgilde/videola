@@ -127,19 +127,73 @@ function collect(
   into: DrawItem[],
 ): void {
   if (depth > MAX_COMPOUND_DEPTH) return;
-  for (const track of timeline.tracks) {
+  // Per timeline, not once for the project: an adjustment track inside a compound clip covers what
+  // is inside that compound and nothing else, which is the same rule one level down.
+  const layers = adjustmentLayers(timeline, at, scene);
+  for (const [index, track] of timeline.tracks.entries()) {
     if (!paints(track)) continue;
+    const under = beneath(layers, index, enclosure);
     for (const clip of track.clips) {
       if (clip.source.kind === "compound") {
-        const inner = enclose(clip, at, scene, enclosure);
+        const inner = enclose(clip, at, scene, under);
         if (inner === undefined) continue;
         collect(clip.source.timeline, inner.at, scene, inner.enclosure, depth + 1, into);
         continue;
       }
-      const item = drawItem(clip, at, scene, enclosure);
+      const item = drawItem(clip, at, scene, under);
       if (item !== undefined) into.push(item);
     }
   }
+}
+
+// An adjustment track's effects, and the height in the stack they start at. `tracks[0]` is the
+// bottom, so a layer covers every track with a *lower* index -- everything drawn underneath it.
+interface AdjustmentLayer {
+  above: number;
+  effects: readonly EffectPass[];
+}
+
+// What the adjustment tracks of one timeline are contributing at this instant. A layer only counts
+// while one of its clips is running: an adjustment track is a track of clips like any other, and
+// the span of the clip is the span the grade applies over.
+function adjustmentLayers(timeline: Timeline, at: Time, scene: Scene): AdjustmentLayer[] {
+  const layers: AdjustmentLayer[] = [];
+  for (const [above, track] of timeline.tracks.entries()) {
+    if (track.kind !== "adjustment" || track.hidden) continue;
+    for (const clip of track.clips) {
+      if (at < clip.start || at >= clip.start + clip.duration) continue;
+      // The one thing on an adjustment clip that is not an effect and still has to be read: a
+      // layer faded to nothing is a layer switched off, which is how it is switched off.
+      const placed = scene.transforms.get(clip.id) ?? clip.transform;
+      if (placed.opacity <= 0) continue;
+      const effects = effectPasses(clip, scene.params);
+      if (effects.length > 0) layers.push({ above, effects });
+    }
+  }
+  return layers;
+}
+
+// The chain a clip on this track runs through: its own effects first, then every adjustment layer
+// standing over it from the bottom up, then whatever a compound clip around all of it contributes.
+// The layers are collected bottom-first, so the order they were stacked in is the order they run.
+//
+// ponytail: the passes run per clip, not once over the composed picture. Where two clips overlap
+// under one layer, a blur sees each of them on its own rather than the seam between them, and an
+// effect at strength one applied to both is not the same as applying it once to what they made
+// together. Doing it properly wants the tracks below the layer rendered into a target of their own
+// and the chain run over that -- the same isolation a compound clip is still waiting for, and the
+// two arrive together or not at all.
+function beneath(
+  layers: readonly AdjustmentLayer[],
+  index: number,
+  enclosure: Enclosure,
+): Enclosure {
+  const covering = layers.filter((layer) => layer.above > index);
+  if (covering.length === 0) return enclosure;
+  return {
+    ...enclosure,
+    effects: [...covering.flatMap((layer) => layer.effects), ...enclosure.effects],
+  };
 }
 
 // The compound's own contribution, and the instant its timeline is showing. Project time towards
@@ -233,9 +287,9 @@ export function blendState(mode: BlendMode): BlendState {
   }
 }
 
-// ponytail: adjustment tracks paint nothing yet. They apply their effects to everything below,
-// which needs the track's intermediate target from the frame graph -- the seam is here, the
-// machinery arrives with the effect chain in Task 16.
+// An adjustment track paints no picture of its own -- it has none. What it contributes is its
+// clips' effect chains, which `adjustmentLayers` reads and hands to everything below it.
+//
 // A caption is drawn like any other title, and the whole of what its own kind buys is that a
 // subtitle file can be written from it without sweeping up the lower thirds. Hiding the track is
 // what turns burned-in subtitles off, and it is the same flag that keeps them out of the file.

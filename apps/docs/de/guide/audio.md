@@ -165,8 +165,11 @@ Ein Streifen je Spur, in der Reihenfolge, in der die Zeitleiste die Spuren stape
 in der der Kern sie hält — `tracks[0]` ist unten im Stapel, und ein Mischpult in dieser Reihenfolge
 setzte den Streifen der obersten Spur ans Ende.
 
-Jeder Streifen trägt einen Pegelregler, ein Panorama von links über die Mitte nach rechts sowie die
-Knöpfe für Stumm und Solo. Ein Zug am Regler ist ein Schritt in der Historie, nicht einer je Pixel.
+Jeder Streifen trägt eine Pegelanzeige, einen Pegelregler, ein Panorama von links über die Mitte
+nach rechts sowie die Knöpfe für Stumm und Solo. Ein Zug am Regler ist ein Schritt in der
+Historie, nicht einer je Pixel. Darunter stehen die beiden Aktionen, die die Abtastwerte brauchen
+und nicht nur das Projekt: das Auswahlfeld, das diese Spur unter einer anderen absenkt, und der
+Knopf, der die Stille aus ihr herausschneidet.
 
 Darunter liegt die Insert-Kette des Streifens: ein Knopf je Effekt, für den dieser Stand einen Klang
 hat, und sobald einer hinzugefügt ist, eine Zeile je Parameter mit denselben Keyframe-Bedienelementen
@@ -177,6 +180,127 @@ Zahl an einem Filter ankommt. Was dasteht, ist also das, was zu hören ist.
 Ganz rechts, durch einen Rahmen abgesetzt, steht der **Summenzug**: der Regler des Projekts und die
 Mastering-Kette. Alles links davon läuft dort hinein.
 
+## Pegelanzeigen
+
+Jeder Streifen trägt eine Pegelanzeige, die Spurstreifen wie der Summenzug, und jede davon ist ein
+echter Abgriff **in** der Signalführung und kein Balken daneben: ein `AnalyserNode` sitzt in der
+Leitung, denn ein Knoten ohne Weg zum Ausgang wird gar nicht verarbeitet, und eine seitlich
+angehängte Anzeige zeigte genau so lange null, wie niemand hinsieht. Ein Analyser reicht seinen
+Eingang unverändert durch — deshalb rendert der Export weiterhin abtastwertgleich zur Wiedergabe.
+
+Der Abgriff einer Spur sitzt **hinter** ihrem Regler und ihrem Panorama, ein Streifen zeigt also, was
+diese Spur sendet, und nicht, was ihre Clips waren, bevor jemand am Pult war. Stumm und Solo liegen
+davor auf dem Bus-Pegel, eine stummgeschaltete Spur zeigt also Stille.
+
+Drei Zahlen je Balken, alle in dBFS:
+
+- **Spitze** — der lauteste Abtastwert im Fenster, gezeichnet als blasser Teil des Balkens. Sie sagt,
+  ob etwas übersteuert hat.
+- **Effektivwert** — der quadratische Mittelwert, gezeichnet als voller Balken. Ihn liest das Auge
+  als Lautstärke: die Spitze eines Sinus steht 3 dB über seinem eigenen Effektivwert, die einer
+  Rechteckschwingung nicht.
+- **Haltemarke** — eine Marke auf der zuletzt größten Spitze, die mit 20 dB je Sekunde fällt. Eine
+  Transiente über einen Puffer sieht ohne sie niemand.
+
+Der Balken ist linear in **Dezibel** über 60 dB, nicht in der Amplitude: die halbe Breite sind 30 dB
+weniger. Genau das macht eine Anzeige lesbar — das leise Ende bekommt so viel Platz wie das laute.
+Die letzten sechs Dezibel färben den Balken rot.
+
+Das ganze Pult wird einmal je Bild gelesen, und nichts davon läuft über React: die Schleife schreibt
+drei Längen und eine Klasse direkt auf die Elemente. Ein Mischpult mit zehn Streifen kostet je
+Streifen und Bild ein `getFloatTimeDomainData` über ein Fenster von 2048 Werten und kein einziges
+Neuzeichnen.
+
+::: warning Was nicht gemessen ist
+Ein Browser ohne Bildschirm hat keine Tonausgabe. Dass die Anzeigen **im Betrieb ausschlagen**, ist
+also das eine, was die Tests nicht sehen. Gemessen ist alles beidseits davon: die Rechnung an echt
+gerenderten Abtastwerten und die Abgriffe selbst an einem echten Offline-Lauf — eine Spur mit halbem
+Pegel zeigt durch den echten `AnalyserNode` −6,02 dBFS.
+:::
+
+## Ein Projekt auf einen Zielwert bringen
+
+Der Summenzug des Mischpults bietet die drei Zielwerte, nach denen wirklich gefragt wird — −14 LUFS
+fürs Streaming, −16 für einen Podcast, −23 für den Rundfunk — und einen Knopf, der den Summenregler
+so weit bewegt, bis das Programm dort gemessen wird.
+
+**Danach wird erneut gemessen.** Was anschließend in der Anzeige steht, ist ein Messwert und nie der
+Zielwert, nach dem gefragt wurde. Das zählt in den Fällen, in denen der Zielwert nicht erreichbar
+ist: ein Programm, das schon an der Obergrenze 4 des Reglers steht, oder ein stummes, sagt das dann
+mit einer Zahl, statt einen Erfolg zu behaupten.
+
+::: tip Warum ein Durchgang reicht und trotzdem nachgemessen wird
+Die Befürchtung ist die richtige: ein Kompressor oder ein Limiter ist keine Verstärkung, er hört auf
+zu begrenzen, sobald sein Eingang leiser wird, und `DynamicsCompressorNode` legt eigenen
+Ausgleichspegel darauf. Sie greift hier nur nicht, und das liegt an der Verschaltung und nicht am
+Knoten — **Inserts sitzen vor dem Fader**, die Mastering-Kette sieht bei jeder Reglerstellung
+dasselbe Signal, und der Regler ist eine reine Verstärkung dahinter. Gemessen, mit einem Limiter
+zwanzig Dezibel unter dem Material: ein Durchgang.
+
+Daraus folgt nicht, dass man der Rechnung glauben dürfte. Die Tore von R128 hängen vom Pegel ab —
+ein verschobenes Programm hat andere Blöcke, die das absolute Tor bei −70 LUFS überschreiten. Was
+zurückkommt, ist also immer ein Messwert.
+:::
+
+## Ducking
+
+Die Musik absenken, solange jemand spricht. Die Sprachspur im Auswahlfeld auf dem Streifen der
+Musikspur wählen, und die Musik geht herunter, solange die Sprache liegt, und danach wieder hoch.
+
+**Es entstehen Keyframes, keine unsichtbare Automatik.** Der Musikbus bekommt einen Insert
+`Verstärkung` und darauf eine Kurve: vier Ecken je Phrase — offen, unten, unten, offen — die Senkung
+eine Viertelsekunde **vor** dem Beginn der Phrase, denn ein Bett, das erst auf der ersten Silbe zu
+fallen beginnt, hat sie schon zugedeckt, und die Rückkehr eine halbe Sekunde danach. Zwei Phrasen so
+dicht beieinander, dass die Rückkehr noch stiege, wenn die nächste Senkung beginnt, lassen das Bett
+dazwischen unten — so macht es ein Pult, und so hätte es ein Cutter von Hand gezeichnet.
+
+Weil es Keyframes sind, gehört danach alles Ihnen: jede Ecke ist ein Wert in einer Zeile des
+Streifens, mit derselben Raute, demselben Vor und Zurück und derselben Interpolation, die der
+Inspektor jedem anderen Parameter gibt. Ein zweites Ducking über eine neu geschnittene Sprachspur
+ersetzt die Kurve, statt eine zweite darüberzulegen, und das ganze Ducking geht in einem Schritt
+zurück.
+
+::: tip Warum kein Seitenketten-Kompressor
+Weil die Web-Audio-API keine Seitenkette hat. `DynamicsCompressorNode` nimmt einen Eingang, und es
+gibt keinen zweiten, über den er gesteuert werden könnte — eine Seitenkette müsste hier aus einem
+Analyser und einem je Bild geschriebenen Pegel gebaut werden, also aus genau der Treppe, deretwegen
+es jede andere Hüllkurve in diesem Graphen gibt. Die Keyframes kosten nichts obendrauf: die
+Insert-Kette automatisiert jeden Parameter, den sie hat, ohnehin abtastwertweise auf dem Tonfaden,
+und Vorschau wie Export lesen dieselbe Spur davon.
+:::
+
+Der Insert sitzt wie jeder andere vor dem Fader, Ducking und der Regler des Streifens multiplizieren
+sich also, statt sich zu bekämpfen — und ebenso Ducking und die Blende eines Clips, die weiter oben
+auf dem Clip-Pegel liegt. Gemessen: ein Bett mit halber Verstärkung unter einer Blende bei der Hälfte
+steht bei einem Viertel.
+
+## Stille finden und schneiden
+
+Der Knopf auf einem Spurstreifen findet die Pausen darin und nimmt sie heraus; wo eine war, bleibt
+eine Lücke.
+
+Die Erkennung liest **die Spitzenwerte, die die Zeitleiste ohnehin zeichnet**, in einer Auflösung,
+die für diese Aufgabe fein genug ist — die Abtastwerte wurden für die Wiedergabe dekodiert und für
+den Streifen einmal durchgesehen, das hier ist also ein dritter Lauf über ein paar tausend Zahlen und
+nicht über ein paar Millionen. Ein Bucket zählt als klingend, wenn er −40 dBFS erreicht; Lücken unter
+250 ms liegen innerhalb einer Phrase und nicht zwischen zweien und werden geschlossen; was danach
+übrig und kürzer als 150 ms ist, war ein Knacken und keine Phrase; und jede Phrase wächst an beiden
+Enden um eine Zehntelsekunde, damit der Schnitt in die Pause fällt und nicht auf die erste Silbe.
+
+Ein Bucket wird zu einem Zeitpunkt, indem die Quellenabbildung des Kerns umgekehrt wird, nicht indem
+eine Dauer geteilt wird. Das macht es für einen Clip richtig, der nicht geradeaus läuft: unter einer
+Geschwindigkeitskurve liegen die Spitzenwerte über dem **Puffer**, und der ist zur Projektzeit gar
+nicht proportional. Ein rückwärts laufender Clip braucht keinen eigenen Fall — sein Puffer ist
+bereits die umgekehrte Kopie, die der Graph spielt.
+
+::: warning Eine Lücke, kein Ripple
+Der Schnitt lässt alles dahinter stehen, wo es steht. Ein Ripple zöge den Rest dieser Spur nach vorn
+und ließe jede andere Spur — vor allem das Bild, zu dem die Stimme gehört — stehen. Stille zu
+entfernen lohnt sich; Stille so zu entfernen, dass der Ton von den Lippen wandert, nicht. Die
+Zeitleiste danach zu schließen ist ein Ripple-Löschen auf den Lücken, und das ist ein Befehl, den man
+sieht und zurücknehmen kann.
+:::
+
 ## Was es noch nicht gibt
 
 Benannt statt angedeutet, denn ein Bedienelement, das nichts tut, ist schlimmer als keines:
@@ -185,8 +309,13 @@ Benannt statt angedeutet, denn ein Bedienelement, das nichts tut, ist schlimmer 
   denn eine Filterform ist eine Auswahl, und die Effektbeschreibungen tragen nur Fließkommazahlen.
   `ParamValue` kennt bereits eine Auswahl-Art; die Kuhschwanzfilter kommen mit dem Bedienelement, das
   eine solche bearbeiten kann.
-- **Pegelanzeigen im Betrieb.** Aussteuerung und Pegelreduktion brauchen je Bus eine Analyse pro Bild.
-- **Ducking, Rauschreduktion, Beat-Erkennung, Panorama über Stereo hinaus.**
+- **Anzeige der Pegelreduktion.** Die Streifen zeigen, was ein Bus sendet; wie stark sein Kompressor
+  arbeitet, ist eine zweite Anzeige, und `DynamicsCompressorNode.reduction` wäre ihre Quelle.
+- **Rauschreduktion, Beat-Erkennung, Panorama über Stereo hinaus.**
+- **Bus-Automation in der Keyframe-Spur der Zeitleiste.** Die Ecken eines Duckings lassen sich auf
+  dem Streifen bearbeiten, der sie geschrieben hat, mit denselben Bedienelementen wie im Inspektor;
+  die Spur unter einem Clip zeichnet nur Clip-Keyframes, und die einer Spur zu zeichnen hieße, einer
+  Lane eine Identität zu geben, die kein Clip ist.
 - **True Peak (dBTP).** Der Spitzenwert ist ein Abtastwert-Spitzenwert; ein Zwischenwert-Spitzenwert
   braucht Überabtastung.
 - **Die Lippensynchronität ist nirgends gemessen.** Ein Browser ohne Bildschirm hat keine Tonausgabe,

@@ -12,10 +12,20 @@ interface Rig {
   playPause: Mock<() => void>;
   seek: Mock<(time: Time) => void>;
   step: Mock<(direction: 1 | -1) => void>;
+  shuttle: Mock<(direction: 1 | -1) => void>;
+  markerJump: Mock<(direction: 1 | -1) => void>;
+  resolution: Mock<(scale: number) => void>;
 }
 
 function show(props: Partial<TransportProps> = {}): Rig {
-  const rig: Rig = { playPause: vi.fn(), seek: vi.fn(), step: vi.fn() };
+  const rig: Rig = {
+    playPause: vi.fn(),
+    seek: vi.fn(),
+    step: vi.fn(),
+    shuttle: vi.fn(),
+    markerJump: vi.fn(),
+    resolution: vi.fn(),
+  };
   render(
     <I18nProvider>
       <Transport
@@ -26,6 +36,9 @@ function show(props: Partial<TransportProps> = {}): Rig {
         onPlayPause={rig.playPause}
         onSeek={rig.seek}
         onStep={rig.step}
+        onShuttle={rig.shuttle}
+        onMarkerJump={rig.markerJump}
+        onResolution={rig.resolution}
         {...props}
       />
     </I18nProvider>,
@@ -157,5 +170,108 @@ describe("Transport", () => {
     show({ time: 5 * frameDuration(NTSC) });
 
     expect(screen.getByLabelText("Position").textContent?.startsWith("00:00:00.05")).toBe(true);
+  });
+});
+
+// The three keys every cutter has in their fingers. They are unmodified, so the guards that keep
+// the space bar out of a text field have to keep these out of one too.
+describe("Transport shuttle keys", () => {
+  it("shuttles backwards on J and forwards on L", () => {
+    const rig = show();
+
+    press("j");
+    press("l");
+    press("L");
+
+    expect(rig.shuttle.mock.calls).toEqual([[-1], [1], [1]]);
+  });
+
+  it("halts on K while something is rolling", () => {
+    const rig = show({ playing: true });
+
+    press("k");
+
+    expect(rig.playPause).toHaveBeenCalledOnce();
+    expect(rig.shuttle).not.toHaveBeenCalled();
+  });
+
+  // K is a brake, not a play button wearing a different letter: on a transport that is already
+  // standing still it does nothing, which is what keeps a stray press from starting playback.
+  it("does nothing on K while the transport stands still", () => {
+    const rig = show({ playing: false });
+
+    press("k");
+
+    expect(rig.playPause).not.toHaveBeenCalled();
+  });
+
+  it("keeps the shuttle keys out of a text field", () => {
+    const rig = show();
+    const input = document.createElement("input");
+    document.body.append(input);
+
+    press("l", input);
+
+    expect(rig.shuttle).not.toHaveBeenCalled();
+    input.remove();
+  });
+
+  it("shows the rate only while it is not the ordinary one", () => {
+    show({ rate: 4 });
+    expect(screen.getByRole("status").textContent).toBe("4×");
+
+    cleanup();
+    show({ rate: 1 });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shuttles from the buttons as well, for a hand with no keyboard under it", () => {
+    const rig = show();
+
+    click("Vorwärts (L)");
+    click("Rückwärts (J)");
+
+    expect(rig.shuttle.mock.calls).toEqual([[1], [-1]]);
+  });
+});
+
+describe("Transport marker jumps", () => {
+  it("jumps to the next marker on shift and an arrow, and steps a frame without it", () => {
+    const rig = show();
+
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    press("ArrowRight");
+
+    expect(rig.markerJump.mock.calls).toEqual([[1]]);
+    expect(rig.step.mock.calls).toEqual([[1]]);
+  });
+});
+
+describe("Transport preview resolution", () => {
+  it("reports the fraction that was chosen", () => {
+    const rig = show({ resolution: 1 });
+    const select = screen.getByLabelText("Vorschau-Auflösung") as HTMLSelectElement;
+
+    act(() => {
+      select.value = "0.5";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(rig.resolution).toHaveBeenCalledWith(0.5);
+  });
+
+  it("shows the fraction it is on", () => {
+    show({ resolution: 0.25 });
+
+    expect((screen.getByLabelText("Vorschau-Auflösung") as HTMLSelectElement).value).toBe("0.25");
   });
 });

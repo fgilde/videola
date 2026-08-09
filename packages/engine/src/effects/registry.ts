@@ -1,9 +1,13 @@
+import { curveTable, readableCurve } from "@videola/core";
+
 import { blur } from "./blur";
 import { blurDissolve } from "./blur-dissolve";
 import { brightness } from "./brightness";
 import { chromaKey } from "./chroma-key";
+import { colorWheels } from "./color-wheels";
 import { contrast } from "./contrast";
 import { crossfade } from "./crossfade";
+import { curves } from "./curves";
 import { dip } from "./dip";
 import { iris } from "./iris";
 import { maskEllipse } from "./mask-ellipse";
@@ -45,9 +49,28 @@ export interface ColorParam {
   default: Rgba;
 }
 
+/**
+ * A tone curve: the control points a person drags, not a number they slide.
+ *
+ * The second reason `EffectManifest` needed a kind, and the first parameter here whose size the
+ * project file chooses. What reaches the shader is a table sampled from these points -- see
+ * `clampCurve` -- but what is stored, keyframed and edited is the points, because a table is
+ * derivable from points and points are not derivable from a table.
+ */
+export interface CurveParam {
+  kind: "curve";
+  key: string;
+  name: { de: string; en: string };
+  default: readonly (readonly [number, number])[];
+}
+
 export type Rgba = readonly [number, number, number, number];
-export type VideoParam = EffectParam | ColorParam;
-/** What `setUniforms` will take: a float, or the components of a vector. */
+export type VideoParam = EffectParam | ColorParam | CurveParam;
+/**
+ * What `setUniforms` will take: a float, the components of a vector or a matrix, or the entries of
+ * a table. Nothing shorter than seventeen numbers is ever a table, which is what keeps the shape of
+ * the value enough to pick the call -- see `program.ts`.
+ */
 export type Uniform = number | readonly number[];
 
 export interface EffectManifest {
@@ -74,7 +97,12 @@ export interface EffectManifest {
   // one that does nothing. Each effect names the one setting that makes its own point -- which for
   // a dip is not the midpoint, because the middle of a dip is a black rectangle. Keys left out fall
   // back to the parameter's default.
-  preview: Readonly<Record<string, Uniform>>;
+  //
+  // Authored in the parameter's own kind rather than in the shape the uniform ends up as -- a
+  // curve's telling setting is the points somebody would drag, not the table they sample to. It
+  // goes through the same guard every other authored value does, which is what makes `unknown`
+  // safe here and a preview outside its own declared range unable to paint a tile no control could.
+  preview: Readonly<Record<string, unknown>>;
   fragmentSource: string;
 }
 
@@ -106,6 +134,11 @@ const MANIFESTS: readonly EffectManifest[] = [
   contrast,
   saturation,
   temperature,
+  // The two that make this a grading tool rather than a set of picture sliders, and the two a
+  // scope is read against: the wheels put the black and white points where the waveform says they
+  // belong, the curves shape what is between them.
+  colorWheels,
+  curves,
   vignette,
   blur,
   sharpen,
@@ -175,9 +208,33 @@ function clamp01(channel: number): number {
   return Math.min(Math.max(channel, 0), 1);
 }
 
+/**
+ * The table a curve reaches the shader as: `CURVE_SAMPLES` outputs, evenly spaced from black to
+ * white, which the shader reads with a mix between neighbours.
+ *
+ * Sampled here rather than stored sampled, and sampled per frame rather than cached: a keyframed
+ * curve has different points at every moment, so a cache would need the resolved points as its
+ * key -- which is the work it was meant to save. Thirty-two evaluations of a handful of cubic
+ * segments, four times over, is nothing beside one pass of the shader that reads them.
+ *
+ * The same guard as everywhere else on this seam: what does not read as this parameter's kind is
+ * the manifest's default, so a float on a curve track is the untouched picture rather than an
+ * unset uniform, which is a table of zeroes and a black clip.
+ */
+export function clampCurve(param: CurveParam, value: unknown): readonly number[] {
+  return curveTable(readableCurve(value, param.default));
+}
+
 /** Whichever guard this parameter's kind calls for. Everything on the way to a uniform goes here. */
 export function paramUniform(param: VideoParam, value: unknown): Uniform {
-  return param.kind === "color" ? clampColor(param, value) : clampParam(param, value);
+  switch (param.kind) {
+    case "color":
+      return clampColor(param, value);
+    case "curve":
+      return clampCurve(param, value);
+    default:
+      return clampParam(param, value);
+  }
 }
 
 // The full uniform record a tile is drawn with. Through the same guards as every other path to a

@@ -1,0 +1,122 @@
+/* A control in the timeline's toolbar that opens a panel over the tracks. It costs the height of
+   one button while it is closed, which is what it has to cost: the picture is the largest zone on
+   this screen, and a list nobody has opened must not take a row away from it. */
+.v-markers {
+  position: relative;
+}
+
+/* Styled as one of the toolbar's buttons rather than as a disclosure triangle, because that is
+   what it is standing in a row of. The marker is set with the flag beside it; this one reads them
+   back. */
+.v-markers__summary {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--v-space-3);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  background: var(--v-surface);
+  font-size: var(--v-text-sm);
+  color: var(--v-text);
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.v-markers__summary::-webkit-details-marker {
+  display: none;
+}
+
+.v-markers__summary:hover {
+  background: var(--v-surface-hover);
+}
+
+.v-markers__list,
+.v-markers__empty {
+  position: absolute;
+  z-index: 20;
+  inset-block-start: calc(100% + var(--v-space-1));
+  inset-inline-start: 0;
+  /* Never wider than the screen it opens on, which is the whole of a phone's. */
+  inline-size: min(34rem, 92vw);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  box-shadow: var(--v-shadow);
+}
+
+.v-markers__empty {
+  margin: 0;
+  padding: var(--v-space-3);
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+}
+
+.v-markers__list {
+  list-style: none;
+  padding: var(--v-space-2);
+  /* A project can carry a hundred of them; the panel does not grow to a hundred rows. */
+  max-block-size: 40vh;
+  overflow-y: auto;
+}
+
+.v-markers__item {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  padding: var(--v-space-1) 0;
+}
+
+.v-markers__color {
+  flex: none;
+  inline-size: 32px;
+  block-size: 28px;
+  padding: 0;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  background: none;
+}
+
+.v-markers__time {
+  flex: none;
+  border: none;
+  background: none;
+  padding: var(--v-space-1) var(--v-space-2);
+  border-radius: var(--v-radius-sm);
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--v-text);
+  cursor: pointer;
+}
+
+.v-markers__time:hover {
+  background: var(--v-surface-hover);
+}
+
+.v-markers__label {
+  flex: 1 1 8ch;
+  min-width: 0;
+}
+
+.v-markers__note {
+  flex: 2 1 12ch;
+  min-width: 0;
+}
+
+@media (pointer: coarse) {
+  .v-markers__summary {
+    min-height: var(--v-touch-target);
+  }
+
+  .v-markers__item {
+    flex-wrap: wrap;
+  }
+
+  .v-markers__color,
+  .v-markers__time,
+  .v-markers__label,
+  .v-markers__note {
+    min-height: var(--v-touch-target);
+  }
+}

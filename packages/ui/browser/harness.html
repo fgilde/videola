@@ -7,7 +7,11 @@
   /* The inspector gets its own root: it is mounted inside a .v-shell whose data-layout is what
      decides its touch targets, and the timeline host must not carry that attribute. */
   #panel { position: absolute; left: 37px; top: 500px; width: 360px; height: 380px; display: flex; }
-  #out { position: absolute; left: 0; top: 1000px; }
+  /* The instruments and the curve field get hosts of their own: both are drawings whose whole
+     claim is about pixels, and neither can be measured inside a box with no size. */
+  #scopes { position: absolute; left: 420px; top: 500px; width: 640px; height: 220px; }
+  #curve { position: absolute; left: 420px; top: 760px; width: 300px; height: 300px; display: flex; }
+  #out { position: absolute; left: 0; top: 1200px; }
 </style>
 <script src="./bundle.js"></script>
 <script>
@@ -693,6 +697,193 @@ test("the scroll bars come from the tokens", function () {
     ) || style.scrollbarColor.startsWith("rgb"),
     true);
   check("which is not the browser's own answer", style.scrollbarColor === "auto", false);
+});
+
+// ---------------------------------------------------------------- the instruments, on real pixels
+//
+// Everything below here needs a canvas the browser actually rasterises. jsdom has none, so a unit
+// test can say the panel rendered three figures and nothing at all about whether they show a
+// measurement -- which is the only thing a scope is for.
+
+const scopesHost = document.createElement("div");
+scopesHost.id = "scopes";
+scopesHost.className = "v-shell";
+document.body.append(scopesHost);
+const scopesRoot = T.createRoot(scopesHost);
+
+const TARGETS = [{ name: "R", x: 0.42, y: 0.13 }, { name: "B", x: 0.87, y: 0.54 }];
+
+function emptyReading() {
+  return {
+    histogram: { red: new Uint32Array(256), green: new Uint32Array(256),
+      blue: new Uint32Array(256), luma: new Uint32Array(256) },
+    waveform: new Uint32Array(64 * 256), columns: 64,
+    vectorscope: new Uint32Array(128 * 128), measured: 0, range: undefined,
+  };
+}
+
+// A picture dark on the left and bright on the right, red-shifted throughout. Each of the three
+// instruments has something different to say about it, which is what tells them apart.
+function slopedReading() {
+  const shot = emptyReading();
+  for (let column = 0; column < 64; column += 1) {
+    const level = Math.round((column / 63) * 200) + 20;
+    shot.waveform[column * 256 + level] = 100;
+    shot.histogram.luma[level] += 100;
+    shot.histogram.red[Math.min(255, level + 30)] += 100;
+    shot.histogram.green[level] += 100;
+    shot.histogram.blue[Math.max(0, level - 30)] += 100;
+  }
+  shot.vectorscope[40 * 128 + 90] = 500;
+  shot.measured = 6400;
+  shot.range = [20, 220];
+  return shot;
+}
+
+function drawScopes(reading, layout) {
+  scopesHost.setAttribute("data-layout", layout || "desktop");
+  T.flushSync(function () { scopesRoot.render(null); });
+  T.flushSync(function () {
+    scopesRoot.render(T.createElement(T.I18nProvider, null,
+      T.createElement(T.Scopes, { reading: reading, targets: TARGETS })));
+  });
+}
+
+function scopeCanvas(title) {
+  return Array.from(scopesHost.querySelectorAll(".v-scope")).find(function (figure) {
+    return figure.querySelector(".v-scope__title").textContent === title;
+  }).querySelector("canvas");
+}
+
+// How many pixels of a canvas carry ink, and where. Read back through getImageData, which is the
+// only way to tell a drawing from an empty box.
+function inked(canvas, region) {
+  const two = document.createElement("canvas");
+  two.width = canvas.width;
+  two.height = canvas.height;
+  const context = two.getContext("2d");
+  context.drawImage(canvas, 0, 0);
+  const box = region || { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  const data = context.getImageData(box.x, box.y, box.w, box.h).data;
+  let count = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] > 8) count += 1;
+  return count;
+}
+
+test("the instruments draw a measurement rather than an empty box", function () {
+  drawScopes(slopedReading());
+  ["Wellenform", "Vektorskop", "Histogramm"].forEach(function (title) {
+    const canvas = scopeCanvas(title);
+    checkAtLeast(title + " has a buffer of its own", canvas.width, 40);
+    checkAtLeast(title + " puts ink on it", inked(canvas), 60);
+  });
+});
+
+// What separates a waveform from a histogram: it says *where* in the frame a tone is. A picture
+// dark on the left and bright on the right has to draw low on the left and high on the right, and
+// a waveform built from the histogram alone would look the same on both sides.
+test("the waveform reads across the frame", function () {
+  drawScopes(slopedReading());
+  const canvas = scopeCanvas("Wellenform");
+  const half = Math.floor(canvas.width / 2);
+  const quarter = Math.floor(canvas.height / 4);
+  const low = canvas.height - quarter;
+  // The bottom quarter is the tones under about 64, and only the left of the frame reaches them;
+  // the top quarter is over about 190, and only the right does. A trace drawn from the histogram
+  // instead would put the whole spread under every column and fill all four of these.
+  checkAtLeast("the dark half of the frame draws low",
+    inked(canvas, { x: 0, y: low, w: half, h: quarter }), 10);
+  check("and the bright half has nothing down there",
+    inked(canvas, { x: half, y: low, w: half, h: quarter }), 0);
+  checkAtLeast("the bright half draws high",
+    inked(canvas, { x: half, y: 0, w: half, h: quarter }), 10);
+  check("and the dark half has nothing up there",
+    inked(canvas, { x: 0, y: 0, w: half, h: quarter }), 0);
+});
+
+// The graticule turns a cloud into a reading, and it is drawn whether or not there is anything to
+// plot -- an empty vectorscope without its boxes is a black square.
+test("the vectorscope keeps its graticule with nothing to plot", function () {
+  drawScopes(emptyReading());
+  checkAtLeast("the boxes and the circle are still there", inked(scopeCanvas("Vektorskop")), 100);
+  check("and the panel says why the rest is empty",
+    scopesHost.querySelector(".v-scopes__range").textContent, "Nichts zu messen");
+});
+
+// Scope and empty picture, crossed where it is drawn rather than where it is counted.
+test("an empty reading draws no trace", function () {
+  drawScopes(emptyReading());
+  check("the waveform is blank", inked(scopeCanvas("Wellenform")), 0);
+  check("and so is the histogram", inked(scopeCanvas("Histogramm")), 0);
+});
+
+test("the instruments stack rather than squeeze under a finger", function () {
+  drawScopes(slopedReading(), "phone");
+  const boxes = Array.from(scopesHost.querySelectorAll(".v-scope__canvas"))
+    .map(function (canvas) { return canvas.getBoundingClientRect(); });
+  check("each instrument gets the whole width",
+    boxes.every(function (box) { return Math.round(box.width) === Math.round(boxes[0].width); }),
+    true);
+  check("and they stand one above another", boxes[1].top > boxes[0].bottom - 1, true);
+});
+
+// ---------------------------------------------------------------- the curve field
+
+const curveHost = document.createElement("div");
+curveHost.id = "curve";
+curveHost.className = "v-shell";
+document.body.append(curveHost);
+const curveRoot = T.createRoot(curveHost);
+
+function drawCurve(layout, points) {
+  curveHost.setAttribute("data-layout", layout);
+  T.flushSync(function () { curveRoot.render(null); });
+  T.flushSync(function () {
+    curveRoot.render(T.createElement(T.I18nProvider, null, T.createElement(T.CurveRow, {
+      label: "Helligkeit",
+      value: points || [[0, 0], [0.5, 0.8], [1, 1]],
+      onChange: function (next, key) { sent.push({ command: next, key: key }); },
+    })));
+  });
+}
+
+// A control point a finger cannot hit is not a control point. The dot stays small on purpose -- a
+// 44 px lozenge would cover a quarter of the range it points at -- so what has to grow is the
+// square around it, and only a laid-out browser can say whether it did.
+test("a curve point is big enough to aim at", function () {
+  drawCurve("phone");
+  const point = curveHost.querySelector(".v-curve__point").getBoundingClientRect();
+  checkAtLeast("wide enough for a finger", Math.round(point.width), 44);
+  checkAtLeast("and tall enough", Math.round(point.height), 44);
+
+  drawCurve("desktop");
+  const mouse = curveHost.querySelector(".v-curve__point").getBoundingClientRect();
+  if (POINTER === "fine") {
+    checkAtMost("a mouse gets a smaller one", Math.round(mouse.width), 32);
+  } else {
+    checkAtLeast("a finger at desk width still gets the whole target", Math.round(mouse.width), 44);
+  }
+});
+
+// The one thing about a curve field no unit test can see: where the points actually land. A field
+// that ran the output down the page rather than up would put the same numbers on screen upside
+// down, and every assertion about the model would still pass.
+test("a curve point stands where the curve puts it", function () {
+  drawCurve("desktop");
+  const field = curveHost.querySelector(".v-curve").getBoundingClientRect();
+  const points = Array.from(curveHost.querySelectorAll(".v-curve__point"))
+    .map(function (node) { return node.getBoundingClientRect(); });
+  const middle = points[1];
+  checkAtMost("the point at four fifths of the output sits high in the field",
+    Math.round(middle.top + middle.height / 2 - field.top), Math.round(field.height * 0.25));
+  check("and halfway across it",
+    Math.abs(middle.left + middle.width / 2 - field.left - field.width / 2) < 3, true);
+  check("black sits at the bottom",
+    Math.round(points[0].top + points[0].height / 2 - field.top) > field.height * 0.75, true);
+  // The line itself, not only the handles: a path drawn from a different sampler than the one the
+  // renderer uses is a curve that looks like one thing and grades like another.
+  checkAtLeast("and the curve is drawn between them",
+    (curveHost.querySelector(".v-curve__line").getAttribute("d") || "").length, 200);
 });
 
 document.getElementById("out").textContent = JSON.stringify(results);

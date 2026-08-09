@@ -394,6 +394,28 @@ fn every_command_undoes_to_the_exact_prior_state() {
             start: Time::from_seconds(5.0),
             duration: Time::from_seconds(1.0),
         },
+        |Fixture { track, .. }| Command::ClipInsert {
+            track: track.clone(),
+            source: ClipSource::Generator {
+                generator: Generator::Solid {
+                    color: "#00ff00".into(),
+                },
+            },
+            start: Time::from_seconds(1.0),
+            duration: Time::from_seconds(1.0),
+            in_point: Time::from_seconds(0.5),
+        },
+        |Fixture { track, .. }| Command::ClipOverwrite {
+            track: track.clone(),
+            source: ClipSource::Generator {
+                generator: Generator::Solid {
+                    color: "#00ff00".into(),
+                },
+            },
+            start: Time::from_seconds(1.0),
+            duration: Time::from_seconds(1.0),
+            in_point: Time::from_seconds(0.5),
+        },
         |Fixture { clip, .. }| Command::ClipRemove { clip: clip.clone() },
         |Fixture { other, clip, .. }| Command::ClipMove {
             clip: clip.clone(),
@@ -545,6 +567,14 @@ fn every_command_undoes_to_the_exact_prior_state() {
         |Fixture { marker, .. }| Command::MarkerRename {
             marker: marker.clone(),
             label: "renamed".into(),
+        },
+        |Fixture { marker, .. }| Command::MarkerSetColor {
+            marker: marker.clone(),
+            color_hex: "#2EA043".into(),
+        },
+        |Fixture { marker, .. }| Command::MarkerSetNote {
+            marker: marker.clone(),
+            note: "the take we kept".into(),
         },
     ];
     // Guards the table itself: comparing lengths alone would still pass if a duplicate entry

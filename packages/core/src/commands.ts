@@ -250,6 +250,24 @@ export const cmd = {
     start,
     duration,
   }),
+  // The two halves of a three-point edit. `inPoint` is the source in point the range was marked
+  // at and `duration` is out minus in, so the pair of them is the marked range and `start` is the
+  // place on the timeline it lands. Insert moves everything after it on *every* track; overwrite
+  // moves nothing and replaces what it covers on the one track named.
+  clipInsert: (
+    track: string,
+    source: ClipSource,
+    start: Time,
+    duration: Time,
+    inPoint: Time = 0,
+  ) => ({ type: "clip.insert", track, source, start, duration, inPoint }),
+  clipOverwrite: (
+    track: string,
+    source: ClipSource,
+    start: Time,
+    duration: Time,
+    inPoint: Time = 0,
+  ) => ({ type: "clip.overwrite", track, source, start, duration, inPoint }),
   clipRemove: (clip: string) => ({ type: "clip.remove", clip }),
   clipMove: (clip: string, toTrack: string, start: Time) => ({
     type: "clip.move",
@@ -388,6 +406,12 @@ export const cmd = {
   markerAdd: (time: Time, label: string) => ({ type: "marker.add", time, label }),
   markerRemove: (marker: string) => ({ type: "marker.remove", marker }),
   markerRename: (marker: string, label: string) => ({ type: "marker.rename", marker, label }),
+  markerSetColor: (marker: string, colorHex: string) => ({
+    type: "marker.setColor",
+    marker,
+    colorHex,
+  }),
+  markerSetNote: (marker: string, note: string) => ({ type: "marker.setNote", marker, note }),
 
   // Since M1 the bytes live in OPFS rather than in WASM memory, so the caller is the only side
   // that ever sees them and has to supply the id it hashed them to. The core still checks the

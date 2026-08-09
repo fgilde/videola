@@ -729,6 +729,131 @@ describe("Playback transport", () => {
   });
 });
 
+// J, K and L. What makes this the transport's rate and not a clip's: nothing here reaches the
+// project, and the same timeline exports at the speed it was authored at whatever the shuttle
+// was doing when the export started.
+describe("Playback shuttle", () => {
+  it("climbs the ladder while the direction stays the same", async () => {
+    const { playback } = rig();
+    await playback.load(project([]));
+
+    playback.shuttle(1);
+    expect(playback.rate).toBe(1);
+    playback.shuttle(1);
+    expect(playback.rate).toBe(2);
+    playback.shuttle(1);
+    expect(playback.rate).toBe(4);
+    playback.shuttle(1);
+    expect(playback.rate).toBe(8);
+    playback.shuttle(1);
+    expect(playback.rate).toBe(8);
+  });
+
+  // The brake: one press against the direction of travel goes straight back to the first rung
+  // rather than counting back down through the ones it climbed.
+  it("drops to the first rung when the direction turns", async () => {
+    const { playback } = rig();
+    await playback.load(project([]));
+
+    playback.shuttle(1);
+    playback.shuttle(1);
+    playback.shuttle(1);
+    expect(playback.rate).toBe(4);
+
+    playback.shuttle(-1);
+    expect(playback.rate).toBe(-1);
+  });
+
+  it("runs project time at the rate it was given", async () => {
+    const { playback, transport } = rig();
+    await playback.load(project([]));
+
+    playback.shuttle(1);
+    playback.shuttle(1);
+    await settle();
+    transport.advance(1);
+
+    expect(playback.now()).toBe(2 * SECOND);
+  });
+
+  // The re-anchor: the second half second was played at four times, the first at two, and neither
+  // is recomputed at the rate the other ran at.
+  it("banks what it has played before a change of rate", async () => {
+    const { playback, transport } = rig();
+    await playback.load(project([]));
+
+    playback.shuttle(1);
+    playback.shuttle(1);
+    await settle();
+    transport.advance(0.5);
+    playback.shuttle(1);
+    transport.advance(0.5);
+
+    expect(playback.now()).toBe(3 * SECOND);
+  });
+
+  it("runs backwards and stops at the head of the timeline", async () => {
+    const { playback, transport } = rig();
+    await playback.load(project([]));
+    playback.seek(2 * SECOND);
+
+    playback.shuttle(-1);
+    await settle();
+    transport.advance(1);
+    runFrame();
+    await settle();
+    expect(playback.now()).toBe(SECOND);
+
+    transport.advance(2);
+    runFrame();
+    await settle();
+    expect(playback.now()).toBe(0);
+    expect(playback.isPlaying).toBe(false);
+    expect(playback.rate).toBe(0);
+  });
+
+  // Silence rather than a chipmunk: an AudioBufferSourceNode is scheduled against real time and
+  // would drift further from the picture with every second of shuttling.
+  it("plays sound at ordinary speed and none at any other", async () => {
+    const { playback, graph } = rig();
+    await playback.load(project([]));
+    const startAt = vi.spyOn(graph, "startAt");
+    const stop = vi.spyOn(graph, "stop");
+
+    playback.shuttle(1);
+    expect(startAt).toHaveBeenCalledOnce();
+
+    playback.shuttle(1);
+    expect(stop).toHaveBeenCalled();
+    expect(startAt).toHaveBeenCalledOnce();
+  });
+
+  it("is halted after a pause, whatever it was shuttling at", async () => {
+    const { playback } = rig();
+    await playback.load(project([]));
+
+    playback.shuttle(1);
+    playback.shuttle(1);
+    playback.pause();
+
+    expect(playback.rate).toBe(0);
+    expect(playback.isPlaying).toBe(false);
+  });
+
+  // Pressing play after a shuttle is a fresh start at ordinary speed, not a resume of whatever
+  // rate the keys had left behind.
+  it("goes back to ordinary speed on play", async () => {
+    const { playback } = rig();
+    await playback.load(project([]));
+
+    playback.shuttle(1);
+    playback.shuttle(1);
+    playback.play();
+
+    expect(playback.rate).toBe(1);
+  });
+});
+
 // Sound and picture cross here: the same seek that moves the playhead has to move the audio, and
 // these samples come out of a real renderer rather than out of a spy.
 describe("Playback sound", () => {

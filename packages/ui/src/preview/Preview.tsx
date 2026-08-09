@@ -6,13 +6,27 @@ import "./Preview.css";
 export interface PreviewProps {
   width: number;
   height: number;
+  /**
+   * How much of the screen's own resolution the drawing buffer is given: 1 is every pixel, 0.5 is
+   * half in each direction and so a quarter of the work. The element keeps its size and CSS
+   * stretches the smaller buffer back over it, so the picture only gets softer -- the cheapest
+   * thing there is to trade for a preview that keeps up on a big project. The export never sees
+   * it: it renders into a context of its own at the size it was asked for.
+   */
+  resolution?: number;
   /** The element, once it exists, and `null` when it goes away. Called once per element. */
   onCanvas: (canvas: HTMLCanvasElement | null) => void;
   /** The drawing buffer was resized, which empties it. Whoever draws has to draw again. */
   onResize?: () => void;
 }
 
-export function Preview({ width, height, onCanvas, onResize }: PreviewProps): ReactElement {
+export function Preview({
+  width,
+  height,
+  resolution = 1,
+  onCanvas,
+  onResize,
+}: PreviewProps): ReactElement {
   const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // The callbacks are read through refs so a parent that passes an inline arrow does not tear
@@ -38,7 +52,7 @@ export function Preview({ width, height, onCanvas, onResize }: PreviewProps): Re
       // The buffer is sized in device pixels and the element in CSS pixels, so a HiDPI screen
       // gets the resolution it has. The compositor reads the buffer size per call, so nothing
       // needs telling -- but assigning it clears the buffer, and that does.
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = (window.devicePixelRatio || 1) * resolution;
       const buffer = {
         width: Math.max(1, Math.round(canvas.clientWidth * ratio)),
         height: Math.max(1, Math.round(canvas.clientHeight * ratio)),
@@ -51,7 +65,7 @@ export function Preview({ width, height, onCanvas, onResize }: PreviewProps): Re
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [width, height]);
+  }, [width, height, resolution]);
 
   return (
     <div className="v-preview" data-testid="preview">

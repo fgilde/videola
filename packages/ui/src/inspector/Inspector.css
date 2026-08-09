@@ -291,3 +291,114 @@
   min-height: calc(var(--v-touch-target) * 1.5);
   resize: vertical;
 }
+
+/* A curve is the one parameter that is a picture rather than a line of controls, so it takes the
+   whole width of its card and puts the label and the keyframe switches above the field instead of
+   beside it. */
+.v-param--curve {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+}
+
+.v-param__curveHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-2);
+}
+
+/* Square, because both axes are the same range and a stretched box makes a symmetric S look like
+   it favours one end. `touch-action: none` is what lets a finger drag a point rather than scroll
+   the panel underneath it. */
+.v-curve {
+  position: relative;
+  width: 100%;
+  max-width: var(--v-control-max);
+  aspect-ratio: 1;
+  background: var(--v-bg-sunken);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  touch-action: none;
+}
+
+.v-curve__plot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.v-curve__grid {
+  stroke: var(--v-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The curve that changes nothing, so the shape of the one that does is readable as a departure
+   from it rather than as a line on its own. */
+.v-curve__diagonal {
+  stroke: var(--v-border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.v-curve__line {
+  fill: none;
+  stroke: var(--v-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The grab target, and the same symbol rank the keyframe switches carry: the mark a person aims at
+   is the dot, and the square around it is how much of the field belongs to that dot. Under a finger
+   the square grows to the touch target and the dot does not -- a 44 px lozenge on a curve would
+   cover a quarter of the range it is meant to point at. */
+.v-curve__point {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  transform: translate(-50%, 50%);
+  background: none;
+  border: none;
+  border-radius: var(--v-radius-pill);
+  cursor: grab;
+}
+
+.v-curve__point::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 11px;
+  height: 11px;
+  transform: translate(-50%, -50%);
+  background: var(--v-accent);
+  border: 2px solid var(--v-accent-contrast);
+  border-radius: var(--v-radius-pill);
+  transition: transform var(--v-transition);
+}
+
+.v-curve__point:hover::before,
+.v-curve__point:focus-visible::before,
+.v-curve__point[data-held]::before {
+  transform: translate(-50%, -50%) scale(1.35);
+}
+
+.v-curve__point[data-held] {
+  cursor: grabbing;
+}
+
+@media (pointer: coarse) {
+  .v-curve__point {
+    width: var(--v-touch-target);
+    height: var(--v-touch-target);
+  }
+}
+
+.v-shell[data-layout="tablet"] .v-curve__point,
+.v-shell[data-layout="phone"] .v-curve__point {
+  width: var(--v-touch-target);
+  height: var(--v-touch-target);
+}

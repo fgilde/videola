@@ -32,6 +32,10 @@ export interface MediaLibraryProps {
   onAdd: (media: MediaId) => void;
   onRelink: (media: MediaId) => void;
   onGrab?: (grab: MediaGrab) => void;
+  /** The medium a range is being marked in, so the entry can say which one that is. */
+  armed?: MediaId;
+  /** Take this medium to the source bar and mark a range in it. */
+  onArm?: (media: MediaId) => void;
 }
 
 export function MediaLibrary({
@@ -45,6 +49,8 @@ export function MediaLibrary({
   onAdd,
   onRelink,
   onGrab,
+  armed,
+  onArm,
 }: MediaLibraryProps): ReactElement {
   const { t } = useI18n();
 
@@ -76,9 +82,11 @@ export function MediaLibrary({
               fps={fps}
               thumbnail={thumbnails?.get(asset.id)}
               draggable={draggable}
+              armed={armed === asset.id}
               onAdd={onAdd}
               onRelink={onRelink}
               onGrab={onGrab}
+              onArm={onArm}
             />
           ))}
         </ul>
@@ -125,18 +133,22 @@ function Entry({
   fps,
   thumbnail,
   draggable,
+  armed,
   onAdd,
   onRelink,
   onGrab,
+  onArm,
 }: {
   asset: MediaAsset;
   missing: boolean;
   fps: Rate;
   thumbnail: string | undefined;
   draggable: boolean;
+  armed: boolean;
   onAdd: (media: MediaId) => void;
   onRelink: (media: MediaId) => void;
   onGrab: ((grab: MediaGrab) => void) | undefined;
+  onArm: ((media: MediaId) => void) | undefined;
 }): ReactElement {
   const { t, formatTimecode } = useI18n();
   const grabbable = draggable && !missing && onGrab !== undefined;
@@ -155,6 +167,7 @@ function Entry({
       className="v-library__item"
       data-media-id={asset.id}
       data-missing={missing}
+      data-armed={armed}
       data-grabbable={grabbable}
       title={grabbable ? t("library.dragToTimeline") : undefined}
       onPointerDown={onPointerDown}
@@ -189,6 +202,19 @@ function Entry({
           disabled={missing}
           onClick={() => onAdd(asset.id)}
         />
+        {/* The other way onto the timeline, and the one classical cutting is built on: mark a
+            range in this medium and insert or overwrite with it, rather than dropping the whole
+            of it at the end. Pressed rather than gone while it is armed, so the entry the source
+            bar is showing can be read off the list. */}
+        {onArm !== undefined && (
+          <IconButton
+            icon="scissors"
+            label={t("library.markRange")}
+            pressed={armed}
+            disabled={missing}
+            onClick={() => onArm(asset.id)}
+          />
+        )}
         {missing && (
           <IconButton
             icon="link"

@@ -35,6 +35,20 @@ sixteen instants and the audio render sample for sample.
 Everything runs through Pointer Events, so mouse, pen and finger take the same path, and a whole
 drag — two hundred pointer moves — is **one** undo step.
 
+The classical cut is here too: mark a range in a medium with <kbd>I</kbd> and <kbd>O</kbd>, then
+<kbd>,</kbd> **inserts** it at the playhead — opening the same gap on every track, so sound stays
+with picture — or <kbd>.</kbd> **overwrites** with it, replacing what was there and leaving the
+timeline the length it was. Each is one command, so an insert across three tracks and a dozen clips
+is one <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
+
+An **adjustment track** carries no picture of its own: its clips' effects run over everything drawn
+below them, so five shots are graded at once instead of five times. That the picture underneath
+changes and the picture beside it does not is checked on real pixels, because that is the only place
+the claim exists.
+
+Markers carry a colour and a note, and the list beside the marker button jumps between them —
+<kbd>Shift</kbd> and an arrow key does the same from the keyboard.
+
 ## Effects, transitions and text
 
 ![The effect browser: tiles by category, each rendered through the effect it offers](/editor-effects.webp)
@@ -44,16 +58,11 @@ tile is the effect's own shader over the frame at the playhead** — not a paint
 tile that failed to change the picture it was drawn from fails the build, which is what stops an
 effect from advertising itself with its own default value.
 
-Brightness, contrast, saturation, colour temperature, vignette, blur, sharpen and chroma key.
-Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
+Brightness, contrast, saturation, colour temperature, curves, colour wheels, vignette, blur, sharpen
+and chroma key. Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
 masks with feather and invert; two masks in one chain intersect. A text generator with styling and
 in, out and loop animation.
 
-They are chosen from a **browser you can look at**, grouped by category and searchable in both
-languages — and every tile in it is that effect's own shader run over the frame the editor is
-showing, at the size of a thumbnail. Not a painted illustration and not a stock photograph: what the
-tile promises is what the timeline delivers, because it is the same shader. A transition's tile shows
-the moment that says the most about it, which for a dissolve is halfway and for a dip is not.
 
 Every parameter can be keyframed — including a clip's position, scale, rotation and opacity — and a
 `position` track turns a series of keys into a **motion path** interpolated as a curve rather than
@@ -70,8 +79,32 @@ handles keeps them and keeps its shape, but nothing here can drag one — see
 Each effect's behaviour is measured against real pixels rendered by a real driver: 303 such checks
 run on every build, and every tile in the browser is one of them — a tile that failed to change the
 picture it was drawn from fails the build. A third-covered pixel over red must read 81, which is
-what premultiplied alpha
-gives; the reflex answer of 255 fails.
+what premultiplied
+alpha gives; the reflex answer of 255 fails.
+
+## Colour correction, and something to judge it by
+
+Curves and colour wheels, and three measuring instruments to read the result on.
+
+**Curves** on brightness and on each of the three channels, with control points you drag: tap the
+field to add one where you tapped, tap a point to take it away, and the two ends stay. The line is
+a monotone cubic, which cannot overshoot between two points — an overshoot on a tone curve is a
+bright rim along every edge in the picture that crossed that tone. The brightness curve is not the
+three channel curves in step: it scales all three by one ratio, so the colour of a pixel comes out
+exactly as it went in and only its brightness moves.
+
+**Colour wheels** — lift, gamma and gain — each with a tint and a strength, which is what the wheel
+and the ring on a real panel are. Lift says where black goes, gain says where white goes, and gamma
+bends what lies between without moving either end.
+
+**Scopes**: a waveform, a vectorscope and a histogram, in a strip under the picture that a switch on
+the transport opens. They read the preview's own pixels, so what they show is what the export will
+write. They are shrunk on the GPU before they are counted and measured ten times a second: 0.9 ms a
+reading rather than the 33 ms a naive full-frame count costs at 1080p, and nothing at all while the
+strip is closed.
+
+Everything here is keyframable like any other parameter, curves included — a curve keyframe
+interpolates its control points, so a knee slides sideways as well as up.
 
 ## Subtitles
 
@@ -132,11 +165,26 @@ Loudness is measured to EBU R128 and verified against the Tech 3341 conformance 
 knob is called **threshold**, not ceiling: the browser's compressor applies its own makeup gain, so
 it is not a brickwall, and the documentation says so rather than implying otherwise.
 
+Every strip carries a **level meter** — peak, effective value and a falling hold marker, read
+from an analyser that sits in the signal path rather than beside it. **Normalising** moves the
+master fader onto a target of −14, −16 or −23 LUFS and then measures again, so what is reported
+is a reading and not the target. **Ducking** pulls the music down under a voice track by writing
+keyframes onto a gain insert on the music bus — visible corners you can drag afterwards, not an
+invisible automatic, and the only choice the Web Audio API leaves open since it has no sidechain.
+**Cutting silence** finds the pauses in a track from the peaks already on screen and takes them
+out, leaving a gap rather than rippling the picture out of sync. See [Audio](./audio.md).
+
 ## Playback and export
 
 The audio clock leads and the picture follows, because audio drift is audible and a dropped frame is
 not. Frame rates stay rational to the last division — 30000/1001 is not 29.97, and a frame step
 built from the decimal drifts off the ruler within a few hundred frames.
+
+<kbd>J</kbd>, <kbd>K</kbd> and <kbd>L</kbd> shuttle backwards, halt and shuttle forwards, stepping up
+through 1, 2, 4 and 8 with each press in the same direction. That rate belongs to the transport and
+not to the material: a clip's own speed, ramp and all, is untouched by it and reaches the export as
+it was authored. The preview can be drawn at half or a quarter resolution, which is the cheapest
+performance there is on a large project and never reaches the exported file.
 
 Export writes MP4 with H.264 and AAC, or WebM with VP9 and Opus, in a worker, through the same
 compositor the preview uses. Progress is reported and cancelling really stops it. A browser that can

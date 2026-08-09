@@ -29,7 +29,8 @@ import {
 import { useI18n, type Locale } from "../i18n/useI18n";
 import { POSITION_TRACK } from "../timeline/keyframes";
 import { findClip } from "../timeline/useTimelineGestures";
-import { ColorRow, keyframeAt, ParamRow, shownColor, shownValue } from "./ParamRow";
+import { CurveRow, shownCurve } from "./CurveRow";
+import { ColorRow, keyframeAt, Keys, ParamRow, shownColor, shownValue } from "./ParamRow";
 import { TextPanel } from "./TextPanel";
 import "./Inspector.css";
 
@@ -63,7 +64,18 @@ export interface ColorParamDescriptor {
   default: readonly [number, number, number, number];
 }
 
-export type ParamDescriptor = EffectParamDescriptor | ColorParamDescriptor;
+/** A tone curve: the control points, `[input, output]` with both 0 to 1 and x ascending. */
+export interface CurveParamDescriptor {
+  kind: "curve";
+  key: string;
+  name: Record<Locale, string>;
+  default: readonly (readonly [number, number])[];
+}
+
+export type ParamDescriptor =
+  | EffectParamDescriptor
+  | ColorParamDescriptor
+  | CurveParamDescriptor;
 
 export interface InspectorProps {
   project: Project;
@@ -539,6 +551,21 @@ function Effects({
             <h4 className="v-inspector__effectName">{manifest.name[locale]}</h4>
             {manifest.params.map((param) => {
               const held = resolved.get(authored.id)?.get(param.key)?.value;
+              if (param.kind === "curve") {
+                return (
+                  <CurveParam
+                    key={param.key}
+                    clip={clip.id}
+                    effect={authored}
+                    param={param}
+                    value={shownCurve(param, held)}
+                    playhead={playhead}
+                    inside={inside}
+                    send={send}
+                    onSeek={onSeek}
+                  />
+                );
+              }
               return param.kind === "color" ? (
                 <ColorRow
                   key={param.key}
@@ -650,6 +677,73 @@ function EffectParam({
   );
 }
 
+// The same shape as `EffectParam` one level up, and separate for the same reason: what a curve does
+// with a change is not what a slider does with one, and the difference is a whole widget.
+function CurveParam({
+  clip,
+  effect,
+  param,
+  value,
+  playhead,
+  inside,
+  send,
+  onSeek,
+}: {
+  clip: ClipId;
+  effect: Effect;
+  param: CurveParamDescriptor;
+  value: readonly (readonly [number, number])[];
+  playhead: Time;
+  inside: boolean;
+  send: Send;
+  onSeek: (time: Time) => void;
+}): ReactElement {
+  const { locale } = useI18n();
+  const track = effect.keyframes[param.key] ?? [];
+  const keyframed = track.length > 0;
+  const label = param.name[locale];
+  const set = (next: readonly (readonly [number, number])[], interp: Interp = "linear"): Command =>
+    cmd.keyframeAdd(on.clip(clip), effect.effectType, param.key, playhead, curve(next), interp);
+
+  return (
+    <CurveRow
+      label={label}
+      value={value}
+      disabled={keyframed && !inside}
+      onChange={(next, coalesceKey) =>
+        send(
+          keyframed
+            ? set(next, keyframeAt(track, playhead)?.interp ?? "linear")
+            : cmd.effectSetParam(on.clip(clip), effect.effectType, param.key, curve(next)),
+          coalesceKey,
+        )
+      }
+      keyframes={
+        <Keys
+          strip={{
+            at: playhead,
+            track,
+            settable: inside,
+            onAdd: () => send(set(value)),
+            onRemove: () =>
+              send(cmd.keyframeRemove(on.clip(clip), effect.effectType, param.key, playhead)),
+            onGoTo: onSeek,
+            onInterp: (interp) =>
+              send(
+                cmd.keyframeSetInterp(on.clip(clip), effect.effectType, param.key, playhead, interp),
+              ),
+          }}
+          name={label}
+        />
+      }
+    />
+  );
+}
+
 function float(value: number): ParamValue {
   return { kind: "float", value };
+}
+
+function curve(points: readonly (readonly [number, number])[]): ParamValue {
+  return { kind: "curve", value: points.map(([x, y]) => [x, y]) };
 }

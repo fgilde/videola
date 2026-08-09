@@ -31,10 +31,10 @@ meldet das Ergebnis zurück, über `--dump-dom` oder per POST an den Server, der
 
 | Aufruf | Was er prüft |
 |---|---|
-| `pnpm --filter @videola/engine test:gpu` | 89 Pixelprüfungen gegen ANGLE/SwiftShader: Shader, premultipliziertes Alpha in allen neun Blendmodi, Transformationsmatrix, Kontextverlust, geschlossener `VideoFrame` |
+| `pnpm --filter @videola/engine test:gpu` | 351 Pixelprüfungen gegen ANGLE/SwiftShader: Shader, premultipliziertes Alpha in allen neun Blendmodi, jeder Effekt und Übergang an benannten Pixelwerten, die Tonwertkurven und die Farbräder, was ein Messgerät aus einem verkleinerten Bild liest, Transformationsmatrix, Kontextverlust, geschlossener `VideoFrame` |
 | `pnpm --filter @videola/engine test:export` | 27 Prüfungen: ein echter Export, danach lesen `ffprobe` und `ffmpeg` die Datei zurück — Codec, Auflösung, Bildrate, Bildzahl, Länge, und ein Goertzel-Filter bestätigt den Ton in der Datei |
-| `pnpm --filter @videola/ui test:browser` | 29 Prüfungen gegen echtes Layout: 44 px als Geometrie, Trefferflächen, Virtualisierungsbudget über Zoomstufen, Scrollbreite |
-| `pnpm --filter videola-web test:browser` | 56 Prüfungen an der **gebauten** Anwendung: eine abgelegte Datei bis ins dekodierte Bild, Wiedergabe, Telefon-Viewport über das Devtools-Protokoll |
+| `pnpm --filter @videola/ui test:browser` | 200 Prüfungen gegen echtes Layout: 44 px als Geometrie, Trefferflächen, Virtualisierungsbudget über Zoomstufen, Scrollbreite, und die drei Messgeräte samt Kurvenfeld auf einer Leinwand, die der Browser wirklich rastert |
+| `pnpm --filter videola-web test:browser` | 228 Prüfungen an der **gebauten** Anwendung: eine abgelegte Datei bis ins dekodierte Bild, eine Korrektur mit Kurve und Farbrad, der die Messgeräte folgen, Wiedergabe, Telefon- und Tablet-Viewport über das Devtools-Protokoll |
 
 Alle vier in **einem** Job: zusammen brauchen sie deutlich unter einer Minute, ein zweiter Job
 kostete mehr an Checkout, Installation und Bau als die Prüfungen selbst. Nichts davon läuft nur

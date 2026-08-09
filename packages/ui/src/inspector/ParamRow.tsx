@@ -105,7 +105,12 @@ export function ParamRow({
   );
 }
 
-function Keys({ strip, name }: { strip: KeyframeStrip; name: string }): ReactElement {
+/**
+ * The three switches and the interpolation picker a keyframed parameter carries. Exported because
+ * a curve is not a row -- it is a field with a heading -- and puts the same switches in that
+ * heading rather than beside a slider it does not have.
+ */
+export function Keys({ strip, name }: { strip: KeyframeStrip; name: string }): ReactElement {
   const { t } = useI18n();
   const here = keyframeAt(strip.track, strip.at);
   const previous = neighbour(strip.track, strip.at, -1);

@@ -38,6 +38,20 @@ nachgewiesen.
 Alles läuft über Pointer Events, damit Maus, Stift und Finger denselben Weg nehmen, und ein ganzer
 Zug über zweihundert Bewegungen ist **ein** Undo-Schritt.
 
+Der klassische Schnitt ist ebenfalls da: einen Bereich im Medium mit <kbd>I</kbd> und <kbd>O</kbd>
+markieren, dann **fügt** <kbd>,</kbd> ihn am Playhead ein — mit derselben Lücke auf jeder Spur, damit
+Ton beim Bild bleibt — oder <kbd>.</kbd> **überschreibt** damit, ersetzt also, was dort lag, und
+lässt die Zeitleiste so lang, wie sie war. Jedes davon ist ein Command; ein Einfügen über drei Spuren
+und ein Dutzend Clips ist ein <kbd>Strg</kbd>+<kbd>Z</kbd>.
+
+Eine **Anpassungsspur** trägt kein eigenes Bild: die Effekte ihrer Clips laufen über alles, was
+darunter gezeichnet wird, damit fünf Einstellungen auf einmal gegradet werden statt fünfmal. Dass
+sich das Bild darunter ändert und das daneben nicht, ist an echten Pixeln geprüft — der einzige Ort,
+an dem diese Aussage überhaupt existiert.
+
+Marker tragen eine Farbe und eine Notiz, und die Liste neben dem Marker-Knopf springt zwischen ihnen;
+<kbd>Umschalt</kbd> und eine Pfeiltaste tut dasselbe von der Tastatur aus.
+
 ## Effekte, Übergänge und Text
 
 ![Der Effekt-Browser: Kacheln nach Kategorien, jede durch den Effekt gerendert, den sie anbietet](/editor-effects.webp)
@@ -47,8 +61,8 @@ Kachel ist der Shader des Effekts über dem Bild am Playhead** — kein gemaltes
 die das Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Genau das
 verhindert, dass ein Effekt mit seinem eigenen Standardwert für sich wirbt.
 
-Helligkeit, Kontrast, Sättigung, Farbtemperatur, Vignette, Weichzeichnen, Schärfen und
-Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
+Helligkeit, Kontrast, Sättigung, Farbtemperatur, Kurven, Farbräder, Vignette, Weichzeichnen,
+Schärfen und Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
 über eine frei gewählte Farbe. Rechteckige und elliptische Masken mit weicher Kante und
 Invertierung; zwei Masken in einer Kette schneiden sich. Ein Textgenerator mit Gestaltung sowie
 Ein-, Aus- und Schleifenanimation.
@@ -78,6 +92,31 @@ Prüfungen laufen bei jedem Bau, und jede Kachel der Bibliothek ist eine davon �
 Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Ein zu einem Drittel
 gedeckter Pixel über Rot muss **81** ergeben —
 das liefert premultipliziertes Alpha; die naheliegende Antwort 255 fällt durch.
+
+## Farbkorrektur, und etwas, woran man sie beurteilt
+
+Kurven und Farbräder, und drei Messgeräte, um das Ergebnis abzulesen.
+
+**Kurven** für die Helligkeit und für jeden der drei Kanäle, mit Stützpunkten, die man zieht: ins
+Feld tippen setzt einen neuen dorthin, auf einen Punkt tippen nimmt ihn weg, und die beiden Enden
+bleiben. Die Linie ist ein monoton kubischer Spline, der zwischen zwei Punkten nicht überschießen
+kann — ein Überschwinger auf einer Tonwertkurve ist ein heller Saum an jeder Kante im Bild, die
+diesen Tonwert kreuzt. Die Helligkeitskurve ist nicht dasselbe wie die drei Kanalkurven im
+Gleichschritt: sie skaliert alle drei mit einem Verhältnis, die Farbe eines Pixels kommt also genau
+so heraus, wie sie hineinging, und nur seine Helligkeit bewegt sich.
+
+**Farbräder** — Lift, Gamma und Gain — jeweils mit Farbstich und Stärke, also mit dem, was Rad und
+Ring an einem echten Pult sind. Lift sagt, wohin Schwarz geht, Gain sagt, wohin Weiß geht, und Gamma
+biegt, was dazwischen liegt, ohne eines der beiden Enden mitzunehmen.
+
+**Messgeräte**: eine Wellenform, ein Vektorskop und ein Histogramm, in einer Leiste unter dem Bild,
+die ein Schalter in der Transportleiste öffnet. Sie lesen die Pixel der Vorschau selbst, was sie
+zeigen, ist also das, was der Export schreiben wird. Vor dem Zählen werden sie auf der GPU
+verkleinert und zehnmal in der Sekunde gemessen: 0,9 ms je Messung statt der 33 ms, die ein naives
+Zählen des ganzen Bildes bei 1080p kostet — und gar nichts, solange die Leiste zu ist.
+
+Alles hier lässt sich keyframen wie jeder andere Parameter, Kurven eingeschlossen: ein Kurven-Keyframe
+interpoliert die Stützpunkte, ein Knie wandert also seitlich mit und nicht nur nach oben.
 
 ## Untertitel
 
@@ -142,11 +181,28 @@ Die Lautheit wird nach EBU R128 gemessen und gegen die Tech-3341-Fälle geprüft
 Limiters heißt **Schwelle**, nicht Ceiling: der Kompressor des Browsers legt eigenen Ausgleichspegel
 drauf, ist also keine Brickwall — und die Doku sagt das, statt etwas anderes anzudeuten.
 
+Jeder Streifen trägt eine **Pegelanzeige** — Spitze, Effektivwert und eine fallende Haltemarke,
+gelesen aus einem Analyser, der in der Signalführung sitzt und nicht daneben. **Normalisieren**
+bringt den Summenregler auf einen Zielwert von −14, −16 oder −23 LUFS und misst danach erneut, was
+dasteht, ist also ein Messwert und nicht der Zielwert. **Ducking** senkt die Musik unter einer
+Sprachspur ab, indem es Keyframes auf einen Verstärkungs-Insert des Musikbusses schreibt —
+sichtbare Ecken zum Nachziehen statt einer unsichtbaren Automatik, und der einzige Weg, den die
+Web-Audio-API lässt, denn eine Seitenkette hat sie nicht. **Stille schneiden** findet die Pausen
+einer Spur aus den Spitzenwerten, die ohnehin auf dem Schirm sind, und nimmt sie heraus — als
+Lücke, nicht als Ripple, damit das Bild synchron bleibt. Siehe [Ton](./audio.md).
+
 ## Wiedergabe und Export
 
 Der Ton führt und das Bild folgt, weil Audio-Drift hörbar ist und ein ausgelassenes Bild nicht.
 Bildraten bleiben bis zur letzten Division rational — 30000/1001 ist nicht 29,97, und ein Bildschritt
 aus der Dezimalzahl läuft schon nach wenigen hundert Bildern vom Lineal weg.
+
+<kbd>J</kbd>, <kbd>K</kbd> und <kbd>L</kbd> schalten rückwärts, halten an und schalten vorwärts, mit
+jedem Druck in dieselbe Richtung eine Stufe höher: 1, 2, 4, 8. Diese Rate gehört dem Transport und
+nicht dem Material — die Geschwindigkeit eines Clips samt Rampe bleibt davon unberührt und erreicht
+den Export so, wie sie gebaut wurde. Die Vorschau lässt sich auf halbe oder viertel Auflösung
+stellen, die billigste Leistungssteigerung bei großem Material, und sie erreicht die exportierte
+Datei nie.
 
 Der Export schreibt MP4 mit H.264 und AAC oder WebM mit VP9 und Opus, in einem Worker, durch denselben
 Compositor wie die Vorschau. Der Fortschritt wird gemeldet, und ein Abbruch stoppt wirklich. Ein
