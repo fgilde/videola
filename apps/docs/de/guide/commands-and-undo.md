@@ -18,7 +18,7 @@ Die beiden nach außen gerichteten stehen in [Die API und der MCP-Server](/de/gu
 | `track.*` | `add`, `remove`, `reorder`, `rename`, `setVolume`, `setPan`, `setFlags` |
 | `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `setSpeed`, `setVolume`, `setTransform`, `setTransition` |
 | `effect.*` | `add`, `setParam` |
-| `keyframe.*` | `add`, `remove`, `move`, `setInterp` |
+| `keyframe.*` | `add`, `remove`, `move`, `setInterp`, `setHandles` |
 | `marker.*` | `add`, `remove`, `rename` |
 | `media.*` | `import`, `remove` |
 
@@ -84,9 +84,24 @@ Parameter wieder von der Uhr, statt ihn einzufrieren.
 zweiten daneben zu legen. Genau das macht einen Schieberzug im Inspector zur selben Form wie einen
 Clipzug — eine Sendung pro Zeigerbewegung, alle unter einem Coalesce-Key, ein Undo-Schritt.
 
-`interp` ist `linear`, `hold`, `ease` oder `bezier`; Bezier-Anfasser stehen im Modell, aber kein
-Command schreibt sie. `keyframe.move` weigert sich, auf einer schon besetzten Zeit zu landen, nimmt
-aber einen Zug hin, der dort endet, wo er anfing.
+`interp` ist `linear`, `hold`, `ease` oder `bezier`. `keyframe.move` weigert sich, auf einer schon
+besetzten Zeit zu landen, nimmt aber einen Zug hin, der dort endet, wo er anfing.
+
+`keyframe.setHandles` ist das, was ein Kurveneditor zieht: `handleOut` formt den Weg vom Schlüssel
+fort, `handleIn` den ankommenden, beide als Punkt im Einheitsquadrat des Abschnitts — dasselbe Paar,
+das CSS `cubic-bezier` nimmt —, und `null` setzt einen auf die Voreinstellung zurück, auf der ein
+Bezier-Schlüssel öffnet. Beide gehen bei jeder Schreibung mit, weil ein Paar je Schlüssel die Form
+ist, die das Modell trägt; nur den einen unter der Hand zu senden würde den anderen löschen. Gelesen
+werden die Anfasser nur, solange der Nachbarschlüssel auf `bezier` steht.
+
+`Project::normalize` prüft beide Anfasser auf Endlichkeit, und `keyframe.setHandles` läuft durch
+dieselbe Funktion: ein NaN dort erreicht `cubic_bezier_y_at`, kommt aus dem interpolierten Wert
+wieder heraus und landet in JavaScript als `null`. `keyframe.add` fasst das Paar nie an — sein
+Upsert würde eine Kurve sonst bei jeder Zeigerbewegung eines Schieberzuges flach ziehen.
+
+Eine **Ratenspur** nimmt Anfasser, aber nie den Verlauf, der sie liest: `keyframe::integrate` hat
+unter einer Bezier keine exakte Fläche, und mit ihr fiele die Additivität, auf der `consumed_source`
+steht. `keyframe.setInterp` lehnt `bezier` auf der `speed`-Spur ab, und der Ladepfad ebenso.
 
 ### Eine Transformation keyframen
 

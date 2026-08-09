@@ -71,10 +71,17 @@ read different values.
 
 Keyframes are edited on a lane under the tracks, on the timeline's own axis: press one to pick it,
 drag it to move it, <kbd>Delete</kbd> or the button above the lane to remove it, and a picker for
-what times the stretch after it — linear, hold or ease. One drag is one undo step, and it all works
-with a finger as well as with a mouse. There is no curve editor yet: a project that carries bezier
-handles keeps them and keeps its shape, but nothing here can drag one — see
-[Editing](./editing.md#the-keyframe-lane).
+what times the stretch after it — linear, hold, ease or a curve of your own. One drag is one undo
+step, and it all works with a finger as well as with a mouse.
+
+The **curve field** opens beside the picked keyframe, over the tracks, and shows the one segment
+that starts at it: the travel plotted against the even-paced diagonal, with a handle on each end to
+drag. The line is sampled from the core's own easing rather than redrawn here, so what is on screen
+is what moves the picture — a curve that looked like one thing and animated like another is the one
+fault such a tool must not have. The three presets stay a single click beside it. A rate track is
+never offered a curve: the area under a bezier is not exact, and the time mapping a speed ramp is
+made of rests on that area being exactly additive. See
+[Editing](./editing.md#the-curve-field).
 
 Each effect's behaviour is measured against real pixels rendered by a real driver: 303 such checks
 run on every build, and every tile in the browser is one of them — a tile that failed to change the

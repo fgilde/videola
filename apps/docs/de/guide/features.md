@@ -82,10 +82,17 @@ Export unmöglich verschiedene Werte lesen.
 Bearbeitet werden Keyframes in einer Spur unter den Spuren, auf der Zeitachse der Zeitleiste
 selbst: ein Druck wählt einen aus, ein Zug verschiebt ihn, <kbd>Entf</kbd> oder der Knopf über der
 Spur löscht ihn, und eine Auswahl bestimmt den Verlauf der Strecke danach — linear, halten oder
-weich. Ein Zug ist ein Undo-Schritt, und alles funktioniert mit dem Finger genauso wie mit der
-Maus. Einen Kurveneditor gibt es noch nicht: ein Projekt, das Bezier-Anfasser trägt, behält sie und
-behält seine Form, aber ziehen kann sie hier niemand — siehe
-[Schneiden](./editing.md#die-keyframe-spur).
+weich oder eine eigene Kurve. Ein Zug ist ein Undo-Schritt, und alles funktioniert mit dem Finger
+genauso wie mit der Maus.
+
+Das **Kurvenfeld** öffnet neben dem gewählten Keyframe über den Spuren und zeigt den einen
+Abschnitt, der bei ihm beginnt: den Weg, aufgetragen gegen die gleichmäßige Diagonale, mit je einem
+Anfasser an beiden Enden. Die Linie wird beim Kern abgetastet statt hier nachgerechnet — was auf
+dem Schirm steht, ist das, was das Bild bewegt, und eine Kurve, die anders aussieht, als sie wirkt,
+ist der eine Fehler, den so ein Werkzeug nicht haben darf. Die drei Voreinstellungen bleiben
+daneben ein Klick. Einer Ratenspur wird nie eine Kurve angeboten: die Fläche unter einer Bezier ist
+nicht exakt, und die Zeitabbildung einer Geschwindigkeitsrampe steht darauf, dass diese Fläche
+exakt additiv ist. Siehe [Schneiden](./editing.md#das-kurvenfeld).
 
 Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 303 solcher
 Prüfungen laufen bei jedem Bau, und jede Kachel der Bibliothek ist eine davon — eine Kachel, die das

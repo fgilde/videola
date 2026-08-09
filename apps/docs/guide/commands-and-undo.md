@@ -138,6 +138,7 @@ reach it.
 | `keyframe.remove` | `target`, `effectType`, `key`, `time` |
 | `keyframe.move` | `target`, `effectType`, `key`, `from`, `to` |
 | `keyframe.setInterp` | `target`, `effectType`, `key`, `time`, `interp` |
+| `keyframe.setHandles` | `target`, `effectType`, `key`, `time`, `handleIn`, `handleOut` |
 
 Keyframes address the same chain `effect.setParam` does — a `target` plus `effectType` plus `key`
 triple — so a track equaliser sweeps its cutoff by exactly the commands a clip effect uses. A parameter with a keyframe track is read from the track; a parameter
@@ -151,10 +152,26 @@ key rather than adding a second one there. That is what makes a slider drag over
 parameter the same shape as a clip drag — one dispatch per pointer move, all of them under one
 coalesce key, one entry on the undo stack (see below).
 
-`interp` is `linear`, `hold`, `ease` or `bezier`. Bezier handles exist in the model but no command
-writes them; a bezier key without handles uses the ease-in-out defaults. `keyframe.move` refuses to
-land on a time another key already occupies rather than silently replacing it, but moving a key to
-where it already is is accepted — a drag cannot know in advance that it went nowhere.
+`interp` is `linear`, `hold`, `ease` or `bezier`. `keyframe.move` refuses to land on a time another
+key already occupies rather than silently replacing it, but moving a key to where it already is is
+accepted — a drag cannot know in advance that it went nowhere.
+
+`keyframe.setHandles` is what a curve editor drags. `handleOut` shapes the travel away from the key
+and `handleIn` the travel arriving at it, each a point in the segment's own unit square — the same
+pair CSS `cubic-bezier` takes — and `null` clears one back to the ease-in-out default a bezier key
+opens on. Both go out on every write, because one pair per key is the shape the model carries;
+sending only the one under the hand would clear the other. The handles are read only while the
+neighbouring key is `bezier`, so setting them on a `linear` key stores a shape that takes effect the
+moment somebody switches it over — which is what lets a preset stay a single click.
+
+`Project::normalize` checks both handles for finiteness, and `keyframe.setHandles` runs the same
+check through the same function: a NaN handle reaches `cubic_bezier_y_at`, comes out of the
+interpolated value, and arrives in JavaScript as `null`. `keyframe.add` never touches the pair —
+its upsert would otherwise flatten a curve on every pointer move of a slider drag.
+
+A **rate track** takes handles but never the interpolation that reads them: `keyframe::integrate`
+has no exact area under a bezier, and the additivity `consumed_source` rests on would go with it, so
+`keyframe.setInterp` refuses `bezier` on the `speed` track and the load path refuses it too.
 
 #### Keyframing a transform
 

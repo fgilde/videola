@@ -88,9 +88,10 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No motion blur, no LUT import, no noise reduction, no beat detection. No curve editor for keyframe
-easing: a project carrying bezier handles keeps them and keeps its shape, but nothing here can drag
-one. A compound clip is flattened rather than isolated, so opacity, effects and blend apply per
+No motion blur, no LUT import, no noise reduction, no beat detection. Keyframe easing has a curve
+field with handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of
+— is pinned to its edge, and a curve cannot be copied from one parameter to another. A compound
+clip is flattened rather than isolated, so opacity, effects and blend apply per
 nested clip instead of once over the composed picture — an adjustment track sits under the same
 ceiling. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent: the
 useful half is ripple delete and trim, and the rest would change the model's overlap rule that
