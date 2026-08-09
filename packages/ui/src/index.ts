@@ -14,6 +14,7 @@ export * from "./preview/Transport";
 export * from "./inspector/Inspector";
 export * from "./mixer/Mixer";
 export * from "./inspector/ParamRow";
+export * from "./inspector/CurveRow";
 export * from "./timeline/Timeline";
 export * from "./timeline/geometry";
 export * from "./export/ExportDialog";

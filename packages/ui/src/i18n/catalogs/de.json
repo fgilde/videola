@@ -126,6 +126,8 @@
   "inspector.cropRight": "Beschnitt rechts",
   "inspector.cropBottom": "Beschnitt unten",
   "inspector.position": "Bewegungspfad",
+  "inspector.curveField": "Kurve für {name}: Punkt ziehen zum Verschieben, Feld antippen für einen neuen, Punkt antippen zum Entfernen",
+  "inspector.curvePoint": "{name}, Punkt bei Eingang {input} von 100, Ausgang {output} von 100",
   "inspector.animated": "Animiert, {count} Keyframe | Animiert, {count} Keyframes",
   "inspector.fit": "Ins Bild einpassen",
   "inspector.playback": "Ton und Tempo",
