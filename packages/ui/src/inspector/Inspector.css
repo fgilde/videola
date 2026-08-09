@@ -274,3 +274,20 @@
   color: var(--v-accent);
   font-weight: var(--v-weight-strong);
 }
+
+/* The words of a title, and the one control in this panel that is not a slider. A column rather
+   than the grid the parameters use: a label above a box above a button is the shape of a field, and
+   the box has to be as wide as the panel gives it rather than as wide as a slider. */
+.v-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-2);
+  align-items: start;
+  max-width: var(--v-control-max);
+}
+
+.v-text__area {
+  width: 100%;
+  min-height: calc(var(--v-touch-target) * 1.5);
+  resize: vertical;
+}

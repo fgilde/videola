@@ -30,6 +30,7 @@ import { useI18n, type Locale } from "../i18n/useI18n";
 import { POSITION_TRACK } from "../timeline/keyframes";
 import { findClip } from "../timeline/useTimelineGestures";
 import { ColorRow, keyframeAt, ParamRow, shownColor, shownValue } from "./ParamRow";
+import { TextPanel } from "./TextPanel";
 import "./Inspector.css";
 
 /**
@@ -117,6 +118,9 @@ export function Inspector({
             send={dispatch}
             onSeek={onSeek}
           />
+          {/* Above the presets, because on a caption clip it is the only thing anyone came here
+              for -- and it renders nothing at all on a clip that draws no words. */}
+          <TextPanel clip={found.clip} send={dispatch} />
           <Playback clip={found.clip} send={dispatch} />
           <Presets clip={found.clip} project={project} playhead={playhead} send={dispatch} />
           <Transitions clip={found.clip} effects={effects} send={dispatch} onBrowse={onBrowse} />

@@ -7,8 +7,11 @@ import { useEffect, useState, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  captionClips,
+  captionCues,
   cmd,
   createWasmBackend,
+  parseCaptions,
   FLICKS_PER_SECOND,
   VideolaDocument,
   type Clip,
@@ -665,5 +668,69 @@ describe("markers", () => {
     drag(clipAt(0), 0, 450);
 
     expect(clips(doc.state)[0]?.start).toBe(4.53 * SECOND);
+  });
+});
+
+async function documentWithCaptions(): Promise<VideolaDocument> {
+  const doc = new VideolaDocument(await createWasmBackend());
+  doc.dispatch(cmd.trackAdd("caption", "C1"));
+  const track = doc.state.timeline.tracks[0]?.id ?? "";
+  for (const command of captionClips(
+    track,
+    parseCaptions("1\n00:00:00,000 --> 00:00:02,000\nHello\n\n2\n00:00:02,000 --> 00:00:04,000\nthere\n"),
+  )) {
+    doc.dispatch(command);
+  }
+  return doc;
+}
+
+describe("merging two captions", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  it("joins the words and the span from the timeline's own menu", async () => {
+    const doc = await documentWithCaptions();
+    render(<Harness doc={doc} />);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 20, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Mit naechstem Untertitel verbinden" }));
+
+    expect(captionCues(doc.state)).toEqual([
+      { start: 0, end: 4 * SECOND, text: "Hello\nthere" },
+    ]);
+  });
+
+  // Three commands go out and exactly one comes back off the undo stack. A half-merged pair -- the
+  // words joined, the second clip still standing -- is not a state anyone asked to land on.
+  it("is one undo step", async () => {
+    const doc = await documentWithCaptions();
+    render(<Harness doc={doc} />);
+    const before = captionCues(doc.state);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 20, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Mit naechstem Untertitel verbinden" }));
+    doc.undo();
+
+    expect(captionCues(doc.state)).toEqual(before);
+  });
+
+  // A menu entry that cannot do anything says so rather than dispatching a command the core would
+  // refuse -- the same rule "ungroup" and "paste" already follow.
+  it("is greyed out on the last caption, and on a clip that is not one", async () => {
+    const doc = await documentWithCaptions();
+    render(<Harness doc={doc} />);
+
+    fireEvent.contextMenu(clipAt(1), { clientX: 220, clientY: 40 });
+    const entry = screen.getByRole("menuitem", { name: "Mit naechstem Untertitel verbinden" });
+    expect((entry as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("is greyed out on an ordinary clip that is not a caption at all", async () => {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 20, clientY: 40 });
+    const entry = screen.getByRole("menuitem", { name: "Mit naechstem Untertitel verbinden" });
+    expect((entry as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -10,7 +10,12 @@ export interface ExportFormatChoice {
   id: string;
   video: boolean;
   audio: boolean;
+  /** Whether the container can carry a subtitle track of its own. Asked of the writer, not guessed. */
+  subtitles?: boolean;
 }
+
+/** Mirrors `CaptionMode` in the engine. Named here so this package needs no dependency on it. */
+export type ExportCaptionChoice = "burned" | "separate" | "none";
 
 export type ExportRangeChoice = "project" | "selection";
 
@@ -22,6 +27,7 @@ export interface ExportSelection {
   videoBitrate: number;
   audioBitrate: number;
   range: ExportRangeChoice;
+  captions: ExportCaptionChoice;
 }
 
 export interface ExportProgress {
@@ -33,6 +39,8 @@ export interface ExportDialogProps {
   formats: readonly ExportFormatChoice[];
   settings: { width: number; height: number; fps: Rate };
   hasSelection: boolean;
+  /** Whether the project has any captions at all. Without them the row is nothing to decide. */
+  hasCaptions?: boolean;
   progress?: ExportProgress;
   error?: string;
   onExport: (selection: ExportSelection) => void;
@@ -41,6 +49,8 @@ export interface ExportDialogProps {
 }
 
 const AUDIO_BITRATE = 128_000;
+
+const CAPTION_CHOICES: readonly ExportCaptionChoice[] = ["burned", "separate", "none"];
 
 // The rates an editor is handed, plus whatever the project itself runs at. Rationals throughout:
 // 29.97 is not 30000/1001, and a file written from the decimal drifts a frame every half minute.
@@ -82,6 +92,7 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
   // user's, and changing the resolution must not overwrite what they typed.
   const [bitrate, setBitrate] = useState<number>();
   const [range, setRange] = useState<ExportRangeChoice>("project");
+  const [captions, setCaptions] = useState<ExportCaptionChoice>("burned");
   const ref = useRef<HTMLDivElement>(null);
 
   const rates = useMemo(() => withProjectRate(props.settings.fps), [props.settings.fps]);
@@ -106,6 +117,10 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
       videoBitrate: bitrate ?? suggested,
       audioBitrate: AUDIO_BITRATE,
       range,
+      // A container that cannot carry a subtitle track must not be handed a request for one. The
+      // radio is disabled as well, but a format changed after the choice was made would otherwise
+      // start a run whose switch has nothing behind it.
+      captions: captions === "separate" && chosen?.subtitles !== true ? "burned" : captions,
     });
   };
 
@@ -191,6 +206,30 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
             onChange={(event) => setBitrate(megabits(event.target.value, suggested))}
           />
         </label>
+
+        {props.hasCaptions === true && (
+          <fieldset className="v-export__row" disabled={running}>
+            <legend>{t("export.captions")}</legend>
+            {CAPTION_CHOICES.map((choice) => (
+              <label key={choice}>
+                <input
+                  type="radio"
+                  name="v-export-captions"
+                  value={choice}
+                  checked={captions === choice}
+                  // Offered only where the writer says it can be honoured. A radio that starts a
+                  // run which quietly burns them in instead is worse than one that is greyed out.
+                  disabled={choice === "separate" && chosen?.subtitles !== true}
+                  onChange={() => setCaptions(choice)}
+                />
+                {t(`export.captions.${choice}`)}
+              </label>
+            ))}
+            {chosen?.subtitles !== true && (
+              <p className="v-export__note">{t("export.captions.unsupported")}</p>
+            )}
+          </fieldset>
+        )}
 
         <fieldset className="v-export__row" disabled={running}>
           <legend>{t("export.range")}</legend>

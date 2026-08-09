@@ -11,8 +11,10 @@ import {
 } from "react";
 
 import {
+  canMergeCaptions,
   cmd,
   FLICKS_PER_SECOND,
+  mergeCaptions,
   on,
   splitScreen,
   stageFor,
@@ -606,6 +608,17 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
       label: t("timeline.nest"),
       disabled: selected.size < 1,
       onSelect: close(() => dispatch(cmd.clipNest([...selected]))),
+    },
+    // Beside split, because they are the same pair of gestures on a caption: cut one in two, or
+    // fold two into one. Three commands under one key, so the whole merge is one undo step and a
+    // half-merged pair is never a state anyone can land on.
+    {
+      label: t("timeline.mergeCaption"),
+      disabled: !canMergeCaptions(project, clip.id),
+      onSelect: close(() => {
+        const key = `timeline-merge-caption-${(actionSequence += 1)}`;
+        for (const command of mergeCaptions(project, clip.id)) dispatch(command, key);
+      }),
     },
     // The one preset that belongs here rather than in the inspector: it is the only one about two
     // clips, and the timeline is where two clips are selected. The rest live beside the clip's own

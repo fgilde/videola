@@ -242,3 +242,28 @@ select:hover {
   outline: 3px solid var(--v-focus);
   outline-offset: 2px;
 }
+
+/* The fourth native control, taken over for the same reason as the other three: left alone a
+   textarea draws the operating system's box, in the operating system's font, on a panel that is
+   neither. A textarea and not an input wherever words are typed -- an input drops a hard line
+   break without a word, and a two-line subtitle is two lines. */
+textarea {
+  min-height: var(--v-touch-target);
+  padding: var(--v-space-2);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  line-height: var(--v-leading);
+  transition: border-color var(--v-transition);
+}
+
+textarea:hover {
+  border-color: var(--v-border-strong);
+}
+
+textarea:focus-visible {
+  border-color: var(--v-accent);
+}

@@ -196,3 +196,51 @@ describe("ExportDialog", () => {
     expect(screen.getByRole("alert").textContent).toBe("Der Export ist fehlgeschlagen.");
   });
 });
+
+describe("what becomes of the captions", () => {
+  const CAPTIONABLE = [
+    { id: "mp4", video: true, audio: true, subtitles: true },
+    { id: "webm", video: true, audio: true, subtitles: true },
+  ];
+
+  it("is not asked at all in a project with no captions", () => {
+    show({ formats: CAPTIONABLE });
+    expect(screen.queryByLabelText("Ins Bild")).toBeNull();
+  });
+
+  it("burns them into the picture unless told otherwise", () => {
+    const { exported } = show({ formats: CAPTIONABLE, hasCaptions: true });
+    fireEvent.click(screen.getByRole("button", { name: "Export starten" }));
+    expect(exported[0]?.captions).toBe("burned");
+  });
+
+  it("carries the choice of a separate track through to the run", () => {
+    const { exported } = show({ formats: CAPTIONABLE, hasCaptions: true });
+    fireEvent.click(screen.getByLabelText("Als eigene Spur"));
+    fireEvent.click(screen.getByRole("button", { name: "Export starten" }));
+    expect(exported[0]?.captions).toBe("separate");
+  });
+
+  it("carries the choice to leave them out", () => {
+    const { exported } = show({ formats: CAPTIONABLE, hasCaptions: true });
+    fireEvent.click(screen.getByLabelText("Weglassen"));
+    fireEvent.click(screen.getByRole("button", { name: "Export starten" }));
+    expect(exported[0]?.captions).toBe("none");
+  });
+
+  // A switch the writer cannot honour must not be offered, and must not start a run that quietly
+  // does something else. Both halves, because the radio alone leaves the choice reachable by a
+  // format changed after it was made.
+  it("greys the separate track out where the format cannot carry one, and never sends it", () => {
+    const { exported } = show({
+      formats: [{ id: "mp4", video: true, audio: true, subtitles: false }],
+      hasCaptions: true,
+    });
+    const separate = screen.getByLabelText("Als eigene Spur") as HTMLInputElement;
+    expect(separate.disabled).toBe(true);
+    expect(screen.getByText("Dieses Format kann keine eigene Untertitelspur tragen")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export starten" }));
+    expect(exported[0]?.captions).toBe("burned");
+  });
+});
