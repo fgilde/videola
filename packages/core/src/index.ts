@@ -1,6 +1,7 @@
 export * from "./backend";
 export * from "./commands";
 export * from "./document";
+export * from "./presets";
 export * from "./generated";
 export {
   builtinTemplates,
