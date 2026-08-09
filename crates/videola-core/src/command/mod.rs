@@ -10,6 +10,7 @@ use crate::model::{
     Clip, ClipId, ClipSource, Generator, Interp, MarkerId, MediaAsset, MediaId, ParamValue,
     Project, ProjectSettings, Time, TrackId, TrackKind, Transform, Transition,
 };
+use crate::CoreError;
 use crate::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, JsonSchema)]
@@ -326,6 +327,78 @@ pub enum EffectTarget {
 
 impl Command {
     pub fn apply(&self, target: &mut Project) -> Result<()> {
+        if let Some(locked) = self.locked_track(target) {
+            return Err(CoreError::TrackLocked(locked));
+        }
+        self.run(target)
+    }
+
+    /// The first locked track a command would change clips on, if there is one.
+    ///
+    /// One gate in front of the whole dispatch rather than a check inside twenty handlers: a lock
+    /// that half the commands honoured would be worse than no lock at all, and a new command that
+    /// forgot its check would be a hole nobody notices. What a lock covers is the timeline — the
+    /// clips on the track and their contents. The mixer, the name and the flags themselves stay
+    /// reachable, and that last one is how a track is unlocked again.
+    ///
+    /// An insert or an overwrite opens or fills a gap on *every* track, because a picture edit that
+    /// moved the sound out from under it is the one thing those two must never do. So a single
+    /// locked track anywhere refuses them outright: skipping it would leave the timeline out of
+    /// sync, which is the opposite of what a lock is for.
+    fn locked_track(&self, target: &Project) -> Option<TrackId> {
+        let named = |id: &TrackId| target.track(id).filter(|t| t.locked).map(|t| t.id.clone());
+        let holding = |clip: &ClipId| {
+            target
+                .track_of(clip)
+                .filter(|t| t.locked)
+                .map(|t| t.id.clone())
+        };
+        let any_locked = || {
+            target
+                .timeline
+                .tracks
+                .iter()
+                .find(|track| track.locked)
+                .map(|track| track.id.clone())
+        };
+        let chain = |at: &EffectTarget| match at {
+            EffectTarget::Clip { clip } => holding(clip),
+            EffectTarget::Track { track } => named(track),
+            EffectTarget::Project => None,
+        };
+        match self {
+            Self::TrackRemove { track } => named(track),
+            Self::ClipAdd { track, .. } | Self::ClipPaste { track, .. } => named(track),
+            Self::ClipInsert { track, .. } | Self::ClipOverwrite { track, .. } => {
+                any_locked().or_else(|| named(track))
+            }
+            Self::ClipMove { clip, to_track, .. } => holding(clip).or_else(|| named(to_track)),
+            Self::ClipRemove { clip }
+            | Self::ClipTrim { clip, .. }
+            | Self::ClipSplit { clip, .. }
+            | Self::ClipRippleDelete { clip }
+            | Self::ClipRippleTrim { clip, .. }
+            | Self::ClipRoll { clip, .. }
+            | Self::ClipSlip { clip, .. }
+            | Self::ClipSlide { clip, .. }
+            | Self::ClipUngroup { clip }
+            | Self::ClipSetSpeed { clip, .. }
+            | Self::ClipSetVolume { clip, .. }
+            | Self::ClipSetTransform { clip, .. }
+            | Self::ClipSetGenerator { clip, .. }
+            | Self::ClipSetTransition { clip, .. } => holding(clip),
+            Self::ClipGroup { clips } | Self::ClipNest { clips } => clips.iter().find_map(holding),
+            Self::EffectAdd { target: at, .. }
+            | Self::EffectSetParam { target: at, .. }
+            | Self::KeyframeAdd { target: at, .. }
+            | Self::KeyframeRemove { target: at, .. }
+            | Self::KeyframeSetInterp { target: at, .. }
+            | Self::KeyframeSetHandles { target: at, .. } => chain(at),
+            _ => None,
+        }
+    }
+
+    fn run(&self, target: &mut Project) -> Result<()> {
         match self {
             Self::ProjectSetSettings { settings } => project::set_settings(target, settings),
             Self::ProjectSetTitle { title } => project::set_title(target, title),

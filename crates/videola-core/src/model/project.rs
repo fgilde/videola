@@ -11,7 +11,7 @@ use super::keyframe::{sort_track, Keyframe};
 use super::media::MediaAsset;
 use super::param::ParamValue;
 use super::timeline::{Marker, Timeline, Track};
-use super::{ProjectId, Rate, Time, TrackId};
+use super::{ClipId, ProjectId, Rate, Time, TrackId};
 use crate::{CoreError, Result};
 
 // `ClipSource::Compound` nests a whole `Timeline`, which can itself contain compound clips.
@@ -62,6 +62,15 @@ impl Project {
 
     pub fn track(&self, id: &TrackId) -> Option<&Track> {
         self.timeline.tracks.iter().find(|track| &track.id == id)
+    }
+
+    /// The track a clip sits on. A clip id is unique across the timeline, so this is a lookup and
+    /// not a search with a choice in it.
+    pub fn track_of(&self, clip: &ClipId) -> Option<&Track> {
+        self.timeline
+            .tracks
+            .iter()
+            .find(|track| track.clip_index(clip).is_some())
     }
 
     pub fn track_mut(&mut self, id: &TrackId) -> Option<&mut Track> {

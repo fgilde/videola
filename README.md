@@ -15,7 +15,9 @@ into ordinary editable projects.
 clips across tracks, ripple delete and ripple trim, roll, slip and slide, multi-select, group, cut,
 copy and paste, split, markers, snapping to clip edges and the playhead, zoom from a single frame to
 a whole project. One Pointer Events path serves mouse, pen and touch; hit areas grow to 44 px when
-the pointer is not a mouse, and a whole drag is one undo step.
+the pointer is not a mouse, and a whole drag is one undo step. A padlock beside a track's name
+freezes it: enforced in the core by one gate in front of the whole command dispatch, so no handler
+can forget it, and read by the timeline before a drag rather than after one.
 
 **Playback.** WebCodecs decoding into a WebGL2 compositor, the audio clock in the lead, and a
 transport for play/pause, frame stepping and jumping to either end.
@@ -104,8 +106,8 @@ a list of commands to a project without a browser.
 
 No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
 handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
-to its edge, and a curve cannot be copied from one parameter to another. `track.locked` is not
-enforced anywhere. The magnetic timeline is deliberately absent: the
+to its edge, and a curve cannot be copied from one parameter to another. The magnetic timeline is
+deliberately absent: the
 useful half is ripple delete and trim, and the rest would change the model's overlap rule that
 transitions, layering and roll/slide all depend on. FFmpeg is not bundled; the export uses the
 browser's own encoders.

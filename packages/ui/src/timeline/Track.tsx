@@ -40,6 +40,7 @@ export function Track({
       // What a clip is made of decides what it looks like, and the row is where the kind is
       // known -- the clip itself only knows its own box.
       data-kind={track.kind}
+      data-locked={track.locked || undefined}
       data-drop-target={dropTarget || undefined}
       style={{ height: `${trackHeight(track)}px` }}
     >

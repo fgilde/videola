@@ -78,6 +78,7 @@ features:
 
 - **Schneiden** — Ripple-Löschen und -Trimmen, Roll, Slip, Slide, Mehrfachauswahl, Gruppen,
   Zwischenablage, Marker, Einrasten und Zoom, mit einem Zeigerpfad für Maus, Stift und Finger.
+  Sperrbare Spuren, durchgesetzt von einer einzigen Schranke vor der ganzen Kommandoverteilung.
 - **Verschachtelte Clips** — eine Auswahl zu einem Clip zusammenfassen; dass das Bild sich dabei
   nicht ändert, ist nachgewiesen. Blenden, überlagern, graden, zuschneiden oder überblenden isoliert
   den Compound zuerst auf eine eigene Fläche, damit alle fünf die fertige Gruppe treffen und nicht
@@ -111,7 +112,7 @@ Kein Motion-Blur, keine Rauschreduktion, keine Beat-Erkennung. Die Keyframe-Glä
 Kurvenfeld mit ziehbaren Anfassern, aber ein Anfasser außerhalb des Einheitsquadrats — das
 Überschwingen, aus dem ein Abprall gemacht ist — wird an dessen Rand geklemmt, und eine Kurve lässt
 sich nicht von einem Parameter auf einen anderen übertragen. Kein Editor für einen Bewegungspfad auf
-dem Bild. `track.locked` wird nirgends durchgesetzt. Die Magnetic-Timeline fehlt bewusst, und das
+dem Bild. Die Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

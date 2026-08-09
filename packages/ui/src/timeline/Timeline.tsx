@@ -34,7 +34,7 @@ import type { Peaks } from "@videola/media";
 
 import { useI18n } from "../i18n/useI18n";
 import type { EffectDescriptor } from "../inspector/Inspector";
-import { IconButton } from "../primitives/Icon";
+import { Icon, IconButton } from "../primitives/Icon";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyframeCurve } from "./KeyframeCurve";
@@ -465,6 +465,18 @@ export function Timeline({
             >
               <span className="v-timeline__headerName">{track.name}</span>
               <span className="v-timeline__headerKind">{t(`track.kind.${track.kind}`)}</span>
+              {/* On the header and not in a menu: a lock is read as often as it is set -- the
+                  question "why will this clip not move" is answered by looking at the row. */}
+              <button
+                type="button"
+                className="v-timeline__lock"
+                aria-label={t(track.locked ? "track.unlock" : "track.lock", { name: track.name })}
+                title={t(track.locked ? "track.unlock" : "track.lock", { name: track.name })}
+                aria-pressed={track.locked}
+                onClick={() => dispatch(cmd.trackSetFlags(track.id, null, null, !track.locked, null))}
+              >
+                <Icon name={track.locked ? "lock" : "unlock"} />
+              </button>
             </div>
           ))}
           <KeyframeLaneHeaders rows={laneRowList} effects={effects} />

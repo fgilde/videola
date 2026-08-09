@@ -21,6 +21,10 @@ const OUTLINED = {
   keyframe: "M12 4.8 19.2 12 12 19.2 4.8 12Z",
   // Three traces at three heights -- a waveform, which is the instrument this opens.
   waveform: "M4 15h2.5l2-7 2.5 11 2.5-9 2 5H20",
+  // A shackle over a body, closed and open. The open one leans its shackle to the right, which is
+  // the difference a reader sees at 16 px -- a hole in the ring is not one.
+  lock: "M8 10.5V7.5a4 4 0 0 1 8 0v3M6.2 10.5h11.6v9H6.2z",
+  unlock: "M8 10.5V7.5a4 4 0 0 1 7.6-1.8M6.2 10.5h11.6v9H6.2z",
   // Three faders at three settings. A mixing desk is drawn this way everywhere it is drawn.
   mixer: "M7 4v5M7 15v5M12 4v9M12 19v1M17 4v1M17 11v9M4.5 12h5M9.5 16h5M14.5 8h5",
   trash: "M4.5 7h15M10 7V4.8h4V7M6.5 7l1 12.2h9L17.5 7M10.2 10.5v5.4M13.8 10.5v5.4",

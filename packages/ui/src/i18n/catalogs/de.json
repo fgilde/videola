@@ -69,6 +69,8 @@
   "transport.stepBack": "Ein Bild zurück",
   "transport.stepForward": "Ein Bild vor",
   "transport.position": "Position",
+  "track.lock": "{name} sperren",
+  "track.unlock": "{name} entsperren",
   "transport.scopes": "Messgeräte zeigen",
   "transport.mixer": "Mischpult zeigen",
   "media.dropHint": "Videodatei hier ablegen",

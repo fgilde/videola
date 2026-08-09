@@ -129,11 +129,29 @@ Beides ist **ein** Command und damit je ein Schritt auf dem Undo-Stapel, wie vie
 bewegt haben. Ein Einfügen über drei Spuren und ein Dutzend Clips ist ein einziges
 <kbd>Strg</kbd>+<kbd>Z</kbd>.
 
-Zweierlei tun sie nicht. `track.locked` nimmt eine Spur nicht vom Rippeln aus: eine Sperre wird im
-Kern bisher nirgends durchgesetzt, und sie ausgerechnet in einem Command zu achten machte dieses
-Command zur einzigen Autorität darüber, was eine Sperre bedeutet — und eine ausgenommene Spur wäre
-eine Überlappung, die niemand gebaut hat. Marker rippeln ebenfalls nicht; sie behalten ihre absoluten
-Positionen.
+Eines tun sie nicht: Marker rippeln nicht mit. Sie behalten ihre absoluten Positionen.
+
+Eine gesperrte Spur weist beide rundheraus ab, gleich welche Spur genannt wurde. Ein Einfügen öffnet
+die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter seinem eigenen Ton
+wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
+Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
+
+## Gesperrte Spuren
+
+Das Schloss neben dem Spurnamen ist ein Versprechen: auf dieser Spur bewegt sich nichts, bis sie
+wieder entsperrt ist. Durchgesetzt wird es im Kern, in einer Schranke vor der gesamten
+Kommandoverteilung statt in jedem der zwanzig Handler, die einen Clip ändern könnten — eine Sperre,
+die nur die Hälfte der Commands achtet, wäre schlimmer als keine, und das nächste hinzugefügte
+Command wäre ein Loch, das niemandem auffällt.
+
+Sie umfasst die Zeitleiste: die Clips der Spur, ihre Trims, ihr Tempo, ihre Transformationen, ihre
+Effekte und Keyframes, die Effektkette der Spur selbst und die Spur als Ganzes. Sie lässt in Ruhe:
+das Mischpult und den Namen — eine gesperrte Spur wird weiterhin geregelt, panoramiert, stumm- und
+solo-geschaltet — und die Schalter selbst, denn darüber wird wieder entsperrt.
+
+Die Zeitleiste wartet diese Ablehnung nicht ab. Ein Clip auf einer gesperrten Zeile ist gar kein
+Ziel für eine Zieh-Geste, kommt also nie unter dem Zeiger weg und springt zurück; die Zeile ist
+schraffiert, und das Schloss neben ihrem Namen sagt warum.
 
 ## Die Timeline
 

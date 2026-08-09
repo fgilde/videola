@@ -58,16 +58,85 @@
   /* The track colour lives here, not on the row: a row starts at content x 0 and scrolls out of
      sight, the header column is sticky and keeps showing it. */
   border-left: 3px solid transparent;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
-  padding: 0 var(--v-space-3);
+  display: grid;
+  /* The name and the kind stack in the first column, the lock sits beside both. A flex column with
+     the lock in it would put the lock under the words and grow the row. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name lock"
+    "kind lock";
+  align-content: center;
+  align-items: center;
+  gap: 1px var(--v-space-1);
+  padding: 0 var(--v-space-2) 0 var(--v-space-3);
   border-bottom: 1px solid var(--v-border);
   overflow: hidden;
 }
 
+/* Quiet until it is either hovered or on. A row carries one of these per track, and a column of
+   lit padlocks beside every name would be the loudest thing on the timeline. */
+.v-timeline__lock {
+  grid-area: lock;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--v-radius-sm);
+  color: var(--v-text-muted);
+  opacity: 0.45;
+  cursor: pointer;
+  transition:
+    opacity var(--v-transition),
+    color var(--v-transition);
+}
+
+.v-timeline__lock .v-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.v-timeline__lock:hover {
+  opacity: 1;
+  background: var(--v-surface-hover);
+}
+
+.v-timeline__lock[aria-pressed="true"] {
+  opacity: 1;
+  color: var(--v-accent);
+}
+
+@media (pointer: coarse) {
+  .v-timeline__lock {
+    width: var(--v-touch-target);
+    height: var(--v-touch-target);
+  }
+}
+
+/* A locked row says so without being unreadable: the clips keep their colours and the diagonal
+   hatching over them is what a locked track looks like in every editor that has one. */
+.v-track[data-locked] {
+  cursor: not-allowed;
+}
+
+.v-track[data-locked]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    var(--v-bg-sunken) 6px 12px
+  );
+  opacity: 0.35;
+}
+
 .v-timeline__headerName {
+  grid-area: name;
   color: var(--v-text);
   font-size: var(--v-text-sm);
   font-weight: var(--v-weight-strong);
@@ -78,6 +147,7 @@
 }
 
 .v-timeline__headerKind {
+  grid-area: kind;
   color: var(--v-text-muted);
   font-size: var(--v-text-xs);
   line-height: var(--v-leading-tight);

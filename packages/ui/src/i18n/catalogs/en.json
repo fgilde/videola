@@ -69,6 +69,8 @@
   "transport.stepBack": "One frame back",
   "transport.stepForward": "One frame forward",
   "transport.position": "Position",
+  "track.lock": "Lock {name}",
+  "track.unlock": "Unlock {name}",
   "transport.scopes": "Show scopes",
   "transport.mixer": "Show mixer",
   "media.dropHint": "Drop the video file here",

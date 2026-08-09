@@ -648,6 +648,10 @@ function hitTest(target: EventTarget | null): Hit | undefined {
   const clip = target.closest<HTMLElement>("[data-clip-id]");
   const id = clip?.dataset.clipId;
   if (id === undefined) return undefined;
+  // A locked row is not a hit at all. The core refuses the edit either way -- that is where the
+  // rule lives -- but a drag that follows the pointer for two hundred moves and then reports a
+  // refusal at the end is a worse answer than a clip that simply does not come away.
+  if (clip?.closest("[data-locked]") !== null) return undefined;
   const edge = target.closest<HTMLElement>("[data-edge]")?.dataset.edge;
   return { kind: "clip", clip: id, edge: edge === "start" || edge === "end" ? edge : undefined };
 }

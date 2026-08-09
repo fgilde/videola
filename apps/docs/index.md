@@ -75,7 +75,8 @@ features:
 ## What works today
 
 - **Editing** — ripple delete and trim, roll, slip, slide, multi-selection, groups, clipboard,
-  markers, snapping and zoom, with one pointer path for mouse, pen and finger.
+  markers, snapping and zoom, with one pointer path for mouse, pen and finger. Lockable tracks,
+  enforced by a single gate in front of the whole command dispatch.
 - **Compound clips** — fold a selection into one clip; the picture is proven not to change. Fade,
   blend, grade, crop or dissolve the compound and it is isolated on a surface of its own first, so
   all five meet the composed group once rather than each clip in it.
@@ -106,7 +107,7 @@ features:
 No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
 handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
 to its edge, and a curve cannot be copied from one parameter to another. No on-canvas editor for a
-motion path. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent,
+motion path. The magnetic timeline is deliberately absent,
 and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
 browser's own encoders.
 

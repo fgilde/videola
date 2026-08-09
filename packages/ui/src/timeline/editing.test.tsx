@@ -734,3 +734,54 @@ describe("merging two captions", () => {
     expect((entry as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+// A lock is enforced in the core, where it belongs. What the timeline owes is that the rule is
+// reachable and that it is visible before a drag rather than after one: a clip that follows the
+// pointer across the row and then springs back is a worse answer than a clip that never moves.
+describe("a locked track", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  async function locked(): Promise<VideolaDocument> {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+    fireEvent.click(screen.getByRole("button", { name: "V1 sperren" }));
+    return doc;
+  }
+
+  it("is locked from its own header, and unlocked from the same button", async () => {
+    const doc = await locked();
+    expect(doc.state.timeline.tracks[0]?.locked).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "V1 entsperren" }));
+    expect(doc.state.timeline.tracks[0]?.locked).toBe(false);
+  });
+
+  it("does not let a clip be dragged off it", async () => {
+    const doc = await locked();
+    const before = starts(doc.state);
+
+    down(clipAt(0), 20);
+    move(120);
+    up(120);
+
+    expect(starts(doc.state)).toEqual(before);
+  });
+
+  it("does not let an edge be trimmed on it either", async () => {
+    const doc = await locked();
+    const before = durations(doc.state);
+
+    down(handleOf(clipAt(0), "end"), 200);
+    move(150);
+    up(150);
+
+    expect(durations(doc.state)).toEqual(before);
+  });
+
+  it("says so on the row, so the reason is on screen", async () => {
+    await locked();
+    const row = document.querySelector('[data-track-id][data-locked]');
+    expect(row).not.toBeNull();
+  });
+});

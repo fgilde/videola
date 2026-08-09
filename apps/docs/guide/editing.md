@@ -124,10 +124,28 @@ with it — a dissolve belongs to the edge it was authored on, and that edge no 
 Both are **one** command, so both are one step on the undo stack however many clips moved. An insert
 across three tracks and a dozen clips is a single <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
 
-Two things they do not do. `track.locked` does not exempt a track from an insert's ripple: a lock is
-not enforced anywhere in the core yet, and honouring it in one command alone would make that command
-the only authority on what a lock means — and an exempt track would be an overlap nobody authored.
-Markers do not ripple either; they keep their absolute positions.
+One thing they do not do: markers do not ripple. They keep their absolute positions.
+
+A locked track refuses both of them outright, and it does not matter which track was named. An
+insert opens the gap on **every** track, so skipping the locked one would move the picture out from
+under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
+unlock the track and edit, or leave it alone.
+
+## Locked tracks
+
+The padlock beside a track's name is a promise: nothing on that track moves until it is unlocked
+again. It is enforced in the core, in one gate in front of the whole command dispatch rather than in
+each of the twenty handlers that could edit a clip — a lock half the commands honoured would be
+worse than no lock at all, and the next command anyone adds would be a hole nobody notices.
+
+What it covers is the timeline: the clips on the track, their trims, their speed, their transforms,
+their effects and keyframes, the track's own effect chain, and the track itself. What it leaves
+alone is the mixer and the name — a locked track is still faded, panned, muted and soloed — and the
+flags themselves, which is how a track is unlocked again.
+
+The timeline does not wait for that refusal to arrive. A clip on a locked row is not a drag target
+at all, so it never comes away from under the pointer and springs back; the row is hatched, and the
+padlock beside its name says why.
 
 ## The timeline
 

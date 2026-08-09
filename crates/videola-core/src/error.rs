@@ -12,6 +12,9 @@ pub enum CoreError {
     #[error("clip not found: {0}")]
     ClipNotFound(ClipId),
 
+    #[error("track is locked: {0}")]
+    TrackLocked(TrackId),
+
     #[error("index {index} out of range (len {len})")]
     IndexOutOfRange { index: usize, len: usize },
 
