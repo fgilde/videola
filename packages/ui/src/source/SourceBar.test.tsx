@@ -146,14 +146,19 @@ describe("SourceBar", () => {
   });
 
   // A range belongs to the medium it was marked in. Carrying an out point over to the next one
-  // would read past the end of a shorter medium.
+  // would read past the end of a shorter medium. Re-rendered rather than remounted: a fresh mount
+  // starts over whatever the component does, so only a rerender can tell the two apart.
   it("starts over when another medium is armed", () => {
-    const onEdit = show();
+    const onEdit: Edit = vi.fn();
+    const { rerender } = render(
+      <I18nProvider>
+        <SourceBar asset={asset()} fps={NTSC} onEdit={onEdit} />
+      </I18nProvider>,
+    );
     scrubTo(0.5);
     click("In-Punkt setzen (I)");
-    cleanup();
 
-    render(
+    rerender(
       <I18nProvider>
         <SourceBar
           asset={asset({ id: `med_${"b".repeat(64)}`, duration: 4 * FLICKS_PER_SECOND })}

@@ -869,6 +869,38 @@ describe("an adjustment track", () => {
     expect(passesOn(drawn, "clp_b")).toEqual(["contrast"]);
   });
 
+  // Three chains in one item, and the only shape that pins their order: the clip's own effects run
+  // first, then the layer standing over it inside the compound, then the compound's own over the
+  // result. Without the compound carrying a chain of its own the last two could be swapped and the
+  // list would look the same.
+  it("runs between the clip it covers and the compound it stands in", () => {
+    const folded = project([
+      track("trk_1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: 2 * SECOND,
+            effects: [effect({ id: "eff_group", effectType: "saturation" })],
+          },
+          [
+            track("trk_in", [
+              clip({ id: "clp_a", effects: [effect({ id: "eff_own", effectType: "sharpen" })] }),
+            ]),
+            track("trk_grade_in", [graded()], { kind: "adjustment" }),
+          ],
+        ),
+      ]),
+    ]);
+    const all = params([
+      ["eff_own", [["amount", 1]]],
+      ["eff_grade", [["amount", 2]]],
+      ["eff_group", [["amount", 2]]],
+    ]);
+
+    expect(passesOn(list(folded, 0, all), "clp_a")).toEqual(["sharpen", "contrast", "saturation"]);
+  });
+
   // And the same rule one level down: a layer inside a compound covers what is inside it and stops
   // at the fold, rather than reaching out over the whole project.
   it("inside a compound clip covers only what is inside it", () => {
