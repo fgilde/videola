@@ -46,6 +46,13 @@ export class FrameCache {
     return this.#bytes;
   }
 
+  // The number the budget is really about. Bytes are what the cache is sized in, because a 4K
+  // frame is sixteen times a 540p one -- but what decides whether scrubbing feels instant or
+  // ruinous is how many frames of *this* material fit, and that is only visible from here.
+  framesHeld(): number {
+    return this.#frames.size;
+  }
+
   // A frame larger than the whole budget is kept anyway rather than closed on the way in: the
   // caller holds the reference `put` just accepted, and handing back something already closed
   // would be worse than exceeding a budget by one frame. Size the budget above one 4K frame.

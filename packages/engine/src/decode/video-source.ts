@@ -1,8 +1,9 @@
 import { secondsToTime, timeToSeconds } from "@videola/core";
-import { mediaBlob } from "@videola/media";
+import { sourceBlob } from "@videola/media";
 import { EncodedPacketSink, VideoSampleSink } from "mediabunny";
 
 import type { Time } from "@videola/core";
+import type { Fidelity } from "@videola/media";
 import type { Input, VideoSample } from "mediabunny";
 
 import { openInput } from "./demuxer";
@@ -27,6 +28,7 @@ export interface Held {
 }
 
 export class VideoSource {
+  #fidelity: Fidelity;
   #cache: FrameCache;
   #medium?: OpenMedium;
   #window?: AsyncGenerator<VideoSample, void, unknown>;
@@ -36,7 +38,11 @@ export class VideoSource {
   #decoded = 0;
   #pending: Promise<void> = Promise.resolve();
 
-  constructor(budgetBytes: number = DEFAULT_FRAME_BUDGET_BYTES) {
+  // `fidelity` has no default. Everything that draws for the screen wants the proxy and everything
+  // that writes a file wants the original, and the two are one word apart -- so the word is asked
+  // for rather than assumed, and a new caller that has not thought about it does not compile.
+  constructor(fidelity: Fidelity, budgetBytes: number = DEFAULT_FRAME_BUDGET_BYTES) {
+    this.#fidelity = fidelity;
     this.#cache = new FrameCache(budgetBytes);
   }
 
@@ -57,7 +63,7 @@ export class VideoSource {
   // Nothing is torn down until the new medium has proven itself, so a failed open leaves the
   // source playing what it was playing before instead of leaving it with neither.
   async open(hash: string): Promise<void> {
-    const blob = await mediaBlob(hash);
+    const blob = await sourceBlob(hash, this.#fidelity);
     if (blob === undefined) throw new Error("error.mediaMissing");
     const input = openInput(blob);
     try {

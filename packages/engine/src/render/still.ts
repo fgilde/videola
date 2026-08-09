@@ -32,7 +32,10 @@ export async function renderStills(request: StillRequest): Promise<Blob[]> {
   const context = createContext(canvas);
   const compositor = new Compositor(context);
   const pass = {
-    sources: new SourcePool(request.createFrameSource ?? ((): FrameSource => new VideoSource())),
+    // `master` like the export: a still is a picture that leaves the program as a file.
+    sources: new SourcePool(
+      request.createFrameSource ?? ((): FrameSource => new VideoSource("master")),
+    ),
     generated: new GeneratorFrames(),
   };
   const hashes = clipHashes(request.project);

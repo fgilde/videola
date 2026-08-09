@@ -96,7 +96,10 @@ export class Playback {
     this.#sourceTimes = options.sourceTimes;
     this.#effectParams = options.effectParams;
     this.#transforms = options.transforms;
-    this.#createFrameSource = options.createFrameSource ?? ((): FrameSource => new VideoSource());
+    // `preview`: everything this class draws is looked at and thrown away, so it reads the proxy
+    // where there is one.
+    this.#createFrameSource =
+      options.createFrameSource ?? ((): FrameSource => new VideoSource("preview"));
     this.#clock = new Clock(options.audio);
     // Subscribed before anyone else, so a consumer's listener sees the time the picture is
     // already on its way to. Never unsubscribed: the clock is this object's own, so the listener
@@ -230,6 +233,14 @@ export class Playback {
   // the next paint open it for real.
   forget(hash: string): void {
     this.#release(hash);
+  }
+
+  // Every medium opened again from scratch, and the picture drawn again. What a proxy arriving
+  // looks like, and what switching to the originals looks like: a source that is already open
+  // holds a handle on the file it chose, and no setting reaches back into it.
+  reopen(): void {
+    for (const hash of [...this.#sources.keys()]) this.#release(hash);
+    this.refresh();
   }
 
   // Read after `load` resolves, because that is when the graph holds the decoded samples. Fixed
