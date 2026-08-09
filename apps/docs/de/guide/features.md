@@ -54,6 +54,28 @@ Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 
 Prüfungen laufen bei jedem Bau. Ein zu einem Drittel gedeckter Pixel über Rot muss **81** ergeben —
 das liefert premultipliziertes Alpha; die naheliegende Antwort 255 fällt durch.
 
+## Umzeiten und Voreinstellungen
+
+Die Geschwindigkeit eines Clips ist eine **Kurve über die Zeit**, kein Faktor. Keyframes auf der
+`speed`-Spur machen aus der Abbildung von Projektzeit auf Quellzeit ein Integral statt einer
+Multiplikation — die Fläche unter der Geschwindigkeitskurve — und `consumed_source` ist dasselbe
+Integral, nur für den ganzen Clip gefragt. Summe und Anfang können deshalb nie auseinandergehen.
+Rückwärtslauf, Trimmen und die Dekoderklemmung arbeiten weiter, weil sie auf dieser einen Funktion
+stehen und nicht auf der Arithmetik, die sie ersetzt.
+
+Der Ton folgt derselben Kurve: ein `AudioBufferSourceNode` liest seinen Puffer am laufenden Integral
+von `playbackRate`. Bild und Ton sind also eine Abbildung, von zwei Maschinen gerechnet, und nicht
+zwei Umsetzungen, die man im Gleichschritt halten muss. Eine Rampe wird über sieben Formen Flick für
+Flick gegen den Rust-Kern geprüft und Sample für Sample in einem echten Offline-Tonlauf.
+
+Ein **Standbild** ist eine Rate von null und sonst nichts. Kein Standbildclip, keine zweite
+Quellenart.
+
+Die Voreinstellungen — Standbild, drei Zeitlupenformen, eine Ken-Burns-Fahrt, Bild im Bild, geteilter
+Bildschirm — sind Listen von Befehlen unter einem gemeinsamen Sammelschlüssel, keine Einträge in der
+Projektdatei. Damit ist jede von ihnen ein einziger Undo-Schritt ohne eine Zeile Umkehrcode und für
+einen Agenten erreichbar, indem er dieselben Befehle schickt. Siehe [Schneiden](./editing.md#voreinstellungen).
+
 ## Ton
 
 ![Der Editor auf einem Tablet: die Eigenschaften zweispaltig, drei vollständige Mischpult-Streifen am Boden](/editor-tablet.webp)

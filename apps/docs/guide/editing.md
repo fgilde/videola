@@ -219,6 +219,92 @@ transform](./commands-and-undo.md#keyframing-a-transform) for the command. What 
 surface: a row per transform field with the same switch an effect parameter's row carries. Volume
 is still unanimated, and that one is genuinely missing an evaluation.
 
+## Speed ramps
+
+A clip's rate is not one number any more. `Speed { rate, reverse }` is still what a clip runs at when
+nothing is animated, but a clip can carry a **rate track** — keyframes under the key `speed`, in the
+same factor `rate` uses — and then the speed is a curve over time.
+
+That changes the arithmetic underneath rather than adding a feature beside it. Where the mapping from
+project time to source time used to be
+
+```
+source = in_point + (t - start) * rate
+```
+
+it is now the **area under the rate curve**:
+
+```
+source = in_point + ∫ from start to t of rate(u) du
+```
+
+A clip running from half speed to double over two seconds has spent 0.875 s of its material after one
+second, not 1.25 s. Every proportional reading of that moment — the rate at the instant, the average
+rate, the static rate — gives a different answer, and all of them are wrong.
+
+`Clip::consumed_source()` is the same integral asked for the whole clip, deliberately: the total and
+every prefix of it come out of one function, so they cannot drift apart. A reversed clip reads
+`in_point + consumed − area`, and the moment those two were computed separately its first frame would
+fall outside the range a decoder may read.
+
+**The sound follows the same curve, not a copy of it.** An `AudioBufferSourceNode` reads its buffer at
+the running integral of `playbackRate`, which is that same integral. The audio graph hands the platform
+the rate curve as automation, so the picture and the sound are not two implementations that have to
+agree — they are one mapping, computed twice by two engines that both do calculus.
+
+### What a rate keyframe may be
+
+| | |
+|---|---|
+| Value | a number from 0 to 100 |
+| Interpolation | `linear`, `hold` or `ease` |
+| Zero | allowed, and it means a frame hold |
+| `bezier` | refused |
+| On a compound clip | refused |
+| On a clip you then nest | refused |
+
+`bezier` is refused because its easing has no elementary antiderivative in the track's own time, and
+an inexact area would break the one property everything rests on: that the area over a span is the sum
+of the areas over its parts. Compound clips are refused in both directions because folding a nested
+timeline in or out inverts the outer rate by dividing, which only works while that rate is one number.
+Flatten the ramp, or nest first and ramp afterwards.
+
+`Project::normalize()` refuses all of it on load, and the `keyframe.*` commands refuse the same shapes
+through the same function — so a ramp one route accepts is never a ramp the other refuses to open.
+
+## Presets
+
+A preset is a list of commands sent under one coalesce key. It is not a thing in the project file, and
+that is the point: `Dispatch.coalesceKey` already collapses a list into one undo step, the patch and
+its inverse already come from `json_patch::diff`, the command layer already refuses every field a
+preset would otherwise have had to check itself, and `POST /api/projects/:id/commands` already carries
+a list under one key. A preset in the model would need its own load boundary, its own undo and its own
+wire format, and would become a second authority on what a quarter-size picture in the corner means —
+one the commands could then disagree with.
+
+So every preset below is reachable from an agent by sending the same commands. The builders live in
+`packages/core/src/presets.ts`.
+
+| Preset | What it sends |
+|---|---|
+| Freeze from here | two keys on the rate track: the clip's own rate, held, then zero |
+| Slow start / end / middle | two or three eased keys on the rate track |
+| Ken Burns in / out | two keys each on `scaleX` and `scaleY`, plus a two-point motion path |
+| Picture in picture | one `clip.setTransform`, and a `clip.move` where a track sits above |
+| Split screen | one `clip.setTransform` per clip, each cropped to its own half |
+
+**Freeze from here** is a rate of zero and nothing else — no still-image clip, no second kind of
+source, no branch anywhere downstream. The frame it stops on is the one the playhead was showing, and
+the sound stops with it through the same track. It is refused on a reversed clip: backwards, a clip
+reads `in_point + consumed − area`, so zeroing the rate shortens `consumed` and moves the frame the
+clip is *anchored* to rather than the one it stops on. The button is disabled rather than wrong.
+
+**Ken Burns** starts from the scale at which the material covers the frame, so the corners never open
+onto the background at either end of the move.
+
+**Split screen** crops each clip to the half it stands in rather than squashing it, so both keep their
+proportions.
+
 ## Playback
 
 The transport gives you start, frame back, play/pause, frame forward, end, and a timecode read from

@@ -228,6 +228,98 @@ Wert — der Schalter schriebe also Daten, die ein Bild wirklich zeigt. Es fehlt
 Zeile je Transformationsfeld mit demselben Schalter, den eine Effektparameterzeile trägt. Die
 Lautstärke bleibt unanimiert, dort fehlt tatsächlich noch die Auswertung.
 
+## Geschwindigkeitsrampen
+
+Die Geschwindigkeit eines Clips ist keine einzelne Zahl mehr. `Speed { rate, reverse }` ist weiterhin
+das, was ein Clip laeuft, solange nichts animiert ist — aber ein Clip kann eine **Ratenspur** tragen:
+Keyframes unter dem Schluessel `speed`, im selben Faktor, den `rate` verwendet. Dann ist die
+Geschwindigkeit eine Kurve ueber die Zeit.
+
+Das aendert die Arithmetik darunter, statt eine Funktion danebenzustellen. Wo die Abbildung von
+Projektzeit auf Quellzeit frueher
+
+```
+Quelle = in_point + (t - start) * rate
+```
+
+war, ist sie jetzt die **Flaeche unter der Geschwindigkeitskurve**:
+
+```
+Quelle = in_point + ∫ von start bis t ueber rate(u) du
+```
+
+Ein Clip, der in zwei Sekunden von halber auf doppelte Geschwindigkeit laeuft, hat nach einer Sekunde
+0,875 s seines Materials verbraucht, nicht 1,25 s. Jede proportionale Lesart dieses Moments — die Rate
+im Augenblick, die mittlere Rate, die statische Rate — gibt eine andere Antwort, und alle sind falsch.
+
+`Clip::consumed_source()` ist bewusst dasselbe Integral, nur fuer den ganzen Clip gefragt: die Summe
+und jeder Anfang davon kommen aus einer Funktion und koennen deshalb nicht auseinanderlaufen. Ein
+rueckwaerts laufender Clip liest `in_point + consumed − Flaeche`, und sobald diese beiden getrennt
+gerechnet wuerden, faellt sein erstes Bild aus dem Bereich heraus, den ein Dekoder lesen darf.
+
+**Der Ton folgt derselben Kurve, nicht einer Kopie davon.** Ein `AudioBufferSourceNode` liest seinen
+Puffer am laufenden Integral von `playbackRate` — genau diesem Integral. Der Audiograph uebergibt der
+Plattform die Ratenkurve als Automation. Bild und Ton sind also nicht zwei Umsetzungen, die sich einig
+werden muessen, sondern eine Abbildung, zweimal gerechnet von zwei Maschinen, die beide integrieren
+koennen.
+
+### Was ein Ratenkeyframe sein darf
+
+| | |
+|---|---|
+| Wert | eine Zahl von 0 bis 100 |
+| Interpolation | `linear`, `hold` oder `ease` |
+| Null | erlaubt, und sie bedeutet ein Standbild |
+| `bezier` | abgelehnt |
+| Auf einem Verbundclip | abgelehnt |
+| Auf einem Clip, den man danach verschachtelt | abgelehnt |
+
+`bezier` wird abgelehnt, weil seine Zeitverzerrung in der Spurzeit keine elementare Stammfunktion hat
+und eine ungenaue Flaeche die eine Eigenschaft braeche, auf der alles ruht: dass die Flaeche ueber
+einer Spanne die Summe der Flaechen ueber ihren Teilen ist. Verbundclips werden in beide Richtungen
+abgelehnt, weil das Ein- und Ausfalten einer verschachtelten Timeline die aeussere Rate durch Division
+umkehrt — und das geht nur, solange diese Rate eine Zahl ist. Also: Rampe aufloesen, oder erst
+verschachteln und dann rampen.
+
+`Project::normalize()` lehnt das alles beim Laden ab, und die `keyframe.*`-Befehle lehnen dieselben
+Formen durch dieselbe Funktion ab. Eine Rampe, die der eine Weg annimmt, ist also nie eine, die der
+andere nicht mehr oeffnet.
+
+## Voreinstellungen
+
+Eine Voreinstellung ist eine Liste von Befehlen unter einem gemeinsamen Sammelschluessel. Sie ist kein
+eigenes Ding in der Projektdatei, und das ist der Punkt: `Dispatch.coalesceKey` fasst eine Liste
+bereits zu einem Rueckgaengig-Schritt zusammen, Patch und Umkehrung kommen bereits aus
+`json_patch::diff`, die Befehlsschicht lehnt bereits jedes Feld ab, das eine Voreinstellung sonst
+selbst pruefen muesste, und `POST /api/projects/:id/commands` traegt bereits eine Liste unter einem
+Schluessel. Eine Voreinstellung im Modell braeuchte eine eigene Ladeschranke, ein eigenes Rueckgaengig
+und ein eigenes Drahtformat — und waere eine zweite Instanz, die entscheidet, was ein viertelgrosses
+Bild in der Ecke heisst. Eine, der die Befehle dann widersprechen koennten.
+
+Jede Voreinstellung unten ist also fuer einen Agenten erreichbar, indem er dieselben Befehle schickt.
+Die Bauteile liegen in `packages/core/src/presets.ts`.
+
+| Voreinstellung | Was sie schickt |
+|---|---|
+| Standbild ab hier | zwei Schluessel auf der Ratenspur: die eigene Rate, gehalten, dann null |
+| Langsamer Anfang / Ende / Mitte | zwei oder drei weiche Schluessel auf der Ratenspur |
+| Ken-Burns-Fahrt hinein / heraus | je zwei Schluessel auf `scaleX` und `scaleY`, dazu ein Bewegungspfad aus zwei Punkten |
+| Bild im Bild | ein `clip.setTransform`, dazu ein `clip.move`, wenn eine Spur darueber liegt |
+| Geteilter Bildschirm | ein `clip.setTransform` je Clip, jeder auf seine Haelfte beschnitten |
+
+**Standbild ab hier** ist eine Rate von null und sonst nichts — kein Standbildclip, keine zweite
+Quellenart, kein Zweig irgendwo dahinter. Das Bild, auf dem es stehenbleibt, ist das, welches der
+Abspielkopf gerade zeigte, und der Ton bleibt ueber dieselbe Spur mit stehen. Auf einem rueckwaerts
+laufenden Clip wird es abgelehnt: rueckwaerts liest ein Clip `in_point + consumed − Flaeche`, eine
+Rate von null verkuerzt also `consumed` und verschiebt das Bild, an dem der Clip *verankert* ist,
+statt jenes, auf dem er stehenbleibt. Der Knopf ist ausgegraut statt falsch.
+
+**Ken Burns** beginnt bei der Skalierung, bei der das Material das Bildformat gerade fuellt — so
+oeffnen sich an keinem Ende der Fahrt die Ecken auf den Hintergrund.
+
+**Geteilter Bildschirm** beschneidet jeden Clip auf die Haelfte, in der er steht, statt ihn zu
+stauchen; beide behalten damit ihre Proportionen.
+
 ## Wiedergabe
 
 Der Transport bietet Anfang, Bild zurück, Abspielen/Pause, Bild vor, Ende und einen Timecode aus der

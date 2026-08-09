@@ -51,6 +51,26 @@ Each effect's behaviour is measured against real pixels rendered by a real drive
 run on every build. A third-covered pixel over red must read 81, which is what premultiplied alpha
 gives; the reflex answer of 255 fails.
 
+## Retiming and presets
+
+A clip's speed is a **curve over time**, not a factor. Keyframes on the `speed` track make the map
+from project time to source time an integral rather than a multiplication — the area under the rate
+curve — and `consumed_source` is that same integral asked for the whole clip, so a total and a
+prefix of it can never disagree. Reversal, trimming and the decoder clamp all keep working because
+they were built on that one function rather than on the arithmetic it replaced.
+
+The sound follows the same curve: an `AudioBufferSourceNode` reads its buffer at the running
+integral of `playbackRate`, so the picture and the sound are one mapping computed by two engines,
+not two implementations that have to be kept in step. A ramp is checked flick for flick against the
+Rust core across seven shapes, and sample for sample in a real offline audio render.
+
+A **frame hold** is a rate of zero and nothing else. No still-image clip, no second kind of source.
+
+The presets — a frame hold, three slow-motion shapes, a Ken Burns push, picture in picture, a split
+screen — are lists of commands sent under one coalesce key, not entries in the project file. That
+makes each of them one press of undo without a line of inversion code, and reachable from an agent
+by sending the same commands. See [Editing](./editing.md#presets).
+
 ## Sound
 
 ![The editor on a tablet: the properties panel in two columns, three complete mixer strips along the bottom](/editor-tablet.webp)
