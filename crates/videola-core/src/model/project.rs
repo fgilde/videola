@@ -946,7 +946,9 @@ mod tests {
             Time::from_seconds(1.0),
         );
         let mut effect = crate::model::Effect::new("curves");
-        effect.params.insert("luma".into(), ParamValue::Curve(points));
+        effect
+            .params
+            .insert("luma".into(), ParamValue::Curve(points));
         clip.effects.push(effect);
         track.clips.push(clip);
         p.timeline.tracks.push(track);

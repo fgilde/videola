@@ -170,7 +170,10 @@ mod tests {
     fn track_kind_serialises_in_kebab_case() {
         let json = serde_json::to_string(&TrackKind::Adjustment).unwrap();
         assert_eq!(json, "\"adjustment\"");
-        assert_eq!(serde_json::to_string(&TrackKind::Caption).unwrap(), "\"caption\"");
+        assert_eq!(
+            serde_json::to_string(&TrackKind::Caption).unwrap(),
+            "\"caption\""
+        );
     }
 
     // Every kind has to be a colour of its own: the timeline draws the track's stripe from this and
@@ -187,7 +190,10 @@ mod tests {
         ];
         let mut seen = std::collections::BTreeSet::new();
         for kind in kinds {
-            assert!(seen.insert(default_color(kind)), "{kind:?} repeats a colour");
+            assert!(
+                seen.insert(default_color(kind)),
+                "{kind:?} repeats a colour"
+            );
         }
         assert_eq!(seen.len(), kinds.len());
     }

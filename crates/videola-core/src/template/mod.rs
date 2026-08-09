@@ -145,16 +145,25 @@ pub enum SlotKind {
     rename_all_fields = "camelCase"
 )]
 pub enum SlotBinding {
-    ClipMedia { clip: ClipId, fit: Fit },
-    ClipLabel { clip: ClipId },
+    ClipMedia {
+        clip: ClipId,
+        fit: Fit,
+    },
+    ClipLabel {
+        clip: ClipId,
+    },
     ProjectTitle,
     Background,
     /// The words a text generator puts on the screen. The one binding that makes a template look
     /// like the person who filled it in, rather than like the template.
-    GeneratorText { clip: ClipId },
+    GeneratorText {
+        clip: ClipId,
+    },
     /// The colour a generator is drawn in: a solid's fill, the first stop of a gradient, or the
     /// ink of a title. One answer, one clip, whichever of the three it happens to be.
-    GeneratorColor { clip: ClipId },
+    GeneratorColor {
+        clip: ClipId,
+    },
 }
 
 /// The rectangle a clip's picture is placed in, as fractions of the frame with the origin at the
@@ -341,7 +350,9 @@ impl Template {
                 clip.speed.rate = 1.0;
             }
         }
-        project.library.retain(|asset| asset.id.as_str() != STAND_IN);
+        project
+            .library
+            .retain(|asset| asset.id.as_str() != STAND_IN);
         project.normalize()?;
         Ok(project)
     }
@@ -672,7 +683,8 @@ fn apply(project: &mut Project, slot: &Slot, answer: &SlotAnswer, frame: Frame) 
                         }
                     }
                     SlotBinding::GeneratorText { clip } => {
-                        if let Some(Generator::Text { content, .. }) = generator_of_mut(project, clip)
+                        if let Some(Generator::Text { content, .. }) =
+                            generator_of_mut(project, clip)
                         {
                             *content = text.clone();
                         }
@@ -1871,7 +1883,10 @@ mod tests {
 
         let marked = BTreeSet::from([ClipId::from("clp_field".to_string())]);
         let chosen = Template::from_project(&project, "mine", Some(&marked)).unwrap();
-        assert_eq!(slot_ids(&chosen, SlotKind::Color), vec!["colour1", "background"]);
+        assert_eq!(
+            slot_ids(&chosen, SlotKind::Color),
+            vec!["colour1", "background"]
+        );
     }
 
     // A project with no footage at all must not open the wizard on a panel with nothing on it.

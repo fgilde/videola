@@ -180,10 +180,7 @@ pub enum Command {
     /// Replace the generator of a generator clip: its words, its colours, its style. Refused on a
     /// clip whose source is a medium or a nested timeline.
     #[serde(rename = "clip.setGenerator")]
-    ClipSetGenerator {
-        clip: ClipId,
-        generator: Generator,
-    },
+    ClipSetGenerator { clip: ClipId, generator: Generator },
     // A transition belongs to the incoming edge of a clip — the only edge the compositor reads
     // (see `mixPass` in draw-list.ts). `null` clears it, so one command adds, retimes and removes.
     /// Set or clear the transition on a clip's incoming edge; `null` removes it.

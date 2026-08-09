@@ -393,6 +393,17 @@ describe("the order of an effect chain", () => {
 });
 
 describe("an effect chain that cannot be built in full", () => {
+  // Named first because everything below it is meaningless without it: if this build carries no
+  // audio manifests at all, every chain silently becomes a pass-through and each attenuation check
+  // then compares a signal against itself. That reads as "the filter did nothing" rather than as
+  // "there was no filter", which is a different bug and a much longer hunt.
+  it("carries the manifests the rest of these checks rely on", () => {
+    const ids = audioEffectManifests().map((manifest) => manifest.id);
+
+    expect(ids).toContain("eq");
+    expect(ids).toContain("compressor");
+  });
+
   // One unknown type must not take the track's sound with it, for the same reason one missing
   // medium does not take the timeline's. Both positions, because the chain is walked from its far
   // end: an unknown one last in the list is the first thing that walk meets, and giving up there

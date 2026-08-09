@@ -108,11 +108,7 @@ mod tests {
         let lifted = ParamValue::Curve(vec![[0.0, 0.0], [0.5, 0.9], [1.0, 1.0]]);
         assert_eq!(
             flat.lerp(&lifted, 0.5),
-            Some(ParamValue::Curve(vec![
-                [0.0, 0.0],
-                [0.5, 0.7],
-                [1.0, 1.0]
-            ]))
+            Some(ParamValue::Curve(vec![[0.0, 0.0], [0.5, 0.7], [1.0, 1.0]]))
         );
     }
 

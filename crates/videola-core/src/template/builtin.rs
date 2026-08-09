@@ -63,12 +63,7 @@ pub const PRODUCT: &str = "product";
 fn bold_open() -> Template {
     let mut back = video_track("trk_back", "V1");
     back.clips.push(gradient_clip(
-        "clp_bg",
-        0.0,
-        3.6,
-        "#2f6fed",
-        "#101625",
-        155.0,
+        "clp_bg", 0.0, 3.6, "#2f6fed", "#101625", 155.0,
     ));
     let mut shot = placeholder("clp_shot", 3.0, 3.5);
     shot.transition_in = Some(zoom(0.6, 1.45));
@@ -176,8 +171,7 @@ fn iris_open() -> Template {
     let mut back = video_track("trk_back", "V1");
     // A strong colour rather than near-black: a circle cut out of a dark field over a dark card is
     // a circle nobody can see, and the reveal is the whole of what this template is.
-    back.clips
-        .push(solid_clip("clp_back", 0.0, 4.6, "#2f6fed"));
+    back.clips.push(solid_clip("clp_back", 0.0, 4.6, "#2f6fed"));
 
     let mut front = video_track("trk_front", "V2");
     let mut shot = placeholder("clp_shot", 0.0, 4.6);
@@ -436,10 +430,7 @@ fn beat_slideshow() -> Template {
     slots.push(color_slot_named(
         "ink",
         Localized::new("Schriftfarbe", "Ink"),
-        Localized::new(
-            "Färbt die Kopfzeile.",
-            "Colours the header.",
-        ),
+        Localized::new("Färbt die Kopfzeile.", "Colours the header."),
         vec![generator_color("clp_word")],
     ));
 
@@ -931,10 +922,7 @@ fn product_reveal() -> Template {
     // same picture in either of them.
     line.keyframes.insert(
         "position".into(),
-        vec![
-            vec2_key(1.0, [-820.0, 300.0]),
-            vec2_key(1.9, [0.0, 300.0]),
-        ],
+        vec![vec2_key(1.0, [-820.0, 300.0]), vec2_key(1.9, [0.0, 300.0])],
     );
     claim.clips.push(line);
 
@@ -1381,7 +1369,8 @@ mod tests {
         "mask-ellipse",
     ];
     const DRAWN_TRANSITIONS: &[&str] = &["crossfade", "wipe", "slide", "zoom", "dip"];
-    const DRAWN_TRACK_KINDS: &[TrackKind] = &[TrackKind::Video, TrackKind::Text, TrackKind::Overlay];
+    const DRAWN_TRACK_KINDS: &[TrackKind] =
+        &[TrackKind::Video, TrackKind::Text, TrackKind::Overlay];
 
     fn wide_asset(name: &str) -> MediaAsset {
         let mut asset = MediaAsset::new(
@@ -1479,7 +1468,10 @@ mod tests {
                         assert_ne!(media.as_str(), PLACEHOLDER, "{id} kept a placeholder");
                     }
                     ClipSource::Generator {
-                        generator: Generator::Text { .. } | Generator::Solid { .. } | Generator::Gradient { .. },
+                        generator:
+                            Generator::Text { .. }
+                            | Generator::Solid { .. }
+                            | Generator::Gradient { .. },
                     } => {}
                     _ => panic!("{id} baked a clip this version draws nothing for"),
                 }
@@ -1562,7 +1554,9 @@ mod tests {
             let preview = template.preview(None).unwrap();
             let poster = template.manifest.poster_at.expect("a poster instant");
 
-            let showing: Vec<&Clip> = clips(&preview).filter(|clip| clip.contains(poster)).collect();
+            let showing: Vec<&Clip> = clips(&preview)
+                .filter(|clip| clip.contains(poster))
+                .collect();
             assert!(
                 showing
                     .iter()
@@ -1634,7 +1628,11 @@ mod tests {
                 texts.push(&slot.hint);
             }
             for text in texts {
-                assert!(!text.de.trim().is_empty(), "{}: German missing", manifest.id);
+                assert!(
+                    !text.de.trim().is_empty(),
+                    "{}: German missing",
+                    manifest.id
+                );
                 assert!(
                     !text.en.trim().is_empty(),
                     "{}: English missing",
@@ -1678,7 +1676,10 @@ mod tests {
                         continue;
                     };
                     assert_eq!(transition.alignment, TransitionAlignment::In);
-                    assert!(index > 0, "the first clip of a track cannot transition into one");
+                    assert!(
+                        index > 0,
+                        "the first clip of a track cannot transition into one"
+                    );
                     let previous = &track.clips[index - 1];
                     assert!(
                         previous.end() >= clip.start + transition.duration,
@@ -1841,7 +1842,10 @@ mod tests {
             let id = &template.manifest.id;
             let preview = template.preview(None).unwrap();
 
-            assert!(preview.library.is_empty(), "{id}: the preview carries media");
+            assert!(
+                preview.library.is_empty(),
+                "{id}: the preview carries media"
+            );
             for clip in clips(&preview) {
                 assert!(
                     matches!(&clip.source, ClipSource::Generator { .. }),

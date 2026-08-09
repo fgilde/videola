@@ -944,7 +944,10 @@ fn rewriting_a_caption_leaves_its_placement_alone() {
     }))
     .unwrap();
     let after = &doc.project().timeline.tracks[0].clips[0];
-    assert_eq!((after.start, after.duration, after.id.clone()), (before.start, before.duration, before.id));
+    assert_eq!(
+        (after.start, after.duration, after.id.clone()),
+        (before.start, before.duration, before.id)
+    );
     assert_eq!(after.transform, before.transform);
 }
 

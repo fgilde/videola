@@ -115,7 +115,11 @@ fn replacing_a_keyframe_keeps_the_curve_shape_it_was_authored_with() {
         .unwrap();
     bend(&mut doc);
     let bent = amount_at(doc.project(), 2.0);
-    assert_ne!(bent, Some(ParamValue::Float(0.5)), "the handles have to bend it at all");
+    assert_ne!(
+        bent,
+        Some(ParamValue::Float(0.5)),
+        "the handles have to bend it at all"
+    );
 
     doc.dispatch(Dispatch::new(add(&clip, 1.0, 0.0, Interp::Bezier)))
         .unwrap();
