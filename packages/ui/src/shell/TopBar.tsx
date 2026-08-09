@@ -12,6 +12,8 @@ export interface TopBarActions {
   onOpen?: () => void;
   onSave?: () => void;
   onImportMedia?: () => void;
+  onImportCaptions?: () => void;
+  onExportCaptions?: () => void;
   onAddTrack?: () => void;
   onExport?: () => void;
   onUndo?: () => void;
@@ -38,6 +40,11 @@ export function TopBar({ compact = false, ...actions }: TopBarProps): ReactEleme
       <Action label={t("action.templates")} onClick={actions.onTemplates} />
       <Action label={t("action.open")} onClick={actions.onOpen} />
       <Action label={t("action.importMedia")} onClick={actions.onImportMedia} />
+      {/* Beside importing media, because both are "bring a file into this project". They live in
+          the overflow rather than on the bar for the reason everything else does: ten controls do
+          not fit a phone at 44 px each. */}
+      <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
+      <Action label={t("action.exportCaptions")} onClick={actions.onExportCaptions} />
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
     </>
   );

@@ -273,8 +273,6 @@
   "track.kind.caption": "Captions",
   "action.importCaptions": "Import captions",
   "action.exportCaptions": "Export captions",
-  "caption.trackName": "Captions",
-  "caption.imported": "{count} caption imported | {count} captions imported",
   "caption.none": "No captions could be read from that file",
   "caption.nothingToWrite": "There are no captions to write",
   "timeline.mergeCaption": "Merge with next caption",

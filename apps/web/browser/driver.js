@@ -580,6 +580,8 @@ async function announce() {
     // project to work with.
     if (virtual) await keyframeLane(await keyframes());
 
+    await captions();
+
     key(" ", document.body);
     await until("the transport to report playing", () => button("Anhalten") !== null, 8000);
     check("the space bar starts playback from outside the transport",
@@ -671,7 +673,8 @@ async function announce() {
     const menu = q(".v-topbar__menu");
     check("the menu holds every action the bar gave up",
       [...menu.querySelectorAll("button")].map((node) => node.getAttribute("aria-label") ?? node.textContent),
-      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren", "Spur hinzufügen",
+      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren",
+       "Untertitel importieren", "Untertitel exportieren", "Spur hinzufügen",
        "Exportieren", "Deutsch / English", "Hell", "Speichern"]);
     check("and the open menu stays inside the window",
       menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
@@ -1370,6 +1373,54 @@ async function announce() {
   const card = (id) => q(`[data-template-id="${id}"]`);
   const fileInput = (slot) => q(`[data-slot-id="${slot}"] input[type="file"]`);
   const clipBox = (id) => q(`[data-clip-id="${id}"]`).getBoundingClientRect();
+
+  // Subtitles, end to end and through the surface: an SRT dropped on the editor, a track of its own,
+  // a clip per cue at the cue own instants, and the words reachable in the panel that edits them.
+  // Nothing here is reachable from jsdom -- File.text(), a real drop and the layout of the track
+  // headers are all the browser own.
+  //
+  // It undoes itself, so the playback section below still works on the project it was handed.
+  async function captions() {
+    const srt = [
+      "1", "00:00:00,000 --> 00:00:01,000", "Erste Zeile", "",
+      "2", "00:00:01,000 --> 00:00:02,000", "Zweite Zeile", "und noch eine", "",
+    ].join("\n");
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([srt], "dialog.srt", { type: "text/plain" }));
+    const before = all("[data-clip-id]").length;
+    const captionClips = () => all('[data-kind="caption"] [data-clip-id]');
+    drag("drop", q(".v-dropzone"), transfer);
+
+    await until("the caption clips", () => all("[data-clip-id]").length === before + 2);
+    check("a dropped subtitle file raises nothing", banner(), "");
+    const kinds = all(".v-timeline__headerKind").map((node) => node.textContent.trim());
+    check("a track of its own, named for what it carries", kinds.includes("Untertitel"), true);
+
+    // One second at the default zoom is a hundred pixels, so a one-second cue is a hundred wide.
+    // Measured rather than read out of the model: this is the only run where the model reaching the
+    // screen is the thing in question.
+    const boxes = captionClips().map((n) => n.getBoundingClientRect());
+    check("each cue is as wide as it is long",
+      boxes.map((b) => Math.round(b.width)), [100, 100]);
+
+    // The two-line cue, in the field that edits it. A hard line break that reached the model and
+    // not the field is the failure a text input produces, and it is invisible until it is read back.
+    captionClips().at(-1).click();
+    const field = await until("the text field", () => q('[data-testid="text-content"]'));
+    check("the words are in the panel that edits them",
+      field.value, "Zweite Zeile\nund noch eine");
+    check("and it is a textarea, so both lines survived", field.tagName, "TEXTAREA");
+    checkAtLeast("with room to show both of them",
+      Math.round(field.getBoundingClientRect().height), 44);
+
+    // The track and the two cues, the cues under one coalesce key. Undoing until the clips are gone
+    // is what leaves the project below exactly as it was.
+    for (let round = 0; round < 6 && all("[data-clip-id]").length > before; round += 1) {
+      button("Rückgängig").click();
+      await sleep(50);
+    }
+    check("and it leaves the project as it found it", all("[data-clip-id]").length, before);
+  }
 
   async function dropFixture() {
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();

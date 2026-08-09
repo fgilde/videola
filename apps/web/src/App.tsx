@@ -2,13 +2,17 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from "rea
 
 import {
   builtinTemplates,
+  captionClips,
+  captionCues,
   cmd,
   createProjectBackend,
   createTemplateBackend,
   createWasmBackend,
   on,
   FLICKS_PER_SECOND,
+  parseCaptions,
   readTemplateFile,
+  toSrt,
   timeToSeconds,
   VideolaDocument,
   type ClipId,
@@ -30,6 +34,7 @@ import {
   AudioSource,
   effectManifests,
   EXPORT_FORMATS,
+  carriesSubtitles,
   formatSupport,
   measureLoudness,
   Playback,
@@ -82,7 +87,15 @@ import { useTemplatePosters } from "./posters";
 import { useThumbnails } from "./thumbnails";
 import { offerUpdate } from "./updates";
 
-type ErrorKey = "error.openFailed" | "error.saveFailed" | "error.actionFailed" | "error.importFailed";
+// Two of these are not failures of the program but of the file, and they read that way: a subtitle
+// file with nothing legible in it, and a project with no subtitles to write.
+type ErrorKey =
+  | "error.openFailed"
+  | "error.saveFailed"
+  | "error.actionFailed"
+  | "error.importFailed"
+  | "caption.none"
+  | "caption.nothingToWrite";
 
 interface ShellError {
   key: ErrorKey;
@@ -91,6 +104,16 @@ interface ShellError {
 }
 
 const MEDIA_ACCEPT = "video/*,audio/*";
+
+// Both extensions and both media types: a browser that knows neither still offers the file, and a
+// browser that knows one of them stops offering everything else.
+const CAPTION_ACCEPT = ".srt,.vtt,text/vtt,application/x-subrip";
+
+// By the name, because the type is what a browser guesses and it guesses `text/plain` for an SRT as
+// often as not. The name is what the person who saved the file chose.
+function isCaptionFile(file: File): boolean {
+  return /\.(?:srt|vtt)$/i.test(file.name);
+}
 
 // Often enough that a crash costs a minute of work at most, rarely enough that it never competes
 // with a drag for the main thread. It is only the project state -- the media are in OPFS already.
@@ -416,7 +439,13 @@ export function App(): ReactElement {
       channels: 2,
     }).then((support) => {
       if (stale) return;
-      setFormats(support.map((entry) => ({ id: entry.format.id, ...entry })));
+      setFormats(
+        support.map((entry) => ({
+          id: entry.format.id,
+          ...entry,
+          subtitles: carriesSubtitles(entry.format),
+        })),
+      );
     });
     return () => {
       stale = true;
@@ -442,6 +471,7 @@ export function App(): ReactElement {
           videoBitrate: options.videoBitrate,
           audioBitrate: options.audioBitrate,
           range: rangeOf(project, options.range === "selection" ? selection : []),
+          captions: options.captions,
         },
         onProgress: (done, total) => {
           if (runningExport.current === handle) setProgress({ done, total });
@@ -697,6 +727,60 @@ export function App(): ReactElement {
     }
   }, [doc, project, selection]);
 
+  // A caption file becomes a track of its own, through the same `clip.add` every other clip goes
+  // through -- so an SRT someone was handed passes the loader's own gate rather than a second one
+  // written for it. Under one coalesce key, so an import of two thousand cues is one undo step.
+  const importCaptions = useCallback(
+    async (files: readonly File[]) => {
+      if (doc === undefined) return;
+      for (const file of files) {
+        try {
+          const cues = parseCaptions(await file.text());
+          if (cues.length === 0) {
+            reportError("caption.none", new Error(file.name));
+            continue;
+          }
+          // A short code like every other track this file creates, not a translated phrase: `App`
+          // renders the shell that carries the i18n provider, so it stands above it and has no `t`
+          // -- and the header beside the name already says "Untertitel" in the reader's language.
+          const track = added(doc, "caption", `C${doc.state.timeline.tracks.length + 1}`);
+          if (track === undefined) continue;
+          const key = `captions-${file.name}-${Date.now()}`;
+          for (const command of captionClips(track.id, cues)) doc.dispatch(command, key);
+          setError(undefined);
+        } catch (err) {
+          reportError("error.importFailed", err);
+        }
+      }
+    },
+    [doc, reportError],
+  );
+
+  // A file that is dropped is a file someone meant to bring in, whatever it is. Sorting the caption
+  // files out here rather than at each call site is what stops a dropped .srt from reaching the
+  // media importer, which would have refused it as an unsupported medium.
+  const importFiles = useCallback(
+    async (files: File[]) => {
+      const captions = files.filter(isCaptionFile);
+      const media = files.filter((file) => !isCaptionFile(file));
+      if (captions.length > 0) await importCaptions(captions);
+      if (media.length > 0) await importMedia(media);
+    },
+    [importCaptions, importMedia],
+  );
+
+  const exportCaptions = useCallback(() => {
+    if (project === undefined) return;
+    const cues = captionCues(project);
+    if (cues.length === 0) {
+      reportError("caption.nothingToWrite", new Error("caption.nothingToWrite"));
+      return;
+    }
+    const name = project.meta.title || project.meta.id;
+    downloadBlob(new TextEncoder().encode(toSrt(cues)), `${name}.srt`, "application/x-subrip");
+    setError(undefined);
+  }, [project, reportError]);
+
   const playPause = useCallback(() => {
     if (playback === undefined) return;
     if (playback.isPlaying) playback.pause();
@@ -716,6 +800,12 @@ export function App(): ReactElement {
         doc === undefined ? undefined : () => void pickFiles(MEDIA_ACCEPT).then(importMedia)
       }
       onAddTrack={doc === undefined ? undefined : addTrack}
+      onImportCaptions={
+        doc === undefined
+          ? undefined
+          : () => void pickFiles(CAPTION_ACCEPT).then(importCaptions)
+      }
+      onExportCaptions={doc === undefined ? undefined : exportCaptions}
       onExport={
         doc === undefined
           ? undefined
@@ -731,7 +821,7 @@ export function App(): ReactElement {
       canUndo={flags.canUndo}
       canRedo={flags.canRedo}
     >
-      <DropZone onFiles={(files) => void importMedia(files)}>
+      <DropZone onFiles={(files) => void importFiles(files)}>
         <div className="v-editor">
           <div className="v-banners">
             <ErrorBanner error={error} />
@@ -887,6 +977,7 @@ export function App(): ReactElement {
           formats={formats}
           settings={project.settings}
           hasSelection={selection.length > 0}
+          hasCaptions={project !== undefined && captionCues(project).length > 0}
           progress={progress}
           error={exportError}
           onExport={beginExport}
