@@ -33,9 +33,11 @@ export function MarkerList({ markers, fps, dispatch, onSeek }: MarkerListProps):
       {ordered.length === 0 ? (
         <p className="v-markers__empty">{t("markers.empty")}</p>
       ) : (
+        // `data-marker-row` and not `data-marker-id`: the latter names the pin on the ruler, and
+        // one attribute meaning two things is how a query aiming at the pin lands on a row here.
         <ul className="v-markers__list">
           {ordered.map((marker) => (
-            <li key={marker.id} className="v-markers__item" data-marker-id={marker.id}>
+            <li key={marker.id} className="v-markers__item" data-marker-row={marker.id}>
               {/* Native, so a colour is picked with the operating system's own picker and comes
                   back as the `#rrggbb` the core already accepts. */}
               <input

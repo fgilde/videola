@@ -327,6 +327,15 @@ export function Timeline({
             label={t("timeline.addMarker")}
             onClick={() => dispatch(cmd.markerAdd(playhead, ""))}
           />
+          {/* Beside the button that sets one, and opening over the tracks rather than above them:
+              the picture is the largest zone on this screen and a list nobody has opened must not
+              take a row of it. */}
+          <MarkerList
+            markers={project.markers}
+            fps={project.settings.fps}
+            dispatch={dispatch}
+            onSeek={onSeek}
+          />
         </div>
         {/* Two plain selects rather than modifier keys: a finger has no modifiers, and the mode a
             drag is in has to be readable before the drag, not guessed from what it just did.
@@ -357,13 +366,6 @@ export function Timeline({
           </select>
         </div>
       </div>
-
-      <MarkerList
-        markers={project.markers}
-        fps={project.settings.fps}
-        dispatch={dispatch}
-        onSeek={onSeek}
-      />
 
       {/* Only while a keyframe is picked, and outside the scrolling area on purpose: what a
           keyframe is set to has to stay reachable while the lane it lives on is scrolled. */}

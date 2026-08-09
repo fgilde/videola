@@ -31,6 +31,10 @@
 .v-transport {
   display: flex;
   align-items: center;
+  /* Wraps rather than pushing the clock off the edge. On a phone the eight symbols already fill
+     the width, and a timecode cut in half is worse than a timecode on the next line -- with the
+     shuttle keys reaching the same two buttons from a keyboard where there is one. */
+  flex-wrap: wrap;
   gap: var(--v-space-1);
   padding: var(--v-space-2) var(--v-space-3);
   background: var(--v-bg-elevated);
@@ -85,3 +89,25 @@
   color: var(--v-text-muted);
 }
 
+
+/* The shuttle rate, and only while it is not the ordinary one. Tinted rather than merely written,
+   because it is a state the transport is in and not another reading. */
+.v-transport__rate {
+  padding: 0 var(--v-space-2);
+  border-radius: var(--v-radius-pill);
+  background: var(--v-accent-soft);
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--v-text);
+}
+
+.v-transport__resolution {
+  flex: none;
+}
+
+@media (pointer: coarse) {
+  .v-transport__resolution {
+    min-height: var(--v-touch-target);
+  }
+}
