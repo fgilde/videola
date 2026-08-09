@@ -6,7 +6,6 @@ import {
   type Clip,
   type ClipId,
   type Command,
-  type Keyframe,
   type MarkerId,
   type Project,
   type Time,
@@ -96,7 +95,10 @@ type Drag =
   // `at` is where the core last put the keyframe, not where the pointer wants it. Every move sends
   // the step from there, the same way a trim reads the clip's edge back -- a step the core refused
   // (a neighbour already sits there) then cannot desynchronise the rest of the drag.
-  | { mode: "keyframe"; pointerId: number; keyframe: KeyframeHit; at: Time; clientX: number; key: string; live: boolean }
+  // `clientY` is carried like every other drag's, and only the travel threshold reads it: a
+  // keyframe moves along one axis, so the vertical distance decides whether a press became a drag
+  // and nothing else.
+  | { mode: "keyframe"; pointerId: number; keyframe: KeyframeHit; at: Time; clientX: number; clientY: number; key: string; live: boolean }
   | { mode: "scrub"; pointerId: number }
   | { mode: "pinch" ; distance: number; flicksPerPixel: number };
 
@@ -183,6 +185,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
           keyframe: hit.keyframe,
           at: hit.keyframe.time,
           clientX: event.clientX,
+          clientY: event.clientY,
           key: `timeline-${(gestureSequence += 1)}`,
           live: false,
         };
