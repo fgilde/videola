@@ -21,6 +21,19 @@ function near(got, want, slack) {
   return left.length === right.length && left.every((v, i) => Math.abs(v - right[i]) <= slack);
 }
 
+// A budget is a ceiling, not an equality: what has to hold is that the measurement is under it.
+function checkAtMost(name, got, limit) {
+  results.push({ name, ok: typeof got === "number" && got <= limit, got, want: `<= ${limit}` });
+}
+
+function checkAtLeast(name, got, limit) {
+  results.push({ name, ok: typeof got === "number" && got >= limit, got, want: `>= ${limit}` });
+}
+
+// Wall-clock readings, printed by the runner whether the run passed or failed. A budget that only
+// says pass or fail hides the trend that will break it next month.
+const measured = {};
+
 async function test(name, fn) {
   try {
     await fn();
@@ -36,6 +49,16 @@ async function test(name, fn) {
 
 const WIDTH = 160;
 const HEIGHT = 120;
+// The fixture is small enough that the production cap of 720 would refuse it a proxy, so the
+// builder is asked for a height it does have to shrink to. 60 is half of 120, which keeps the
+// width whole and the aspect exact.
+const PROXY_HEIGHT = 60;
+const PROXY_WIDTH = 80;
+// What a proxy must never be: a colour that appears nowhere in the original's ramp. It is written
+// over the real proxy before the exports run, so any file that carries this is a file that was
+// decoded from the proxy -- and every colour check downstream, in this page and in ffmpeg, is
+// then also the proof that the export took the original.
+const POISON = [255, 0, 255];
 const FPS = { numerator: 30, denominator: 1 };
 const SECOND = 705_600_000;
 const OUTPUT_FRAMES = 30;
@@ -111,6 +134,124 @@ async function makeAudioFixture() {
 
 // The real import path into the real core: hash, OPFS, probe, dispatch. Nothing below is told
 // where a clip reads from -- the core is asked, over the wasm boundary, as playback asks it.
+// A flat plate at the proxy's size, encoded the way a real proxy is. Planted under the original's
+// hash it is a proxy that lies about the material, which is the only way to catch a path that
+// reads one when it should not.
+async function makePoisonedProxy() {
+  const { canvas, context } = canvasOf(PROXY_WIDTH, PROXY_HEIGHT);
+  const target = new R.BufferTarget();
+  const output = new R.Output({ format: new R.Mp4OutputFormat(), target });
+  const source = new R.CanvasSource(canvas, {
+    codec: "avc",
+    quality: new R.Quality({ bitrate: 1_000_000 }),
+  });
+  output.addVideoTrack(source, { frameRate: 30 });
+  await output.start();
+  context.fillStyle = `rgb(${POISON[0]} ${POISON[1]} ${POISON[2]})`;
+  for (let index = 0; index < OUTPUT_FRAMES; index += 1) {
+    context.fillRect(0, 0, PROXY_WIDTH, PROXY_HEIGHT);
+    await source.add(index / 30, 1 / 30);
+  }
+  await output.finalize();
+  return new Uint8Array(target.buffer);
+}
+
+// The centre pixel of a decoded frame, through a 2D canvas -- the frame belongs to the source's
+// cache and is only borrowed, so nothing here closes it or keeps it.
+function pixelOfFrame(frame) {
+  const { context } = canvasOf(frame.displayWidth, frame.displayHeight);
+  context.drawImage(frame, 0, 0);
+  const data = context.getImageData(frame.displayWidth / 2, frame.displayHeight / 2, 1, 1).data;
+  return [data[0], data[1], data[2]];
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+const BIG_WIDTH = 1920;
+const BIG_HEIGHT = 1080;
+
+// 1080p, which the production cap of 720 really does shrink, so the numbers below are a comparison
+// between two decodes that differ by something. Fewer frames than the small fixture because every
+// one of them is encoded in software on a machine with no GPU.
+async function makeBigFixture() {
+  const { canvas, context } = canvasOf(BIG_WIDTH, BIG_HEIGHT);
+  const target = new R.BufferTarget();
+  const output = new R.Output({ format: new R.Mp4OutputFormat(), target });
+  const source = new R.CanvasSource(canvas, {
+    codec: "avc",
+    quality: new R.Quality({ bitrate: 8_000_000 }),
+  });
+  output.addVideoTrack(source, { frameRate: 30 });
+  await output.start();
+  for (let index = 0; index < BIG_FRAMES; index += 1) {
+    paintDetail(context, index);
+    await source.add(index / 30, 1 / 30);
+  }
+  await output.finalize();
+  return new File([target.buffer], "big.mp4", { type: "video/mp4" });
+}
+
+// Detail, on purpose. A flat plate compresses to nothing and decodes to nothing, and timing one
+// would say a 1080p decode is free. This is high frequency content that moves every frame, which
+// is what a camera hands an editor.
+function paintDetail(context, index) {
+  const gradient = context.createLinearGradient(index * 8, 0, BIG_WIDTH, BIG_HEIGHT);
+  gradient.addColorStop(0, "#204080");
+  gradient.addColorStop(0.5, "#f0c020");
+  gradient.addColorStop(1, "#801040");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, BIG_WIDTH, BIG_HEIGHT);
+  // A fixed pseudo-random walk, so every run encodes the same pictures and the timings compare.
+  let seed = 1;
+  for (let tile = 0; tile < 400; tile += 1) {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    const x = (seed % BIG_WIDTH) + index * 3;
+    const y = (seed >> 11) % BIG_HEIGHT;
+    context.fillStyle = `rgb(${seed % 255} ${(seed >> 8) % 255} ${(seed >> 16) % 255})`;
+    context.fillRect(x % BIG_WIDTH, y, 40, 40);
+  }
+}
+
+const BIG_FRAMES = 30;
+
+// Wall time for a step forward and for a step backwards, plus how much of the material the cache
+// still holds. The frame budget is deliberately small here: with the default budget a thirty frame
+// medium fits entirely, every step backwards is a cache hit, and the seek would be measured as
+// zero -- which is true and useless. One frame's worth forces the restart a real scrub over a long
+// medium pays for.
+async function timeDecode(hash, fidelity) {
+  const step = SECOND / 30;
+  const source = new R.VideoSource(fidelity);
+  const tight = new R.VideoSource(fidelity, BIG_WIDTH * BIG_HEIGHT * 4);
+  try {
+    await source.open(hash);
+    await source.frameAt(0);
+    const forward = [];
+    for (let index = 1; index < BIG_FRAMES; index += 1) {
+      const began = performance.now();
+      await source.frameAt(index * step);
+      forward.push(performance.now() - began);
+    }
+    const held = source.framesHeld;
+
+    await tight.open(hash);
+    await tight.frameAt((BIG_FRAMES - 1) * step);
+    const began = performance.now();
+    await tight.frameAt(CUT_AT * step);
+    return {
+      frameMs: Math.round(median(forward) * 100) / 100,
+      seekMs: Math.round((performance.now() - began) * 100) / 100,
+      held,
+    };
+  } finally {
+    source.close();
+    tight.close();
+  }
+}
+
 async function buildProject(webm) {
   const doc = new R.VideolaDocument(await R.createWasmBackend());
   const video = await R.importFile(await makeVideoFixture(webm), doc, R.probe);
@@ -152,7 +293,7 @@ async function buildProject(webm) {
       SECOND,
     ),
   );
-  return doc;
+  return { doc, video };
 }
 
 function worker() {
@@ -248,7 +389,140 @@ async function main() {
     chosenHasAudio = usable[0]?.audio === true;
   });
 
-  const doc = await buildProject(chosen?.id === "webm");
+  const built = await buildProject(chosen?.id === "webm");
+  const doc = built.doc;
+  const hash = R.mediaHash(built.video);
+
+  // Made before anything else touches this medium, because every check after it -- the exports,
+  // the stills, the ffmpeg pass over the written file -- runs with a proxy sitting on disk. That
+  // is the point: the proof that the export takes the original is only worth something if a proxy
+  // was there to be taken instead.
+  await test("a proxy is made from the original and shares its ruler", async () => {
+    const made = await R.buildProxy(hash, PROXY_HEIGHT);
+    check("a proxy was made", made !== undefined, true);
+    check("and it is on disk under the original's hash", await R.hasProxy(hash), true);
+    check(
+      "smaller than the medium it was made from",
+      (await R.proxySize(hash)) < (await R.mediaSize(hash)),
+      true,
+    );
+    const info = await R.probe(await R.proxyBlob(hash));
+    check("at the height it was asked for", info.video.height, PROXY_HEIGHT);
+    check("with the aspect ratio kept", info.video.width, PROXY_WIDTH);
+    // A proxy on another timebase would put every source time the core hands out on the wrong
+    // picture, and the error would be a frame here and a frame there rather than a broken preview.
+    check(
+      "on exactly the timebase of the original",
+      [info.video.fps.numerator, info.video.fps.denominator],
+      [30, 1],
+    );
+    check("and exactly as long", info.duration / SECOND, 1, 0.02);
+  });
+
+  // The resolution is what tells the two apart. A check that only asked "did it decode" would pass
+  // whichever file was opened.
+  await test("the preview decodes the proxy and the master the original", async () => {
+    const preview = new R.VideoSource("preview");
+    const master = new R.VideoSource("master");
+    try {
+      await preview.open(hash);
+      const small = await preview.frameAt(0);
+      check("the preview decodes at the proxy's resolution",
+        [small.displayWidth, small.displayHeight], [PROXY_WIDTH, PROXY_HEIGHT]);
+      check("and it is the same picture, only smaller", pixelOfFrame(small), colourAt(0), 14);
+
+      await master.open(hash);
+      const full = await master.frameAt(0);
+      check("the master decodes at the original's resolution",
+        [full.displayWidth, full.displayHeight], [WIDTH, HEIGHT]);
+      check("and the source reports the original's length", master.duration / SECOND, 1, 0.02);
+    } finally {
+      preview.close();
+      master.close();
+    }
+  });
+
+  await test("a missing proxy costs speed and nothing else", async () => {
+    await R.deleteProxy(hash);
+    const source = new R.VideoSource("preview");
+    try {
+      await source.open(hash);
+      const frame = await source.frameAt(0);
+      check("the preview falls back to the original",
+        [frame.displayWidth, frame.displayHeight], [WIDTH, HEIGHT]);
+      check("and shows the picture it always showed", pixelOfFrame(frame), colourAt(0), 14);
+    } finally {
+      source.close();
+    }
+    check("and the proxy really was gone", await R.hasProxy(hash), false);
+    await R.buildProxy(hash, PROXY_HEIGHT);
+  });
+
+  await test("switching to the originals is not a promise but a different decode", async () => {
+    R.useProxies(false);
+    const source = new R.VideoSource("preview");
+    try {
+      await source.open(hash);
+      const frame = await source.frameAt(0);
+      check("the preview decodes at the original's resolution",
+        [frame.displayWidth, frame.displayHeight], [WIDTH, HEIGHT]);
+    } finally {
+      source.close();
+      R.useProxies(true);
+    }
+  });
+
+  // The budgets, measured rather than asserted about, and measured on material big enough for the
+  // measurement to mean anything: 1080p, which the production cap of 720 really does shrink. The
+  // 160x120 fixture above decodes in a tenth of a millisecond either way, and a comparison between
+  // two numbers that small says nothing about a camera file.
+  await test("the budgets, on material the cap really applies to", async () => {
+    const big = await makeBigFixture();
+    const bigHash = await R.contentHash(big);
+    await R.putMedia(bigHash, big);
+    const made = await R.buildProxy(bigHash);
+    check("a proxy was made at the production cap", made?.height, R.PROXY_MAX_HEIGHT);
+
+    const proxied = await timeDecode(bigHash, "preview");
+    const plain = await timeDecode(bigHash, "master");
+
+    measured.proxyFrameMs = proxied.frameMs;
+    measured.originalFrameMs = plain.frameMs;
+    measured.proxySeekMs = proxied.seekMs;
+    measured.originalSeekMs = plain.seekMs;
+    measured.framesHeldOnProxy = proxied.held;
+    measured.framesHeldOnOriginal = plain.held;
+    measured.framesWithin720p = R.framesWithin(1280, 720);
+    measured.framesWithin1080p = R.framesWithin(1920, 1080);
+    measured.framesWithin4K = R.framesWithin(3840, 2160);
+    measured.proxyBytes = made?.bytes;
+    measured.originalBytes = big.size;
+
+    checkAtMost("a preview frame off the proxy arrives inside the frame budget",
+      proxied.frameMs, R.FRAME_BUDGET_MS);
+    checkAtMost("and a step backwards inside the seek budget", proxied.seekMs, R.SEEK_BUDGET_MS);
+    checkAtLeast("the cache holds a scrub's worth of proxy frames", proxied.held,
+      R.MIN_CACHED_FRAMES);
+    // The one comparison the whole feature rests on. Both numbers are wall time in this browser,
+    // on the same pictures, one file apart.
+    check("the proxy is not slower to decode than the material it came from",
+      proxied.frameMs <= plain.frameMs, true);
+    check("and it is smaller on disk", made.bytes < big.size, true);
+  });
+
+  // From here on the proxy is a lie about the material. Nothing that writes a file may read it.
+  await R.putProxy(hash, await makePoisonedProxy());
+
+  await test("the poisoned proxy is what the preview now shows", async () => {
+    const source = new R.VideoSource("preview");
+    try {
+      await source.open(hash);
+      check("so the plant really is in the decode path",
+        pixelOfFrame(await source.frameAt(0)), POISON, 14);
+    } finally {
+      source.close();
+    }
+  });
 
   await test("a one second export comes back as a file", async () => {
     const seen = [];
@@ -498,9 +772,16 @@ async function report() {
     method: "POST",
     body: JSON.stringify({
       results,
+      measured,
       fileName: chosen?.id === "webm" ? "export.webm" : "export.mp4",
       expected: {
         size: [WIDTH, HEIGHT],
+        // What the first frame of the file has to be. The original's ramp starts here; the proxy
+        // on disk while this was written is a flat plate of another colour entirely, so ffmpeg
+        // reading this number is an outside reader saying which file the export decoded.
+        firstPixel: colourAt(0),
+        notPixel: POISON,
+        proxySize: [PROXY_WIDTH, PROXY_HEIGHT],
         frameRate: "30/1",
         frames: OUTPUT_FRAMES,
         seconds: OUTPUT_FRAMES / 30,

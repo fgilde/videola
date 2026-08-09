@@ -56,6 +56,12 @@ export class VideoSource {
     return this.#cache.bytesHeld();
   }
 
+  // What the frame budget buys on this material: the same cache holds nine times as many frames of
+  // a 720p proxy as of the 4K it was made from, and that number is only readable from here.
+  get framesHeld(): number {
+    return this.#cache.framesHeld();
+  }
+
   get duration(): Time {
     return this.#duration;
   }

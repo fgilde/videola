@@ -131,10 +131,31 @@ function toneStrength(path, hertz) {
   return (first * first + second * second - c * first * second) / samples.length;
 }
 
+// The first frame decoded back to raw RGB by ffmpeg. The written file's resolution says nothing
+// about which file the export read -- the encoder is told the output size either way -- but the
+// picture does: a proxy carries different pixels, and this is an outside reader saying which ones
+// are in there.
+function firstPixel(path, [width, height]) {
+  const raw = execFileSync(
+    "ffmpeg",
+    ["-v", "error", "-i", path, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+    { maxBuffer: 64 * 1024 * 1024 },
+  );
+  const centre = 3 * (Math.floor(height / 2) * width + Math.floor(width / 2));
+  return [raw[centre], raw[centre + 1], raw[centre + 2]];
+}
+
 function ffmpegChecks(path, expected) {
   const checks = [];
   const add = (name, got, want) =>
     checks.push({ name, ok: JSON.stringify(got) === JSON.stringify(want), got, want });
+  const addNear = (name, got, want, slack) =>
+    checks.push({
+      name,
+      ok: got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= slack),
+      got,
+      want,
+    });
   let report;
   try {
     report = inspect(path);
@@ -154,6 +175,18 @@ function ffmpegChecks(path, expected) {
     Math.round(expected.seconds * 100),
   );
   add("ffmpeg decodes every frame back", report.decoded.trim(), "");
+  // The one that matters for proxies. A proxy of this medium was on disk while the file was
+  // written, at half its height and painted a colour that appears nowhere in the material. If the
+  // export had read it, this pixel would be that colour.
+  if (expected.firstPixel !== undefined) {
+    const pixel = firstPixel(path, expected.size);
+    addNear("the picture in the file is the original's, not the proxy's", pixel,
+      expected.firstPixel, 16);
+    add("and nothing of the proxy reached it",
+      pixel.every((value, index) => Math.abs(value - expected.notPixel[index]) > 16), true);
+    add("while the proxy on disk was another size entirely",
+      [video?.width, video?.height].join("x") !== expected.proxySize.join("x"), true);
+  }
   // The independent reader on the one thing our own demuxer is not asked about: a subtitle track
   // written beside the picture rather than drawn into it. A player has to find it, not us.
   if (expected.subtitles === true) {
@@ -232,6 +265,11 @@ try {
   ]);
 
   const results = [...page.results];
+  // Printed whether the run passed or failed: a budget that only says yes or no hides how close it
+  // came, and these are the numbers the performance claims are made of.
+  for (const [name, value] of Object.entries(page.measured ?? {})) {
+    console.log(`measured ${name}: ${value}`);
+  }
   if (state.file === null) {
     results.push({ name: "the export produced a file", ok: false, got: null, want: "bytes" });
   } else {
