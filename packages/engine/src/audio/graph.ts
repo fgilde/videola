@@ -1,4 +1,10 @@
-import { timeToSeconds } from "@videola/core";
+import {
+  consumedBetween,
+  consumedSource,
+  speedRateAt,
+  SPEED_TRACK,
+  timeToSeconds,
+} from "@videola/core";
 import { mediaHash, peaks } from "@videola/media";
 
 import type {
@@ -265,16 +271,21 @@ export class AudioGraph {
     automate(gain.gain, envelope(clip, clipStart), contextTime);
     const node = this.#ctx.createBufferSource();
     node.buffer = buffer;
-    node.playbackRate.value = clip.speed.rate;
     node.connect(gain).connect(bus);
-    // Offset and duration are measured in the buffer's own time, which runs at the playback rate
-    // relative to the timeline -- a clip at half speed consumes half a second of source per
-    // second of timeline.
-    const skipped = Math.max(0, timeToSeconds(projectTime - clip.start));
+    // An AudioBufferSourceNode reads its buffer at the running integral of `playbackRate`, and that
+    // is the same integral `sourceTimeAt` takes for the picture. Handing the platform the rate
+    // curve is therefore not an approximation of the mapping -- it is the mapping, computed on the
+    // audio thread. A ramp that moved the picture and not the sound would be the failure this
+    // replaces; here there is no second place for it to happen.
+    automate(node.playbackRate, ratePoints(clip, contextTime, projectTime), contextTime);
+    // Offset and duration are measured in the buffer's own time, which under a ramp is no longer a
+    // multiple of the timeline's -- so both come from the core's own mapping rather than from a
+    // rate times a span.
+    const from = Math.max(clip.start, projectTime);
     node.start(
       Math.max(contextTime, contextTime + timeToSeconds(clip.start - projectTime)),
-      skipped * clip.speed.rate,
-      timeToSeconds(end - Math.max(clip.start, projectTime)) * clip.speed.rate,
+      timeToSeconds(consumedBetween(clip, clip.start, from)),
+      timeToSeconds(consumedBetween(clip, from, end)),
     );
     this.#live.push(node, gain);
     this.#playing.push(node);
@@ -351,6 +362,22 @@ function sampleTimes(track: readonly Keyframe[]): Time[] {
   return times;
 }
 
+// The rate curve as automation corners. Without a ramp it is one value held, which is what the
+// static rate always was.
+//
+// ponytail: the corners are `sampleTimes`'s, so a `linear` or `hold` segment comes out exact -- the
+// platform's ramp between two corners is the same trapezoid the core integrates -- while an `ease`
+// segment is a polyline of CURVE_STEPS through the curve, a fraction of a millisecond adrift over a
+// second of ramp. Raise CURVE_STEPS if that ever shows against a sample.
+function ratePoints(clip: Clip, contextTime: number, projectTime: Time): Point[] {
+  const track = clip.keyframes?.[SPEED_TRACK] ?? [];
+  if (track.length === 0) return [{ at: contextTime, value: clip.speed.rate }];
+  return sampleTimes(track).map((at) => ({
+    at: contextTime + timeToSeconds(at - projectTime),
+    value: speedRateAt(clip, at),
+  }));
+}
+
 // A hold reads as a ramp between two equal values, so the whole envelope is one list of corners
 // and `automate` never has to know which kind of segment it is walking through.
 function envelope(clip: Clip, clipStart: number): Point[] {
@@ -414,6 +441,11 @@ export function hasAudibleClips(project: Project): boolean {
   return audibleClips(project).some(({ clip }) => audibleHash(clip, library) !== undefined);
 }
 
+// The range that has to be decoded, which under a ramp is no longer the duration times a rate. It
+// comes from the core's own `consumedSource` for the same reason the schedule's offsets do: a
+// buffer shorter than the ramp consumes ends in silence partway through the clip, and nothing else
+// here would report it. The cache key above is built from this, so a ramp that changes the range
+// decodes a new buffer rather than reusing one cut for a different speed.
 function outPoint(clip: Clip): Time {
-  return clip.inPoint + Math.round(clip.duration * clip.speed.rate);
+  return clip.inPoint + consumedSource(clip);
 }

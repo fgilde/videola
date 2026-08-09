@@ -73,23 +73,72 @@ export function sourceTimeAt(clip: Clip, at: Time): Time | undefined {
   return clip.speed.reverse ? clip.inPoint + consumedSource(clip) - offset : clip.inPoint + offset;
 }
 
+// How much source a clip spends between two instants on the timeline. `consumedSource` is this
+// asked for the whole clip; the audio graph asks it for the part still to play, and gets a buffer
+// offset that is the very source time the picture is drawn from rather than a second computation
+// that happens to agree.
+export function consumedBetween(clip: Clip, from: Time, to: Time): Time {
+  return sourceOffset(clip, to - clip.start) - sourceOffset(clip, from - clip.start);
+}
+
 // `Clip::source_offset`. A constant rate makes this a multiplication; a rate track makes it the
 // area under that track, and that is the whole of what a speed ramp is -- project time maps to
 // source time through an integral, not through a factor.
 function sourceOffset(clip: Clip, delta: Time): Time {
-  const area = integrate(clip.keyframes[SPEED_TRACK] ?? [], clip.start, clip.start + delta);
-  return Math.round(area ?? delta * clip.speed.rate);
+  const track = ramp(clip);
+  if (track === undefined) return Math.round(delta * clip.speed.rate);
+  return Math.round(integrate(track, clip.start, clip.start + delta));
 }
 
-// `keyframe::integrate`, flick for flick. `undefined` where the track cannot be integrated exactly
-// -- a bezier key or a value that is not a number -- and the caller then falls back to the static
-// rate, the same as the core does. Both shapes are refused at the load boundary, so this only
-// answers `undefined` for a project a later version wrote.
-function integrate(track: readonly Keyframe[], from: Time, to: Time): number | undefined {
-  if (track.length === 0) return undefined;
+// The rate track, if it is one this build can read. A bezier key has no exact area and a value that
+// is not a number has none at all; both are refused at the load boundary and by the command layer,
+// so a track turned away here was written by a later version -- and the clip then runs at its static
+// rate rather than at a guess. `speedRateAt` and `sourceOffset` ask through this one gate, so the
+// rate the sound runs at and the rate the picture runs at are never decided differently.
+function ramp(clip: Clip): readonly Keyframe[] | undefined {
+  // Optional access on a field the type says is always there: a `Clip` reaches this from JSON the
+  // core normalised *and* from callers that build one by hand, and the audio path never read
+  // `keyframes` at all before this. Missing, the throw lands inside an async decode and comes out
+  // as a transport that never starts rather than as an error anyone can see.
+  const track = clip.keyframes?.[SPEED_TRACK];
+  if (track === undefined || track.length === 0) return undefined;
   for (const keyframe of track) {
     if (keyframe.interp === "bezier" || keyframe.value.kind !== "float") return undefined;
   }
+  return track;
+}
+
+// The rate the ramp reads at an instant: the curve `integrate` takes the area under. The audio graph
+// needs it because an AudioBufferSourceNode reads its buffer at the running integral of
+// `playbackRate` -- so handing the platform this curve is not an approximation of the mapping, it is
+// the mapping, computed by the audio thread instead of by us.
+export function speedRateAt(clip: Clip, at: Time): number {
+  const track = ramp(clip);
+  if (track === undefined) return clip.speed.rate;
+  const first = track[0]!;
+  const last = track[track.length - 1]!;
+  if (at <= first.time) return rateOf(first);
+  if (at >= last.time) return rateOf(last);
+  let right = 0;
+  while (right < track.length && track[right]!.time <= at) right += 1;
+  const left = track[right - 1]!;
+  const next = track[right]!;
+  const span = next.time - left.time;
+  if (span <= 0 || left.interp === "hold") return rateOf(left);
+  return (
+    rateOf(left) + (rateOf(next) - rateOf(left)) * ease(left.interp, (at - left.time) / span)
+  );
+}
+
+// `easeArea` is this function's integral. Changing one without the other makes the rate the sound
+// runs at and the rate the picture runs at two different curves, which is exactly the failure the
+// whole of this file exists to prevent.
+function ease(interp: Interp, s: number): number {
+  return interp === "ease" ? s * s * (3 - 2 * s) : s;
+}
+
+// `keyframe::integrate`, flick for flick, for a track `ramp` has already vouched for.
+function integrate(track: readonly Keyframe[], from: Time, to: Time): number {
   if (to <= from) return 0;
   let total = 0;
   let cursor = from;

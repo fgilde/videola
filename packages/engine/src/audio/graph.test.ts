@@ -1,4 +1,4 @@
-import { timeToSeconds } from "@videola/core";
+import { consumedBetween, consumedSource, timeToSeconds } from "@videola/core";
 import { OfflineAudioContext } from "node-web-audio-api";
 import { describe, expect, it, vi } from "vitest";
 
@@ -907,5 +907,120 @@ describe("a compound clip in the audio graph", () => {
     ]);
 
     expect(hasAudibleClips(nested)).toBe(true);
+  });
+});
+
+// The signal is a ramp, so a sample says which source position is being read -- the audio equivalent
+// of the pixel harness's one-colour-per-frame video. That is what lets these runs assert the sound
+// follows the *same* integral the picture does rather than merely that it moves.
+//
+// A speed change that moved the picture and left the sound behind would be a half-feature, so every
+// expectation below is computed from `consumedBetween` in the core rather than written out: if the
+// two ever part company, these fail without anyone having to guess the new number.
+describe("AudioGraph, speed ramps", () => {
+  const rateKeys = (keys: [number, number, string][]): Record<string, unknown> => ({
+    speed: keys.map(([seconds, rate, interp]) => ({
+      time: Math.round(seconds * SECOND),
+      value: { kind: "float", value: rate },
+      interp,
+    })),
+  });
+
+  const ramped = (keys: [number, number, string][], reverse = false): Clip =>
+    clip({
+      duration: 2 * SECOND,
+      speed: { rate: 1, reverse, preservePitch: true },
+      keyframes: rateKeys(keys) as Clip["keyframes"],
+    });
+
+  // Where the buffer's own ramp stands when the clip has spent `consumed` of its range.
+  const expected = (subject: Clip, seconds: number): number => {
+    const spent = consumedBetween(subject, subject.start, Math.round(seconds * SECOND));
+    const whole = consumedSource(subject);
+    return subject.speed.reverse ? (whole - spent) / whole : spent / whole;
+  };
+
+  it("reads its source by the area under the rate, not by the rate", async () => {
+    const subject = ramped([
+      [0, 0.5, "linear"],
+      [2, 2, "linear"],
+    ]);
+    const ctx = context(2);
+    const out = await render(ctx, ramp(ctx), project([track("A1", [subject])]));
+
+    // Halfway through, a proportional reading would be at 0.5 of the range; the integral puts it at
+    // 0.35. The gap is what the whole of this feature is.
+    expect(expected(subject, 1)).toBeCloseTo(0.35, 3);
+    for (const seconds of [0.25, 0.5, 1, 1.5, 1.75]) {
+      expect(at(out, seconds)).toBeCloseTo(expected(subject, seconds), 2);
+    }
+  });
+
+  // The two axes crossing: a ramp *and* backwards. The head opens on the far end of a range whose
+  // size the ramp itself decided, and the sound has to walk back through it at the ramp's own pace.
+  it("runs a ramp backwards over the range the ramp itself sized", async () => {
+    const subject = ramped(
+      [
+        [0, 0.5, "linear"],
+        [2, 2, "linear"],
+      ],
+      true,
+    );
+    const ctx = context(2);
+    const out = await render(ctx, ramp(ctx), project([track("A1", [subject])]));
+
+    expect(at(out, 0.02)).toBeGreaterThan(0.97);
+    for (const seconds of [0.25, 0.5, 1, 1.5, 1.75]) {
+      expect(at(out, seconds)).toBeCloseTo(expected(subject, seconds), 2);
+    }
+  });
+
+  // A frame hold is a rate of zero, and the sound has to stand still with the picture rather than
+  // carry on underneath it.
+  it("stands still where the rate reads zero", async () => {
+    const subject = ramped([
+      [0, 1, "hold"],
+      [1, 0, "hold"],
+    ]);
+    const ctx = context(2);
+    const out = await render(ctx, ramp(ctx), project([track("A1", [subject])]));
+
+    expect(consumedSource(subject)).toBe(SECOND);
+    for (const seconds of [1.2, 1.5, 1.9]) {
+      expect(at(out, seconds)).toBeCloseTo(at(out, 1.05), 2);
+    }
+  });
+
+  // Entering mid-ramp is the seam the offset arithmetic lives on: the buffer offset is no longer a
+  // rate times a span, so a transport started in the middle would open at the wrong sample.
+  it("enters a ramp in the middle at the source position the timeline says", async () => {
+    const subject = ramped([
+      [0, 0.5, "linear"],
+      [2, 2, "linear"],
+    ]);
+    const ctx = context(1);
+    const out = await render(ctx, ramp(ctx), project([track("A1", [subject])]), {
+      projectTime: SECOND,
+      contextTime: 0,
+    });
+
+    expect(out[0]).toBeCloseTo(expected(subject, 1), 2);
+    for (const seconds of [0.25, 0.5, 0.75]) {
+      expect(at(out, seconds)).toBeCloseTo(expected(subject, 1 + seconds), 2);
+    }
+  });
+
+  // The decoded range is the ramp's own doing now. Too short a buffer would end the clip in silence
+  // partway through, which no other assertion here would notice.
+  it("decodes the whole range the ramp consumes", async () => {
+    const subject = ramped([
+      [0, 2, "linear"],
+      [2, 2, "linear"],
+    ]);
+    const ctx = context(2);
+    const out = await render(ctx, dc(ctx), project([track("A1", [subject])]));
+
+    expect(consumedSource(subject)).toBe(4 * SECOND);
+    expect(at(out, 1.98)).toBeCloseTo(1, 2);
   });
 });
