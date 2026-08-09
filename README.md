@@ -55,7 +55,8 @@ limiter as inserts ahead of the fader, fades as scheduled automation rather than
 arithmetic, waveforms drawn from the buffers the graph already decoded. EBU R128 loudness measured
 against the Tech 3341 conformance cases — and a button that normalises to a target and measures
 again rather than trusting the arithmetic. Ducking writes keyframes you can see and edit; silence
-detection cuts the pauses out.
+detection cuts the pauses out; beat detection puts a marker on every hit, found as a rise against a
+threshold that moves with the music rather than against a fixed one.
 
 **Colour.** Waveform, vectorscope and histogram read off the preview. Curves as a first-class
 parameter type, keyframable point by point, plus lift/gamma/gain wheels and `.cube` lookup tables
@@ -110,7 +111,7 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
+No motion blur and no noise reduction. Keyframe easing has a curve field with
 handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
 to its edge, and a curve cannot be copied from one parameter to another. The magnetic timeline is
 deliberately absent: the

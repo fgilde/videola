@@ -89,7 +89,8 @@ features:
   rotation, all resolved in the Rust core so the preview and the export read the same values.
 - **Colour and sound finishing** — waveform, vectorscope and histogram; curves, lift/gamma/gain and
   `.cube` lookup tables that travel inside the project file; a mixer with live meters,
-  EQ, compressor and limiter, loudness normalisation, ducking and silence detection.
+  EQ, compressor and limiter, loudness normalisation, ducking, silence detection and a marker on
+  every beat.
 - **Subtitles** — SRT and WebVTT in and out, on a caption track of their own.
 - **Classical editing** — in and out points, insert and overwrite, J/K/L, adjustment tracks, speed
   ramps whose time mapping is an integral rather than a multiplication.
@@ -106,7 +107,7 @@ features:
 
 ## What is not there yet
 
-No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
+No motion blur and no noise reduction. Keyframe easing has a curve field with
 handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
 to its edge, and a curve cannot be copied from one parameter to another. No on-canvas editor for a
 motion path: the geometry box moves, scales and turns a shot, but the trajectory a series of

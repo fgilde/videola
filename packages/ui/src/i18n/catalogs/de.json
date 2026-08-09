@@ -298,6 +298,7 @@
   "mixer.duckNone": "Spur wählen…",
   "mixer.cutSilence": "Stille schneiden",
   "mixer.cutSilenceOf": "Stille in {name} schneiden",
+  "mixer.markBeatsOf": "Beats von {name} markieren",
   "mixer.unmeasured": "Nicht gemessen",
   "panel.mixer": "Mischpult",
   "update.available": "Videola {version} ist verfügbar. Jetzt installieren?",

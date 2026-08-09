@@ -25,6 +25,8 @@ const OUTLINED = {
   // the difference a reader sees at 16 px -- a hole in the ring is not one.
   lock: "M8 10.5V7.5a4 4 0 0 1 8 0v3M6.2 10.5h11.6v9H6.2z",
   unlock: "M8 10.5V7.5a4 4 0 0 1 7.6-1.8M6.2 10.5h11.6v9H6.2z",
+  // A metronome: the case, and the arm leaning off centre. What "find the beat" is drawn as.
+  metronome: "M9.5 4h5l3.5 16H6zM6.8 15.5h10.4M12 17V6.5l4-1.8",
   // Three faders at three settings. A mixing desk is drawn this way everywhere it is drawn.
   mixer: "M7 4v5M7 15v5M12 4v9M12 19v1M17 4v1M17 11v9M4.5 12h5M9.5 16h5M14.5 8h5",
   trash: "M4.5 7h15M10 7V4.8h4V7M6.5 7l1 12.2h9L17.5 7M10.2 10.5v5.4M13.8 10.5v5.4",

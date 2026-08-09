@@ -298,6 +298,7 @@
   "mixer.duckNone": "Choose a track…",
   "mixer.cutSilence": "Cut silence",
   "mixer.cutSilenceOf": "Cut silence in {name}",
+  "mixer.markBeatsOf": "Mark the beats of {name}",
   "mixer.unmeasured": "Not measured",
   "panel.mixer": "Mixer",
   "update.available": "Videola {version} is available. Install it now?",

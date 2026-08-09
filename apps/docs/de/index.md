@@ -92,7 +92,8 @@ features:
   und Drehung, alles im Rust-Kern aufgelöst.
 - **Farb- und Ton-Feinschliff** — Wellenform, Vektorskop und Histogramm; Kurven, Lift/Gamma/Gain und
   `.cube`-Lookup-Tabellen, die in der Projektdatei mitreisen; Mischpult mit
-  Pegelanzeige, EQ, Kompressor und Limiter, Lautheits-Normalisierung, Ducking und Stille-Erkennung.
+  Pegelanzeige, EQ, Kompressor und Limiter, Lautheits-Normalisierung, Ducking, Stille-Erkennung und
+  einen Marker auf jedem Schlag.
 - **Untertitel** — SRT und WebVTT hinein und heraus, auf einer eigenen Untertitelspur.
 - **Klassischer Schnitt** — In- und Out-Punkte, Einfügen und Überschreiben, J/K/L,
   Anpassungsebenen, Geschwindigkeitsrampen mit Integral statt Multiplikation.
@@ -110,7 +111,7 @@ features:
 
 ## Was noch fehlt
 
-Kein Motion-Blur, keine Rauschreduktion, keine Beat-Erkennung. Die Keyframe-Glättung hat ein
+Kein Motion-Blur und keine Rauschreduktion. Die Keyframe-Glättung hat ein
 Kurvenfeld mit ziehbaren Anfassern, aber ein Anfasser außerhalb des Einheitsquadrats — das
 Überschwingen, aus dem ein Abprall gemacht ist — wird an dessen Rand geklemmt, und eine Kurve lässt
 sich nicht von einem Parameter auf einen anderen übertragen. Kein Editor für einen Bewegungspfad auf

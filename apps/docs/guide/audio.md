@@ -173,6 +173,29 @@ what is heard.
 Last on the right, set apart by a border, is the **master strip**: the project's own fader and the
 mastering chain. Everything to its left feeds it.
 
+## Beats
+
+The metronome symbol on a strip puts a marker on every beat of that track.
+
+What counts as a beat is a **rise**, not a level: the difference between one bucket of the envelope
+and the last, kept only where it is positive. A loud passage is not a beat and a quiet one is full
+of them, which is why the level itself cannot be the signal. The threshold moves with the music — a
+mean over the surrounding half second, times a factor — so the same hits are found in the quiet half
+of a track as in the loud half, which a fixed threshold cannot do. A rise also has to be larger than
+its immediate neighbours, so one hit is one beat rather than the three or four buckets its attack is
+spread over.
+
+It reads the envelope the waveform strip already holds, so it costs a few passes over a few thousand
+floats rather than a decode. The bucket-to-time step goes through the same inversion silence
+detection uses, so a clip on a speed ramp has its beats where they are heard rather than where they
+would be at a rate of one.
+
+Markers and not cuts, deliberately. Where the beat falls is a suggestion to cut against — the
+timeline snaps to markers — and a hundred cuts nobody asked for would be a hundred clips to take
+back one at a time. The whole press is one step in the history whatever it found.
+
+A steady tone has no onsets and yields nothing, which is the right answer rather than a failure.
+
 ## Level meters
 
 Every strip carries a meter, the track strips and the master alike, and every one of them is a real

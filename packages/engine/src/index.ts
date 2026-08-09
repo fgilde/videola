@@ -1,5 +1,7 @@
 export { audioEffect, audioEffectManifests } from "./audio/effects";
 export type { AudioEffectManifest, AudioEffectNode } from "./audio/effects";
+export { beatBuckets, beatMarkers, beatTimes, DEFAULT_BEATS } from "./audio/beats";
+export type { BeatOptions } from "./audio/beats";
 export { DEFAULT_DETECT, gapsBetween, loudSpans, mergeSpans } from "./audio/detect";
 export type { DetectOptions, Span } from "./audio/detect";
 export { DEFAULT_DUCK, DUCK_EFFECT, DUCK_PARAM, duckCommands, duckCorners, speechSpans } from "./audio/ducking";

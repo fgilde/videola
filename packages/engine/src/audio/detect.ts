@@ -128,7 +128,8 @@ function tidy(spans: readonly Span[], options: DetectOptions, from: Time, to: Ti
 //
 // A clip without a ramp lands on the same answer all the same: for a constant rate the integral is
 // the proportional point, so the bisection converges on exactly that.
-function projectTimeAt(clip: Clip, consumed: Time): Time {
+/** Which moment on the timeline a clip has consumed this much of its source by. */
+export function projectTimeAt(clip: Clip, consumed: Time): Time {
   let low = clip.start;
   let high = clip.start + clip.duration;
   while (high - low > 1) {

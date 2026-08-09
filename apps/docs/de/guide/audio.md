@@ -187,6 +187,31 @@ Zahl an einem Filter ankommt. Was dasteht, ist also das, was zu hören ist.
 Ganz rechts, durch einen Rahmen abgesetzt, steht der **Summenzug**: der Regler des Projekts und die
 Mastering-Kette. Alles links davon läuft dort hinein.
 
+## Beats
+
+Das Metronom-Symbol auf einem Streifen setzt auf jeden Schlag dieser Spur einen Marker.
+
+Ein Beat ist hier ein **Anstieg**, kein Pegel: die Differenz zwischen einem Hüllkurven-Eimer und dem
+vorigen, und nur, wo sie positiv ist. Eine laute Passage ist kein Beat und eine leise steckt voller
+davon — deshalb kann der Pegel selbst nicht das Signal sein. Die Schwelle wandert mit der Musik, als
+Mittelwert über die umliegende halbe Sekunde mal einem Faktor, also werden in der leisen Hälfte einer
+Spur dieselben Schläge gefunden wie in der lauten; eine feste Schwelle kann das nicht. Ein Anstieg
+muss außerdem größer sein als seine unmittelbaren Nachbarn, damit ein Schlag ein Beat ist und nicht
+die drei oder vier Eimer, über die sein Einschwingen verteilt ist.
+
+Gelesen wird die Hüllkurve, die der Wellenform-Streifen ohnehin hält; das kostet ein paar Durchläufe
+über ein paar tausend Fließkommazahlen statt eines Dekodiervorgangs. Der Schritt vom Eimer zur Zeit
+läuft über dieselbe Umkehrung wie die Stille-Erkennung, ein Clip auf einer Geschwindigkeitsrampe
+bekommt seine Beats also dort, wo sie zu hören sind.
+
+Marker und keine Schnitte, mit Absicht. Wo der Schlag fällt, ist ein Vorschlag zum Schneiden — die
+Zeitleiste rastet an Markern ein — und hundert ungefragte Schnitte wären hundert Clips, die einzeln
+zurückzunehmen sind. Der ganze Tastendruck ist ein Schritt in der Historie, gleich was er gefunden
+hat.
+
+Ein gleichbleibender Ton hat keine Einsätze und liefert nichts. Das ist die richtige Antwort, kein
+Fehlschlag.
+
 ## Pegelanzeigen
 
 Jeder Streifen trägt eine Pegelanzeige, die Spurstreifen wie der Summenzug, und jede davon ist ein

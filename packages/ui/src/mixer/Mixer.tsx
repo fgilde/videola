@@ -74,6 +74,7 @@ export interface MixerProps {
   normalizing?: boolean;
   onDuck?: (music: string, speech: string) => void;
   onCutSilence?: (track: string) => void;
+  onMarkBeats?: (track: string) => void;
   onSeek?: (time: Time) => void;
 }
 
@@ -103,6 +104,7 @@ export function Mixer({
   normalizing,
   onDuck,
   onCutSilence,
+  onMarkBeats,
   onSeek,
 }: MixerProps): ReactElement {
   const { t } = useI18n();
@@ -133,6 +135,7 @@ export function Mixer({
             metering={metering}
             onDuck={onDuck}
             onCutSilence={onCutSilence}
+            onMarkBeats={onMarkBeats}
           />
         ))}
         {/* Last, where a desk puts it: everything to its left feeds it. */}
@@ -164,6 +167,7 @@ function Strip({
   metering,
   onDuck,
   onCutSilence,
+  onMarkBeats,
 }: {
   track: Track;
   others: readonly Track[];
@@ -173,6 +177,7 @@ function Strip({
   metering?: boolean;
   onDuck?: (music: string, speech: string) => void;
   onCutSilence?: (track: string) => void;
+  onMarkBeats?: (track: string) => void;
 }): ReactElement {
   const { t } = useI18n();
 
@@ -226,7 +231,7 @@ function Strip({
         >
           S
         </button>
-        <Tools track={track} others={others} onDuck={onDuck} onCutSilence={onCutSilence} />
+        <Tools track={track} others={others} onDuck={onDuck} onCutSilence={onCutSilence} onMarkBeats={onMarkBeats} />
       </div>
       <Chain {...chain} target={on.track(track.id)} authored={track.effects} />
     </div>
@@ -252,14 +257,16 @@ function Tools({
   others,
   onDuck,
   onCutSilence,
+  onMarkBeats,
 }: {
   track: Track;
   others: readonly Track[];
   onDuck?: (music: string, speech: string) => void;
   onCutSilence?: (track: string) => void;
+  onMarkBeats?: (track: string) => void;
 }): ReactElement | null {
   const { t } = useI18n();
-  if (onDuck === undefined && onCutSilence === undefined) return null;
+  if (onDuck === undefined && onCutSilence === undefined && onMarkBeats === undefined) return null;
 
   return (
     <>
@@ -285,6 +292,15 @@ function Tools({
           icon="scissors"
           label={t("mixer.cutSilenceOf", { name: track.name })}
           onClick={() => onCutSilence(track.id)}
+        />
+      )}
+      {/* Markers and not cuts: where the beat falls is a suggestion to cut against, and a hundred
+          cuts nobody asked for are a hundred clips to take back one at a time. */}
+      {onMarkBeats !== undefined && (
+        <IconButton
+          icon="metronome"
+          label={t("mixer.markBeatsOf", { name: track.name })}
+          onClick={() => onMarkBeats(track.id)}
         />
       )}
     </>

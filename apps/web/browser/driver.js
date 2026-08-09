@@ -944,6 +944,24 @@ async function announce() {
       Number(q('[data-testid="mixer-master"] input[type=range]').value) !== 1, true);
     check("normalising raised nothing", banner(), "");
 
+    // Beats onto the ruler. The fixture's sound is a steady tone -- measured, its envelope sits at
+    // 0.13 for the whole two seconds -- and a steady tone has no onsets, so what this asks of a
+    // real browser is that the button is wired, that it survives being pressed on material with
+    // nothing to find, and that it invents nothing. That it *does* find the beats of a metronome,
+    // including in the quiet half of a track that gets quieter, is measured in the unit tests where
+    // the material can be made to order.
+    const marked = () => {
+      const button = all("button").find((node) => node.textContent.trim().startsWith("Marker ("));
+      return Number(button?.textContent.match(/\d+/)?.[0] ?? -1);
+    };
+    const markersBefore = marked();
+    // On the strip that carries the material, not on the first strip there is: a subtitle track
+    // has a fader like any other and no samples at all behind it.
+    q('[aria-label^="Beats von V1"]').click();
+    await sleep(400);
+    check("marking the beats raised nothing", banner(), "");
+    check("and a steady tone is not a beat", marked(), markersBefore);
+
     // Cutting the silence out of a track. The fixture is dense material, so what is asserted is
     // the shape of the result rather than a count: whatever it took out, it left every clip that
     // survived where it stood -- a gap and not a ripple -- and it raised nothing.
@@ -957,6 +975,7 @@ async function announce() {
       all("[data-clip-id]").every((clip) => before.includes(clip.offsetLeft)), true);
     check("the strip that was cut is still there",
       q('[data-track-id="' + track + '"]') !== null, true);
+
   }
 
   // Everything a phone has to be able to do: bring material in, arrange it with a finger, and

@@ -32,6 +32,7 @@ import {
   audioEffectManifests,
   AudioGraph,
   AudioSource,
+  beatMarkers,
   clipQuad,
   cutSilence,
   duckCommands,
@@ -621,6 +622,25 @@ export function App(): ReactElement {
       try {
         const key = `mixer-cut-silence-${trackId}-${(actionSequence += 1)}`;
         cutSilence(doc, trackId, silentSpans(track, analysisPeaks()), key);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [analysisPeaks, doc, project, reportError],
+  );
+
+  // Every beat on a track becomes a marker, in one step of the history: a beat is a suggestion to
+  // cut against, and a hundred cuts nobody asked for would be a hundred clips to take back one at
+  // a time. The same coalescing key across all of them, so one press is one undo.
+  const markBeats = useCallback(
+    (trackId: string) => {
+      if (doc === undefined || project === undefined) return;
+      const track = project.timeline.tracks.find((candidate) => candidate.id === trackId);
+      if (track === undefined) return;
+      try {
+        const key = `mixer-beats-${trackId}-${(actionSequence += 1)}`;
+        for (const command of beatMarkers(track, analysisPeaks())) doc.dispatch(command, key);
         setError(undefined);
       } catch (err) {
         reportError("error.actionFailed", err);
@@ -1325,6 +1345,7 @@ export function App(): ReactElement {
                   normalizing={measuring}
                   onDuck={duck}
                   onCutSilence={cutQuiet}
+                  onMarkBeats={markBeats}
                   onSeek={seek}
                 />
               )}
