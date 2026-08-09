@@ -827,6 +827,7 @@ async function announce() {
     // first frame of real material is a fade from black about as often as it is a picture.
     forward(20);
     await until("a picture in the preview", () => (luma() > 8 ? true : null), 60000);
+    onScreen = luma();
 
     pointer("pointerdown", q("[data-clip-id]"));
     pointer("pointerup", q("[data-clip-id]"));
@@ -861,6 +862,22 @@ async function announce() {
       ["mask-ellipse", "mask-rect"].join());
     setValue(q(".v-fx__search"), "");
     await sleep(150);
+
+    // The claim the tiles rest on, and the one the pixel checks in the engine cannot make: that the
+    // picture a tile is drawn from is *this* frame. An application that quietly fell back to the
+    // generated reference would still show fifteen different effects, and every one of them would be
+    // about somebody else's footage.
+    const before = pixelsOf(tileOf("brightness"));
+    labelled("Schließen").click();
+    await until("the shelf to close", () => (shelf() === null ? true : null));
+    forward(25);
+    await repainted();
+    await openShelf("Effekte durchsuchen");
+    const after = pixelsOf(tileOf("brightness"));
+    let moved = 0;
+    for (let i = 0; i < before.length; i += 1) moved += Math.abs(before[i] - after[i]);
+    checkAtLeast("the tiles are drawn from the frame at the playhead, not from a stand-in",
+      Math.round(moved / before.length * 100) / 100, 0.5);
 
     check("the library raised nothing", banner(), "");
     // Left open on purpose: the screenshot is taken when the virtual budget runs out, and what it
