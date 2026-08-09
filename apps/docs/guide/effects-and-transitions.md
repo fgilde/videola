@@ -741,9 +741,10 @@ project actually carries an effect.
 - **One mask of each shape per clip.** `effect.add` treats a repeated type as a no-op, so a second
   rectangle needs the chain keyed by effect id rather than by effect type.
 - **No editor for a motion path yet.** The core resolves the curve and the renderer draws it, but
-  the points are placed by command rather than dragged on the preview. The manifest now has a
-  parameter kind, so a `vec2` row is a smaller step than it was; what a path really wants is a handle
-  on the picture rather than two more numbers in a panel.
+  the points are placed by command rather than dragged on the preview. The geometry box is half the
+  answer — a handle on the picture, checked against the compositor's own matrix — and what is left is
+  drawing the trajectory the position keys trace and letting a key be grabbed on it, which is one
+  overlay reading a keyframe track rather than a resolved transform.
 - **Motion blur** needs more than one moment per output frame, which means more than one decoded
   frame per output frame. That is a change to the gather, not to a shader — see below.
 - **A `.cube` with a domain other than 0 to 1 is refused**, and so is a one-dimensional one. Both

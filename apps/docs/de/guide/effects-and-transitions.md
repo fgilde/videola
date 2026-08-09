@@ -774,10 +774,10 @@ Projekt wirklich einen Effekt trägt.
 - **Eine Maske je Form und Clip.** `effect.add` behandelt einen wiederholten Typ als Nichtstun, ein
   zweites Rechteck braucht also die Kette nach Effekt-Id statt nach Effekttyp.
 - **Noch kein Editor für einen Bewegungspfad.** Der Kern löst die Kurve auf und der Renderer
-  zeichnet sie, aber die Punkte werden per Kommando gesetzt statt in der Vorschau gezogen. Das
-  Manifest kennt jetzt eine Parametersorte, eine `vec2`-Zeile ist also ein kleinerer Schritt als
-  vorher; was ein Pfad eigentlich will, ist ein Griff im Bild und nicht zwei weitere Zahlen in einer
-  Leiste.
+  zeichnet sie, aber die Punkte werden per Kommando gesetzt statt in der Vorschau gezogen. Der
+  Geometrie-Rahmen ist die halbe Antwort — ein Griff im Bild, gegen die Matrix des Compositors
+  geprüft — und was fehlt, ist die Bahn der Positions-Keys zu zeichnen und einen Key darauf greifbar
+  zu machen: ein Overlay, das eine Keyframe-Spur liest statt einer aufgelösten Transformation.
 - **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
   dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
 - **Eine `.cube` mit einem Definitionsbereich außer 0 bis 1 wird abgelehnt**, eine eindimensionale
