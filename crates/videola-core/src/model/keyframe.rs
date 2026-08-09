@@ -432,7 +432,10 @@ mod tests {
             assert!(value >= previous, "the shape fell back at step {step}");
             previous = value;
         }
-        assert!((previous - 1.0).abs() < 1e-3, "it has to arrive, got {previous}");
+        assert!(
+            (previous - 1.0).abs() < 1e-3,
+            "it has to arrive, got {previous}"
+        );
     }
 
     // The four values the pixel harness draws a quad at, pinned here because this is where the
@@ -456,7 +459,11 @@ mod tests {
         assert_eq!(at(0.0), -16.0);
         assert_eq!(at(4.0), 16.0);
         assert!((at(2.0) - -14.545_43).abs() < 0.01, "midpoint {}", at(2.0));
-        assert!((at(3.0) - -11.914_12).abs() < 0.01, "three quarters {}", at(3.0));
+        assert!(
+            (at(3.0) - -11.914_12).abs() < 0.01,
+            "three quarters {}",
+            at(3.0)
+        );
     }
 
     const SECOND: f64 = FLICKS_PER_SECOND as f64;

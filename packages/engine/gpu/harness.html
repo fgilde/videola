@@ -626,10 +626,13 @@ test("isolation is paid for by the level, and only where it is used", () => {
   check("eight levels of faded compounds cost eight surfaces",
     framebuffersFor(scene, ["clp_leaf"]), 8);
   // And the counterweight: eight targets would also be asked for by a compositor that drew nothing.
-  // 0.9 to the eighth is 0.4305 of a white picture over black, rounded to eight bits at every one
-  // of the eight surfaces on the way out.
+  // 0.9 to the eighth is 0.4305 of a white picture over black, which is 109.8 -- and it is rounded
+  // to eight bits at every one of the eight surfaces on the way out. Which side of the half each
+  // of those roundings lands on is the driver's business: ANGLE reads 110 where SwiftShader reads
+  // 109. As a one-element list it is compared with the slack this harness already keeps for a
+  // colour, which is what the claim is about -- the picture arrives, not the last bit of it.
   check("and the picture still arrives through all eight",
-    rendered(64, 64, scene, ["clp_leaf"], () => [255, 255, 255, 255])(32, 32)[0], 109);
+    [rendered(64, 64, scene, ["clp_leaf"], () => [255, 255, 255, 255])(32, 32)[0]], [109], 1);
 });
 
 // Two clips meeting edge to edge under one blurred layer. Composed first, the pair is opaque
