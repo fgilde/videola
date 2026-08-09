@@ -1042,6 +1042,18 @@ test("a wheel's tint reaches only its own end of the range", () => {
     [255, 255, 191, 255]);
 });
 
+// A tint is a direction and not a coverage, so its alpha may not change what it does. It arrives
+// premultiplied like every colour that reaches a shader here, and a shader that used it as it came
+// would read a tint at half alpha as a weaker and differently balanced one -- which is a control
+// whose behaviour depends on a number no wheel has.
+test("a wheel's tint means the same whatever alpha it carries", () => {
+  const grey = [128, 128, 128, 255];
+  const opaque = through("colorWheels", { gainTint: [1, 0.5, 0, 1] }, grey).at(2, 2);
+  const thin = through("colorWheels", { gainTint: [1, 0.5, 0, 0.5] }, grey).at(2, 2);
+  check("a warm highlight tint at full alpha", opaque, [160, 128, 96, 255]);
+  check("and the same tint at half alpha is the same tint", thin, opaque);
+});
+
 // Lift adds a constant, and premultiplication would have scaled that constant by the coverage.
 // Working on the premultiplied value comes back at 124 rather than 92.
 test("the wheels read the colour, not the colour times its alpha", () => {

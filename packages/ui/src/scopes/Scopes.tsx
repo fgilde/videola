@@ -159,7 +159,9 @@ function drawWaveform(canvas: HTMLCanvasElement | null, reading: ScopeReadingLik
   const surf = surface(canvas);
   if (surf === undefined || canvas === null) return;
   const { context, width, height } = surf;
-  if (reading === undefined || reading.measured === 0 || reading.columns === 0) return;
+  // No second guard for an empty reading: with nothing counted the busiest cell is nought and
+  // `brightness` answers nought for every cell, so the loop below draws nothing on its own.
+  if (reading === undefined || reading.columns === 0) return;
 
   const levels = reading.histogram.luma.length;
   const [r, g, b] = accent(canvas);
@@ -209,7 +211,7 @@ function drawVectorscope(
     context.fillText(target.name, left + target.x * side, top + target.y * side - 9);
   }
 
-  if (reading === undefined || reading.measured === 0) return;
+  if (reading === undefined) return;
   const plane = Math.round(Math.sqrt(reading.vectorscope.length));
   if (plane <= 0) return;
   const [r, g, b] = accent(canvas);
@@ -249,7 +251,7 @@ function drawHistogram(canvas: HTMLCanvasElement | null, reading: ScopeReadingLi
   const surf = surface(canvas);
   if (surf === undefined) return;
   const { context, width, height } = surf;
-  if (reading === undefined || reading.measured === 0) return;
+  if (reading === undefined) return;
 
   const levels = reading.histogram.luma.length;
   const busiest = Math.max(

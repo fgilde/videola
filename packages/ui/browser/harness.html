@@ -785,13 +785,19 @@ test("the waveform reads across the frame", function () {
   drawScopes(slopedReading());
   const canvas = scopeCanvas("Wellenform");
   const half = Math.floor(canvas.width / 2);
-  const tall = Math.floor(canvas.height / 2);
-  const leftLow = inked(canvas, { x: 0, y: tall, w: half, h: tall });
-  const rightHigh = inked(canvas, { x: half, y: 0, w: half, h: tall });
-  const leftHigh = inked(canvas, { x: 0, y: 0, w: half, h: tall });
-  checkAtLeast("the dark half of the frame draws low", leftLow, 20);
-  checkAtLeast("the bright half draws high", rightHigh, 20);
-  check("and the bright trace is not over the dark half as well", leftHigh < leftLow, true);
+  const quarter = Math.floor(canvas.height / 4);
+  const low = canvas.height - quarter;
+  // The bottom quarter is the tones under about 64, and only the left of the frame reaches them;
+  // the top quarter is over about 190, and only the right does. A trace drawn from the histogram
+  // instead would put the whole spread under every column and fill all four of these.
+  checkAtLeast("the dark half of the frame draws low",
+    inked(canvas, { x: 0, y: low, w: half, h: quarter }), 10);
+  check("and the bright half has nothing down there",
+    inked(canvas, { x: half, y: low, w: half, h: quarter }), 0);
+  checkAtLeast("the bright half draws high",
+    inked(canvas, { x: half, y: 0, w: half, h: quarter }), 10);
+  check("and the dark half has nothing up there",
+    inked(canvas, { x: 0, y: 0, w: half, h: quarter }), 0);
 });
 
 // The graticule turns a cloud into a reading, and it is drawn whether or not there is anything to
