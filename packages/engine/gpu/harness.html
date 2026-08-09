@@ -58,8 +58,12 @@ function overPage(canvas, pageColor, x, y) {
 
 // The resolved parameters come from the Rust core in the running application; here they are
 // handed in, because what these checks are about is the pixel the value produces.
-function draw(compositor, scene, at, frames, params, transforms) {
-  compositor.render(scene, at, frames, params ?? new Map(), transforms ?? new Map());
+// `luts` is the same kind of thing one level along: the tables come from OPFS in the running
+// application, and here they are handed in, because what these checks are about is the pixel a
+// table produces.
+function draw(compositor, scene, at, frames, params, transforms, luts) {
+  compositor.render(scene, at, frames, params ?? new Map(), transforms ?? new Map(),
+    luts ?? new Map());
 }
 
 function floats(entries) {
@@ -68,9 +72,9 @@ function floats(entries) {
 }
 
 // The same batch, with the kind read off the shape of the value the way a project file spells it:
-// a number is a float, four numbers a colour, a list of pairs a curve. What the core resolves is a
-// ParamValue whatever the kind, so a helper that could only write floats could never drive the two
-// parameters that are not floats.
+// a number is a float, four numbers a colour, a list of pairs a curve, a string the name of a
+// library asset. What the core resolves is a ParamValue whatever the kind, so a helper that could
+// only write floats could never drive the three parameters that are not floats.
 function resolved(entries) {
   return new Map(entries.map(([id, values]) => [id,
     new Map(values.map(([key, value]) => [key, kinded(value)]))]));
@@ -78,6 +82,7 @@ function resolved(entries) {
 
 function kinded(value) {
   if (typeof value === "number") return { kind: "float", value: value };
+  if (typeof value === "string") return { kind: "choice", value: value };
   return Array.isArray(value[0]) ? { kind: "curve", value: value } : { kind: "color", value: value };
 }
 
@@ -809,7 +814,8 @@ function through(type, values, pixel, over) {
   const { canvas, compositor, scene } = rig(size, size, spec.background || "#000000",
     [{ effects, t: spec.t || {}, blend: spec.blend }], size, size);
   const f = frame(size, size, typeof pixel === "function" ? pixel : () => pixel);
-  draw(compositor, scene, 0, new Map([["clp_0", f]]), resolved([["eff_1", Object.entries(values)]]));
+  draw(compositor, scene, 0, new Map([["clp_0", f]]), resolved([["eff_1", Object.entries(values)]]),
+    undefined, spec.luts);
   f.close();
   return { canvas, at: reader(compositor.readPixels(), size, size) };
 }
@@ -1329,6 +1335,114 @@ test("the wheels cannot push a channel past its own alpha", () => {
   check("a half-transparent grey driven over the top",
     through("colorWheels", { liftAmount: 0.25, gainAmount: 0.5 }, [160, 160, 160, 128]).at(2, 2),
     [128, 128, 128, 255]);
+});
+
+// The library asset the tables below are handed in under. A media id in the running application;
+// here it is only the key the compositor looks a texture up by.
+const TABLE = "med_" + "d".repeat(64);
+
+// Red and blue traded, at the smallest grid the format allows. Red runs fastest, so this is the
+// eight corners of the unit cube with the first and third channel of each swapped.
+const SWAP_CUBE = ["LUT_3D_SIZE 2", "0 0 0", "0 0 1", "0 1 0", "0 1 1",
+  "1 0 0", "1 0 1", "1 1 0", "1 1 1"].join("\n");
+
+// The identity at three entries an axis, generated the way the file would be written. Three rather
+// than two because a wrong texture coordinate is invisible at two: the corners are the ends of the
+// range, and every addressing mistake still lands on them.
+function identityCube(size) {
+  const rows = ["LUT_3D_SIZE " + size];
+  for (let b = 0; b < size; b += 1) {
+    for (let g = 0; g < size; g += 1) {
+      for (let r = 0; r < size; r += 1) {
+        rows.push([r, g, b].map((v) => (v / (size - 1)).toFixed(6)).join(" "));
+      }
+    }
+  }
+  return rows.join("\n");
+}
+
+// One clip through the lookup shader with a table handed in. `cube` is the file's text, parsed by
+// the same parser a dropped `.cube` goes through -- so what is measured here is the whole road from
+// characters in a file to a pixel on the screen.
+function graded(cube, pixel, values, over) {
+  const spec = Object.assign({}, over || {},
+    { luts: cube === null ? new Map() : new Map([[TABLE, R.parseCube(cube)]]) });
+  return through("lut", Object.assign({ table: TABLE }, values || {}), pixel, spec);
+}
+
+// The non-distinguishing test, kept honest by the two beside it: an identity table proves the
+// addressing and the filtering and nothing about whether the table is read at all, so the swap
+// below is what says a table does something.
+test("an identity table leaves the picture alone", () => {
+  const at = graded(identityCube(3), [64, 137, 205, 255]).at;
+  check("a colour comes back as it went in", at(2, 2), [64, 137, 205, 255], 2);
+  // Mid tones, not corners. NEAREST filtering would snap each of these onto a grid point -- 64
+  // would come back 0 and 205 would come back 255 -- so this is also where trilinear is measured.
+  check("and so does mid grey", graded(identityCube(3), [128, 128, 128, 255]).at(2, 2),
+    [128, 128, 128, 255], 2);
+  check("and a quarter tone, which is between two grid points",
+    graded(identityCube(3), [64, 64, 64, 255]).at(2, 2), [64, 64, 64, 255], 2);
+});
+
+// The half-texel offset, and nothing else, is what this measures. A table of n entries has its
+// first entry at the *centre* of the first texel; sampling at the raw value instead reads a quarter
+// tone of a 3-cube at 0.125 rather than 0.25, which is 32 rather than 64 on an identity table.
+test("a table is addressed at the centres of its entries", () => {
+  const at = graded(identityCube(3), (x, y) => [64, 192, 32, 255]).at;
+  check("three tones between the grid points come back unmoved", at(2, 2), [64, 192, 32, 255], 2);
+});
+
+test("a table that trades two channels does exactly that", () => {
+  check("red comes back blue", graded(SWAP_CUBE, [255, 0, 0, 255]).at(2, 2), [0, 0, 255, 255], 2);
+  check("blue comes back red", graded(SWAP_CUBE, [0, 0, 255, 255]).at(2, 2), [255, 0, 0, 255], 2);
+  check("green is left where it was", graded(SWAP_CUBE, [0, 255, 0, 255]).at(2, 2),
+    [0, 255, 0, 255], 2);
+});
+
+// A colour mapping belongs on the colour, not on the colour times its coverage. Working on the
+// premultiplied value puts this at 64 instead of 128 -- the table would be asked about a colour the
+// picture does not contain, and every soft edge would come back a different hue from its middle.
+test("a table reads the colour, not the colour times its alpha", () => {
+  check("half-covered red traded for blue over black",
+    graded(SWAP_CUBE, [255, 0, 0, 128]).at(2, 2), [0, 0, 128, 255], 2);
+});
+
+// The failure that made a lookup table worth putting off: a sampler on a unit with nothing bound
+// reads as opaque black, so every one of these would be a black clip rather than an ungraded one.
+test("a grade with no table draws the picture it was given", () => {
+  const picture = [64, 137, 205, 255];
+  check("nothing chosen at all",
+    through("lut", { table: "" }, picture).at(2, 2), picture, 2);
+  check("a table named but not loaded",
+    through("lut", { table: TABLE }, picture).at(2, 2), picture, 2);
+  check("a table whose file could not be read", graded(null, picture).at(2, 2), picture, 2);
+});
+
+// The knob beside every LUT in every grading tool, and the reason this effect has a slider at all.
+test("strength mixes the graded picture back towards the one it came from", () => {
+  check("half way between red and blue",
+    graded(SWAP_CUBE, [255, 0, 0, 255], { amount: 0.5 }).at(2, 2), [128, 0, 128, 255], 2);
+  check("no strength is the untouched picture",
+    graded(SWAP_CUBE, [255, 0, 0, 255], { amount: 0 }).at(2, 2), [255, 0, 0, 255], 2);
+});
+
+// Two grades in one chain, one after the other. The compositor keeps one texture per table and
+// rebinds the third unit per pass; a single remembered binding would put the first table under
+// both passes and the second one would do nothing.
+test("two tables in one chain each get their own", () => {
+  const OTHER = "med_" + "e".repeat(64);
+  const effects = [
+    { id: "eff_1", effectType: "lut", enabled: true, params: {}, keyframes: {} },
+    { id: "eff_2", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+  ];
+  const { compositor, scene } = rig(4, 4, "#000000", [{ effects }], 4, 4);
+  const f = frame(4, 4, () => [255, 0, 0, 255]);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]),
+    resolved([["eff_1", [["table", TABLE], ["amount", 1]]], ["eff_2", [["amount", 1]]]]),
+    undefined, new Map([[TABLE, R.parseCube(SWAP_CUBE)], [OTHER, R.parseCube(identityCube(2))]]));
+  f.close();
+  check("the grade runs and the pass after it does not disturb the binding",
+    reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255], 2);
 });
 
 // Wheel and opacity, crossed. Opacity is applied after the chain, so a lifted black clip at half
@@ -2050,6 +2164,44 @@ test("every tile in the browser shows its own effect at work", () => {
     // Eight levels averaged over every channel of every pixel. Below that a tile is the same frame
     // with a rounding error on it, which is a promise the browser cannot keep.
     check(`${manifest.id} changes the picture it is drawn from`, apart(drawn, untouched) > 8, true);
+  }
+  preview.dispose();
+});
+
+// One table, evaluated on the CPU: trilinear between the eight surrounding grid points, which is
+// what the hardware filter does with a `sampler3D`.
+function lookup(table, rgb) {
+  const n = table.size;
+  const pos = rgb.map((v) => (Math.min(Math.max(v, 0), 255) / 255) * (n - 1));
+  const out = [0, 0, 0];
+  for (let corner = 0; corner < 8; corner += 1) {
+    let weight = 1;
+    const index = [0, 1, 2].map((axis) => {
+      const low = Math.min(Math.floor(pos[axis]), n - 1);
+      const up = (corner >> axis) & 1;
+      weight *= up ? pos[axis] - low : 1 - (pos[axis] - low);
+      return up ? Math.min(low + 1, n - 1) : low;
+    });
+    if (weight === 0) continue;
+    const at = ((index[2] * n + index[1]) * n + index[0]) * 4;
+    for (let c = 0; c < 3; c += 1) out[c] += weight * table.rgba[at + c];
+  }
+  return out;
+}
+
+// "Different from the source" is not enough for this one, and the counter-check proved it: a tile
+// whose sampler is bound to the wrong unit reads an empty one, comes out opaque black, and is very
+// different from the source indeed. So the tile is measured against the table the manifest names,
+// evaluated here rather than on the GPU -- a promise with cover is the tile showing *that* look.
+test("the lookup tile is the table the manifest names, not merely a different picture", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const drawn = tile(preview, R.effect("lut"), picture);
+  const source = flat(picture);
+  const table = R.previewLut(R.effect("lut"));
+  for (const [x, y] of [[10, 10], [32, 20], [50, 45]]) {
+    check(`the tile at ${x},${y} is the source colour through the table`,
+      drawn(x, y).slice(0, 3), lookup(table, source(x, y).slice(0, 3)), 4);
   }
   preview.dispose();
 });

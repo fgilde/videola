@@ -1,11 +1,19 @@
 // Everything the export harness needs, in one bundle. The page below drives the real thing: the
 // real core over the wasm boundary, the real OPFS store, the real worker, the real encoders.
-export { captionCues, cmd, createWasmBackend, frameDuration, VideolaDocument } from "@videola/core";
+export {
+  captionCues,
+  cmd,
+  createWasmBackend,
+  frameDuration,
+  on,
+  VideolaDocument,
+} from "@videola/core";
 export {
   contentHash,
   deleteProxy,
   hasProxy,
   importFile,
+  importLut,
   mediaHash,
   mediaSize,
   putMedia,

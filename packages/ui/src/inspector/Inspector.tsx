@@ -30,7 +30,17 @@ import { useI18n, type Locale } from "../i18n/useI18n";
 import { POSITION_TRACK } from "../timeline/keyframes";
 import { findClip } from "../timeline/useTimelineGestures";
 import { CurveRow, shownCurve } from "./CurveRow";
-import { ColorRow, keyframeAt, Keys, ParamRow, shownColor, shownValue } from "./ParamRow";
+import {
+  ColorRow,
+  keyframeAt,
+  Keys,
+  LutRow,
+  ParamRow,
+  shownColor,
+  shownLut,
+  shownValue,
+} from "./ParamRow";
+import type { LutChoice } from "./ParamRow";
 import { TextPanel } from "./TextPanel";
 import "./Inspector.css";
 
@@ -72,10 +82,18 @@ export interface CurveParamDescriptor {
   default: readonly (readonly [number, number])[];
 }
 
+/** A colour lookup table, named by the id of a library asset of kind `lut`. */
+export interface LutParamDescriptor {
+  kind: "lut";
+  key: string;
+  name: Record<Locale, string>;
+}
+
 export type ParamDescriptor =
   | EffectParamDescriptor
   | ColorParamDescriptor
-  | CurveParamDescriptor;
+  | CurveParamDescriptor
+  | LutParamDescriptor;
 
 export interface InspectorProps {
   project: Project;
@@ -141,6 +159,7 @@ export function Inspector({
             playhead={playhead}
             effects={effects}
             effectParamsAt={effectParamsAt}
+            tables={lutTables(project)}
             send={dispatch}
             onSeek={onSeek}
             onBrowse={onBrowse}
@@ -506,11 +525,20 @@ export function chosenTransition(type: string, current: Transition | undefined):
   };
 }
 
+// The tables a grade can name: the library's own entries and nowhere else. A `.cube` becomes one
+// by being imported like any other medium, which is what puts it in here.
+function lutTables(project: Project): LutChoice[] {
+  return project.library
+    .filter((asset) => asset.kind === "lut")
+    .map((asset) => ({ id: asset.id, name: asset.originalName }));
+}
+
 function Effects({
   clip,
   playhead,
   effects,
   effectParamsAt,
+  tables,
   send,
   onSeek,
   onBrowse,
@@ -519,6 +547,7 @@ function Effects({
   playhead: Time;
   effects: readonly EffectDescriptor[];
   effectParamsAt: (at: Time) => EffectParamSnapshot;
+  tables: readonly LutChoice[];
   send: Send;
   onSeek: (time: Time) => void;
   onBrowse: (only: 1 | 2) => void;
@@ -563,6 +592,24 @@ function Effects({
                     inside={inside}
                     send={send}
                     onSeek={onSeek}
+                  />
+                );
+              }
+              if (param.kind === "lut") {
+                return (
+                  <LutRow
+                    key={param.key}
+                    label={param.name[locale]}
+                    value={shownLut(held)}
+                    tables={tables}
+                    onChange={(next) =>
+                      send(
+                        cmd.effectSetParam(on.clip(clip.id), authored.effectType, param.key, {
+                          kind: "choice",
+                          value: next,
+                        }),
+                      )
+                    }
                   />
                 );
               }

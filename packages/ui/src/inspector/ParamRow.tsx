@@ -264,6 +264,76 @@ function toHex(value: readonly [number, number, number, number]): string {
   return `#${digits}`;
 }
 
+export interface LutChoice {
+  id: string;
+  name: string;
+}
+
+export interface LutRowProps {
+  label: string;
+  /** The library asset the grade names, or the empty string for none. */
+  value: string;
+  /** Every table in the project's library, which is the only place one can come from. */
+  tables: readonly LutChoice[];
+  onChange: (id: string) => void;
+}
+
+/**
+ * The one row here that picks a file rather than a number.
+ *
+ * A picker over what the library holds, and nothing else: a table is imported like every other
+ * medium, so the way to get one into this list is to drop a `.cube` on the editor. When the list is
+ * empty the control says that instead of showing an empty menu -- a select with one option that
+ * means "no" is a control that cannot do anything, and this panel already refuses those elsewhere.
+ *
+ * There are no keyframe switches. `ParamValue` will not interpolate between two names, so a
+ * keyframe on this key could only ever hold -- and a row of switches that can only produce a hold
+ * promises an animation the renderer will not give.
+ *
+ * A name the library no longer holds -- what a removed medium leaves behind -- shows as nothing
+ * chosen, and that is the platform's own doing: a `select` whose value matches no option has a
+ * selected index of -1 and reports the empty string. A guard of ours for it was written, then
+ * deleted, because a counter-check could not make it fail.
+ */
+export function LutRow({ label, value, tables, onChange }: LutRowProps): ReactElement {
+  const { t } = useI18n();
+  const id = useId();
+  return (
+    <div className="v-param">
+      <label className="v-param__label" htmlFor={id}>
+        {label}
+      </label>
+      {tables.length === 0 ? (
+        <span className="v-inspector__note">{t("inspector.lutNone")}</span>
+      ) : (
+        <select
+          id={id}
+          className="v-param__select"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">{t("inspector.lutUnset")}</option>
+          {tables.map((table) => (
+            <option key={table.id} value={table.id}>
+              {table.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What a row is allowed to show for a resolved table: the same guard `lutMedia` applies in the
+ * engine before the compositor looks a texture up. Repeated rather than imported for the same
+ * reason `shownValue` is -- and a picker standing on a name the renderer ignores would be a lie
+ * about the one thing this row exists to display.
+ */
+export function shownLut(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 // The alpha comes from what was there rather than from the field, which has none of its own.
 function fromHex(hex: string, alpha: number): readonly [number, number, number, number] {
   const channel = (at: number): number => Number.parseInt(hex.slice(at, at + 2), 16) / 255;

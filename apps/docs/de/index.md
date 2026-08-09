@@ -87,7 +87,8 @@ features:
   Farbkurven und Lift/Gamma/Gain-Räder, ausgewählt in einem Browser, dessen jede Kachel der Shader
   des Effekts über dem aktuellen Bild ist. Jeder Parameter keyframebar, auch Position, Skalierung
   und Drehung, alles im Rust-Kern aufgelöst.
-- **Farb- und Ton-Feinschliff** — Wellenform, Vektorskop und Histogramm; Mischpult mit
+- **Farb- und Ton-Feinschliff** — Wellenform, Vektorskop und Histogramm; Kurven, Lift/Gamma/Gain und
+  `.cube`-Lookup-Tabellen, die in der Projektdatei mitreisen; Mischpult mit
   Pegelanzeige, EQ, Kompressor und Limiter, Lautheits-Normalisierung, Ducking und Stille-Erkennung.
 - **Untertitel** — SRT und WebVTT hinein und heraus, auf einer eigenen Untertitelspur.
 - **Klassischer Schnitt** — In- und Out-Punkte, Einfügen und Überschreiben, J/K/L,
@@ -106,11 +107,12 @@ features:
 
 ## Was noch fehlt
 
-Kein Motion-Blur, kein LUT-Import, keine Rauschreduktion, keine Beat-Erkennung, und kein
-Kurveneditor für die Keyframe-Glättung — ein Projekt mit Bezier-Anfassern behält sie und behält
-seine Form, aber ziehen kann sie hier niemand. `track.locked` wird nirgends durchgesetzt. Die
-Magnetic-Timeline fehlt bewusst, und das [Kapitel zum Schneiden](/de/guide/editing) begründet warum.
-FFmpeg ist nicht eingebunden; der Export nutzt die Encoder des Browsers.
+Kein Motion-Blur, keine Rauschreduktion, keine Beat-Erkennung, und kein Kurveneditor für die
+Keyframe-Glättung — ein Projekt mit Bezier-Anfassern behält sie und behält seine Form, aber ziehen
+kann sie hier niemand. Kein Editor für einen Bewegungspfad auf dem Bild. `track.locked` wird nirgends
+durchgesetzt. Die Magnetic-Timeline fehlt bewusst, und das
+[Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
+nutzt die Encoder des Browsers.
 
 Das [Architektur-Kapitel](/de/guide/architecture) hält Entscheidung für Entscheidung fest, welche
 Teile des Entwurfs gebaut und welche geplant sind.

@@ -24,6 +24,7 @@ import { clipHashes } from "../playback";
 import { Compositor } from "../render/compositor";
 import { createContext } from "../render/context";
 import { drawList, drawnClips } from "../render/draw-list";
+import { LutStore } from "../render/lut";
 import type { FrameSource } from "../playback";
 import { carriesSubtitles, container, SUBTITLE_CODEC } from "./format";
 import type { ExportFormat } from "./format";
@@ -150,6 +151,13 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   const hashes = clipHashes(request.project);
   const step = timeToSeconds(frameDuration(request.fps));
   const origin = request.frames[0]!.at;
+  // Read here, in the worker, out of the same OPFS entries the editor reads -- not carried across
+  // `postMessage` from a thread that already had them. The project the worker was handed names the
+  // tables by media id, and a media id is a file in the store, which is how the export gets the
+  // third texture unit without a transport of its own. Once, before the loop: the project does not
+  // change under an export.
+  const luts = new LutStore();
+  await luts.ensure(request.project);
   let index = 0;
   for (const frame of request.frames) {
     const pictures = await gatherPictures(pass, hashes, request.project, frame);
@@ -162,6 +170,7 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
       pictures,
       frame.params,
       frame.transforms,
+      luts.tables(),
     );
     await pass.video.add(timeToSeconds(frame.at - origin), step);
     index += 1;

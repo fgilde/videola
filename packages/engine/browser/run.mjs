@@ -61,7 +61,7 @@ function body(request) {
 }
 
 function serve() {
-  const state = { file: null };
+  const state = { file: null, graded: null };
   let deliver = () => undefined;
   const reported = new Promise((resolve) => {
     deliver = resolve;
@@ -72,6 +72,10 @@ function serve() {
     if (request.method === "POST") {
       void body(request).then((bytes) => {
         if (path === "/file") state.file = bytes;
+        // A second file, exported through a lookup table. It is kept apart from the first because
+        // the two answer different questions: that one is a well-formed file with sound and
+        // subtitles in it, this one is a colour.
+        else if (path === "/graded") state.graded = bytes;
         else deliver(JSON.parse(bytes.toString("utf8")));
         response.writeHead(204).end();
       });
@@ -143,6 +147,50 @@ function firstPixel(path, [width, height]) {
   );
   const centre = 3 * (Math.floor(height / 2) * width + Math.floor(width / 2));
   return [raw[centre], raw[centre + 1], raw[centre + 2]];
+}
+
+/**
+ * One pixel out of the middle of the first frame, decoded by ffmpeg and nothing else.
+ *
+ * This is where the lookup table stops being our own claim about our own file. The page already
+ * compares the export against a still rendered on its own thread, which proves the worker and the
+ * editor agree; a reader that shares no line of code with either says what the colour actually is.
+ * One frame, cropped to the middle, written out as raw RGB -- no container and no decoder of ours
+ * in the path. Two by two at an even offset rather than a single pixel: the file is yuv420p, where
+ * the chroma planes are half size, and a crop of one lands on a chroma plane of zero width.
+ */
+function centrePixel(path, width, height) {
+  const x = Math.floor(width / 2 / 2) * 2;
+  const y = Math.floor(height / 2 / 2) * 2;
+  const raw = execFileSync(
+    "ffmpeg",
+    ["-v", "error", "-i", path, "-vf", `crop=2:2:${x}:${y}`,
+      "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+    { maxBuffer: 1024 },
+  );
+  return [raw[0], raw[1], raw[2]];
+}
+
+// A lossy encode at this bitrate moves a flat colour by a few levels; the swap this measures moves
+// two channels by more than two hundred, so the slack cannot swallow the claim.
+function gradedChecks(path, expected) {
+  const want = expected.graded;
+  try {
+    const got = centrePixel(path, expected.size[0], expected.size[1]);
+    return [{
+      name: "ffmpeg reads the graded file's own pixel as the table's answer",
+      ok: got.every((channel, index) => Math.abs(channel - want[index]) <= 16),
+      got,
+      want,
+    }];
+  } catch (error) {
+    return [{
+      name: "ffmpeg reads the graded file",
+      ok: false,
+      got: `THREW ${String(error.message).slice(0, 300)}`,
+      want: "no throw",
+    }];
+  }
 }
 
 function ffmpegChecks(path, expected) {
@@ -279,6 +327,17 @@ try {
     writeFileSync(path, state.file);
     console.log(`wrote ${path} (${state.file.length} bytes)`);
     results.push(...ffmpegChecks(path, page.expected));
+  }
+
+  if (state.graded === null) {
+    results.push({ name: "the graded export produced a file", ok: false, got: null, want: "bytes" });
+  } else {
+    const out = join(tmpdir(), "videola-export");
+    mkdirSync(out, { recursive: true });
+    const path = join(out, `graded-${page.fileName}`);
+    writeFileSync(path, state.graded);
+    console.log(`wrote ${path} (${state.graded.length} bytes)`);
+    results.push(...gradedChecks(path, page.expected));
   }
 
   const failed = results.filter((result) => !result.ok);

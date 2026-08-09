@@ -62,8 +62,8 @@ tile is the effect's own shader over the frame at the playhead** — not a paint
 tile that failed to change the picture it was drawn from fails the build, which is what stops an
 effect from advertising itself with its own default value.
 
-Brightness, contrast, saturation, colour temperature, curves, colour wheels, vignette, blur, sharpen
-and chroma key. Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
+Brightness, contrast, saturation, colour temperature, curves, colour wheels, lookup tables,
+vignette, blur, sharpen and chroma key. Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
 masks with feather and invert; two masks in one chain intersect. A text generator with styling and
 in, out and loop animation.
 
@@ -80,7 +80,7 @@ with a finger as well as with a mouse. There is no curve editor yet: a project t
 handles keeps them and keeps its shape, but nothing here can drag one — see
 [Editing](./editing.md#the-keyframe-lane).
 
-Each effect's behaviour is measured against real pixels rendered by a real driver: 303 such checks
+Each effect's behaviour is measured against real pixels rendered by a real driver: 338 such checks
 run on every build, and every tile in the browser is one of them — a tile that failed to change the
 picture it was drawn from fails the build. A third-covered pixel over red must read 81, which is
 what premultiplied
@@ -100,6 +100,15 @@ exactly as it went in and only its brightness moves.
 **Colour wheels** — lift, gamma and gain — each with a tint and a strength, which is what the wheel
 and the ring on a real panel are. Lift says where black goes, gain says where white goes, and gamma
 bends what lies between without moving either end.
+
+**Lookup tables**: drop a `.cube` on the editor and pick it under the grade. The table joins the
+library like any other medium — content-addressed, so the same file imported into two projects is one
+file on disk, and packed into the `.videola`, so **a project that travels brings its grade with it**.
+A strength slider mixes the look back towards the picture it came from. The table is read against the
+picture as it stands, which is the right input for a display-referred look; a table authored for
+linear light expects its own input and will not be told otherwise. A one-dimensional `.cube` is
+refused by name, because that is a tone curve and the curves above already edit one with points you
+can drag afterwards.
 
 **Scopes**: a waveform, a vectorscope and a histogram, in a strip under the picture that a switch on
 the transport opens. They read the preview's own pixels, so what they show is what the export will

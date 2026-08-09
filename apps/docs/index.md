@@ -84,7 +84,8 @@ features:
   curves and lift/gamma/gain wheels, chosen from a browser whose every tile is that effect's own
   shader over the current frame. Every parameter keyframable, including a clip's position, scale and
   rotation, all resolved in the Rust core so the preview and the export read the same values.
-- **Colour and sound finishing** — waveform, vectorscope and histogram; a mixer with live meters,
+- **Colour and sound finishing** — waveform, vectorscope and histogram; curves, lift/gamma/gain and
+  `.cube` lookup tables that travel inside the project file; a mixer with live meters,
   EQ, compressor and limiter, loudness normalisation, ducking and silence detection.
 - **Subtitles** — SRT and WebVTT in and out, on a caption track of their own.
 - **Classical editing** — in and out points, insert and overwrite, J/K/L, adjustment tracks, speed
@@ -102,11 +103,11 @@ features:
 
 ## What is not there yet
 
-No motion blur, no LUT import, no noise reduction, no beat detection, and no curve editor for
-keyframe easing — a project carrying bezier handles keeps them and keeps its shape, but nothing here
-can drag one. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent,
-and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
-browser's own encoders.
+No motion blur, no noise reduction, no beat detection, and no curve editor for keyframe easing — a
+project carrying bezier handles keeps them and keeps its shape, but nothing here can drag one. No
+on-canvas editor for a motion path. `track.locked` is not enforced anywhere. The magnetic timeline is
+deliberately absent, and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the
+export uses the browser's own encoders.
 
 The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
 design are built and which are planned.

@@ -7,6 +7,8 @@ import {
   clampParam,
   effect,
   effectManifests,
+  lutMedia,
+  previewLut,
   previewValues,
 } from "./registry";
 import type { ColorParam, CurveParam, EffectParam } from "./registry";
@@ -70,13 +72,9 @@ describe("the effect registry", () => {
   it("declares a uniform of the right type for every parameter in the manifest", () => {
     for (const manifest of effectManifests()) {
       for (const param of manifest.params) {
-        const declaration =
-          param.kind === "color"
-            ? `uniform vec4 u_${param.key};`
-            : param.kind === "curve"
-              ? `uniform float u_${param.key}[${CURVE_SAMPLES}];`
-              : `uniform float u_${param.key};`;
-        expect(manifest.fragmentSource, `${manifest.id}.${param.key}`).toContain(declaration);
+        expect(manifest.fragmentSource, `${manifest.id}.${param.key}`).toContain(
+          declarationOf(param),
+        );
       }
       const second = manifest.fragmentSource.includes("uniform sampler2D u_second;");
       expect(second).toBe(manifest.inputs === 2);
@@ -190,7 +188,62 @@ describe("the effect registry", () => {
       expect(values.luma).toEqual(clampCurve(curve, curve.default));
     });
   });
+
+  describe("a lookup table parameter", () => {
+    const manifest = effect("lut")!;
+
+    // The whole reason this kind exists: 35937 triplets have no uniform to travel in, so the
+    // parameter must be kept out of the record that becomes uniforms rather than clamped into it.
+    it("is not a uniform, and is left out of the values a pass carries", () => {
+      expect(Object.keys(previewValues(manifest))).toEqual(["amount"]);
+    });
+
+    it("names a library asset, and nothing else counts as one", () => {
+      expect(lutMedia(`med_${"a".repeat(64)}`)).toBe(`med_${"a".repeat(64)}`);
+      expect(lutMedia(undefined)).toBe("");
+      expect(lutMedia(0.5)).toBe("");
+      expect(lutMedia([0, 0, 0, 1])).toBe("");
+    });
+
+    // The failure this effect was put off to avoid: a grading tile that shows the source picture
+    // is an effect promising something it cannot draw. The tile's table is real and goes through
+    // the real parser, so a broken parser takes the tile with it.
+    it("nominates a real table for its tile", () => {
+      const table = previewLut(manifest);
+      expect(table?.size).toBe(2);
+      expect(table?.rgba).toHaveLength(2 ** 3 * 4);
+      // Not the identity: black comes back lifted and tinted, white comes back warm.
+      expect([...table!.rgba.slice(0, 3)]).not.toEqual([0, 0, 0]);
+    });
+
+    it("has no table for an effect that declares none", () => {
+      expect(previewLut(effect("brightness")!)).toBeUndefined();
+    });
+
+    // The same guard every other kind gets on this seam, and it is not dead code: `preview` is
+    // typed `unknown`, so a manifest can put anything there.
+    it("draws its tile through the identity when the nominated table is not one", () => {
+      expect(previewLut({ ...manifest, preview: { table: "Kodak 2383" } })).toBeUndefined();
+      expect(previewLut({ ...manifest, preview: {} })).toBeUndefined();
+    });
+  });
 });
+
+// A table is the one kind whose declaration is not a uniform of a value type. `highp` is written
+// out because ESSL 3.00 gives `sampler3D` no default precision in a fragment shader, and a driver
+// that enforces that refuses to compile the shader at all -- on that driver only.
+function declarationOf(param: { kind?: string; key: string }): string {
+  switch (param.kind) {
+    case "color":
+      return `uniform vec4 u_${param.key};`;
+    case "curve":
+      return `uniform float u_${param.key}[${CURVE_SAMPLES}];`;
+    case "lut":
+      return `uniform highp sampler3D u_${param.key};`;
+    default:
+      return `uniform float u_${param.key};`;
+  }
+}
 
 function floats(params: readonly { kind?: string }[]): EffectParam[] {
   return params.filter(

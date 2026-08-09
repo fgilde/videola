@@ -6,6 +6,15 @@ const results = [];
 let chosen;
 let chosenHasAudio = false;
 let file = null;
+let gradedFile = null;
+
+// Red and blue traded, at the smallest grid the format allows. Red runs fastest, so these eight
+// rows are the corners of the unit cube with their first and third channel swapped -- and over a
+// grid of two, trilinear interpolation between swapped corners *is* the swap, exactly, for every
+// input. That is what gives the checks below an absolute number to compare against rather than
+// only two of our own pictures against each other.
+const SWAP_CUBE = ["LUT_3D_SIZE 2", "0 0 0", "0 0 1", "0 1 0", "0 1 1",
+  "1 0 0", "1 0 1", "1 1 0", "1 1 1"].join("\n");
 
 // Exact unless a tolerance is named, and a named tolerance compares numbers however deeply they
 // are nested. A comparison that decides for itself which rule to use lets a mismatch of strings
@@ -733,6 +742,74 @@ async function main() {
       beside.frames.length, OUTPUT_FRAMES);
   });
 
+  /**
+   * The one claim a lookup table can only make here: the file and the editor's own picture are the
+   * same grade.
+   *
+   * The two are drawn by two different threads out of two different stores. The export builds its
+   * `LutStore` inside the worker; the still builds one on this thread. Nothing about the table
+   * crosses `postMessage` -- the project names it by media id and each side reads `media/<hash>`
+   * out of OPFS for itself. If the worker ever failed to find it, its clip would come back
+   * ungraded through the identity table and the check below would read the source colour instead.
+   *
+   * ffmpeg is handed the file afterwards to read the same pixel a third time, out of anything of
+   * ours.
+   */
+  await test("a lookup table reaches the file, and the editor draws the same one", async () => {
+    const doc = new R.VideolaDocument(await R.createWasmBackend());
+    const video = await R.importFile(await makeVideoFixture(chosen?.id === "webm"), doc, R.probe);
+    // Through the real import: parsed, hashed, written to OPFS, named to the core. The worker finds
+    // it by that hash and by nothing else.
+    const table = await R.importLut(new File([SWAP_CUBE], "Swap.cube", { type: "" }), doc);
+    check("the table is in the library as a table",
+      doc.state.library.find((entry) => entry.id === table)?.kind, "lut");
+
+    doc.dispatch(R.cmd.trackAdd("video", "V1"));
+    const track = doc.state.timeline.tracks[0];
+    doc.dispatch(R.cmd.clipAdd(track.id, { kind: "media", media: video }, 0, SECOND));
+    const clip = doc.state.timeline.tracks[0].clips[0];
+    doc.dispatch(R.cmd.effectAdd(R.on.clip(clip.id), "lut"));
+    doc.dispatch(
+      R.cmd.effectSetParam(R.on.clip(clip.id), "lut", "table", { kind: "choice", value: table }),
+    );
+
+    const [r, g, b] = colourAt(0);
+    const swapped = [b, g, r];
+
+    const stills = await R.renderStills({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
+      times: [0],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+    const still = await readStill(stills[0], WIDTH / 2, HEIGHT / 2);
+    check("the editor's own picture is the source colour through the table",
+      still.pixel.slice(0, 3), swapped, 6);
+
+    const result = await R.startExport({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
+      options: options({ captions: "none" }),
+      createWorker: worker,
+    }).result;
+    gradedFile = result.bytes;
+
+    const { frames } = await readBack(result.bytes);
+    check("the file holds a frame for every output frame", frames.length, OUTPUT_FRAMES);
+    check("and its picture is the same grade the editor drew", frames[0].pixel, swapped, 14);
+    // The whole point, said as one number: the two paths do not merely each look graded, they agree.
+    check("preview and export are the same picture",
+      frames[0].pixel.map((c, index) => Math.abs(c - still.pixel[index]) < 16), [true, true, true]);
+    // And the counter-question. Without a table the clip would be the source colour, so this is
+    // what says the check above measures the grade rather than the fixture.
+    check("which is not the colour the material had", Math.abs(frames[0].pixel[0] - r) > 60, true);
+  });
+
   await test("cancelling mid-run leaves nothing behind", async () => {
     const handle = R.startExport({
       project: doc.state,
@@ -771,6 +848,7 @@ async function main() {
 // far faster than the encoders answer on their own threads, so the dump lands before the work does.
 async function report() {
   if (file !== null) await fetch("/file", { method: "POST", body: file });
+  if (gradedFile !== null) await fetch("/graded", { method: "POST", body: gradedFile });
   await fetch("/result", {
     method: "POST",
     body: JSON.stringify({
@@ -793,6 +871,9 @@ async function report() {
         audioCodec: chosen?.id === "webm" ? "opus" : "aac",
         hasAudio: chosenHasAudio,
         subtitles: true,
+        // What the graded file's centre pixel has to be, for the reader that shares no code with
+        // any of this: the fixture's first colour with red and blue traded.
+        graded: [colourAt(0)[2], colourAt(0)[1], colourAt(0)[0]],
       },
     }),
   });

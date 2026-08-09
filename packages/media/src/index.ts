@@ -8,6 +8,8 @@ export type {
   VideoTrackProbe,
 } from "./import";
 export { missingMedia, relinkMedia } from "./library";
+export { importLut, LUT_MIME, MAX_LUT_SIZE, parseCube } from "./lut";
+export type { LutTable } from "./lut";
 export {
   deleteMedia,
   deleteProxy,

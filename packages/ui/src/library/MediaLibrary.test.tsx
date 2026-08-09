@@ -126,6 +126,31 @@ describe("MediaLibrary", () => {
 
     expect(onRelink.mock.calls).toEqual([[gone.id]]);
   });
+
+  // A colour table is a library entry that is never a clip: no picture, no length, nothing a track
+  // could show. Both buttons are gone rather than disabled, because a disabled control still says
+  // "this could work here" -- and a table on the timeline would be a clip that draws nothing.
+  it("keeps a colour table off the timeline and shows it for what it is", () => {
+    const table = video("c", {
+      originalName: "Kodak.cube",
+      mime: "application/x-cube-lut",
+      kind: "lut",
+      duration: null,
+      width: null,
+      height: null,
+      fps: null,
+    });
+    const clip = video("a");
+    show([clip, table]);
+
+    expect(within(entry(table)).getByText("Kodak.cube")).toBeTruthy();
+    expect(within(entry(table)).getByText("Farbtabelle")).toBeTruthy();
+    // A length of zero beside a table would read as a table that is zero seconds long.
+    expect(within(entry(table)).queryByText(/00:00:/)).toBeNull();
+    expect(within(entry(table)).queryByRole("button", { name: "Auf die Zeitleiste" })).toBeNull();
+    // And the entry beside it is untouched, which is what says this is about the kind.
+    expect(within(entry(clip)).getByRole("button", { name: "Auf die Zeitleiste" })).toBeTruthy();
+  });
 });
 
 // A proxy costs minutes of a fan spinning. Which media have one, and which one the machine is busy

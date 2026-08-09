@@ -459,6 +459,44 @@ describe("the effect chain in the draw list", () => {
     expect(item.effects[0]?.values.amount).toBe(4);
   });
 
+  describe("a lookup table", () => {
+    const TABLE = `med_${"d".repeat(64)}`;
+    const graded = (): Effect => effect({ effectType: "lut", params: {} });
+    const chosen = (value: ParamValue): EffectParamSnapshot =>
+      new Map([["eff_1", new Map([["table", value]])]]);
+
+    // The id travels beside the uniforms rather than among them, because there is no uniform a
+    // table could be. The compositor reads it to pick the texture for the third unit.
+    it("travels as a name on the pass, not as a value in it", () => {
+      const item = only(
+        [clip({ effects: [graded()] })],
+        0,
+        chosen({ kind: "choice", value: TABLE }),
+      );
+
+      expect(item.effects).toEqual([{ effect: "lut", values: { amount: 1 }, lut: TABLE }]);
+    });
+
+    // Present and empty rather than absent: the compositor has to tell "this shader samples the
+    // third unit" from "this one never looks at it", or a grade with nothing chosen would read an
+    // unbound sampler and come out black.
+    it("is an empty name when nothing has been chosen", () => {
+      expect(only([clip({ effects: [graded()] })], 0).effects[0]?.lut).toBe("");
+    });
+
+    it("is not on a pass whose effect declares no table", () => {
+      expect(only([clip({ effects: [effect()] })], 0).effects[0]?.lut).toBeUndefined();
+    });
+
+    // The same rule every other kind gets here: a project file may carry any kind on any key, and
+    // a number is not a medium.
+    it("ignores a resolved value that is not the name of one", () => {
+      const item = only([clip({ effects: [graded()] })], 0, chosen({ kind: "float", value: 3 }));
+
+      expect(item.effects[0]?.lut).toBe("");
+    });
+  });
+
   it("leaves out a disabled effect and one whose type it does not know", () => {
     const clips = [
       clip({

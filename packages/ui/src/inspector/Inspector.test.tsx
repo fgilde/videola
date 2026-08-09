@@ -68,6 +68,15 @@ const CURVES: EffectDescriptor = {
   ],
 };
 
+// The third kind that is not a slider, and the first that names a file rather than carrying a
+// value. What it proves is that the row offers what the library holds and nothing else.
+const LUT: EffectDescriptor = {
+  id: "lut",
+  name: { de: "Farbtabelle", en: "Lookup table" },
+  inputs: 1,
+  params: [{ kind: "lut", key: "table", name: { de: "Tabelle", en: "Table" } }],
+};
+
 interface Rig {
   sent: { command: Command; key?: string }[];
   seeks: Time[];
@@ -202,6 +211,23 @@ function withCurves(keyframes: Record<string, unknown[]> = {}): Overrides {
 function lumaAt(value: unknown): EffectParamSnapshot {
   return new Map([["eff_1", new Map<string, ParamValue>([["luma", value as ParamValue]])]]);
 }
+
+function withLut(): Overrides {
+  return {
+    effects: [{ id: "eff_1", effectType: "lut", enabled: true, params: {}, keyframes: {} }],
+  };
+}
+
+function tableAt(value: unknown): EffectParamSnapshot {
+  return new Map([["eff_1", new Map<string, ParamValue>([["table", value as ParamValue]])]]);
+}
+
+const TABLE = {
+  id: "med_swap",
+  originalName: "Swap.cube",
+  mime: "application/x-cube-lut",
+  kind: "lut",
+} as unknown as Project["library"][number];
 
 // jsdom lays nothing out, so the field has no rectangle and every pointer position would land on
 // the same tone. A hundred by a hundred at the origin makes a client coordinate a percentage.
@@ -1119,6 +1145,86 @@ describe("the inspector", () => {
       });
 
       for (const point of curvePoints()) expect(point.disabled).toBe(true);
+    });
+  });
+
+  // The kind that names a file. What it must never do is offer a table the library does not hold,
+  // because the renderer would then draw the untouched picture under a grade's name.
+  describe("a lookup table parameter", () => {
+    const clip = (): Clip => clipWithMedia(withLut());
+    const withLibrary = (value: unknown, library: Project["library"]): Rig =>
+      show({
+        clip: clip(),
+        project: makeProject([makeTrack("trk_1", [clip()])], library),
+        effects: [LUT],
+        resolved: tableAt(value),
+      });
+    const picker = (): HTMLSelectElement => screen.getByLabelText("Tabelle") as HTMLSelectElement;
+
+    it("gets a picker of the tables in the library rather than a slider", () => {
+      withLibrary(undefined, [MEDIA, TABLE]);
+
+      expect([...picker().options].map((option) => option.value)).toEqual(["", "med_swap"]);
+      expect(screen.queryByRole("slider", { name: "Tabelle" })).toBeNull();
+    });
+
+    // A video is not a table. Offering one would put a name in the menu that, once chosen, grades
+    // nothing -- the renderer looks the id up among the tables it loaded and finds none.
+    it("offers only the entries that are tables", () => {
+      withLibrary(undefined, [MEDIA, TABLE]);
+
+      expect([...picker().options].map((option) => option.textContent)).toEqual([
+        "Keine",
+        "Swap.cube",
+      ]);
+    });
+
+    it("sends the chosen table as the name of a library entry", () => {
+      const rig = withLibrary(undefined, [TABLE]);
+
+      act(() => void fireEvent.change(picker(), { target: { value: "med_swap" } }));
+
+      expect(rig.sent).toHaveLength(1);
+      expect(rig.sent[0]!.command).toEqual({
+        type: "effect.setParam",
+        target: { kind: "clip", clip: "clp_1" },
+        effectType: "lut",
+        key: "table",
+        value: { kind: "choice", value: "med_swap" },
+      });
+    });
+
+    it("shows what the core resolved, not the first entry in the list", () => {
+      withLibrary({ kind: "choice", value: "med_swap" }, [TABLE]);
+
+      expect(picker().value).toBe("med_swap");
+    });
+
+    // A project file may carry any kind on this key, and a float is not a medium. `shownLut` is
+    // the guard, and it is the same one `lutMedia` applies in the engine before the compositor
+    // looks a texture up -- a picker standing on a name the renderer ignores would be a lie about
+    // the one thing this row displays.
+    it("stands on nothing for a value that is not the name of a table", () => {
+      withLibrary(float(0.5), [TABLE]);
+
+      expect(picker().value).toBe("");
+    });
+
+    // A menu whose only entry means "no" is a control that cannot do anything, and this panel
+    // refuses those elsewhere for the same reason.
+    it("says where a table comes from instead of offering an empty menu", () => {
+      withLibrary(undefined, [MEDIA]);
+
+      expect(screen.queryByLabelText("Tabelle")).toBeNull();
+      expect(screen.getByText("Erst eine .cube-Datei importieren.")).toBeTruthy();
+    });
+
+    // `ParamValue` will not interpolate between two names, so a keyframe here could only ever hold.
+    // A row of switches that can only produce a hold promises an animation nothing will draw.
+    it("carries no keyframe switches", () => {
+      withLibrary(undefined, [TABLE]);
+
+      expect(screen.queryByRole("button", { name: /Tabelle/ })).toBeNull();
     });
   });
 });

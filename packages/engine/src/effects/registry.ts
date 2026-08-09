@@ -1,5 +1,7 @@
 import { curveTable, readableCurve } from "@videola/core";
 
+import type { LutTable } from "@videola/media";
+
 import { blur } from "./blur";
 import { blurDissolve } from "./blur-dissolve";
 import { brightness } from "./brightness";
@@ -10,6 +12,7 @@ import { crossfade } from "./crossfade";
 import { curves } from "./curves";
 import { dip } from "./dip";
 import { iris } from "./iris";
+import { lut } from "./lut";
 import { maskEllipse } from "./mask-ellipse";
 import { maskRect } from "./mask-rect";
 import { saturation } from "./saturation";
@@ -64,8 +67,27 @@ export interface CurveParam {
   default: readonly (readonly [number, number])[];
 }
 
+/**
+ * A colour lookup table, named rather than carried: the value is the id of a library asset of kind
+ * `lut`, and the table itself is that asset's bytes in OPFS.
+ *
+ * The one parameter here that never becomes a uniform. A 33-cube is 35937 triplets -- past every
+ * uniform budget a driver has, and past what belongs in a project file beside a number -- so it
+ * reaches the shader as a texture on the third unit instead, and the draw list carries the id that
+ * says which one.
+ *
+ * There is no default table. An unset parameter draws through `IDENTITY_LUT`, which is the
+ * untouched picture; a default that named some particular look would be a grade nobody asked for
+ * on every clip this effect is added to.
+ */
+export interface LutParam {
+  kind: "lut";
+  key: string;
+  name: { de: string; en: string };
+}
+
 export type Rgba = readonly [number, number, number, number];
-export type VideoParam = EffectParam | ColorParam | CurveParam;
+export type VideoParam = EffectParam | ColorParam | CurveParam | LutParam;
 /**
  * What `setUniforms` will take: a float, the components of a vector or a matrix, or the entries of
  * a table. Nothing shorter than seventeen numbers is ever a table, which is what keeps the shape of
@@ -139,6 +161,9 @@ const MANIFESTS: readonly EffectManifest[] = [
   // belong, the curves shape what is between them.
   colorWheels,
   curves,
+  // Last of the three that grade, because it is the one that answers to a file rather than to a
+  // control: the wheels and the curves are what somebody dials, a table is what somebody was given.
+  lut,
   vignette,
   blur,
   sharpen,
@@ -225,6 +250,17 @@ export function clampCurve(param: CurveParam, value: unknown): readonly number[]
   return curveTable(readableCurve(value, param.default));
 }
 
+/**
+ * The library asset a lookup-table parameter names, or the empty string for none.
+ *
+ * The same rule as every other guard on this seam: what does not read as this parameter's kind is
+ * "nothing chosen", which draws the identity table. A project file may carry a float, a curve or a
+ * number on this key, and none of them is a medium.
+ */
+export function lutMedia(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 /** Whichever guard this parameter's kind calls for. Everything on the way to a uniform goes here. */
 export function paramUniform(param: VideoParam, value: unknown): Uniform {
   switch (param.kind) {
@@ -232,6 +268,10 @@ export function paramUniform(param: VideoParam, value: unknown): Uniform {
       return clampColor(param, value);
     case "curve":
       return clampCurve(param, value);
+    case "lut":
+      // Unreachable through `uniforms` and `previewValues`, which both skip this kind before they
+      // get here: a table is a texture, and there is no uniform that could stand for one.
+      throw new TypeError(`no uniform for a lookup table: ${param.key}`);
     default:
       return clampParam(param, value);
   }
@@ -243,7 +283,32 @@ export function paramUniform(param: VideoParam, value: unknown): Uniform {
 export function previewValues(manifest: EffectManifest): Record<string, Uniform> {
   const values: Record<string, Uniform> = {};
   for (const param of manifest.params) {
+    if (param.kind === "lut") continue;
     values[param.key] = paramUniform(param, manifest.preview[param.key] ?? param.default);
   }
   return values;
+}
+
+/**
+ * The table a tile is drawn through, where the effect has one.
+ *
+ * A LUT's telling setting cannot be a media id: the browser draws its grid before anybody has
+ * imported anything, and a tile for a grading effect that showed the untouched picture would be a
+ * promise with nothing behind it -- the exact reason this effect was put off rather than half
+ * built. So the manifest nominates a table by value, and the tile is a real run of the real shader
+ * over a real table.
+ */
+export function previewLut(manifest: EffectManifest): LutTable | undefined {
+  const param = manifest.params.find((entry) => entry.kind === "lut");
+  if (param === undefined) return undefined;
+  const table = manifest.preview[param.key];
+  return isTable(table) ? table : undefined;
+}
+
+// A manifest is ours rather than untrusted, but `preview` is typed `unknown` on purpose so that
+// every kind's value goes through its own guard; this is that guard.
+function isTable(value: unknown): value is LutTable {
+  if (typeof value !== "object" || value === null) return false;
+  const table = value as Partial<LutTable>;
+  return typeof table.size === "number" && table.rgba instanceof Uint8Array;
 }

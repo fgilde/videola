@@ -66,8 +66,8 @@ Kachel ist der Shader des Effekts über dem Bild am Playhead** — kein gemaltes
 die das Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Genau das
 verhindert, dass ein Effekt mit seinem eigenen Standardwert für sich wirbt.
 
-Helligkeit, Kontrast, Sättigung, Farbtemperatur, Kurven, Farbräder, Vignette, Weichzeichnen,
-Schärfen und Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
+Helligkeit, Kontrast, Sättigung, Farbtemperatur, Kurven, Farbräder, Farbtabellen, Vignette,
+Weichzeichnen, Schärfen und Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
 über eine frei gewählte Farbe. Rechteckige und elliptische Masken mit weicher Kante und
 Invertierung; zwei Masken in einer Kette schneiden sich. Ein Textgenerator mit Gestaltung sowie
 Ein-, Aus- und Schleifenanimation.
@@ -92,7 +92,7 @@ Maus. Einen Kurveneditor gibt es noch nicht: ein Projekt, das Bezier-Anfasser tr
 behält seine Form, aber ziehen kann sie hier niemand — siehe
 [Schneiden](./editing.md#die-keyframe-spur).
 
-Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 303 solcher
+Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 338 solcher
 Prüfungen laufen bei jedem Bau, und jede Kachel der Bibliothek ist eine davon — eine Kachel, die das
 Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Ein zu einem Drittel
 gedeckter Pixel über Rot muss **81** ergeben —
@@ -113,6 +113,16 @@ so heraus, wie sie hineinging, und nur seine Helligkeit bewegt sich.
 **Farbräder** — Lift, Gamma und Gain — jeweils mit Farbstich und Stärke, also mit dem, was Rad und
 Ring an einem echten Pult sind. Lift sagt, wohin Schwarz geht, Gain sagt, wohin Weiß geht, und Gamma
 biegt, was dazwischen liegt, ohne eines der beiden Enden mitzunehmen.
+
+**Farbtabellen**: eine `.cube` auf den Editor fallen lassen und unter der Farbkorrektur auswählen.
+Die Tabelle kommt in die Bibliothek wie jedes andere Medium — inhaltsadressiert, dieselbe Datei in
+zwei Projekten ist also eine Datei auf der Platte, und mit in die `.videola` gepackt, **ein Projekt,
+das reist, bringt seine Farbkorrektur also mit**. Ein Stärkeregler mischt den Look zurück zum Bild,
+aus dem er kam. Gelesen wird die Tabelle gegen das Bild, wie es steht, und das ist der richtige
+Eingang für einen display-referred Look; eine für lineares Licht gebaute Tabelle erwartet ihren
+eigenen Eingang und wird hier nicht eines Besseren belehrt. Eine eindimensionale `.cube` wird
+ausdrücklich abgelehnt, denn das ist eine Tonwertkurve, und die Kurven weiter oben bearbeiten eine
+davon bereits mit Punkten, die man hinterher noch ziehen kann.
 
 **Messgeräte**: eine Wellenform, ein Vektorskop und ein Histogramm, in einer Leiste unter dem Bild,
 die ein Schalter in der Transportleiste öffnet. Sie lesen die Pixel der Vorschau selbst, was sie
