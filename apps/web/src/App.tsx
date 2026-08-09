@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 
 import {
   builtinTemplates,
@@ -28,15 +28,22 @@ import {
   audioEffectManifests,
   AudioGraph,
   AudioSource,
+  cutSilence,
+  duckCommands,
   effectManifests,
   EXPORT_FORMATS,
   formatSupport,
   measureLoudness,
+  normalizeToTarget,
   Playback,
   probe,
+  silentSpans,
+  speechSpans,
   startExport,
+  WAVEFORM_BUCKETS,
   type ExportHandle,
   type ExportRange,
+  type Level,
 } from "@videola/engine";
 import {
   clearSession,
@@ -102,6 +109,16 @@ const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 // A stable empty array, so the poster hook is not handed a fresh one on every render.
 const NO_TEMPLATES: readonly Template[] = [];
+
+// The ceiling on how finely a track is scanned for a duck or for its pauses. Twenty milliseconds a
+// bucket is what the detector wants; over a long timeline that is more buckets than a peak reader
+// should be asked for, and past this the analysis is coarser than ideal rather than slow.
+const MAX_ANALYSIS_BUCKETS = 60_000;
+
+// Distinguishes one multi-command action from the next under the coalescing key, so two ducks in a
+// row are two entries on the undo stack rather than one. The timeline keeps its own for the same
+// reason.
+let actionSequence = 0;
 
 export function App(): ReactElement {
   const [doc, setDoc] = useState<VideolaDocument>();
@@ -350,6 +367,110 @@ export function App(): ReactElement {
       .then(setLoudness, (err: unknown) => reportError("error.actionFailed", err))
       .finally(() => setMeasuring(false));
   }, [doc, project, reportError]);
+
+  // Rendering the timeline once per correction, which is why this shares `measuring` with the
+  // reading above: both are the same slow thing and neither may run twice at once.
+  //
+  // What lands in the readout afterwards is what the second render measured, not the target that
+  // was asked for. A programme that cannot reach its target -- one already at the fader's ceiling,
+  // or a silent one -- then says so with a number instead of claiming success.
+  const normalize = useCallback(
+    (targetLufs: number) => {
+      if (project === undefined || doc === undefined) return;
+      const seconds = timeToSeconds(projectEnd(project));
+      if (seconds <= 0) return;
+      setMeasuring(true);
+      const rate = project.settings.sampleRate;
+      const source = new AudioSource();
+      const measureOnce = (candidate: Project): Promise<number> =>
+        measureLoudness(
+          new OfflineAudioContext(2, Math.ceil(seconds * rate), rate),
+          candidate,
+          source,
+          doc.effectParamsAt,
+        );
+      normalizeToTarget(project, targetLufs, measureOnce)
+        .then(
+          (result) => {
+            // Dispatched only when it moved: a project already on target must not land an
+            // undo step that changes nothing.
+            if (result.volume !== project.master.volume) {
+              doc.dispatch(cmd.projectSetMasterVolume(result.volume));
+            }
+            setLoudness(result.loudness);
+          },
+          (err: unknown) => reportError("error.actionFailed", err),
+        )
+        .finally(() => setMeasuring(false));
+    },
+    [doc, project, reportError],
+  );
+
+  // The strips are read from the peaks the graph already holds, at a resolution fine enough for a
+  // duck rather than the one the timeline draws with: 600 buckets over a ten-minute clip is a
+  // second apiece, and a bed that came down a second late would have swallowed the first sentence.
+  const analysisPeaks = useCallback((): ReadonlyMap<string, Peaks> => {
+    if (playback === undefined || project === undefined) return new Map();
+    const seconds = Math.max(1, timeToSeconds(projectEnd(project)));
+    return playback.waveforms(
+      Math.min(MAX_ANALYSIS_BUCKETS, Math.max(WAVEFORM_BUCKETS, Math.ceil(seconds / 0.02))),
+    );
+  }, [playback, project]);
+
+  const duck = useCallback(
+    (music: string, speech: string) => {
+      if (doc === undefined || project === undefined) return;
+      const peaks = analysisPeaks();
+      const musicTrack = project.timeline.tracks.find((track) => track.id === music);
+      const speechTrack = project.timeline.tracks.find((track) => track.id === speech);
+      if (musicTrack === undefined || speechTrack === undefined) return;
+      try {
+        // One coalesce key for the lot, so a duck comes back off the timeline in a single undo
+        // however many corners it wrote.
+        const key = `mixer-duck-${music}-${(actionSequence += 1)}`;
+        for (const command of duckCommands(musicTrack, speechSpans(speechTrack, peaks))) {
+          doc.dispatch(command, key);
+        }
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [analysisPeaks, doc, project, reportError],
+  );
+
+  const cutQuiet = useCallback(
+    (trackId: string) => {
+      if (doc === undefined || project === undefined) return;
+      const track = project.timeline.tracks.find((candidate) => candidate.id === trackId);
+      if (track === undefined) return;
+      try {
+        const key = `mixer-cut-silence-${trackId}-${(actionSequence += 1)}`;
+        cutSilence(doc, trackId, silentSpans(track, analysisPeaks()), key);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [analysisPeaks, doc, project, reportError],
+  );
+
+  // One reading of the whole desk per animation frame, shared by every strip that asks inside it.
+  // The frame's own timestamp is what tells "the same frame" from "the next one" -- every meter is
+  // asked with the number requestAnimationFrame handed it, so the first ask does the reading and
+  // the rest are answered out of it.
+  const readLevel = useMemo(() => {
+    let taken = 0;
+    let levels: ReadonlyMap<string, Level> = new Map();
+    return (bus: string, nowMs: number): Level | undefined => {
+      if (playback === undefined) return undefined;
+      if (nowMs !== taken) {
+        levels = playback.levels(taken === 0 ? 0 : (nowMs - taken) / 1000);
+        taken = nowMs;
+      }
+      return levels.get(bus);
+    };
+  }, [playback]);
 
   const addTrack = useCallback(() => {
     if (doc === undefined) return;
@@ -792,11 +913,16 @@ export function App(): ReactElement {
                   project={project}
                   loudness={loudness}
                   measuring={measuring}
+                  readLevel={readLevel}
                   playhead={playhead}
                   effects={audioEffectManifests()}
                   effectParamsAt={doc?.effectParamsAt}
                   dispatch={edit}
                   onMeasure={measure}
+                  onNormalize={normalize}
+                  normalizing={measuring}
+                  onDuck={duck}
+                  onCutSilence={cutQuiet}
                   onSeek={seek}
                 />
               )}

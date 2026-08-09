@@ -510,3 +510,242 @@ describe("Mixer effect keyframes", () => {
     expect(screen.queryByLabelText("Keyframe für Frequenz am Playhead")).toBeNull();
   });
 });
+
+describe("the level meters", () => {
+  // No `readLevel` is the honest state of a mixer with no transport behind it. A row of bars stuck
+  // at silence would say the opposite of what is true.
+  it("has no meters at all without somewhere to read a level", () => {
+    show(<Mixer project={makeProject([audio("trk_1")])} dispatch={() => {}} />);
+
+    expect(screen.queryAllByTestId("meter")).toHaveLength(0);
+  });
+
+  it("gives every strip a meter and the master one as well", () => {
+    show(
+      <Mixer
+        project={makeProject([audio("trk_1"), audio("trk_2")])}
+        dispatch={() => {}}
+        readLevel={() => SILENT}
+      />,
+    );
+
+    expect(screen.getAllByTestId("meter")).toHaveLength(3);
+    expect(screen.getByLabelText("Pegel Master")).toBeDefined();
+    expect(screen.getByLabelText("Pegel trk_1")).toBeDefined();
+  });
+
+  // Each bus is asked for its own level, and every one of them inside a single frame is asked with
+  // that frame's own timestamp -- which is what lets the caller read the graph once for the lot.
+  it("asks for each bus by name with the frame's own timestamp", async () => {
+    const readLevel = vi.fn((_bus: string, _now: number) => SILENT);
+    show(
+      <Mixer project={makeProject([audio("trk_1")])} dispatch={() => {}} readLevel={readLevel} />,
+    );
+
+    await frame();
+
+    expect(new Set(readLevel.mock.calls.map((call) => call[0]))).toEqual(
+      new Set(["trk_1", "master"]),
+    );
+    expect(new Set(readLevel.mock.calls.map((call) => call[1])).size).toBe(1);
+  });
+
+  // The bar is drawn linearly in decibels, not in amplitude: half the width is thirty decibels
+  // down. Read off the element rather than off whatever fed it -- a value the platform itself
+  // would have clamped proves nothing about the code that set it.
+  it("draws the bar linearly in decibels over a sixty decibel scale", async () => {
+    show(
+      <Mixer
+        project={makeProject([])}
+        dispatch={() => {}}
+        readLevel={() => ({ peak: -12, rms: -30, hold: -6 })}
+      />,
+    );
+
+    await frame();
+    const meter = screen.getByTestId("meter");
+
+    expect(bar(meter, "v-meter__peak").style.width).toBe("80%");
+    expect(bar(meter, "v-meter__rms").style.width).toBe("50%");
+    expect(bar(meter, "v-meter__hold").style.left).toBe("90%");
+  });
+
+  it("draws nothing at all for silence and hides the hold marker", async () => {
+    show(<Mixer project={makeProject([])} dispatch={() => {}} readLevel={() => SILENT} />);
+
+    await frame();
+    const meter = screen.getByTestId("meter");
+
+    expect(bar(meter, "v-meter__peak").style.width).toBe("0%");
+    expect(bar(meter, "v-meter__hold").hidden).toBe(true);
+  });
+
+  it("marks the meter as hot in the last six decibels", async () => {
+    show(
+      <Mixer
+        project={makeProject([])}
+        dispatch={() => {}}
+        readLevel={() => ({ peak: -3, rms: -6, hold: -3 })}
+      />,
+    );
+
+    await frame();
+
+    expect(screen.getByTestId("meter").classList.contains("v-meter--hot")).toBe(true);
+  });
+
+  it("tells a screen reader the peak as a whole number", async () => {
+    show(
+      <Mixer
+        project={makeProject([])}
+        dispatch={() => {}}
+        readLevel={() => ({ peak: -12.4, rms: -20, hold: -12 })}
+      />,
+    );
+
+    await frame();
+
+    expect(screen.getByTestId("meter").getAttribute("aria-valuenow")).toBe("-12");
+  });
+});
+
+describe("normalising to a target", () => {
+  it("is not offered without somewhere to send it", () => {
+    show(<Mixer project={makeProject([])} dispatch={() => {}} />);
+
+    expect(screen.queryByText("Auf Ziel bringen")).toBeNull();
+  });
+
+  it("asks for the target the picker is showing", () => {
+    const onNormalize = vi.fn();
+    show(<Mixer project={makeProject([])} dispatch={() => {}} onNormalize={onNormalize} />);
+
+    fireEvent.click(screen.getByText("Auf Ziel bringen"));
+
+    expect(onNormalize).toHaveBeenCalledWith(-14);
+  });
+
+  it("follows the picker to another target", () => {
+    const onNormalize = vi.fn();
+    show(<Mixer project={makeProject([])} dispatch={() => {}} onNormalize={onNormalize} />);
+
+    fireEvent.change(screen.getByLabelText("Zielwert"), { target: { value: "-23" } });
+    fireEvent.click(screen.getByText("Auf Ziel bringen"));
+
+    expect(onNormalize).toHaveBeenCalledWith(-23);
+  });
+
+  // Rendering the timeline twice is the same slow thing measuring is, and pressing it again halfway
+  // through would start a second render against a project the first one is about to change.
+  it("cannot be pressed while it is running", () => {
+    show(
+      <Mixer
+        project={makeProject([])}
+        dispatch={() => {}}
+        onNormalize={() => {}}
+        normalizing={true}
+      />,
+    );
+
+    expect(screen.getByText("Gleiche an…").hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("ducking and cutting silence from a strip", () => {
+  it("offers neither without somewhere to send them", () => {
+    show(<Mixer project={makeProject([audio("trk_1")])} dispatch={() => {}} />);
+
+    expect(screen.queryByLabelText("Stille in trk_1 schneiden")).toBeNull();
+    expect(screen.queryByLabelText("trk_1 unter einer anderen Spur absenken")).toBeNull();
+  });
+
+  it("names the strip as the music and the chosen track as the speech", () => {
+    const onDuck = vi.fn();
+    show(
+      <Mixer
+        project={makeProject([audio("trk_music"), audio("trk_voice")])}
+        dispatch={() => {}}
+        onDuck={onDuck}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("trk_music unter einer anderen Spur absenken"), {
+      target: { value: "trk_voice" },
+    });
+
+    expect(onDuck).toHaveBeenCalledWith("trk_music", "trk_voice");
+  });
+
+  // A strip cannot duck under itself, and a picker that offered it would be one entry that does
+  // nothing next to the ones that do.
+  it("does not offer a strip its own track to duck under", () => {
+    show(
+      <Mixer
+        project={makeProject([audio("trk_music"), audio("trk_voice")])}
+        dispatch={() => {}}
+        onDuck={() => {}}
+      />,
+    );
+
+    const picker = screen.getByLabelText("trk_music unter einer anderen Spur absenken");
+    const offered = [...picker.querySelectorAll("option")].map((option) => option.value);
+    expect(offered).toEqual(["", "trk_voice"]);
+  });
+
+  it("leaves the picker out where there is no other track to duck under", () => {
+    show(<Mixer project={makeProject([audio("trk_1")])} dispatch={() => {}} onDuck={() => {}} />);
+
+    expect(screen.queryByLabelText("trk_1 unter einer anderen Spur absenken")).toBeNull();
+  });
+
+  // The picker is an action and not a setting: left showing the track it was last pointed at, it
+  // would read as a duck that is still in force.
+  it("leaves the picker empty after it has been used", () => {
+    show(
+      <Mixer
+        project={makeProject([audio("trk_music"), audio("trk_voice")])}
+        dispatch={() => {}}
+        onDuck={() => {}}
+      />,
+    );
+    const picker = screen.getByLabelText<HTMLSelectElement>(
+      "trk_music unter einer anderen Spur absenken",
+    );
+
+    fireEvent.change(picker, { target: { value: "trk_voice" } });
+
+    expect(picker.value).toBe("");
+  });
+
+  it("names the track whose silence is to be cut", () => {
+    const onCutSilence = vi.fn();
+    show(
+      <Mixer
+        project={makeProject([audio("trk_1")])}
+        dispatch={() => {}}
+        onCutSilence={onCutSilence}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Stille in trk_1 schneiden"));
+
+    expect(onCutSilence).toHaveBeenCalledWith("trk_1");
+  });
+});
+
+const SILENT = {
+  peak: Number.NEGATIVE_INFINITY,
+  rms: Number.NEGATIVE_INFINITY,
+  hold: Number.NEGATIVE_INFINITY,
+};
+
+// One turn of the meters' own loop. They are driven by requestAnimationFrame and not by React, so
+// nothing they draw is on the screen until a frame has been through.
+const frame = (): Promise<void> =>
+  new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
+
+function bar(meter: HTMLElement, className: string): HTMLElement {
+  return meter.querySelector<HTMLElement>("." + className)!;
+}
