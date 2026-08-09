@@ -81,7 +81,7 @@ fn save_then_open_restores_project_and_media() {
 
 #[test]
 fn every_known_media_kind_string_is_accepted() {
-    for kind in ["video", "audio", "image", "font"] {
+    for kind in ["video", "audio", "image", "font", "lut"] {
         let mut host = DocumentHost::new();
         let result = host.import_media(
             "a.bin".into(),

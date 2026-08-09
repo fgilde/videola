@@ -49,6 +49,18 @@ pub enum MediaKind {
     Audio,
     Image,
     Font,
+    // A colour lookup table -- a `.cube` file. It paints nothing on its own and is never a clip;
+    // it is what an effect's parameter names. A kind of its own rather than `Image` because the
+    // library has to keep it off the timeline and offer it where a grade asks for one, and because
+    // a table that reached the draw list as a picture would be drawn as one.
+    //
+    // It is a library asset for one reason: a 33-cubed table is 35937 triplets, which has no
+    // business sitting in `project.json` beside a number -- and everything a library asset already
+    // gets is what a LUT needs. Content-addressed in OPFS, so the same table imported into two
+    // projects is one file; packed into the `.videola` by `write_media`, so a project that travels
+    // brings its grade with it. A doc comment rather than this would split the generated JSON
+    // schema into a `oneOf` and carry the whole paragraph into the command catalogue.
+    Lut,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
