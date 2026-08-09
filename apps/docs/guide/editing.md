@@ -193,6 +193,10 @@ authors as one shape, and the `x` and `y` tracks the properties panel writes. A 
 into the track it came from — one `vec2` for the first, an `x` and a `y` for the others, because
 moving only one of a pair would drag the clip sideways when the pointer went diagonally.
 
+`keyframe.add` at an instant a key already sits at takes its place rather than adding a second one
+there, so a drag across the picture is one key changing value however far it travels — checked in a
+real browser, on a real drag, against the number the properties panel reads afterwards.
+
 ## Locked tracks
 
 The padlock beside a track's name is a promise: nothing on that track moves until it is unlocked

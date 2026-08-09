@@ -202,6 +202,11 @@ Ein Key wird in die Spur zurückgeschrieben, aus der er kam — ein `vec2` für 
 ein `y` für die anderen, denn nur eines von beiden zu bewegen zöge den Clip zur Seite, wenn der
 Zeiger diagonal ging.
 
+`keyframe.add` auf einem Zeitpunkt, auf dem schon ein Key sitzt, ersetzt ihn, statt einen zweiten
+danebenzusetzen: ein Zug über das Bild ist also ein Key, der seinen Wert ändert, gleich wie weit er
+wandert — in einem echten Browser an einem echten Zug gegen die Zahl geprüft, die der
+Eigenschaften-Bereich danach liest.
+
 ## Gesperrte Spuren
 
 Das Schloss neben dem Spurnamen ist ein Versprechen: auf dieser Spur bewegt sich nichts, bis sie
