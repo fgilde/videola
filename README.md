@@ -50,7 +50,7 @@ values.
 
 **Audio.** A mixing desk opened from the transport — folded away until it is asked for, because a
 strip is 190 px and the picture is meant to be the largest thing in the window — with live meters,
-per-track volume, pan, mute and solo, EQ, compressor and
+per-track volume, pan, mute and solo, EQ, low cut, high cut, compressor and
 limiter as inserts ahead of the fader, fades as scheduled automation rather than per-frame
 arithmetic, waveforms drawn from the buffers the graph already decoded. EBU R128 loudness measured
 against the Tech 3341 conformance cases — and a button that normalises to a target and measures
@@ -112,7 +112,8 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No motion blur and no noise reduction. Keyframe easing has a curve field with
+No motion blur. No noise reduction: the low and high cut take away a band, which is not the same
+as separating a voice from noise sharing its band. Keyframe easing has a curve field with
 handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
 to its edge, and a curve cannot be copied from one parameter to another. The magnetic timeline is
 deliberately absent: the

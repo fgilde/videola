@@ -173,6 +173,23 @@ what is heard.
 Last on the right, set apart by a border, is the **master strip**: the project's own fader and the
 mastering chain. Everything to its left feeds it.
 
+## Low cut and high cut
+
+Two filters, one knob each, on the same insert chain as the equaliser.
+
+Neither is a denoiser, and calling one that would be a lie: nothing here separates a voice from
+noise sharing its band. What they do is take away a band that carries nothing anyone wants — rumble,
+wind and mains hum under a voice, tape hiss or a fan over it — and on a location recording that is
+most of what is wrong with it.
+
+The low cut sits at 80 Hz by default, under the lowest note of a speaking voice; the high cut at
+12 kHz, above the consonants and inside the hiss. There is no Q knob: a biquad's Q at its corner is
+a resonance, and a resonant high-pass on a voice is a howl at the frequency it was set to.
+
+Both are measured through the real renderer against two tones in one signal, so neither can pass by
+going quiet: at a cutoff of 1 kHz the low cut leaves the 200 Hz tone at under a tenth of its strength
+and the 6 kHz one at over seven tenths, and the high cut does the same the other way round.
+
 ## Beats
 
 The metronome symbol on a strip puts a marker on every beat of that track.

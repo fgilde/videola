@@ -233,6 +233,50 @@ describe("an equaliser on a track bus", () => {
     );
   });
 
+  // A low cut is what a "denoise" button is usually asked for: the rumble under a voice, which
+  // shares no band with it. Both tones in one render, so nothing passes by going silent.
+  it("takes the rumble out from under a voice and leaves the voice", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      twoTones(ctx),
+      project([
+        track("trk_1", [clip()], { effects: [effect("lowcut", { frequency: 1000 })] }),
+      ]),
+    );
+    const flatCtx = context(1);
+    const flat = await render(flatCtx, twoTones(flatCtx), project([track("trk_1", [clip()])]));
+
+    const window: [number, number] = [sample(0.2), sample(0.9)];
+    expect(toneStrength(out, LOW_HZ, ...window)).toBeLessThan(
+      toneStrength(flat, LOW_HZ, ...window) / 10,
+    );
+    expect(toneStrength(out, HIGH_HZ, ...window)).toBeGreaterThan(
+      toneStrength(flat, HIGH_HZ, ...window) * 0.7,
+    );
+  });
+
+  it("takes the hiss off the top and leaves what is under it", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      twoTones(ctx),
+      project([
+        track("trk_1", [clip()], { effects: [effect("highcut", { frequency: 1000 })] }),
+      ]),
+    );
+    const flatCtx = context(1);
+    const flat = await render(flatCtx, twoTones(flatCtx), project([track("trk_1", [clip()])]));
+
+    const window: [number, number] = [sample(0.2), sample(0.9)];
+    expect(toneStrength(out, HIGH_HZ, ...window)).toBeLessThan(
+      toneStrength(flat, HIGH_HZ, ...window) / 10,
+    );
+    expect(toneStrength(out, LOW_HZ, ...window)).toBeGreaterThan(
+      toneStrength(flat, LOW_HZ, ...window) * 0.7,
+    );
+  });
+
   it("lifts the band it is pointed at when the gain is positive", async () => {
     const ctx = context(1);
     const out = await render(

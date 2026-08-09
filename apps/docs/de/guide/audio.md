@@ -187,6 +187,25 @@ Zahl an einem Filter ankommt. Was dasteht, ist also das, was zu hören ist.
 Ganz rechts, durch einen Rahmen abgesetzt, steht der **Summenzug**: der Regler des Projekts und die
 Mastering-Kette. Alles links davon läuft dort hinein.
 
+## Tiefensperre und Höhensperre
+
+Zwei Filter mit je einem Regler, auf derselben Insert-Kette wie der Equalizer.
+
+Keiner von beiden ist eine Rauschunterdrückung, und einen so zu nennen wäre gelogen: nichts hier
+trennt eine Stimme von einem Geräusch, das ihr Band teilt. Sie nehmen ein Band weg, in dem nichts
+steht, was jemand will — Rumpeln, Wind und Netzbrumm unter einer Stimme, Bandrauschen oder ein
+Lüfter darüber — und bei einer Außenaufnahme ist das das meiste, was daran nicht stimmt.
+
+Die Tiefensperre steht voreingestellt auf 80 Hz, unter dem tiefsten Ton einer Sprechstimme; die
+Höhensperre auf 12 kHz, über den Konsonanten und mitten im Rauschen. Einen Güte-Regler gibt es
+nicht: die Güte eines Biquads an seiner Grenzfrequenz ist eine Resonanz, und ein resonanter
+Hochpass auf einer Stimme ist ein Heulen bei genau der eingestellten Frequenz.
+
+Beide sind durch den echten Renderer an zwei Tönen in einem Signal gemessen, keiner kann also
+bestehen, indem er still wird: bei 1 kHz Grenzfrequenz lässt die Tiefensperre den 200-Hz-Ton unter
+einem Zehntel seiner Stärke und den 6-kHz-Ton über sieben Zehnteln, und die Höhensperre dasselbe
+andersherum.
+
 ## Beats
 
 Das Metronom-Symbol auf einem Streifen setzt auf jeden Schlag dieser Spur einen Marker.

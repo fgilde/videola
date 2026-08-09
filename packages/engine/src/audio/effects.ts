@@ -76,6 +76,57 @@ const eq: AudioEffectManifest = {
   },
 };
 
+// The two filters that do the work a "denoise" button is usually asked for. Neither is a denoiser:
+// nothing here separates a voice from the noise it shares a band with. What they do is take away a
+// band that carries nothing anyone wants -- handling rumble, wind and mains hum under a voice, and
+// tape hiss or a fan over it -- and that is most of what a location recording needs.
+//
+// A cutoff and nothing else. A biquad's Q at the corner is a resonance, and a resonant high-pass on
+// a voice is a howl at the frequency it was set to; one knob is the whole of operating one.
+const lowCut: AudioEffectManifest = {
+  id: "lowcut",
+  name: { de: "Tiefensperre", en: "Low cut" },
+  params: [
+    {
+      key: "frequency",
+      name: { de: "Grenzfrequenz", en: "Cutoff" },
+      // Under a speaking voice: the lowest note of a male voice is around 85 Hz, and everything
+      // below is the room, the table and the wind.
+      default: 80,
+      min: 20,
+      max: 500,
+    },
+  ],
+  build(ctx) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.Q.value = Math.SQRT1_2;
+    return { node: filter, knobs: new Map([["frequency", filter.frequency]]) };
+  },
+};
+
+const highCut: AudioEffectManifest = {
+  id: "highcut",
+  name: { de: "Höhensperre", en: "High cut" },
+  params: [
+    {
+      key: "frequency",
+      name: { de: "Grenzfrequenz", en: "Cutoff" },
+      // Above speech and below the top of the band: consonants live up to about 8 kHz, hiss goes
+      // on well past it.
+      default: 12000,
+      min: 1000,
+      max: 20000,
+    },
+  ],
+  build(ctx) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = Math.SQRT1_2;
+    return { node: filter, knobs: new Map([["frequency", filter.frequency]]) };
+  },
+};
+
 // The knee stays at the platform's default. It is a fifth slider on a strip that already has four,
 // and the two settings anyone reaches for -- how loud before it acts and how hard -- are here.
 const compressor: AudioEffectManifest = {
@@ -133,7 +184,7 @@ const limiter: AudioEffectManifest = {
   },
 };
 
-const MANIFESTS: readonly AudioEffectManifest[] = [gain, eq, compressor, limiter];
+const MANIFESTS: readonly AudioEffectManifest[] = [gain, eq, lowCut, highCut, compressor, limiter];
 
 export function audioEffect(type: string): AudioEffectManifest | undefined {
   return MANIFESTS.find((manifest) => manifest.id === type);
