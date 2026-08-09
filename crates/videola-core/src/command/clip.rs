@@ -358,6 +358,21 @@ pub(super) fn nest(target: &mut Project, clips: &[ClipId]) -> Result<()> {
     let mut span_start = at(&host).start;
     let mut span_end = at(&host).end();
     for found in &located {
+        // Ramps and compounds do not mix, in either direction: `speed_track_bounded` refuses a ramp
+        // on a compound because the outer rate is inverted by division, and this refuses a ramp
+        // *inside* one because folding a nested clip back out multiplies its rate by the outer one
+        // and trims its in point by the same factor — neither of which a rate track is. Permitting
+        // it would draw the inside of the compound at instants nobody authored, silently. Flatten
+        // the ramp or nest first and ramp after.
+        if at(found)
+            .keyframes
+            .get(SPEED_TRACK)
+            .is_some_and(|track| !track.is_empty())
+        {
+            return Err(CoreError::InvalidArgument(
+                "a clip with a speed ramp cannot be nested".into(),
+            ));
+        }
         span_start = span_start.min(at(found).start);
         span_end = span_end.max(at(found).end());
     }

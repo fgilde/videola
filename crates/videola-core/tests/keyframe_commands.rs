@@ -646,3 +646,24 @@ fn undoing_a_speed_ramp_puts_the_clip_back_the_way_it_was() {
 
     assert_eq!(serde_json::to_value(doc.project()).unwrap(), before);
 }
+
+// The other half of "ramps and compounds do not mix". Folding a ramped clip into a compound would
+// hand the fold a clip whose rate it multiplies and whose in point it trims by that same factor --
+// neither of which a rate track is -- and the inside would be drawn at instants nobody authored.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_clip_carrying_a_speed_ramp_cannot_be_nested() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(speed_key(&clip, 0.0, 2.0, Interp::Linear)))
+        .unwrap();
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::ClipNest {
+            clips: vec![clip.clone()],
+        }))
+        .is_err());
+    assert!(matches!(
+        doc.project().timeline.tracks[0].clips[0].source,
+        ClipSource::Media { .. }
+    ));
+}

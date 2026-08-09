@@ -1,4 +1,4 @@
-import { timeToSeconds } from "@videola/core";
+import { SPEED_TRACK, timeToSeconds } from "@videola/core";
 import type { Clip, Project, Time, Track } from "@videola/core";
 
 export interface Finding {
@@ -52,7 +52,15 @@ function describeClip(clip: Clip): string {
     `${sourceOf(clip)} (${clip.id})`,
     `in ${seconds(clip.inPoint)} s`,
   ];
-  if (clip.speed.rate !== 1 || clip.speed.reverse) {
+  // A ramped clip has no one rate to report, and printing its static one would tell an agent the
+  // clip runs at a speed it does not run at. The keys are what it actually follows.
+  const ramp = clip.keyframes?.[SPEED_TRACK];
+  if (ramp !== undefined && ramp.length > 0) {
+    const rates = ramp
+      .map((key) => (key.value.kind === "float" ? `${seconds(key.time)}s:${key.value.value}` : "?"))
+      .join(" ");
+    parts.push(`speed ramp ${rates}${clip.speed.reverse ? " reversed" : ""}`);
+  } else if (clip.speed.rate !== 1 || clip.speed.reverse) {
     parts.push(`speed ${clip.speed.rate}${clip.speed.reverse ? " reversed" : ""}`);
   }
   if (clip.volume !== 1) parts.push(`volume ${clip.volume}`);

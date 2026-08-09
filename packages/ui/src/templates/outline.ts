@@ -1,3 +1,4 @@
+import { consumedSource } from "@videola/core";
 import type { Clip, Localized, Project, Slot, Template, Time } from "@videola/core";
 
 import type { Locale } from "../i18n/useI18n";
@@ -48,7 +49,7 @@ export function slotNeeds(template: Template, slot: Slot): Time {
     if (binding.target !== "clipMedia") continue;
     const clip = findClip(template.project, binding.clip);
     if (clip === undefined) continue;
-    needed = Math.max(needed, clip.inPoint + Math.round(clip.duration * clip.speed.rate));
+    needed = Math.max(needed, clip.inPoint + consumedSource(clip));
   }
   return needed;
 }
