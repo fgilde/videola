@@ -47,6 +47,13 @@ Every parameter can be keyframed — including a clip's position, scale, rotatio
 a set of corners. The interpolation happens in the Rust core, so the preview and the export cannot
 read different values.
 
+Keyframes are edited on a lane under the tracks, on the timeline's own axis: press one to pick it,
+drag it to move it, <kbd>Delete</kbd> or the button above the lane to remove it, and a picker for
+what times the stretch after it — linear, hold or ease. One drag is one undo step, and it all works
+with a finger as well as with a mouse. There is no curve editor yet: a project that carries bezier
+handles keeps them and keeps its shape, but nothing here can drag one — see
+[Editing](./editing.md#the-keyframe-lane).
+
 Each effect's behaviour is measured against real pixels rendered by a real driver: 258 such checks
 run on every build. A third-covered pixel over red must read 81, which is what premultiplied alpha
 gives; the reflex answer of 255 fails.

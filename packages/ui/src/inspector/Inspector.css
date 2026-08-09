@@ -242,3 +242,23 @@
 .v-shell[data-layout="phone"] .v-inspector__preset {
   min-height: var(--v-touch-target);
 }
+
+/* This parameter is on the clock. The three switches beside it only ever report the playhead, so
+   a row with keyframes elsewhere on the timeline looked exactly like a row with none at all. */
+.v-param__animated {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: var(--v-space-1);
+  vertical-align: middle;
+  background: var(--v-accent);
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+
+/* And the label itself, so the mark is not the only carrier -- a 7 px diamond at the end of a line
+   is a hint, not a statement, and a person who cannot see the tint still reads the weight. */
+.v-param[data-animated] .v-param__label {
+  color: var(--v-accent);
+  font-weight: var(--v-weight-strong);
+}

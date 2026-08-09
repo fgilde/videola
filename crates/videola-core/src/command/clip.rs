@@ -604,7 +604,14 @@ pub(super) fn add_keyframe(
     let tracks = keyframes_mut(target, at, effect_type)?;
     let track = tracks.entry(key.to_string()).or_default();
     match track.iter_mut().find(|existing| existing.time == time) {
-        Some(existing) => *existing = keyframe,
+        Some(existing) => {
+            // Value and interpolation come from the caller; the handles do not, because no command
+            // carries a pair. Overwriting the whole struct would be the one thing an upsert could
+            // do to a curve a project arrived with, and it would do it on every pointer move of a
+            // slider drag -- with nothing on any surface able to put the shape back.
+            existing.value = keyframe.value;
+            existing.interp = keyframe.interp;
+        }
         None => {
             track.push(keyframe);
             sort_track(track);

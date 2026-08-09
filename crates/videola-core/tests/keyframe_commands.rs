@@ -101,6 +101,56 @@ fn adding_at_an_occupied_time_replaces_that_keyframe() {
     assert_eq!(track[0].interp, Interp::Hold);
 }
 
+// No command carries bezier handles, so the only thing an upsert can do with the pair a project
+// arrived with is destroy it. One drag of a slider over a keyframed parameter would then flatten a
+// curve nobody can put back -- the surface that would have to offer the undo cannot author handles
+// either, and `keyframe.setInterp` beside it changes the interpolation without touching them.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn replacing_a_keyframe_keeps_the_curve_shape_it_was_authored_with() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 1.0, 0.0, Interp::Bezier)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(add(&clip, 3.0, 1.0, Interp::Linear)))
+        .unwrap();
+    bend(&mut doc);
+    let bent = amount_at(doc.project(), 2.0);
+    assert_ne!(bent, Some(ParamValue::Float(0.5)), "the handles have to bend it at all");
+
+    doc.dispatch(Dispatch::new(add(&clip, 1.0, 0.0, Interp::Bezier)))
+        .unwrap();
+
+    let track = &doc.project().timeline.tracks[0].clips[0].effects[0].keyframes["amount"];
+    assert_eq!(track[0].handle_out, Some([0.9, 0.05]));
+    assert_eq!(amount_at(doc.project(), 2.0), bent);
+}
+
+// And the other half of the rule: a keyframe written where none stood has no shape to keep.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_keyframe_written_on_empty_ground_carries_no_handles() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 1.0, 0.25, Interp::Bezier)))
+        .unwrap();
+
+    let track = &doc.project().timeline.tracks[0].clips[0].effects[0].keyframes["amount"];
+    assert_eq!(track[0].handle_in, None);
+    assert_eq!(track[0].handle_out, None);
+}
+
+// Handles can only arrive by loading a project: no command takes them.
+#[allow(clippy::unwrap_used)]
+fn bend(doc: &mut Document) {
+    let mut project = doc.project().clone();
+    let track = project.timeline.tracks[0].clips[0].effects[0]
+        .keyframes
+        .get_mut("amount")
+        .unwrap();
+    track[0].handle_out = Some([0.9, 0.05]);
+    track[1].handle_in = Some([0.95, 0.1]);
+    *doc = Document::from_project(project).unwrap();
+}
+
 // A slider dragged over a keyframed parameter is the Inspector's own version of the timeline
 // drag: two hundred dispatches under one key, one entry on the undo stack.
 #[test]

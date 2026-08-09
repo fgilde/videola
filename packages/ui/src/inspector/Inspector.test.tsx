@@ -10,6 +10,7 @@ import {
   type ParamValue,
   type Project,
   type Time,
+  type Transform,
 } from "@videola/core";
 
 import { I18nProvider } from "../i18n/I18nProvider";
@@ -38,6 +39,7 @@ interface Rig {
   sent: { command: Command; key?: string }[];
   seeks: Time[];
   asked: Time[];
+  askedTransforms: Time[];
   dispatch: Mock;
 }
 
@@ -49,13 +51,18 @@ interface Scene {
   amountAt?: (at: Time) => number | undefined;
   /** For the kinds `amountAt` cannot express -- a project may carry any `ParamValue` here. */
   rawAmountAt?: (at: Time) => ParamValue;
+  /**
+   * What the core resolves the clip's placement to. Absent means "nothing is keyframed", which the
+   * core answers with the static transform -- so the fake answers the same thing.
+   */
+  transformAt?: (at: Time) => Record<string, number>;
   dispatch?: (command: Command, key?: string) => void;
 }
 
 function show(scene: Scene = {}): Rig {
   const clip = scene.clip ?? clipWithMedia();
   const project = scene.project ?? makeProject([makeTrack("trk_1", [clip])], [MEDIA]);
-  const rig: Rig = { sent: [], seeks: [], asked: [], dispatch: vi.fn() };
+  const rig: Rig = { sent: [], seeks: [], asked: [], askedTransforms: [], dispatch: vi.fn() };
   rig.dispatch.mockImplementation((command: Command, key?: string) => {
     rig.sent.push({ command, key });
     scene.dispatch?.(command, key);
@@ -70,6 +77,11 @@ function show(scene: Scene = {}): Rig {
     return new Map([["eff_1", new Map<string, ParamValue>([["amount", value]])]]);
   };
 
+  const transformsAt = (at: Time) => {
+    rig.askedTransforms.push(at);
+    return new Map([[clip.id, { ...clip.transform, ...scene.transformAt?.(at) } as Transform]]);
+  };
+
   render(
     <I18nProvider>
       <Inspector
@@ -78,6 +90,7 @@ function show(scene: Scene = {}): Rig {
         playhead={scene.playhead ?? 0}
         effects={[BRIGHTNESS, CROSSFADE]}
         effectParamsAt={effectParamsAt}
+        transformsAt={transformsAt}
         dispatch={rig.dispatch}
         onSeek={(time) => rig.seeks.push(time)}
       />
@@ -165,6 +178,7 @@ describe("the inspector", () => {
           playhead={0}
           effects={[BRIGHTNESS]}
           effectParamsAt={() => new Map()}
+          transformsAt={() => new Map()}
           dispatch={vi.fn()}
           onSeek={vi.fn()}
         />
@@ -218,6 +232,105 @@ describe("the inspector", () => {
 
     expect(slider("Position X (px)").disabled).toBe(false);
     expect(screen.queryByText("Position X und Y folgen einem Bewegungspfad.")).toBeNull();
+  });
+
+  // "Stell keinen Schalter hin, der nichts bewirkt." A keyframe written on x while a path exists
+  // is one the core stores, saves and reloads without it ever reaching a pixel.
+  it("offers no keyframe switch on the two rows a path has taken over", () => {
+    show({ clip: clipWithMedia({ keyframes: { position: [key(0, 0)] } }) });
+
+    expect(screen.queryByLabelText("Keyframe für Position X (px) am Playhead")).toBeNull();
+    expect(screen.queryByLabelText("Keyframe für Position Y (px) am Playhead")).toBeNull();
+    // Everything a path says nothing about keeps its switch.
+    expect(screen.getByLabelText("Keyframe für Deckkraft am Playhead")).toBeTruthy();
+  });
+
+  // The fit writes x, y and both scales. Every one of those that is on the clock is a field the
+  // renderer no longer reads, so the button would move numbers nothing is drawn from.
+  it("offers no fit while the placement it would write is animated", () => {
+    show({ clip: clipWithMedia({ keyframes: { scaleX: [key(0, 1), key(SECOND, 2)] } }) });
+
+    expect((screen.getByRole("button", { name: "Ins Bild einpassen" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  // The row now reads what the core resolves. A keyframed field's static number is the one thing
+  // on the screen that is no longer true, and the two have to be told apart by the fixture: the
+  // clip holds 0.25, the core answers 0.9.
+  it("shows the resolved placement rather than the number the clip holds at rest", () => {
+    show({
+      clip: clipWithMedia({
+        transform: { ...identity(), opacity: 0.25 },
+        keyframes: { opacity: [key(0, 0.25), key(2 * SECOND, 1)] },
+      }),
+      transformAt: () => ({ opacity: 0.9 }),
+    });
+
+    // The readout, not `input[type=range].value`: the browser clamps and steps that itself, so it
+    // would report a number the row never chose. German decimal comma, because the harness is de.
+    expect(readout("Deckkraft")).toBe("0,9");
+  });
+
+  it("asks for the placement at the nearest moment the clip covers", () => {
+    const rig = show({ playhead: 9 * SECOND });
+
+    // The clip runs 0..2s, so the last moment it covers is one flick short of its end.
+    expect(rig.askedTransforms).toContain(2 * SECOND - 1);
+  });
+
+  it("marks a row whose parameter is on the clock, wherever the playhead stands", () => {
+    show({
+      clip: clipWithMedia({ keyframes: { rotation: [key(0, 0), key(SECOND, 90)] } }),
+      playhead: 0,
+    });
+
+    const animated = screen.getByLabelText("Drehung (Grad)").closest(".v-param");
+    expect(animated?.getAttribute("data-animated")).toBe("true");
+    expect(animated?.querySelector(".v-param__animated")).toBeTruthy();
+    // And a row that is not animated must not carry the mark, or the mark says nothing.
+    expect(
+      screen.getByLabelText("Deckkraft").closest(".v-param")?.getAttribute("data-animated"),
+    ).toBeNull();
+  });
+
+  it("sets a transform keyframe on the clip's own track rather than on an effect", () => {
+    const rig = show({ playhead: SECOND, transformAt: () => ({ rotation: 33 }) });
+
+    press("Keyframe für Drehung (Grad) am Playhead");
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      type: "keyframe.add",
+      target: { kind: "clip", clip: "clp_1" },
+      effectType: null,
+      key: "rotation",
+      time: SECOND,
+      value: { kind: "float", value: 33 },
+    });
+  });
+
+  it("writes a keyframe rather than the static transform once the field is animated", () => {
+    const rig = show({
+      clip: clipWithMedia({ keyframes: { rotation: [key(0, 0, "hold")] } }),
+      playhead: 0,
+    });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    // "hold", not "linear": the upsert must not turn a held keyframe into a ramp.
+    expect(rig.sent[0]?.command).toMatchObject({
+      type: "keyframe.add",
+      key: "rotation",
+      interp: "hold",
+    });
+  });
+
+  it("still writes the static transform while nothing on that field is keyframed", () => {
+    const rig = show({ clip: clipWithMedia({ keyframes: { opacity: [key(0, 1)] } }) });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    expect(rig.sent[0]?.command).toMatchObject({ type: "clip.setTransform" });
   });
 
   it("sends the whole transform with one field replaced", () => {

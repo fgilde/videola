@@ -199,25 +199,72 @@ command sets them — a slider there would write nothing.
 
 ### Keyframes
 
-A parameter row of an **effect** carries a keyframe switch, arrows to the previous and next
-keyframe, and — where one sits under the playhead — a picker for what happens after it: linear,
-hold or ease. The switch sets a keyframe at the playhead or removes the one already there.
+Every parameter row — an **effect** parameter and every **transform** field alike — carries a
+keyframe switch, arrows to the previous and next keyframe, and, where one sits under the playhead,
+a picker for what happens after it: linear, hold or ease. The switch sets a keyframe at the
+playhead or removes the one already there. A row whose parameter has keyframes anywhere on the
+timeline is marked with a diamond beside its label: the three switches only ever report the
+playhead, so a row animated somewhere else looked exactly like a row animated nowhere.
 
-The value on the row is the one `Effect::param_at` gives for that moment, asked through
-`doc.effectParamsAt`, never a calculation of its own. Interpolating in TypeScript would give the
-preview and the export two different answers for the same frame.
+The value on the row is the one the core gives for that moment — `Effect::param_at` through
+`doc.effectParamsAt`, `Clip::transform_at` through `doc.transformsAt` — never a calculation of its
+own. Interpolating in TypeScript would give the preview and the export two different answers for
+the same frame. See [Keyframing a transform](./commands-and-undo.md#keyframing-a-transform) for the
+command a transform row sends.
 
 Once a parameter is keyframed the slider writes keyframes rather than the static value, and it
-writes them at the playhead. `keyframe.add` is an upsert, which is what makes a drag one undo step.
-While the playhead stands outside the clip the keyframe controls are locked: a keyframe written
-there is never evaluated for this clip, so the switch would report a state no picture ever shows.
+writes them at the playhead. `keyframe.add` is an upsert, which is what makes a drag one undo step;
+it replaces the value and the interpolation of the key already there and leaves its bezier handles
+alone, because no command carries a handle pair and destroying one would be the only other thing an
+upsert could do with it. While the playhead stands outside the clip the keyframe controls are
+locked: a keyframe written there is never evaluated for this clip, so the switch would report a
+state no picture ever shows.
 
-**The transform can be keyframed too; the inspector does not offer it yet.** The core resolves
-`Clip::keyframes` and the draw list places the picture from the resolved value, so the switch would
-now write data a picture really shows — see [Keyframing a
-transform](./commands-and-undo.md#keyframing-a-transform) for the command. What is left is the
-surface: a row per transform field with the same switch an effect parameter's row carries. Volume
-is still unanimated, and that one is genuinely missing an evaluation.
+Two rows carry no switch at all. Where a clip has a **motion path** the core resolves `x` and `y`
+from it and ignores whatever the two fields hold, so a keyframe written on either would be stored,
+saved and reloaded without ever reaching a pixel. For the same reason **Fit to frame** goes dead
+while the placement it would write — `x`, `y`, either scale, or the path — is on the clock.
+
+Volume is still unanimated, and that one is genuinely missing an evaluation.
+
+### The keyframe lane
+
+Under the tracks, inside the timeline's own scrolling area, is a lane showing the keyframes of the
+selected clip: one row per keyframe track, named the way the properties panel names it, with a
+point per keyframe and the gap between two points drawn in the shape of the interpolation that
+times it — solid for linear, broken for hold, faint at both ends for ease.
+
+It sits in the timeline rather than in the properties panel so that there is one conversion between
+pixels and time in the whole application and not two. The lane, the ruler, the clips and the
+playhead are all positioned by `timeToX` out of the same `flicksPerPixel` and the same scroll
+offset, so a keyframe stands on the ruler tick of its own time by construction rather than by
+agreement. A lane in the properties panel would need a second axis over the panel's width, its own
+scroll and its own playhead — two answers to "where is now", which is the one thing a keyframe
+editor cannot afford. Keyframe times are absolute timeline time in the model, the same instants the
+playhead reports, so nothing is converted between the two ends.
+
+Press a point to pick it; drag it to move it. It is the same pointer path clips use, so it works
+with a mouse and with a finger without a second code path, snapping applies (hold <kbd>Alt</kbd> to
+suspend it), and one drag is one entry on the undo stack. A drag stops at the clip's edges, because
+a keyframe outside the clip is never evaluated for it — and because a clamp is what keeps the core
+from refusing once per pointer move, which is how a trim held against its limit once produced nine
+error banners in a single drag.
+
+Above the lane, while a keyframe is picked, is a bar carrying what that keyframe is set to: its
+parameter's name, the interpolation of the segment that starts at it, and a delete button. The bar
+sits outside the scrolling area so that it stays reachable on a long project, and the button is
+there because a finger has no <kbd>Delete</kbd> key. With a keyframe picked, <kbd>Delete</kbd>
+removes that keyframe rather than the clip under it.
+
+Rows a motion path has taken over are struck through and marked *overridden by the path*. They are
+not hidden: the keyframes are still in the file, and the lane exists to show what is stored.
+
+**What is missing is a curve editor.** The model carries `handle_in` and `handle_out` per keyframe
+and `Interp::Bezier` feeds them through a cubic bezier, but no command sets them and nothing here
+can drag one — the three named presets are all this surface authors. A project that arrives with
+handles keeps them and keeps its shape; it just cannot be reshaped here. The segment styles say
+which interpolation times a gap; they do not draw the curve, and drawing one would mean asking the
+core for samples rather than computing them, for the same reason the rows read resolved values.
 
 ## Speed ramps
 

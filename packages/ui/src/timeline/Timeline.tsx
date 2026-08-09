@@ -13,11 +13,14 @@ import {
 import {
   cmd,
   FLICKS_PER_SECOND,
+  on,
   splitScreen,
   stageFor,
   type Clip as ClipModel,
   type ClipId,
   type Command,
+  type Interp,
+  type Keyframe,
   type MediaId,
   type Project,
   type Time,
@@ -27,9 +30,12 @@ import {
 import type { Peaks } from "@videola/media";
 
 import { useI18n } from "../i18n/useI18n";
+import type { EffectDescriptor } from "../inspector/Inspector";
 import { IconButton } from "../primitives/Icon";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { KeyframeLane, KeyframeLaneHeaders, paramLabel, type KeyframeSelection } from "./KeyframeLane";
+import { laneRows, offeredFor, type LaneRow } from "./keyframes";
 import { Ruler } from "./Ruler";
 import { Track } from "./Track";
 import {
@@ -81,6 +87,12 @@ export interface TimelineProps {
    */
   waveforms?: ReadonlyMap<string, Peaks>;
   /**
+   * What the keyframe lane calls an effect and its parameters. Absent means the lane falls back to
+   * the raw keys -- a track under a name no manifest declares is a project from a later version,
+   * and showing the name it carries beats showing nothing.
+   */
+  effects?: readonly EffectDescriptor[];
+  /**
    * Must throw when the core refuses a command, and must not report it itself. Hitting a clip's
    * limit is ordinary during a drag and the timeline swallows it; a caller that catches first
    * produces one error banner per pointer movement.
@@ -104,6 +116,7 @@ export function Timeline({
   project,
   playhead,
   waveforms,
+  effects = [],
   dispatch,
   onSeek,
   onSelectionChange,
@@ -111,12 +124,13 @@ export function Timeline({
   onDropMedia,
   onGrabEnd,
 }: TimelineProps): ReactElement {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
   const clipboard = useRef<Copied[]>([]);
   const [flicksPerPixel, setFlicksPerPixel] = useState(DEFAULT_FLICKS_PER_PIXEL);
   const [selected, setSelected] = useState<ReadonlySet<ClipId>>(() => new Set());
+  const [keyframe, setKeyframe] = useState<KeyframeSelection>();
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [edgeMode, setEdgeMode] = useState<EdgeMode>("trim");
   const [dragMode, setDragMode] = useState<DragMode>("move");
@@ -145,6 +159,7 @@ export function Timeline({
     dispatch,
     onSeek,
     onSelect: select,
+    onSelectKeyframe: useCallback((hit) => setKeyframe({ row: hit.row, time: hit.time }), []),
     selection: selected,
     zoom,
     snapEnabled,
@@ -172,6 +187,29 @@ export function Timeline({
   const menu = gestures.menu;
   // One viewport of slack past the end, so a clip can always be dragged beyond what exists.
   const contentWidth = timeToX(end, flicksPerPixel) + Math.max(viewport.width, 1);
+
+  // The lane follows the clip selection, so it and the inspector are always showing the same clip.
+  const laneClip = useMemo(() => {
+    const first = [...selected][0];
+    return first === undefined ? undefined : findClip(project, first)?.clip;
+  }, [project, selected]);
+  const laneRowList = useMemo(() => (laneClip === undefined ? [] : laneRows(laneClip)), [laneClip]);
+  // Derived rather than kept in step by an effect: a keyframe that was deleted, or one on a clip
+  // that is no longer selected, simply stops being found -- there is no stale selection to clear.
+  const picked = pickedKeyframe(laneRowList, keyframe);
+
+  const removeKeyframe = useCallback(() => {
+    if (laneClip === undefined || picked === undefined) return;
+    dispatch(
+      cmd.keyframeRemove(
+        on.clip(laneClip.id),
+        picked.row.effectType,
+        picked.row.key,
+        picked.entry.time,
+      ),
+    );
+    setKeyframe(undefined);
+  }, [dispatch, laneClip, picked]);
 
   const remove = useCallback(
     (ripple: boolean) => {
@@ -221,6 +259,11 @@ export function Timeline({
       const action = shortcut(event);
       if (action === undefined) return;
       event.preventDefault();
+      // A keyframe under the hand is what the delete keys aim at; there is no rippling a keyframe,
+      // so both spellings mean the one thing they can mean here.
+      if (picked !== undefined && (action === "delete" || action === "rippleDelete")) {
+        return removeKeyframe();
+      }
       switch (action) {
         case "delete":
           return remove(false);
@@ -248,7 +291,7 @@ export function Timeline({
           return dispatch(cmd.markerAdd(playhead, ""));
       }
     },
-    [remove, copy, cut, paste, dispatch, project, selected, playhead],
+    [remove, copy, cut, paste, dispatch, project, selected, playhead, picked, removeKeyframe],
   );
 
   return (
@@ -314,6 +357,40 @@ export function Timeline({
         </div>
       </div>
 
+      {/* Only while a keyframe is picked, and outside the scrolling area on purpose: what a
+          keyframe is set to has to stay reachable while the lane it lives on is scrolled. */}
+      {picked !== undefined && laneClip !== undefined && (
+        <div className="v-timeline__keybar" data-testid="keyframe-bar">
+          <span className="v-timeline__keybarName">
+            {paramLabel(picked.row, effects, locale, t)}
+          </span>
+          <select
+            aria-label={t("keyframe.interp")}
+            value={picked.entry.interp}
+            onChange={(event) =>
+              dispatch(
+                cmd.keyframeSetInterp(
+                  on.clip(laneClip.id),
+                  picked.row.effectType,
+                  picked.row.key,
+                  picked.entry.time,
+                  event.target.value as Interp,
+                ),
+              )
+            }
+          >
+            {offeredFor(picked.entry.interp).map((interp) => (
+              <option key={interp} value={interp}>
+                {t(`interp.${interp}`)}
+              </option>
+            ))}
+          </select>
+          {/* A finger has no Delete key, and this is the only way to reach the one thing a picked
+              keyframe can have done to it without one. */}
+          <IconButton icon="trash" label={t("keyframe.delete")} onClick={removeKeyframe} />
+        </div>
+      )}
+
       <div className="v-timeline__body">
         <div className="v-timeline__headers">
           <div className="v-timeline__rulerSpacer" />
@@ -327,6 +404,7 @@ export function Timeline({
               <span className="v-timeline__headerKind">{t(`track.kind.${track.kind}`)}</span>
             </div>
           ))}
+          <KeyframeLaneHeaders rows={laneRowList} effects={effects} />
         </div>
 
         <div
@@ -357,6 +435,19 @@ export function Timeline({
                 />
               ))}
             </div>
+            {/* Inside the same content the tracks are in, so the lane's x axis is the timeline's
+                x axis by construction rather than by agreement, and the playhead crosses it. */}
+            {laneClip !== undefined && (
+              <KeyframeLane
+                clip={laneClip}
+                rows={laneRowList}
+                flicksPerPixel={flicksPerPixel}
+                range={range}
+                fps={project.settings.fps}
+                effects={effects}
+                selection={picked === undefined ? undefined : keyframe}
+              />
+            )}
             {markers.map((marker) => (
               <button
                 key={marker.id}
@@ -537,6 +628,21 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
   return (
     <ContextMenu x={menu.x} y={menu.y} label={t("timeline.clipMenu")} items={items} onClose={onClose} />
   );
+}
+
+/**
+ * The keyframe the lane has picked, resolved against the rows that exist right now. A row that is
+ * gone, or a time nothing sits at any more, is simply not found -- which is what makes a delete and
+ * a change of clip need no cleanup of their own.
+ */
+function pickedKeyframe(
+  rows: readonly LaneRow[],
+  selection: KeyframeSelection | undefined,
+): { row: LaneRow; entry: Keyframe } | undefined {
+  if (selection === undefined) return undefined;
+  const row = rows.find((candidate) => candidate.id === selection.row);
+  const entry = row?.track.find((candidate) => candidate.time === selection.time);
+  return row === undefined || entry === undefined ? undefined : { row, entry };
 }
 
 // One clip out of every group the selection touches, so a command that acts on a whole group is

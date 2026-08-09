@@ -1,7 +1,12 @@
 .v-timeline {
   --v-ruler-height: 26px;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  /* One row per keyframe track. A finger needs a whole touch target of height here, because what
+     is being aimed at is a point in time and there is nothing wider around it to hit instead. */
+  --v-keylane-row: 26px;
+  /* A column rather than a fixed number of grid rows: the bar above the lane comes and goes with
+     the selection, and grid-template-rows would have to be told how many rows exist today. */
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   background: var(--v-bg-elevated);
   border-top: 1px solid var(--v-border);
@@ -29,6 +34,7 @@
 .v-timeline__body {
   display: grid;
   grid-template-columns: auto 1fr;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   background: var(--v-bg-sunken);
@@ -336,4 +342,207 @@
   color: var(--v-text-muted);
   opacity: 0.6;
   cursor: default;
+}
+
+/* ------------------------------------------------------------------- the keyframe lane */
+
+/* What one picked keyframe is set to, and the one thing that can be done to it without a Delete
+   key. Outside the scrolling body on purpose: the lane scrolls away under a long project, and a
+   control that scrolls out of reach is a control the phone layout does not have. */
+.v-timeline__keybar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--v-space-2);
+  padding: var(--v-space-1) var(--v-space-2);
+  background: var(--v-accent-soft);
+  border-bottom: 1px solid var(--v-border);
+}
+
+.v-timeline__keybarName {
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inside .v-timeline__content, below the tracks: one x axis for the whole surface, so the time a
+   keyframe is drawn at is the time the ruler and the playhead are drawn at -- not a second
+   mapping that agrees with the first until somebody zooms. */
+.v-keylane {
+  position: relative;
+  border-top: 1px solid var(--v-border-strong);
+}
+
+.v-keylane__row {
+  position: relative;
+  height: var(--v-keylane-row);
+  color: var(--v-accent);
+  border-bottom: 1px solid var(--v-border);
+}
+
+/* A row whose keyframes the motion path overwrites. Dimmed rather than hidden: the keys are still
+   in the file, and the lane exists to show what is stored. */
+.v-keylane__row[data-overridden] {
+  color: var(--v-text-muted);
+  opacity: 0.65;
+}
+
+/* How the travel after a key is timed, drawn as the shape of the gap it governs. Never pointed at:
+   the key carries the setting, and two things to grab for one edit is one too many. */
+.v-keylane__segment {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  pointer-events: none;
+}
+
+.v-keylane__segment[data-interp="linear"] {
+  background: currentcolor;
+}
+
+/* Nothing moves, then it jumps. A broken line is what that looks like from above. */
+.v-keylane__segment[data-interp="hold"] {
+  background: repeating-linear-gradient(90deg, currentcolor 0 6px, transparent 6px 12px);
+}
+
+/* Slow at both ends, so the line is faint where the motion is. */
+.v-keylane__segment[data-interp="ease"] {
+  background: linear-gradient(
+    90deg,
+    transparent 0,
+    currentcolor 22%,
+    currentcolor 78%,
+    transparent 100%
+  );
+}
+
+.v-keylane__segment[data-interp="bezier"] {
+  background: repeating-linear-gradient(90deg, currentcolor 0 2px, transparent 2px 6px);
+}
+
+/* The hit area, not the picture. It is a whole touch target wide on a finger, which is far wider
+   than the diamond it draws -- a keyframe point that cannot be hit with a finger is not one. */
+.v-keylane__key {
+  position: absolute;
+  top: 0;
+  width: 22px;
+  height: 100%;
+  transform: translateX(-50%);
+  padding: 0;
+  background: none;
+  border: none;
+  /* A button does not inherit its colour: the user agent hands it `buttontext`, and that beat the
+     row's accent every time. The diamond then drew its outline in near-black on a near-black lane,
+     and only the picked one -- which sets a colour of its own -- could be seen at all. Found by
+     looking at the screenshot; no measurement in any harness had an opinion about it. */
+  color: inherit;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 1;
+}
+
+.v-keylane__key::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -6px 0 0 -6px;
+  /* The lane sits on the sunken ground, so an "elevated" fill is barely a shade off it and an
+     unpicked diamond read as a hole rather than as a shape. */
+  background: var(--v-surface);
+  border: 2px solid currentcolor;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+/* A held key ends its segment where the next one begins, so its own shape says so too. */
+.v-keylane__key[data-interp="hold"]::before {
+  border-radius: 0;
+  transform: none;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+}
+
+.v-keylane__key:hover::before {
+  background: currentcolor;
+}
+
+.v-keylane__key[aria-pressed="true"] {
+  color: var(--v-accent-hover);
+  z-index: 2;
+}
+
+.v-keylane__key[aria-pressed="true"]::before {
+  background: currentcolor;
+  border-color: var(--v-text);
+  box-shadow: 0 0 0 2px var(--v-accent-soft);
+}
+
+/* The sticky column beside the lane. Same order and the same height as the rows it names, because
+   the two are one list drawn at two ends. */
+.v-keylane__header {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
+  height: var(--v-keylane-row);
+  padding: 0 var(--v-space-2) 0 var(--v-space-3);
+  border-bottom: 1px solid var(--v-border);
+  overflow: hidden;
+}
+
+.v-keylane__header:first-of-type {
+  border-top: 1px solid var(--v-border-strong);
+}
+
+.v-keylane__headerName {
+  color: var(--v-text);
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading-tight);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.v-keylane__header[data-overridden] .v-keylane__headerName {
+  color: var(--v-text-muted);
+  text-decoration: line-through;
+}
+
+.v-keylane__headerNote {
+  flex: none;
+  color: var(--v-warning);
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (pointer: coarse) {
+  .v-timeline {
+    --v-keylane-row: var(--v-touch-target);
+  }
+
+  .v-keylane__key {
+    width: var(--v-touch-target);
+  }
+}
+
+/* Sticky to the left edge of the viewport rather than to content x 0: the hint is a sentence, and
+   a sentence that has scrolled off the side is not a hint. */
+.v-keylane__empty {
+  position: sticky;
+  left: 0;
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  padding: var(--v-space-2) var(--v-space-3);
+  color: var(--v-text-muted);
+  font-size: var(--v-text-sm);
 }

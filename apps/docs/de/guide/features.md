@@ -50,6 +50,14 @@ eine `position`-Spur macht aus einer Reihe von Schlüsseln einen **Bewegungspfad
 interpoliert wird statt als Ecken. Die Interpolation geschieht im Rust-Kern, damit Vorschau und
 Export unmöglich verschiedene Werte lesen.
 
+Bearbeitet werden Keyframes in einer Spur unter den Spuren, auf der Zeitachse der Zeitleiste
+selbst: ein Druck wählt einen aus, ein Zug verschiebt ihn, <kbd>Entf</kbd> oder der Knopf über der
+Spur löscht ihn, und eine Auswahl bestimmt den Verlauf der Strecke danach — linear, halten oder
+weich. Ein Zug ist ein Undo-Schritt, und alles funktioniert mit dem Finger genauso wie mit der
+Maus. Einen Kurveneditor gibt es noch nicht: ein Projekt, das Bezier-Anfasser trägt, behält sie und
+behält seine Form, aber ziehen kann sie hier niemand — siehe
+[Schneiden](./editing.md#die-keyframe-spur).
+
 Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 258 solcher
 Prüfungen laufen bei jedem Bau. Ein zu einem Drittel gedeckter Pixel über Rot muss **81** ergeben —
 das liefert premultipliziertes Alpha; die naheliegende Antwort 255 fällt durch.
