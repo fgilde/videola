@@ -79,6 +79,29 @@ Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. E
 gedeckter Pixel über Rot muss **81** ergeben —
 das liefert premultipliziertes Alpha; die naheliegende Antwort 255 fällt durch.
 
+## Untertitel
+
+Eine **SRT** oder **WebVTT**, die auf den Editor faellt, wird zu einer Untertitelspur: ein Clip je
+Marke, zu den Zeitpunkten der Marke selbst. Dieselbe Spur schreibt sich als SRT wieder heraus,
+Zeichen fuer Zeichen -- die Formate rechnen in ganzen Millisekunden, eine Millisekunde sind genau
+705 600 Flicks, und die Umrechnung liegt an einer einzigen Stelle, damit eine Datei den Weg hin und
+zurueck geht, ohne sich zu bewegen.
+
+Ein Untertitel ist ein Clip mit einem Textgenerator darin. Er laesst sich also ziehen, trimmen und
+teilen wie alles andere auf der Zeitleiste; einen in den naechsten zu verbinden ist ein Menuepunkt
+und ein Rueckgaengig-Schritt. Getippt werden die Woerter im Inspector, in einem Textbereich statt in
+einem einzeiligen Feld, denn ein zweizeiliger Untertitel ist zweizeilig. Voreingestellt ist Weiss auf
+halbdurchsichtiger Platte, unten und mittig -- dass das vor hellem Himmel wie vor naechtlichem
+Innenraum lesbar bleibt, wird an Pixeln geprueft statt behauptet.
+
+Im Export gehen sie **ins Bild**, **daneben als Untertitelspur**, die der Zuschauer abschalten kann,
+oder **gar nicht**. Welcher Container eine eigene Spur tragen kann, wird beim Schreiber erfragt statt
+angenommen, und die entstandene Datei wird von **ffprobe** zurueckgelesen, um zu bestaetigen, dass
+die Spur wirklich darin steht.
+
+Untertitelclips werden nirgends abgelehnt und ueberall erkannt: zurueckgeschrieben wird nur eine
+Untertitelspur, die Bauchbinden auf den Textspuren bleiben also aus der Untertiteldatei heraus.
+
 ## Umzeiten und Voreinstellungen
 
 Die Geschwindigkeit eines Clips ist eine **Kurve über die Zeit**, kein Faktor. Keyframes auf der

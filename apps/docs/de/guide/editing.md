@@ -372,6 +372,64 @@ oeffnen sich an keinem Ende der Fahrt die Ecken auf den Hintergrund.
 **Geteilter Bildschirm** beschneidet jeden Clip auf die Haelfte, in der er steht, statt ihn zu
 stauchen; beide behalten damit ihre Proportionen.
 
+## Untertitel
+
+Videola liest und schreibt **SRT** und **WebVTT**. Lass eine `.srt` oder `.vtt` auf den Editor
+fallen, oder nimm **Untertitel importieren** im Projektmenue: jede Marke wird zu einem Clip auf einer
+eigenen Untertitelspur. **Untertitel exportieren** schreibt die Spur als SRT neben das Projekt
+zurueck.
+
+Ein Untertitel ist ein gewoehnlicher Clip mit einem Textgenerator darin. Alles, was die Zeitleiste
+mit einem Clip kann, kann sie deshalb auch mit einem Untertitel: ziehen, an beiden Kanten trimmen,
+am Abspielkopf teilen. Zwei Dinge gehoeren den Untertiteln allein. **Mit naechstem Untertitel
+verbinden** im Clipmenue faltet einen Untertitel in den folgenden -- die Woerter auf eigenen Zeilen
+verbunden, die Spanne vom ersten Kopf bis zum zweiten Ende -- und das ist ein Rueckgaengig-Schritt,
+denn ein halb verbundenes Paar ist kein Zustand, in den jemand gelangen wollte. Und im **Text**-Feld
+des Inspectors werden die Woerter getippt. Es ist ein Textbereich und kein einzeiliges Feld: ein
+harter Zeilenumbruch ist ein Zeilenumbruch im Bild, und ein zweizeiliger Untertitel, der in ein
+einzeiliges Feld getippt wird, kommt einzeilig zurueck.
+
+### Wo die Zeiten liegen
+
+Die Formate rechnen in ganzen Millisekunden, das Projekt in Flicks. 705 600 000 ist ein ganzes
+Vielfaches von 1000, eine Millisekunde sind also genau 705 600 Flicks, und in keiner Richtung geht
+etwas verloren. Diese Umrechnung liegt in `millisecondsToTime` und `timeToMilliseconds` in
+`packages/core/src/commands.ts` und sonst nirgends -- und genau das laesst dieselbe Datei Zeichen
+fuer Zeichen hinein und wieder heraus. Geprueft wird das an einer Datei, deren Millisekunden weder
+ganze Sekunden noch ganze Bilder sind.
+
+Zurueckgeschrieben wird nur eine Untertitelspur. Das ist der ganze Grund, warum es
+`TrackKind::Caption` gibt statt einer Verabredung auf der Textspur: die mitgelieferten Vorlagen legen
+Bauchbinden auf Textspuren, eine Untertiteldatei aus allen Textclips des Projekts truege die
+Bauchbinden also als Marken mit -- und eine aus einigen von ihnen braeuchte anderswo eine zweite
+Markierung, die sagt, welche. Eine ausgeblendete Untertitelspur bleibt aus der Datei, aus demselben
+Grund, aus dem sie aus dem Bild bleibt.
+
+### Was eine SRT sein darf
+
+Eine Untertiteldatei ist eine Datei, die dir jemand gegeben hat. Jedes hiervon wird einzeln
+weggelassen, und der Rest der Datei wird trotzdem gelesen: ein Zeitstempel, der sich nicht lesen
+laesst, ein Ende, das nicht nach dem Anfang kommt, eine Marke ohne Woerter darin, eine Marke weiter
+draussen, als ein Projekt reicht. Nach 20 000 Marken hoert das Lesen auf -- das Zehnfache eines
+dreistuendigen Films. Aus einer Datei, die gar keine Untertiteldatei ist, kommt nichts statt eines
+Fehlers. Auszeichnungen fallen weg -- der Generator zeichnet einen Textlauf in einem Stil, und die
+Alternative waere, die Auszeichnung als Zeichen zu zeichnen.
+
+### Wie sie aussehen und wo sie landen
+
+Voreingestellt ist Weiss auf einer halbdurchsichtigen schwarzen Platte, unten und mittig, in den
+Stilschluesseln, die der Textgenerator ohnehin liest. Die Platte ist es, die den Untertitel vor
+hellem Himmel wie vor naechtlichem Innenraum lesbar macht -- eine Kontur allein uebersteht das eine
+und nicht das andere, und eine Kontur, die fuer beides breit genug ist, frisst die Punzen der
+Buchstaben. Diese Behauptung wird an Pixeln geprueft, ueber Weiss und ueber Fastschwarz, gegen
+dieselben Woerter ohne Platte.
+
+Im Exportdialog stehen Untertitel **ins Bild**, **als eigene Spur** oder **weggelassen**. Ins Bild
+ist die Voreinstellung und verlangt vom Abspieler nichts. Eine eigene Spur kann der Zuschauer
+abschalten; ob der gewaehlte Container eine tragen kann, wird beim Schreiber erfragt statt
+angenommen, und der Knopf ist ausgegraut, wo er es nicht kann. Beide Container, die Videola
+schreibt, tragen heute WebVTT.
+
 ## Wiedergabe
 
 Der Transport bietet Anfang, Bild zurück, Abspielen/Pause, Bild vor, Ende und einen Timecode aus der

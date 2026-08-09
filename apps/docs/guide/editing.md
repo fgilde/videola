@@ -352,6 +352,59 @@ onto the background at either end of the move.
 **Split screen** crops each clip to the half it stands in rather than squashing it, so both keep their
 proportions.
 
+## Subtitles
+
+Videola reads and writes **SRT** and **WebVTT**. Drop an `.srt` or a `.vtt` on the editor, or reach
+for **Import captions** in the project menu, and every cue becomes a clip on a caption track of its
+own. **Export captions** writes the track back out as an SRT beside the project.
+
+A subtitle is an ordinary clip with a text generator in it, so everything the timeline can already
+do to a clip it can do to a subtitle: drag it, trim either edge, split it at the playhead. Two more
+things belong to captions in particular. **Merge with next caption** in the clip menu folds a
+subtitle into the one that follows it -- the words joined on their own lines, the span reaching from
+the first head to the second tail -- and it is one undo step, because a half-merged pair is not a
+state anyone asked to land on. And the **Text** panel in the inspector is where the words are typed.
+It is a textarea and not a single-line field: a hard line break is a line break on screen, and a
+two-line subtitle typed into an input comes back as one line.
+
+### Where the times live
+
+The formats count in whole milliseconds and the project counts in flicks. 705 600 000 is a whole
+multiple of 1000, so a millisecond is exactly 705 600 flicks and neither direction loses anything.
+That conversion lives in `millisecondsToTime` and `timeToMilliseconds` in
+`packages/core/src/commands.ts` and nowhere else, and it is what lets the same file go in and come
+back out character for character -- which is checked, on a file whose milliseconds are none of them
+a whole second or a whole frame.
+
+Only a caption track is read back out. That is the whole reason `TrackKind::Caption` exists rather
+than a convention on the text track: the builtin templates put lower thirds on text tracks, so a
+subtitle file written from every text clip in the project would carry the lower thirds as cues, and
+one written from some of them would need a second marking somewhere else to say which. A hidden
+caption track is left out of the file for the same reason it is left out of the picture.
+
+### What an SRT is allowed to be
+
+A caption file is something you were handed, so every one of these is dropped on its own and the
+rest of the file is still read: a timestamp that will not parse, an end that does not come after its
+start, a cue with no words in it, a cue further out than a project may reach. Reading stops after
+20 000 cues, which is ten times a three-hour feature. A file that is not a caption file at all
+yields nothing rather than an error. Markup is dropped -- the generator draws one run of text in one
+style, and the alternative is drawing the tag as characters.
+
+### How they look, and where they end up
+
+The default is white on a translucent black plate, low and centred, in the style keys the text
+generator already reads. The plate is what makes it readable on a bright sky and on a night interior
+both -- a stroke alone survives one and not the other, and a stroke wide enough for both eats the
+counters of the letters. That claim is checked at pixels, over white and over near-black, against
+the same words with the plate taken away.
+
+In the export dialog, captions go **in the picture**, **as a separate track**, or are **left out**.
+In the picture is the default and needs nothing of the player. A separate track is one the viewer
+can switch off; whether the chosen container can carry one is asked of the writer rather than
+assumed, and the control is greyed out where it cannot. Both containers Videola writes can carry
+WebVTT today.
+
 ## Playback
 
 The transport gives you start, frame back, play/pause, frame forward, end, and a timecode read from

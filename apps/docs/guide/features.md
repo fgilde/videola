@@ -73,6 +73,27 @@ picture it was drawn from fails the build. A third-covered pixel over red must r
 what premultiplied alpha
 gives; the reflex answer of 255 fails.
 
+## Subtitles
+
+An **SRT** or a **WebVTT** dropped on the editor becomes a caption track: one clip per cue, at the
+cue's own instants. The same track writes back out as an SRT, character for character -- the formats
+count in whole milliseconds, a millisecond is exactly 705 600 flicks, and the conversion lives in one
+place so a file can make the round trip without moving.
+
+A subtitle is a clip with a text generator in it, so it drags, trims and splits like anything else on
+the timeline; merging one into the next is a menu entry and a single undo step. The words are typed
+in the inspector, in a textarea rather than a one-line field, because a two-line subtitle is two
+lines. The default look is white on a translucent plate, low and centred, and that it stays readable
+on a bright sky and on a night interior is checked at pixels rather than asserted.
+
+In the export they go **into the picture**, **beside it as a subtitle track** the viewer can switch
+off, or **nowhere**. Which containers can carry a track of their own is asked of the writer rather
+than assumed, and the file that comes out is read back by **ffprobe** to confirm the track is really
+in it.
+
+Caption clips are refused nowhere and marked everywhere: only a caption track is written back out,
+so the lower thirds on your text tracks stay out of the subtitle file.
+
 ## Retiming and presets
 
 A clip's speed is a **curve over time**, not a factor. Keyframes on the `speed` track make the map
