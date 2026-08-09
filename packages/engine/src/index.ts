@@ -41,5 +41,7 @@ export { blendState, drawList } from "./render/draw-list";
 export type { BlendState, DrawItem, DrawList, EffectPass } from "./render/draw-list";
 export { EffectPreview, referencePicture } from "./render/preview";
 export { compileProgram, setUniforms } from "./render/program";
+export { measure, SCOPE_LEVELS, VECTOR_SIZE, VECTOR_TARGETS } from "./render/scopes";
+export type { Histogram, ScopeReading } from "./render/scopes";
 export { renderStills } from "./render/still";
 export type { StillRequest } from "./render/still";

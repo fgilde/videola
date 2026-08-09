@@ -13,6 +13,7 @@ export * from "./preview/Preview";
 export * from "./preview/Transport";
 export * from "./inspector/Inspector";
 export * from "./mixer/Mixer";
+export * from "./scopes/Scopes";
 export * from "./inspector/ParamRow";
 export * from "./inspector/CurveRow";
 export * from "./timeline/Timeline";

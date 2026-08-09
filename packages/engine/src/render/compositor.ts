@@ -117,6 +117,8 @@ export class Compositor {
   #effects = new Map<string, Pipeline>();
   #screen: Pipeline | undefined;
   #chain: RenderTarget[] = [];
+  // Built on first use, like everything else here: a project nobody is measuring never makes one.
+  #scope: RenderTarget | undefined;
   #mirror: WebGLTexture | undefined;
   #resources: Resources | undefined;
   #disposed = false;
@@ -175,6 +177,52 @@ export class Compositor {
     return pixels;
   }
 
+  /**
+   * The same picture, smaller: what a measuring instrument reads.
+   *
+   * A scope needs numbers about the frame, not the frame, and the frame is the expensive part.
+   * `readPixels` stalls until the driver has finished and then copies the whole drawing buffer
+   * across the bus -- eight megabytes at 1080p, thirty times a second if anything asks per frame.
+   * The blit does the shrinking on the GPU and leaves a fraction of that to copy: at 256 by 144 it
+   * is 147 kilobytes, one part in fifty-six.
+   *
+   * NEAREST and not LINEAR, and that is the whole difference between a measurement and a picture.
+   * Averaging four neighbours invents values no pixel had: a single clipped highlight in a dark
+   * field averages down into a midtone and the scope stops reporting the one thing it exists to
+   * report. Nearest keeps real pixel values and simply reads fewer of them, which is a sample of
+   * the picture rather than a smoothed version of it.
+   *
+   * ponytail: the read is still synchronous, so it waits for the GPU. A PIXEL_PACK_BUFFER with a
+   * fence read a frame late would not wait at all -- worth it if a scope ever has to keep up with
+   * playback rather than with a person looking at it.
+   */
+  sample(width: number, height: number): Uint8Array {
+    const gl = this.#gl;
+    if (this.#disposed || gl.isContextLost() || width <= 0 || height <= 0) return new Uint8Array(0);
+    const target = (this.#scope ??= new RenderTarget(gl));
+    target.bind(width, height);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    gl.blitFramebuffer(
+      0,
+      0,
+      gl.drawingBufferWidth,
+      gl.drawingBufferHeight,
+      0,
+      0,
+      width,
+      height,
+      gl.COLOR_BUFFER_BIT,
+      gl.NEAREST,
+    );
+    // Back to the small target, or the read below would take its pixels from the drawing buffer
+    // the blit just read -- which is the full-size copy this exists to avoid.
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, target.framebuffer);
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return pixels;
+  }
+
   // Final. A preview component that unmounts still has an animation frame in flight, and without
   // the flag the next render would rebuild everything this just deleted -- and leak it, because
   // the subscription that would have dropped the handles is gone.
@@ -184,6 +232,8 @@ export class Compositor {
     for (const texture of this.#textures.values()) gl.deleteTexture(texture);
     this.#textures.clear();
     for (const target of this.#chain) target.dispose();
+    this.#scope?.dispose();
+    this.#scope = undefined;
     for (const pipeline of this.#effects.values()) this.#discard(pipeline);
     if (this.#mirror !== undefined) gl.deleteTexture(this.#mirror);
     this.#chain = [];
@@ -437,6 +487,7 @@ export class Compositor {
     this.#textures.clear();
     this.#effects.clear();
     this.#chain = [];
+    this.#scope = undefined;
     this.#mirror = undefined;
     this.#screen = undefined;
     this.#resources = undefined;

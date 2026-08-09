@@ -1188,6 +1188,95 @@ test("a colour parameter reaches the shader as a colour", () => {
     crossing("dip", 500, { params: { colour: 0.5 } }).at(2, 2), [0, 0, 0, 255]);
 });
 
+// ---------------------------------------------------------------------------------------------
+// What a measuring instrument reads. `scopes.test.ts` pins the counting; only a driver can say
+// whether the pixels handed to it are the pixels that were drawn, and whether shrinking them on
+// the way keeps the values a scope exists to report.
+// ---------------------------------------------------------------------------------------------
+
+// Four quadrants, so a sample that came back mirrored, rotated or off by a row is a different
+// picture rather than the same one at another size.
+const QUADRANTS = (x, y) => (y < 16 ? (x < 16 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+  : (x < 16 ? [0, 0, 255, 255] : [255, 255, 0, 255]));
+
+function painted(pixel, size, background) {
+  const { compositor, scene } = rig(size, size, background || "#000000", [{}], size, size);
+  const f = frame(size, size, pixel);
+  draw(compositor, scene, 0, new Map([["clp_0", f]]));
+  f.close();
+  return compositor;
+}
+
+function onlyLevels(counts) {
+  const found = [];
+  counts.forEach((count, level) => { if (count > 0) found.push(level); });
+  return found;
+}
+
+test("a sampled read is the picture at another size", () => {
+  const small = painted(QUADRANTS, 32).sample(8, 8);
+  check("the whole small buffer came back", small.length, 8 * 8 * 4);
+  const at = reader(small, 8, 8);
+  check("top left is still red", at(1, 1), [255, 0, 0, 255]);
+  check("top right is still green", at(6, 1), [0, 255, 0, 255]);
+  check("bottom left is still blue", at(1, 6), [0, 0, 255, 255]);
+  check("bottom right is still yellow", at(6, 6), [255, 255, 0, 255]);
+});
+
+// The reason the shrink is NEAREST. A clipped patch in a dark field is the single most important
+// thing a scope has to report, and an averaging shrink turns its edge into midtones that were
+// never in the picture -- a scope then reports tones nothing on screen has.
+//
+// Thirteen out of thirty-two on purpose: at a whole ratio a bilinear read lands on texel centres
+// and gives the same answer nearest does, so a check taken at half size cannot tell the two apart.
+test("shrinking a picture invents no value that was never in it", () => {
+  const patch = (x, y) => (x > 10 && x < 15 && y > 10 && y < 15
+    ? [255, 255, 255, 255] : [16, 16, 16, 255]);
+  const small = painted(patch, 32).sample(13, 13);
+  const levels = new Set();
+  for (let i = 0; i < small.length; i += 4) levels.add(small[i]);
+  check("only the two levels the frame carried came back",
+    [...levels].sort((a, b) => a - b), [16, 255]);
+});
+
+// End to end on real pixels: a flat colour has a histogram with one bar per channel, which is the
+// reading everybody checks a scope against first.
+test("a solid colour reads as one bar in every channel", () => {
+  const reading = R.measure(painted(() => [64, 128, 192, 255], 32).sample(16, 16), 16, 16);
+  check("every pixel was measured", reading.measured, 256);
+  check("red", onlyLevels(reading.histogram.red), [64]);
+  check("green", onlyLevels(reading.histogram.green), [128]);
+  check("blue", onlyLevels(reading.histogram.blue), [192]);
+  check("and the waveform sits on one line", reading.range, [119, 119]);
+});
+
+// Scope and empty picture, crossed on a driver. A frame with a transparent background has nothing
+// in it to measure, and the reading has to come back empty rather than as a spike at black.
+test("a measurement of a frame nothing was drawn into is empty", () => {
+  const { compositor } = rig(16, 16, "#00000000", []);
+  draw(compositor, project(16, 16, "#00000000", []), 0, new Map());
+  const reading = R.measure(compositor.sample(8, 8), 8, 8);
+  check("nothing was measured", reading.measured, 0);
+  check("and no level was counted", reading.range, undefined);
+});
+
+// Scope and grading, crossed: the instrument has to move when the picture does, or it is a picture
+// of a scope. A lift raises the black point, and the floor of the reading is what that means.
+test("a scope follows the grade", () => {
+  const size = 16;
+  const effects = [{ id: "eff_1", effectType: "colorWheels", enabled: true, params: {}, keyframes: {} }];
+  const { compositor, scene } = rig(size, size, "#000000", [{ effects }], size, size);
+  const floorAt = (lift) => {
+    const f = frame(size, size, (x) => [x * 16, x * 16, x * 16, 255]);
+    draw(compositor, scene, 0, new Map([["clp_0", f]]),
+      resolved([["eff_1", [["liftAmount", lift]]]]));
+    f.close();
+    return R.measure(compositor.sample(size, size), size, size).range[0];
+  };
+  check("ungraded, the darkest column is black", floorAt(0), 0);
+  check("lifted, the whole picture stands off the floor", floorAt(0.25), 64, 2);
+});
+
 // A round shape is the one thing about this that a unit test cannot see: an iris that came out an
 // axis-aligned square, or an ellipse on a wide frame, satisfies every claim about progress.
 test("an iris opens a circle and not a box", () => {

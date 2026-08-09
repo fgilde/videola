@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
 
-export type EditorPanel = "library" | "timeline" | "inspector" | "mixer";
+export type EditorPanel = "library" | "timeline" | "inspector" | "mixer" | "scopes";
 
 // One entry per panel that exists. The properties panel is what carries effects, keyframes,
 // transitions and speed, and while it sat squeezed between the transport and this bar the phone was
@@ -14,6 +14,7 @@ const TABS = [
   { id: "timeline", label: "timeline.label" },
   { id: "inspector", label: "inspector.label" },
   { id: "mixer", label: "panel.mixer" },
+  { id: "scopes", label: "scopes.label" },
 ] as const satisfies readonly { id: EditorPanel; label: string }[];
 
 export interface PanelTabsProps {

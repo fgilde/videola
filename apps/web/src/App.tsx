@@ -31,12 +31,15 @@ import {
   effectManifests,
   EXPORT_FORMATS,
   formatSupport,
+  measure as measureScopes,
   measureLoudness,
   Playback,
   probe,
   startExport,
+  VECTOR_TARGETS,
   type ExportHandle,
   type ExportRange,
+  type ScopeReading,
 } from "@videola/engine";
 import {
   clearSession,
@@ -63,6 +66,7 @@ import {
   pickFiles,
   Preview,
   projectEnd,
+  Scopes,
   TemplateGallery,
   TemplateWizard,
   Timeline,
@@ -98,6 +102,12 @@ const AUTOSAVE_MS = 30_000;
 
 // Stamped into every .videola this build writes.
 const APP_VERSION = "0.3.0";
+// The size the preview is shrunk to before it is counted. Sixteen by nine, so the waveform's
+// columns line up with the picture's, and small enough that the read is 147 kB rather than eight
+// megabytes -- see the note on the timer below.
+const SCOPE_WIDTH = 256;
+const SCOPE_HEIGHT = 144;
+const SCOPE_INTERVAL_MS = 100;
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 // A stable empty array, so the poster hook is not handed a fresh one on every render.
@@ -118,6 +128,7 @@ export function App(): ReactElement {
   const [loudness, setLoudness] = useState<number>();
   const [measuring, setMeasuring] = useState(false);
   const [panel, setPanel] = useState<EditorPanel>("timeline");
+  const [reading, setReading] = useState<ScopeReading>();
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -290,6 +301,30 @@ export function App(): ReactElement {
       setPlaying(playback.isPlaying);
     });
   }, [playback]);
+
+  // What the scopes read, and how often.
+  //
+  // Measured before it was chosen. On the software rasteriser the harness runs, reading the whole
+  // 1080p drawing buffer back and counting all two million pixels costs 33 ms -- longer than a
+  // frame, every frame, for a panel nobody is dragging. Shrinking on the GPU first and counting
+  // 256 by 144 costs 0.9 ms, and a person reading a scope cannot see it change faster than about
+  // ten times a second. Ten hertz of 0.9 ms is under one percent of one core.
+  //
+  // On a timer rather than on the clock's tick, because that is what makes the rate the rate: a
+  // tick fires at whatever the display does and would need a counter of its own to be capped. And
+  // the effect only exists while the panel is on screen, so an editor nobody is grading in pays
+  // nothing at all.
+  useEffect(() => {
+    if (playback === undefined || canvas === null) return;
+    if (layout === "phone" && panel !== "scopes") return;
+    const take = (): void => {
+      const pixels = playback.sample(SCOPE_WIDTH, SCOPE_HEIGHT);
+      setReading(pixels.length === 0 ? undefined : measureScopes(pixels, SCOPE_WIDTH, SCOPE_HEIGHT));
+    };
+    take();
+    const timer = window.setInterval(take, SCOPE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [playback, canvas, layout, panel]);
 
   useEffect(() => {
     if (playback === undefined || canvas === null) return;
@@ -786,6 +821,9 @@ export function App(): ReactElement {
                   onRelink={(media) => void relink(media)}
                   onGrab={setGrab}
                 />
+              )}
+              {(layout !== "phone" || panel === "scopes") && (
+                <Scopes reading={reading} targets={VECTOR_TARGETS} />
               )}
               {(layout !== "phone" || panel === "mixer") && (
                 <Mixer

@@ -1,0 +1,67 @@
+/* A strip of instruments under the picture, the way a grading suite stands them. The row it sits
+   in is content-sized, so the height comes from here and nowhere else. */
+.v-scopes {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr);
+  align-items: stretch;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2);
+  background: var(--v-bg-elevated);
+  border-top: 1px solid var(--v-border);
+  min-width: 0;
+}
+
+.v-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.v-scope__title {
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-strong);
+  text-transform: uppercase;
+  letter-spacing: var(--v-tracking-wide);
+  color: var(--v-text-muted);
+}
+
+/* `color` is what the traces are drawn in -- the canvas has no other use for it, and reading it
+   back at paint time is what makes one drawing routine right in both themes. The height is fixed
+   rather than an aspect ratio: the three instruments have to line up along their tops and bottoms,
+   and they are three different shapes. */
+.v-scope__canvas {
+  display: block;
+  width: 100%;
+  height: 116px;
+  color: var(--v-accent);
+  background: var(--v-bg-sunken);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+}
+
+/* Nothing measured is a state, not a fault: an empty timeline and a transparent background both
+   land here, and a flat panel saying so beats three black boxes. */
+.v-scope__canvas[data-empty] {
+  opacity: 0.45;
+}
+
+.v-scopes__range {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--v-text-xs);
+  font-family: var(--v-font-mono);
+  color: var(--v-text-muted);
+}
+
+/* Under a finger there is no room for three side by side, and a squeezed vectorscope is a squeezed
+   circle -- which is a scope that lies about saturation. Stacked instead, and taller. */
+.v-shell[data-layout="phone"] .v-scopes {
+  grid-template-columns: minmax(0, 1fr);
+  overflow-y: auto;
+}
+
+.v-shell[data-layout="phone"] .v-scope__canvas {
+  height: 160px;
+}
