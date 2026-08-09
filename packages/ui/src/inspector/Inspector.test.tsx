@@ -705,3 +705,89 @@ function identity(): Clip["transform"] {
     crop: { left: 0, top: 0, right: 0, bottom: 0 },
   };
 }
+
+// The failure this section is most exposed to is a button that dispatches nothing -- a preset in
+// the menu with no cover. Every run below asserts what actually reached `dispatch`, and that the
+// whole list arrived under one key so it is one press of undo.
+describe("Inspector, presets", () => {
+  const press = (rig: Rig, label: string): void => {
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: label }));
+    });
+  };
+
+  it("sends a Ken Burns move as one undoable step of six keyframes", () => {
+    const rig = show();
+    press(rig, "Ken-Burns-Fahrt hinein");
+
+    expect(rig.sent).toHaveLength(6);
+    expect(new Set(rig.sent.map((entry) => entry.key)).size).toBe(1);
+    for (const entry of rig.sent) {
+      expect((entry.command as { type: string }).type).toBe("keyframe.add");
+    }
+    const keys = rig.sent.map((entry) => (entry.command as { key: string }).key);
+    expect(new Set(keys)).toEqual(new Set(["scaleX", "scaleY", "position"]));
+  });
+
+  it("writes the rate track for a slow start, and nothing else", () => {
+    const rig = show();
+    press(rig, "Langsamer Anfang");
+
+    expect(rig.sent).toHaveLength(2);
+    for (const entry of rig.sent) {
+      expect((entry.command as { key: string }).key).toBe("speed");
+    }
+  });
+
+  // Two presses are two edits: sharing a key would fold the second into the first and cost the
+  // user an undo step they can never reach.
+  it("gives each press its own undo step", () => {
+    const rig = show();
+    press(rig, "Langsamer Anfang");
+    press(rig, "Langsames Ende");
+
+    const keys = new Set(rig.sent.map((entry) => entry.key));
+    expect(keys.size).toBe(2);
+  });
+
+  it("shrinks the clip and puts it in a corner for picture in picture", () => {
+    const rig = show();
+    press(rig, "Bild im Bild");
+
+    expect(rig.sent).toHaveLength(1);
+    const command = rig.sent[0]!.command as { type: string; transform: { x: number; scaleX: number } };
+    expect(command.type).toBe("clip.setTransform");
+    expect(command.transform.scaleX).toBeLessThan(1);
+    expect(command.transform.x).toBeGreaterThan(0);
+  });
+
+  // A disabled button is the honest form of "this preset cannot do anything here". The freeze needs
+  // a playhead inside the clip, and it refuses a reversed one outright.
+  it("disables the freeze where it would do nothing", () => {
+    show({ playhead: 0 });
+    expect(screen.getByRole("button", { name: "Standbild ab hier" })).toHaveProperty("disabled", true);
+
+  });
+
+  it("enables the freeze where the playhead is inside the clip", () => {
+    show({ playhead: SECOND });
+    expect(screen.getByRole("button", { name: "Standbild ab hier" })).toHaveProperty("disabled", false);
+  });
+
+  it("disables the freeze on a reversed clip rather than freezing the wrong frame", () => {
+    show({
+      playhead: SECOND,
+      clip: clipWithMedia({ speed: { rate: 1, reverse: true, preservePitch: true } }),
+    });
+    expect(screen.getByRole("button", { name: "Standbild ab hier" })).toHaveProperty("disabled", true);
+  });
+
+  it("freezes from the playhead with two keys on the rate track", () => {
+    const rig = show({ playhead: SECOND });
+    press(rig, "Standbild ab hier");
+
+    expect(rig.sent).toHaveLength(2);
+    const values = rig.sent.map((entry) => (entry.command as { value: { value: number } }).value.value);
+    expect(values[1]).toBe(0);
+  });
+});

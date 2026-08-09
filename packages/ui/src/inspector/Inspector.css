@@ -213,3 +213,32 @@
 .v-shell[data-layout="phone"] .v-param__slider {
   height: var(--v-touch-target);
 }
+
+/* A grid rather than a row: the labels are whole phrases in both languages ("Ken-Burns-Fahrt
+   hinein" is half again as long as "Ken Burns in"), so a row would either wrap raggedly or force a
+   horizontal scroll in German only. Two columns hold every label the catalogue carries at the
+   panel's narrowest, and one column takes over under a finger where the target has to grow anyway. */
+.v-inspector__presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--v-space-2);
+}
+
+.v-inspector__preset {
+  width: 100%;
+  /* The label decides the height, not the other way round: a preset name that wraps must not be
+     clipped by a button sized for one line. */
+  white-space: normal;
+  text-align: center;
+  padding-block: var(--v-space-2);
+}
+
+.v-shell[data-layout="tablet"] .v-inspector__presets,
+.v-shell[data-layout="phone"] .v-inspector__presets {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.v-shell[data-layout="tablet"] .v-inspector__preset,
+.v-shell[data-layout="phone"] .v-inspector__preset {
+  min-height: var(--v-touch-target);
+}

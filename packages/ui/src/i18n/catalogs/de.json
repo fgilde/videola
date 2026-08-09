@@ -221,5 +221,14 @@
   "update.installed": "Das Update ist installiert. Starte Videola neu, um es zu benutzen.",
   "mixer.volumeShort": "Lautstärke",
   "mixer.panShort": "Panorama",
-  "inspector.motionPath": "Position X und Y folgen einem Bewegungspfad."
+  "inspector.motionPath": "Position X und Y folgen einem Bewegungspfad.",
+  "inspector.presets": "Voreinstellungen",
+  "inspector.preset.freeze": "Standbild ab hier",
+  "inspector.preset.slowIn": "Langsamer Anfang",
+  "inspector.preset.slowOut": "Langsames Ende",
+  "inspector.preset.slowMiddle": "Langsame Mitte",
+  "inspector.preset.kenBurnsIn": "Ken-Burns-Fahrt hinein",
+  "inspector.preset.kenBurnsOut": "Ken-Burns-Fahrt heraus",
+  "inspector.preset.pip": "Bild im Bild",
+  "timeline.splitScreen": "Geteilter Bildschirm"
 }

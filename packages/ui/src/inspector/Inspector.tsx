@@ -2,8 +2,13 @@ import { useMemo, type ReactElement } from "react";
 
 import {
   cmd,
+  frameHold,
+  kenBurns,
   on,
+  pictureInPicture,
   secondsToTime,
+  speedRamp,
+  stageFor,
   timeToSeconds,
   type Clip,
   type ClipId,
@@ -80,6 +85,7 @@ export function Inspector({
         <>
           <Transform_ clip={found.clip} project={project} send={dispatch} />
           <Playback clip={found.clip} send={dispatch} />
+          <Presets clip={found.clip} project={project} playhead={playhead} send={dispatch} />
           <Transitions clip={found.clip} effects={effects} send={dispatch} />
           <Effects
             clip={found.clip}
@@ -232,6 +238,70 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
     </Group>
   );
 }
+
+// Every entry is a list of commands sent under one key, which is the whole of what a preset is here
+// (see packages/core/src/presets.ts). One key means one press of undo; the inverse comes from
+// `json_patch::diff` like every other edit's. An entry whose list comes back empty is disabled
+// rather than shown doing nothing -- `frameHold` refuses a reversed clip and a playhead outside the
+// clip, and that refusal is what the button reads to decide.
+function Presets({
+  clip,
+  project,
+  playhead,
+  send,
+}: {
+  clip: Clip;
+  project: Project;
+  playhead: Time;
+  send: Send;
+}): ReactElement {
+  const { t } = useI18n();
+  const stage = stageFor(project, clip);
+  // A picture in picture is a picture over another one, so it needs somewhere above to stand. The
+  // track order is the stacking order; without one higher up the clip stays where it is and only
+  // shrinks, which is still the honest half of the preset.
+  const index = project.timeline.tracks.findIndex((track) =>
+    track.clips.some((candidate) => candidate.id === clip.id),
+  );
+  const above = project.timeline.tracks
+    .slice(index + 1)
+    .find((track) => track.kind === "video")?.id;
+
+  const entries: [string, Command[]][] = [
+    ["freeze", frameHold(clip, playhead)],
+    ["slowIn", speedRamp(clip, "slowIn")],
+    ["slowOut", speedRamp(clip, "slowOut")],
+    ["slowMiddle", speedRamp(clip, "slowMiddle")],
+    ["kenBurnsIn", kenBurns(clip, stage, "in")],
+    ["kenBurnsOut", kenBurns(clip, stage, "out")],
+    ["pip", pictureInPicture(clip, stage, "bottomRight", above)],
+  ];
+
+  return (
+    <Group title={t("inspector.presets")}>
+      <div className="v-inspector__presets">
+        {entries.map(([name, commands]) => (
+          <button
+            key={name}
+            type="button"
+            className="v-button v-inspector__preset"
+            disabled={commands.length === 0}
+            onClick={() => {
+              const key = `preset:${name}:${(presetSequence += 1)}`;
+              for (const command of commands) send(command, key);
+            }}
+          >
+            {t(`inspector.preset.${name}`)}
+          </button>
+        ))}
+      </div>
+    </Group>
+  );
+}
+
+// A fresh key per press, so two runs of the same preset are two undo steps rather than one merged
+// into the other. The same counter trick the timeline's own multi-clip actions use.
+let presetSequence = 0;
 
 const DEFAULT_TRANSITION_SECONDS = 1;
 

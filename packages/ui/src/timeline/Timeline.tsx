@@ -13,6 +13,8 @@ import {
 import {
   cmd,
   FLICKS_PER_SECOND,
+  splitScreen,
+  stageFor,
   type Clip as ClipModel,
   type ClipId,
   type Command,
@@ -434,6 +436,28 @@ interface MenuProps {
 // Every entry either does something or is disabled. What decides that is read at render time and
 // not when the menu opened: the playhead moves while the menu stands, and a clip can be gone by
 // the time an entry is clicked.
+// Exactly two clips, in the order the tracks stack them, or nothing. A split screen of one clip is
+// not a split screen, and of three there is no half to give the third.
+function splitPair(
+  project: Project,
+  selected: ReadonlySet<string>,
+): readonly [ClipModel, ClipModel] | undefined {
+  const found = project.timeline.tracks
+    .flatMap((track) => track.clips)
+    .filter((clip) => selected.has(clip.id));
+  return found.length === 2 ? ([found[0]!, found[1]!] as const) : undefined;
+}
+
+// The lowest video track above the one a clip stands on, so the second half of a split screen has
+// somewhere to go when both clips started on the same track.
+function trackAbove(project: Project, clip: string): string | undefined {
+  const index = project.timeline.tracks.findIndex((track) =>
+    track.clips.some((candidate) => candidate.id === clip),
+  );
+  if (index < 0) return undefined;
+  return project.timeline.tracks.slice(index + 1).find((track) => track.kind === "video")?.id;
+}
+
 function TimelineContextMenu(props: MenuProps): ReactElement | null {
   const { t } = useI18n();
   const { menu, project, playhead, selected, dispatch, onClose } = props;
@@ -491,6 +515,23 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
       label: t("timeline.nest"),
       disabled: selected.size < 1,
       onSelect: close(() => dispatch(cmd.clipNest([...selected]))),
+    },
+    // The one preset that belongs here rather than in the inspector: it is the only one about two
+    // clips, and the timeline is where two clips are selected. The rest live beside the clip's own
+    // settings, which is what they are.
+    {
+      label: t("timeline.splitScreen"),
+      disabled: splitPair(project, selected) === undefined,
+      onSelect: close(() => {
+        const pair = splitPair(project, selected);
+        if (pair === undefined) return;
+        const key = `timeline-split-screen-${(actionSequence += 1)}`;
+        const above = trackAbove(project, pair[1].id);
+        const stages = [stageFor(project, pair[0]), stageFor(project, pair[1])] as const;
+        for (const command of splitScreen(pair, stages, "sideBySide", above)) {
+          dispatch(command, key);
+        }
+      }),
     },
   ];
   return (
