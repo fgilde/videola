@@ -13,9 +13,9 @@ export const TILE_HEIGHT = 108;
  * kept beside each effect either, because a picture that is not this project's frame is a promise
  * about somebody else's footage. The preview canvas already holds the composited frame at the
  * playhead and is created readable, so the source costs one `drawImage` into a 192x108 scratch and
- * no decoder at all. What is left is fifteen passes of 20 736 fragments -- together a seventh of a
- * single 1080p frame, which is why nothing here is loaded lazily or cached between openings: the
- * work is smaller than the gesture that asks for it.
+ * no decoder at all. What is left is one pass of 20 736 fragments per manifest -- seventeen of them
+ * today, together a sixth of a single 1080p frame -- which is why nothing here is loaded lazily or
+ * cached between openings: the work is smaller than the gesture that asks for it.
  *
  * Where the timeline has no picture to give -- an empty project, or a playhead in a gap -- the
  * tiles fall back to a generated reference frame rather than to nothing. It is still the effect's
@@ -46,8 +46,8 @@ export async function effectTiles(
 /**
  * The editor's own frame, scaled down once for every tile to share -- or the reference picture when
  * there is nothing on screen. "Nothing" is decided by looking: a canvas that has never been drawn
- * into and one showing a gap in the timeline are both fully transparent, and a grid of fifteen
- * transparent tiles says nothing about fifteen effects.
+ * into and one showing a gap in the timeline are both fully transparent, and a grid of transparent
+ * tiles says nothing about the effects it claims to be showing.
  */
 function sourceFrame(frame: HTMLCanvasElement | null): OffscreenCanvas {
   if (frame === null || frame.width === 0 || frame.height === 0) {
@@ -64,7 +64,7 @@ function sourceFrame(frame: HTMLCanvasElement | null): OffscreenCanvas {
   return referencePicture(TILE_WIDTH, TILE_HEIGHT);
 }
 
-/** Every object URL a grid handed out. Left alone, one open of the shelf leaks fifteen blobs. */
+/** Every object URL a grid handed out. Left alone, one open of the shelf leaks a blob per effect. */
 export function revokeTiles(tiles: ReadonlyMap<string, string>): void {
   for (const url of tiles.values()) URL.revokeObjectURL(url);
 }

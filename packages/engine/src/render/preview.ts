@@ -65,10 +65,10 @@ function fromHue(hue: number, saturation: number, value: number): [number, numbe
  * and an effect whose shader stops working stops having a tile.
  *
  * The cost is why this is a class rather than a function: the context, the compiled programs and the
- * scratch target are what a tile is expensive to set up and cheap to draw into. Fifteen tiles at
- * 192x108 are three hundred thousand fragments between them -- a seventh of one 1080p frame. The
- * decode that produces the source picture is the expensive half, and there is one of those for the
- * whole grid.
+ * scratch target are what a tile is expensive to set up and cheap to draw into. A 192x108 tile is
+ * twenty thousand fragments, so the whole library together stays under a fifth of one 1080p frame.
+ * The decode that produces the source picture is the expensive half, and there is one of those for
+ * the whole grid.
  */
 export class EffectPreview {
   #canvas: OffscreenCanvas;

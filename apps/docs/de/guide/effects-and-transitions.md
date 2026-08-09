@@ -277,11 +277,11 @@ die ihn zeigen will, andersherum läuft.
 **Das Bild ist das, was der Editor gerade zeigt.** Die Vorschau-Leinwand wird lesbar angelegt und
 trägt das komponierte Bild am Abspielkopf bereits, die Quelle für das ganze Raster kostet also ein
 `drawImage` in eine 192x108-Kladde und keinen Dekoder. Das ist die Entscheidung, die klar gesagt
-gehört, denn die naheliegende Alternative ist ein Dekodiervorgang je Kachel — und zwanzig
-Dekodierungen, um einen Dialog zu füllen, ist genau das, was eine Bibliothek kaputt wirken lässt.
-Die Durchgänge selbst sind nicht das Teure: fünfzehn Kacheln zu 192x108 sind zusammen
-dreihunderttausend Fragmente, ein Siebtel eines einzigen 1080p-Bildes. Darum wird hier nichts träge
-geladen und nichts zwischen zwei Öffnungen aufbewahrt — ein Zwischenspeicher zeigte das Bild von
+gehört, denn die naheliegende Alternative ist ein Dekodiervorgang je Kachel — und ein Dekodiervorgang
+je Kachel, um einen Dialog zu füllen, ist genau das, was eine Bibliothek kaputt wirken lässt.
+Die Durchgänge selbst sind nicht das Teure: eine Kachel zu 192x108 sind zwanzigtausend Fragmente, die
+siebzehn der heutigen Bibliothek zusammen ein Sechstel eines einzigen 1080p-Bildes. Darum wird hier
+nichts träge geladen und nichts zwischen zwei Öffnungen aufbewahrt — ein Zwischenspeicher zeigte das Bild von
 dort, wo der Abspielkopf einmal stand.
 
 Wo die Zeitleiste kein Bild hergibt — ein leeres Projekt oder ein Abspielkopf in einer Lücke —

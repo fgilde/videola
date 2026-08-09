@@ -266,10 +266,10 @@ claims to show it.
 **The frame is the one the editor is showing.** The preview canvas is created readable and already
 holds the composited picture at the playhead, so the source for the whole grid costs one `drawImage`
 into a 192x108 scratch and no decoder at all. That is the decision worth stating plainly, because the
-obvious alternative is one decode per tile, and twenty decodes to fill one dialog is what makes a
-library feel broken. The passes themselves are not the expensive part -- fifteen tiles at 192x108 are
-three hundred thousand fragments between them, a seventh of a single 1080p frame -- which is why
-nothing here is loaded lazily and nothing is cached between openings. A cache would be showing the
+obvious alternative is one decode per tile, and one decode per tile to fill a dialog is what makes a
+library feel broken. The passes themselves are not the expensive part -- one 192x108 tile is twenty
+thousand fragments, and the seventeen the library holds today come to a sixth of a single 1080p
+frame -- which is why nothing here is loaded lazily and nothing is cached between openings. A cache would be showing the
 picture from wherever the playhead used to be.
 
 Where the timeline has no picture to give -- an empty project, or a playhead in a gap -- the tiles
