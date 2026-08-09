@@ -35,8 +35,13 @@ void main() {
 export const wipe: EffectManifest = {
   id: "wipe",
   name: { de: "Wischen", en: "Wipe" },
+  blurb: {
+    de: "Schiebt eine Kante über das Bild und gibt den neuen Clip frei.",
+    en: "Runs an edge across the frame and reveals the new clip.",
+  },
   category: "transition",
   inputs: 2,
+  preview: { progress: 0.5, softness: 0.03 },
   params: [
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
     // Degrees, clockwise on screen like every other angle in the renderer, because `v_uv` runs down

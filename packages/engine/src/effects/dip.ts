@@ -25,8 +25,15 @@ void main() {
 export const dip: EffectManifest = {
   id: "dip",
   name: { de: "Schwarzblende", en: "Dip to colour" },
+  blurb: {
+    de: "Blendet über eine Farbe, statt die Clips zu mischen.",
+    en: "Fades through a flat colour instead of mixing the clips.",
+  },
   category: "transition",
   inputs: 2,
+  // Not the midpoint: in the middle a dip is nothing but the colour it dips through, and a flat
+  // black rectangle says nothing about the effect that produced it.
+  preview: { progress: 0.3 },
   params: [
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
     // Grey, from black through to white: a flat vec4(l, l, l, 1) is already premultiplied for every

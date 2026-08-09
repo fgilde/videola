@@ -38,9 +38,14 @@ void main() {
 export const blur: EffectManifest = {
   id: "blur",
   name: { de: "Weichzeichnen", en: "Blur" },
+  blurb: {
+    de: "Zeichnet das Bild in zwei Durchgängen weich.",
+    en: "Softens the picture in two sweeps.",
+  },
   category: "detail",
   inputs: 1,
   passes: 2,
+  preview: { amount: 10 },
   // Spacing between taps, in pixels of the frame. At 0 every tap lands on the same texel and the
   // weights sum to one, so the picture comes back untouched -- the slider has a real off position
   // rather than a nearly-off one.

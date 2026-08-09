@@ -29,8 +29,13 @@ void main() {
 export const vignette: EffectManifest = {
   id: "vignette",
   name: { de: "Vignettierung", en: "Vignette" },
+  blurb: {
+    de: "Dunkelt die Ränder ab und führt den Blick zur Mitte.",
+    en: "Darkens the edges and draws the eye to the middle.",
+  },
   category: "color",
   inputs: 1,
+  preview: { amount: 1, size: 0.3 },
   params: [
     { key: "amount", name: { de: "Stärke", en: "Amount" }, default: 0.5, min: 0, max: 1 },
     // Where the darkening begins, as a distance from the centre in half-frames. The ceiling stops

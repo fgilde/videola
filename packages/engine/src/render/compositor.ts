@@ -40,7 +40,10 @@ void main() {
 `;
 
 // The same unit quad, stretched over the whole target: what every pass of the effect chain draws.
-const SCREEN_VERTEX_SOURCE = `#version 300 es
+// Exported because the browser's preview tiles run the same passes over a still picture, and a
+// second copy of this is how `v_uv` would come to run one way in the editor and the other in the
+// tile that claims to show it.
+export const SCREEN_VERTEX_SOURCE = `#version 300 es
 in vec2 a_quad;
 out vec2 v_uv;
 

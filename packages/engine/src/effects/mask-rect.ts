@@ -44,8 +44,13 @@ void main() {
 export const maskRect: EffectManifest = {
   id: "mask-rect",
   name: { de: "Maske (Rechteck)", en: "Mask (rectangle)" },
+  blurb: {
+    de: "Lässt nur ein Rechteck stehen, der Rest wird durchsichtig.",
+    en: "Keeps a rectangle and makes the rest transparent.",
+  },
   category: "key",
   inputs: 1,
+  preview: { width: 0.6, height: 0.6, feather: 0.08 },
   params: [
     // Fractions of the frame, from its top-left corner, so 0.5 is the middle whatever the output
     // size is -- the same reasoning that makes every measurement in a text style a fraction.

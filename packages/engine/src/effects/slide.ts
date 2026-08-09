@@ -33,8 +33,13 @@ void main() {
 export const slide: EffectManifest = {
   id: "slide",
   name: { de: "Schieben", en: "Slide" },
+  blurb: {
+    de: "Schiebt beide Clips zusammen aus dem Bild.",
+    en: "Pushes both clips across the frame together.",
+  },
   category: "transition",
   inputs: 2,
+  preview: { progress: 0.5 },
   params: [
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
     // The direction the pair of pictures travels: at 0 both move right, so the incoming clip enters

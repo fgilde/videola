@@ -1273,6 +1273,142 @@ test("offscreen canvas", () => {
     reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255]);
 });
 
+// The effect browser's tiles. A tile that came back is worth nothing; what has to hold is that it
+// came back *changed*, changed by the effect it is named after, and changed the same way up as the
+// picture in the editor.
+const TILE = 64;
+
+// The tile, read as a picture: (0, 0) is its top-left corner.
+function tile(preview, manifest, source, second) {
+  preview.render(manifest, source, second);
+  return reader(preview.readPixels(), TILE, TILE);
+}
+
+// The source picture as the page sees it, for comparison against a tile drawn from it.
+function flat(canvas) {
+  const two = canvasOf(canvas.width, canvas.height).getContext("2d");
+  two.drawImage(canvas, 0, 0);
+  const data = two.getImageData(0, 0, canvas.width, canvas.height).data;
+  const at = (x, y) => (y * canvas.width + x) * 4;
+  return (x, y) => Array.from(data.slice(at(x, y), at(x, y) + 4));
+}
+
+// How far two readings of the same grid are apart, averaged over the whole tile. A single sampled
+// pixel would let an effect that touches one corner pass as one that touches the picture.
+function apart(one, other) {
+  let sum = 0;
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const a = one(x, y);
+      const b = other(x, y);
+      for (let c = 0; c < 4; c += 1) sum += Math.abs(a[c] - b[c]);
+    }
+  }
+  return sum / (TILE * TILE * 4);
+}
+
+test("every tile in the browser shows its own effect at work", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const other = R.referencePicture(TILE, TILE, 180);
+  const untouched = flat(picture);
+  for (const manifest of R.effectManifests()) {
+    const drawn = tile(preview, manifest, picture, other);
+    // Eight levels averaged over every channel of every pixel. Below that a tile is the same frame
+    // with a rounding error on it, which is a promise the browser cannot keep.
+    check(`${manifest.id} changes the picture it is drawn from`, apart(drawn, untouched) > 8, true);
+  }
+  preview.dispose();
+});
+
+test("a tile is drawn from the frame, not from a picture kept for the effect", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const one = tile(preview, R.effect("brightness"), R.referencePicture(TILE, TILE));
+  const rows = [];
+  for (let y = 0; y < TILE; y += 1) rows.push(Array.from({ length: TILE }, (_, x) => one(x, y)));
+  const two = tile(preview, R.effect("brightness"), R.referencePicture(TILE, TILE, 180));
+  check("the same effect over two different frames gives two different tiles",
+    apart(two, (x, y) => rows[y][x]) > 8, true);
+  preview.dispose();
+});
+
+test("a tile runs v_uv the same way up as the editor does", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const other = R.referencePicture(TILE, TILE, 180);
+  // A wipe at 90 degrees reads clockwise on screen, so at half progress the clip it is bringing in
+  // holds the top of the frame. Every effect built before the first wipe was symmetric about y and
+  // would have passed an upside-down tile without a word.
+  const sideways = Object.assign({}, R.effect("wipe"),
+    { preview: { progress: 0.5, angle: 90, softness: 0.01 } });
+  const drawn = tile(preview, sideways, picture, other);
+  check("the incoming picture is at the top", drawn(32, 6), flat(picture)(32, 6), 6);
+  check("and the outgoing one at the bottom", drawn(32, 57), flat(other)(32, 57), 6);
+  preview.dispose();
+});
+
+test("a transition tile really mixes the two pictures", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const other = R.referencePicture(TILE, TILE, 180);
+  const drawn = tile(preview, R.effect("crossfade"), picture, other);
+  const a = flat(picture)(20, 20);
+  const b = flat(other)(20, 20);
+  check("half way is half of each", drawn(20, 20), [0, 1, 2, 3].map((c) => (a[c] + b[c]) / 2), 4);
+  // Without a second input the shader would sample an empty texture and fade the tile away, which
+  // reads as a transition that dissolves to nothing.
+  const alone = tile(preview, R.effect("crossfade"), picture);
+  check("and one asked for without a second picture falls back to the one it has",
+    alone(20, 20), a, 4);
+  preview.dispose();
+});
+
+test("a separable effect runs both of its sweeps in a tile", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  // One white quadrant on black: the only picture where a missing sweep shows, because the vertical
+  // boundary is softened by the first sweep and the horizontal one only by the second.
+  const canvas = canvasOf(TILE, TILE);
+  const two = canvas.getContext("2d");
+  two.fillStyle = "#000000";
+  two.fillRect(0, 0, TILE, TILE);
+  two.fillStyle = "#ffffff";
+  two.fillRect(0, 0, TILE / 2, TILE / 2);
+  const drawn = tile(preview, R.effect("blur"), canvas);
+  const between = (a, b) => a > 12 && a < 243 && b > 12 && b < 243;
+  check("the vertical edge is soft, which is the horizontal sweep",
+    between(drawn(TILE / 2 - 1, 8)[0], drawn(TILE / 2, 8)[0]), true);
+  check("and the horizontal edge is soft, which is the vertical one",
+    between(drawn(8, TILE / 2 - 1)[0], drawn(8, TILE / 2)[0]), true);
+  preview.dispose();
+});
+
+test("a tile carries premultiplied alpha like everything else downstream", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const canvas = canvasOf(TILE, TILE);
+  const two = canvas.getContext("2d");
+  two.fillStyle = "#ffffff";
+  two.fillRect(0, 0, TILE, TILE);
+  // A feathered mask is the one effect here that manufactures partial coverage, so it is where an
+  // invalid premultiplied texel would be made. The band between the two edges is the only place
+  // worth looking: outside it the RGBA8 target clamps on its own and a check proves nothing.
+  const feathered = Object.assign({}, R.effect("mask-ellipse"),
+    { preview: { width: 0.7, height: 0.7, feather: 0.3 } });
+  const drawn = tile(preview, feathered, canvas);
+  let inBand = 0;
+  let invalid = 0;
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const [r, g, b, a] = drawn(x, y);
+      if (a <= 2 || a >= 253) continue;
+      inBand += 1;
+      if (r > a + 1 || g > a + 1 || b > a + 1) invalid += 1;
+    }
+  }
+  check("the feather really produced partial coverage", inBand > 200, true);
+  check("and no texel in it carries more colour than coverage", invalid, 0);
+  preview.dispose();
+});
+
 // The one thing a phone does routinely. Everything below rebuilds lazily, so the proof is a
 // correct pixel after the context comes back.
 const lossCanvas = canvasOf(4, 4);

@@ -49,8 +49,15 @@ void main() {
 export const chromaKey: EffectManifest = {
   id: "chromaKey",
   name: { de: "Chroma-Keying", en: "Chroma key" },
+  blurb: {
+    de: "Stanzt eine Farbe aus dem Bild, meist die grüne Wand.",
+    en: "Cuts one colour out of the picture, usually the green screen.",
+  },
   category: "key",
   inputs: 1,
+  // A wider tolerance than the default: on a frame that was never shot against a screen the
+  // default bites on nothing at all, and a tile showing nothing teaches nothing.
+  preview: { tolerance: 60, softness: 30 },
   params: [
     // Green, because that is what a screen is. Degrees round the colour circle, so 240 is the blue
     // screen and 0 the red one.

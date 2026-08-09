@@ -23,8 +23,13 @@ void main() {
 export const brightness: EffectManifest = {
   id: "brightness",
   name: { de: "Helligkeit", en: "Brightness" },
+  blurb: {
+    de: "Hebt oder senkt die Helligkeit des ganzen Bildes.",
+    en: "Lifts or lowers the whole picture.",
+  },
   category: "color",
   inputs: 1,
+  preview: { amount: 2.2 },
   // A gain, so 1 is the untouched picture and 0 is black. The ceiling is four stops of headroom,
   // which is as much as an 8-bit source can be pushed before it is only noise.
   params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],

@@ -29,6 +29,9 @@ export interface EffectManifest {
   // Carried here rather than in the i18n catalogues, so that adding an effect is one file and the
   // inspector needs to know nothing about any particular effect to label it.
   name: { de: string; en: string };
+  // One sentence saying what the effect does to a picture. The browser puts it under the tile, and
+  // a search over it is what finds "weichzeichnen" from the word "unscharf".
+  blurb: { de: string; en: string };
   // What the inspector groups by. A category earns its place by having more than one member --
   // otherwise it is a heading over a single row.
   category: "color" | "detail" | "key" | "transition";
@@ -40,6 +43,12 @@ export interface EffectManifest {
   // parameter is what the inspector puts a slider on.
   passes?: 2;
   params: readonly EffectParam[];
+  // What the browser's tile is drawn with. Not the defaults: a gain of 1 and a warmth of 0 are the
+  // untouched picture, so a tile drawn from the defaults would promise a brightness effect and show
+  // one that does nothing. Each effect names the one setting that makes its own point -- which for
+  // a dip is not the midpoint, because the middle of a dip is a black rectangle. Keys left out fall
+  // back to the parameter's default.
+  preview: Readonly<Record<string, number>>;
   fragmentSource: string;
 }
 
@@ -104,4 +113,15 @@ export function effectManifests(): readonly EffectManifest[] {
 export function clampParam(param: EffectParam, value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return param.default;
   return Math.min(Math.max(value, param.min), param.max);
+}
+
+// The full uniform record a tile is drawn with. Through `clampParam` like every other path to a
+// uniform, so a preview setting outside its own declared range cannot paint a tile the slider
+// could never reach.
+export function previewValues(manifest: EffectManifest): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const param of manifest.params) {
+    values[param.key] = clampParam(param, manifest.preview[param.key] ?? param.default);
+  }
+  return values;
 }
