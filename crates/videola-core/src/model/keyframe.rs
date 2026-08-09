@@ -78,8 +78,16 @@ pub fn evaluate_path(track: &[Keyframe], at: Time) -> Option<[f32; 2]> {
     if span <= 0 || before.interp == Interp::Hold {
         return Some(p1);
     }
-    let t = ease(before, after, (at - before.time).as_flicks() as f32 / span as f32);
-    let p0 = if left == 0 { mirror(p1, p2) } else { point(left - 1)? };
+    let t = ease(
+        before,
+        after,
+        (at - before.time).as_flicks() as f32 / span as f32,
+    );
+    let p0 = if left == 0 {
+        mirror(p1, p2)
+    } else {
+        point(left - 1)?
+    };
     let p3 = if right == last_index {
         mirror(p2, p1)
     } else {
@@ -146,7 +154,8 @@ fn span_area(track: &[Keyframe], from: Time, to: Time) -> f64 {
     let alpha = (from - left.time).as_flicks() as f64 / span;
     let beta = (to - left.time).as_flicks() as f64 / span;
     let (start, end) = (float(left), float(next));
-    width * start + span * (end - start) * (ease_area(left.interp, beta) - ease_area(left.interp, alpha))
+    width * start
+        + span * (end - start) * (ease_area(left.interp, beta) - ease_area(left.interp, alpha))
 }
 
 // The definite integral of `ease` from 0 to `s`. `Bezier` never arrives -- `integrate` turns a
@@ -361,7 +370,10 @@ mod tests {
         let whole = area(&track, 0.0, 4.0);
         for cut in [0.1, 0.5, 1.0, 1.7, 2.5, 2.9, 3.0, 3.6] {
             let parts = area(&track, 0.0, cut) + area(&track, cut, 4.0);
-            assert!((whole - parts).abs() < 1e-9, "split at {cut}: {whole} vs {parts}");
+            assert!(
+                (whole - parts).abs() < 1e-9,
+                "split at {cut}: {whole} vs {parts}"
+            );
         }
     }
 
@@ -401,7 +413,10 @@ mod tests {
     #[test]
     fn an_empty_span_has_no_area_and_an_empty_track_has_no_answer() {
         let track = vec![kf(0.0, 2.0, Interp::Linear)];
-        assert_eq!(integrate(&track, Time::from_seconds(2.0), Time::ZERO), Some(0.0));
+        assert_eq!(
+            integrate(&track, Time::from_seconds(2.0), Time::ZERO),
+            Some(0.0)
+        );
         assert_eq!(integrate(&[], Time::ZERO, Time::from_seconds(1.0)), None);
     }
 
@@ -410,7 +425,10 @@ mod tests {
     #[test]
     fn a_bezier_key_or_a_non_numeric_one_has_no_exact_area() {
         let bezier = vec![kf(0.0, 1.0, Interp::Bezier), kf(2.0, 2.0, Interp::Linear)];
-        assert_eq!(integrate(&bezier, Time::ZERO, Time::from_seconds(2.0)), None);
+        assert_eq!(
+            integrate(&bezier, Time::ZERO, Time::from_seconds(2.0)),
+            None
+        );
 
         let mut wrong = vec![kf(0.0, 1.0, Interp::Linear), kf(2.0, 2.0, Interp::Linear)];
         wrong[1].value = ParamValue::Bool(true);
@@ -453,14 +471,21 @@ mod tests {
     #[test]
     fn a_third_key_bends_the_segment_before_it() {
         let straight = vec![at(0.0, 0.0, 0.0), at(2.0, 100.0, 0.0)];
-        let bent = vec![at(0.0, 0.0, 0.0), at(2.0, 100.0, 0.0), at(4.0, 100.0, 100.0)];
+        let bent = vec![
+            at(0.0, 0.0, 0.0),
+            at(2.0, 100.0, 0.0),
+            at(4.0, 100.0, 100.0),
+        ];
         let half = Time::from_seconds(1.0);
 
         assert_eq!(evaluate_path(&straight, half), Some([50.0, 0.0]));
         let Some([x, y]) = evaluate_path(&bent, half) else {
             panic!("expected a point");
         };
-        assert!(y.abs() > 1.0, "the third key left the segment straight, y={y}");
+        assert!(
+            y.abs() > 1.0,
+            "the third key left the segment straight, y={y}"
+        );
         assert!((0.0..=100.0).contains(&x), "x ran off the path, x={x}");
     }
 
@@ -483,9 +508,20 @@ mod tests {
 
     #[test]
     fn a_path_hits_every_key_it_is_built_from() {
-        let track = vec![at(0.0, 0.0, 0.0), at(2.0, 100.0, 0.0), at(4.0, 100.0, 100.0)];
-        for (seconds, want) in [(0.0, [0.0, 0.0]), (2.0, [100.0, 0.0]), (4.0, [100.0, 100.0])] {
-            assert_eq!(evaluate_path(&track, Time::from_seconds(seconds)), Some(want));
+        let track = vec![
+            at(0.0, 0.0, 0.0),
+            at(2.0, 100.0, 0.0),
+            at(4.0, 100.0, 100.0),
+        ];
+        for (seconds, want) in [
+            (0.0, [0.0, 0.0]),
+            (2.0, [100.0, 0.0]),
+            (4.0, [100.0, 100.0]),
+        ] {
+            assert_eq!(
+                evaluate_path(&track, Time::from_seconds(seconds)),
+                Some(want)
+            );
         }
     }
 

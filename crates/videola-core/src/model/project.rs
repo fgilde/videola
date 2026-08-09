@@ -139,6 +139,7 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     normalize_transition(&clip.transition_in)?;
     normalize_transition(&clip.transition_out)?;
     normalize_keyframes(&mut clip.keyframes)?;
+    speed_track_bounded(clip)?;
     match &mut clip.source {
         ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
         ClipSource::Generator {
@@ -315,6 +316,53 @@ pub(crate) fn finite(value: f32) -> Result<f32> {
 // `command::clip::set_speed` and `normalize_clip` so a rate one route accepts is never a rate the
 // other route lets overflow `Time`'s raw arithmetic on the next trim or split.
 pub(crate) const MAX_SPEED_RATE: f32 = 100.0;
+
+// The same seam one level down, for the track a speed ramp lives on. `Clip::source_offset`
+// multiplies a rate off this track straight into a `Time` exactly as `speed.rate` is multiplied, so
+// the hole C1 found in the scalar is a hole here too — with the extra twist that a track carries
+// arbitrarily many of them and `keyframe_bounded` only checks that they are finite.
+//
+// Zero is allowed here and refused on `speed.rate`, deliberately: a rate track reading zero is a
+// frame hold, which someone authored, while a static zero is a clip that consumes no source at all
+// and that the compound mapping divides by.
+//
+// A `Bezier` key is refused because `integrate` cannot answer it exactly, and an inexact answer
+// would break the one property the mapping rests on — that the area over the whole clip is the sum
+// of the areas over its parts. A compound clip is refused because the compound mapping in
+// nesting.ts inverts the outer rate by dividing, which only works while the rate is one number.
+// Both are honest refusals: the alternative is a ramp in the menu that draws the wrong frame.
+pub(crate) fn speed_track_bounded(clip: &Clip) -> Result<()> {
+    let Some(track) = clip.keyframes.get(super::clip::SPEED_TRACK) else {
+        return Ok(());
+    };
+    if track.is_empty() {
+        return Ok(());
+    }
+    if matches!(clip.source, ClipSource::Compound { .. }) {
+        return Err(CoreError::InvalidArgument(
+            "a compound clip cannot carry a speed ramp".into(),
+        ));
+    }
+    for keyframe in track {
+        let ParamValue::Float(rate) = keyframe.value else {
+            return Err(CoreError::InvalidArgument(
+                "a speed keyframe must be a number".into(),
+            ));
+        };
+        finite(rate)?;
+        if !(0.0..=MAX_SPEED_RATE).contains(&rate) {
+            return Err(CoreError::InvalidArgument(
+                "a speed keyframe must be between 0 and 100".into(),
+            ));
+        }
+        if keyframe.interp == super::Interp::Bezier {
+            return Err(CoreError::InvalidArgument(
+                "a speed keyframe cannot be a bezier".into(),
+            ));
+        }
+    }
+    Ok(())
+}
 
 pub(crate) fn speed_rate_bounded(rate: f32) -> Result<()> {
     finite(rate)?;
@@ -617,6 +665,67 @@ mod tests {
         ));
     }
 
+    // The same hole one level down, and the reason `speed_track_bounded` exists: a rate track
+    // carries arbitrarily many rates and `keyframe_bounded` only ever asked whether they were
+    // finite. `1e30` on the track multiplies into a `Time` in `Clip::source_offset` exactly as the
+    // scalar did, and the next `clip.trim` overflows on it just the same.
+    #[test]
+    fn a_clip_with_an_absurd_rate_on_its_speed_track_fails_to_load() {
+        for rate in [1e30f32, -1.0, 101.0] {
+            let mut loaded: Project = serde_json::from_str(
+                &serde_json::to_string(&ramped(rate, Interp::Linear)).unwrap(),
+            )
+            .unwrap();
+            assert!(
+                matches!(loaded.normalize(), Err(CoreError::InvalidArgument(_))),
+                "{rate} loaded"
+            );
+        }
+    }
+
+    // A bezier rate has no exact area, so `integrate` would answer `None` and the clip would fall
+    // back to its static rate — a project that silently plays at a speed nobody authored. Refused
+    // at the boundary instead, which is where a shape this build cannot honour belongs.
+    #[test]
+    fn a_bezier_rate_keyframe_fails_to_load_and_a_zero_one_does_not() {
+        let mut bezier: Project =
+            serde_json::from_str(&serde_json::to_string(&ramped(2.0, Interp::Bezier)).unwrap())
+                .unwrap();
+        assert!(matches!(
+            bezier.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+
+        let mut hold: Project =
+            serde_json::from_str(&serde_json::to_string(&ramped(0.0, Interp::Hold)).unwrap())
+                .unwrap();
+        assert!(hold.normalize().is_ok());
+    }
+
+    #[allow(clippy::unwrap_used)]
+    fn ramped(rate: f32, interp: Interp) -> Project {
+        let mut p = Project::default();
+        let mut track = Track::new(TrackKind::Video, "V1".into());
+        let mut clip = Clip::new_media(
+            MediaId::from("med_x".to_string()),
+            Time::ZERO,
+            Time::from_seconds(1.0),
+        );
+        clip.keyframes.insert(
+            super::super::clip::SPEED_TRACK.into(),
+            vec![Keyframe {
+                time: Time::ZERO,
+                value: ParamValue::Float(rate),
+                interp,
+                handle_in: None,
+                handle_out: None,
+            }],
+        );
+        track.clips.push(clip);
+        p.timeline.tracks.push(track);
+        p
+    }
+
     // I3: `1e300` is a valid JSON number and casts to `f32::INFINITY` on deserialisation (no
     // f32 literal can express this directly, hence going via `Value` rather than field
     // assignment), which `normalize` used to wave through — the value only became a problem
@@ -755,8 +864,8 @@ mod tests {
         p.timeline.tracks.push(track);
 
         let mut json = serde_json::to_value(&p).unwrap();
-        json["timeline"]["tracks"][0]["clips"][0]["keyframes"]["position"][0]["value"]["value"][1] =
-            serde_json::json!(1e300);
+        json["timeline"]["tracks"][0]["clips"][0]["keyframes"]["position"][0]["value"]["value"]
+            [1] = serde_json::json!(1e300);
         let mut loaded: Project = serde_json::from_value(json).unwrap();
         assert!(matches!(
             loaded.normalize(),

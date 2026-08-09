@@ -129,8 +129,7 @@ impl Clip {
             .keyframes
             .get(SPEED_TRACK)
             .and_then(|track| integrate(track, self.start, self.start + delta));
-        let flicks =
-            area.unwrap_or_else(|| delta.as_flicks() as f64 * self.speed.rate as f64);
+        let flicks = area.unwrap_or_else(|| delta.as_flicks() as f64 * self.speed.rate as f64);
         Time::from_flicks(flicks.round() as i64)
     }
 
@@ -472,7 +471,8 @@ mod tests {
     fn an_empty_path_track_leaves_the_placement_alone() {
         let mut clip = media_clip(0.0, 4.0);
         clip.transform.x = 12.0;
-        clip.keyframes.insert(POSITION_TRACK.to_string(), Vec::new());
+        clip.keyframes
+            .insert(POSITION_TRACK.to_string(), Vec::new());
 
         assert_eq!(clip.transform_at(Time::from_seconds(1.0)).x, 12.0);
     }
@@ -662,10 +662,17 @@ mod tests {
     #[test]
     fn a_speed_ramp_maps_project_time_by_the_area_under_the_rate() {
         let mut clip = media_clip(0.0, 2.0);
-        rate_track(&mut clip, &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)]);
+        rate_track(
+            &mut clip,
+            &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)],
+        );
 
         let at = clip.source_time_at(Time::from_seconds(1.0)).unwrap();
-        assert!((at.as_seconds() - 0.875).abs() < 1e-6, "{}", at.as_seconds());
+        assert!(
+            (at.as_seconds() - 0.875).abs() < 1e-6,
+            "{}",
+            at.as_seconds()
+        );
         assert!((clip.consumed_source().as_seconds() - 2.5).abs() < 1e-6);
     }
 
@@ -681,9 +688,16 @@ mod tests {
             &[(10.0, 0.5, Interp::Linear), (12.0, 2.0, Interp::Linear)],
         );
 
-        assert_eq!(clip.source_time_at(Time::from_seconds(10.0)).unwrap(), clip.in_point);
+        assert_eq!(
+            clip.source_time_at(Time::from_seconds(10.0)).unwrap(),
+            clip.in_point
+        );
         let at = clip.source_time_at(Time::from_seconds(11.0)).unwrap();
-        assert!((at.as_seconds() - 4.875).abs() < 1e-6, "{}", at.as_seconds());
+        assert!(
+            (at.as_seconds() - 4.875).abs() < 1e-6,
+            "{}",
+            at.as_seconds()
+        );
     }
 
     // The two axes the brief says must cross somewhere: a ramp *and* reverse. Backwards, the clip
@@ -694,13 +708,20 @@ mod tests {
         let mut clip = media_clip(0.0, 2.0);
         clip.in_point = Time::from_seconds(10.0);
         clip.speed.reverse = true;
-        rate_track(&mut clip, &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)]);
+        rate_track(
+            &mut clip,
+            &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)],
+        );
 
         assert_eq!(clip.out_point(), clip.in_point + clip.consumed_source());
         let head = clip.source_time_at(Time::ZERO).unwrap();
         assert_eq!(head, clip.out_point());
         let mid = clip.source_time_at(Time::from_seconds(1.0)).unwrap();
-        assert!((mid.as_seconds() - (12.5 - 0.875)).abs() < 1e-6, "{}", mid.as_seconds());
+        assert!(
+            (mid.as_seconds() - (12.5 - 0.875)).abs() < 1e-6,
+            "{}",
+            mid.as_seconds()
+        );
     }
 
     // The clamp the brief names, now that the size of the consumed range is the ramp's own doing.
@@ -710,12 +731,18 @@ mod tests {
         let mut clip = media_clip(0.0, 2.0);
         clip.in_point = Time::from_seconds(10.0);
         clip.speed.reverse = true;
-        rate_track(&mut clip, &[(0.0, 3.0, Interp::Ease), (2.0, 0.25, Interp::Linear)]);
+        rate_track(
+            &mut clip,
+            &[(0.0, 3.0, Interp::Ease), (2.0, 0.25, Interp::Linear)],
+        );
 
         for step in 0..40 {
             let t = Time::from_seconds(step as f64 * 0.05);
             let at = clip.readable_source_time_at(t).unwrap();
-            assert!(at >= clip.in_point && at < clip.out_point(), "{at:?} at step {step}");
+            assert!(
+                at >= clip.in_point && at < clip.out_point(),
+                "{at:?} at step {step}"
+            );
         }
     }
 
@@ -725,12 +752,23 @@ mod tests {
     fn a_rate_of_zero_holds_the_frame_it_was_last_shown() {
         let mut clip = media_clip(0.0, 4.0);
         clip.in_point = Time::from_seconds(5.0);
-        rate_track(&mut clip, &[(0.0, 1.0, Interp::Hold), (2.0, 0.0, Interp::Hold)]);
+        rate_track(
+            &mut clip,
+            &[(0.0, 1.0, Interp::Hold), (2.0, 0.0, Interp::Hold)],
+        );
 
-        assert_eq!(clip.source_time_at(Time::from_seconds(1.0)).unwrap().as_seconds(), 6.0);
+        assert_eq!(
+            clip.source_time_at(Time::from_seconds(1.0))
+                .unwrap()
+                .as_seconds(),
+            6.0
+        );
         let frozen = clip.source_time_at(Time::from_seconds(2.0)).unwrap();
         for seconds in [2.0, 2.5, 3.0, 3.999] {
-            assert_eq!(clip.source_time_at(Time::from_seconds(seconds)).unwrap(), frozen);
+            assert_eq!(
+                clip.source_time_at(Time::from_seconds(seconds)).unwrap(),
+                frozen
+            );
         }
         assert_eq!(clip.consumed_source().as_seconds(), 2.0);
     }
@@ -751,8 +789,13 @@ mod tests {
         );
         let mut last = Time::ZERO;
         for step in 0..80 {
-            let at = clip.source_time_at(Time::from_seconds(step as f64 * 0.05)).unwrap();
-            assert!(at >= last, "went backwards at step {step}: {at:?} after {last:?}");
+            let at = clip
+                .source_time_at(Time::from_seconds(step as f64 * 0.05))
+                .unwrap();
+            assert!(
+                at >= last,
+                "went backwards at step {step}: {at:?} after {last:?}"
+            );
             last = at;
         }
     }
@@ -763,7 +806,10 @@ mod tests {
     fn a_rate_track_this_build_cannot_integrate_falls_back_to_the_static_rate() {
         let mut clip = media_clip(0.0, 2.0);
         clip.speed.rate = 2.0;
-        rate_track(&mut clip, &[(0.0, 0.5, Interp::Bezier), (2.0, 0.5, Interp::Linear)]);
+        rate_track(
+            &mut clip,
+            &[(0.0, 0.5, Interp::Bezier), (2.0, 0.5, Interp::Linear)],
+        );
         assert_eq!(clip.consumed_source().as_seconds(), 4.0);
 
         clip.keyframes.insert(SPEED_TRACK.into(), Vec::new());
@@ -775,7 +821,10 @@ mod tests {
     #[test]
     fn a_rate_track_leaves_the_geometry_alone_and_a_transform_track_leaves_the_rate_alone() {
         let mut clip = media_clip(0.0, 2.0);
-        rate_track(&mut clip, &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)]);
+        rate_track(
+            &mut clip,
+            &[(0.0, 0.5, Interp::Linear), (2.0, 2.0, Interp::Linear)],
+        );
         assert_eq!(clip.transform_at(Time::from_seconds(1.0)), clip.transform);
 
         let mut other = media_clip(0.0, 2.0);

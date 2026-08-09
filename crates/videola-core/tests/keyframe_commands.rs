@@ -490,3 +490,159 @@ fn undoing_a_transform_keyframe_puts_the_clip_back_the_way_it_was() {
 
     assert_eq!(serde_json::to_value(doc.project()).unwrap(), before);
 }
+
+fn speed_key(clip: &ClipId, seconds: f64, rate: f32, interp: Interp) -> Command {
+    Command::KeyframeAdd {
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: None,
+        key: "speed".into(),
+        time: Time::from_seconds(seconds),
+        value: ParamValue::Float(rate),
+        interp,
+    }
+}
+
+// A speed ramp is a keyframe track and nothing else, so the command that authors it is the one that
+// authors a motion path. Two dispatches, and the clip reads its source by area from then on.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn two_speed_keyframes_make_a_ramp_the_clip_reads_its_source_by() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(speed_key(&clip, 0.0, 0.5, Interp::Linear)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(speed_key(&clip, 2.0, 2.0, Interp::Linear)))
+        .unwrap();
+
+    let clip_ref = &doc.project().timeline.tracks[0].clips[0];
+    let at = clip_ref
+        .source_time_at(Time::from_seconds(1.0))
+        .unwrap()
+        .as_seconds();
+    assert!((at - 0.875).abs() < 1e-6, "{at}");
+}
+
+// The rate track is the one name outside `Transform`'s roster that `keyframe.add` lets through, so
+// the roster still has to turn everything else away.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn the_rate_track_is_the_only_name_outside_the_transform_roster() {
+    let (mut doc, clip) = doc_with_effect();
+    assert!(doc
+        .dispatch(Dispatch::new(transform_key(&clip, "wobble", 1.0, 1.0)))
+        .is_err());
+    assert!(doc
+        .dispatch(Dispatch::new(speed_key(&clip, 1.0, 1.0, Interp::Linear)))
+        .is_ok());
+}
+
+// The bounds the load path applies, applied by the command too — otherwise a rate a dispatch wrote
+// is a rate the next open refuses, and the project a user saved will not come back.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_rate_keyframe_outside_the_bound_is_refused_by_the_command_and_by_the_loader() {
+    let (mut doc, clip) = doc_with_effect();
+    for rate in [-0.5, 1e30, 101.0] {
+        assert!(
+            doc.dispatch(Dispatch::new(speed_key(&clip, 1.0, rate, Interp::Linear)))
+                .is_err(),
+            "{rate} was accepted"
+        );
+    }
+    assert!(doc.project().timeline.tracks[0].clips[0]
+        .keyframes
+        .is_empty());
+
+    doc.dispatch(Dispatch::new(speed_key(&clip, 1.0, 0.0, Interp::Linear)))
+        .unwrap();
+    assert!(videola_core::Document::from_project(doc.project().clone()).is_ok());
+}
+
+// A bezier rate has no exact area, and an area that is not exactly additive would let a reversed
+// clip's head fall past the end of the range a decoder may read. Refused on the way in, both as a
+// value and as a later change of mind.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_bezier_rate_keyframe_is_refused_going_in_and_coming_back() {
+    let (mut doc, clip) = doc_with_effect();
+    assert!(doc
+        .dispatch(Dispatch::new(speed_key(&clip, 1.0, 2.0, Interp::Bezier)))
+        .is_err());
+
+    doc.dispatch(Dispatch::new(speed_key(&clip, 1.0, 2.0, Interp::Linear)))
+        .unwrap();
+    assert!(doc
+        .dispatch(Dispatch::new(Command::KeyframeSetInterp {
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: None,
+            key: "speed".into(),
+            time: Time::from_seconds(1.0),
+            interp: Interp::Bezier,
+        }))
+        .is_err());
+    assert_eq!(
+        doc.project().timeline.tracks[0].clips[0].keyframes["speed"][0].interp,
+        Interp::Linear
+    );
+}
+
+// A rate that is not a number would integrate to nothing, and `integrate`'s fallback would quietly
+// put the clip back on its static rate instead of reporting that the ramp is unreadable.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_rate_keyframe_that_is_not_a_number_is_refused() {
+    let (mut doc, clip) = doc_with_effect();
+    assert!(doc
+        .dispatch(Dispatch::new(Command::KeyframeAdd {
+            target: EffectTarget::Clip { clip },
+            effect_type: None,
+            key: "speed".into(),
+            time: Time::ZERO,
+            value: ParamValue::Vec2([1.0, 1.0]),
+            interp: Interp::Linear,
+        }))
+        .is_err());
+}
+
+// A compound clip's inner timeline is walked by inverting the outer rate, which is a division and
+// only works while that rate is one number. Refusing is the honest answer; drawing the inside at
+// the wrong instant is not.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_compound_clip_is_refused_a_speed_ramp() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(Command::ClipNest { clips: vec![clip] }))
+        .unwrap();
+    let compound = doc.project().timeline.tracks[0].clips[0].id.clone();
+
+    assert!(doc
+        .dispatch(Dispatch::new(speed_key(
+            &compound,
+            0.0,
+            2.0,
+            Interp::Linear
+        )))
+        .is_err());
+    assert!(doc.project().timeline.tracks[0].clips[0]
+        .keyframes
+        .is_empty());
+}
+
+// The whole point of a preset being a command sequence: undo puts the clip back exactly, and the
+// patch that does it was never written by hand.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn undoing_a_speed_ramp_puts_the_clip_back_the_way_it_was() {
+    let (mut doc, clip) = doc_with_effect();
+    let before = serde_json::to_value(doc.project()).unwrap();
+
+    doc.dispatch(Dispatch::new(
+        speed_key(&clip, 0.0, 0.5, Interp::Linear).clone(),
+    ))
+    .unwrap();
+    doc.dispatch(Dispatch::new(speed_key(&clip, 2.0, 2.0, Interp::Linear)))
+        .unwrap();
+    doc.undo().unwrap();
+    doc.undo().unwrap();
+
+    assert_eq!(serde_json::to_value(doc.project()).unwrap(), before);
+}

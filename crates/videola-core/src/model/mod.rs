@@ -10,6 +10,7 @@ pub mod timeline;
 
 pub use clip::{
     BlendMode, Clip, ClipSource, Crop, Fades, Generator, Speed, Transform, POSITION_TRACK,
+    SPEED_TRACK,
 };
 pub use effect::{Effect, Transition, TransitionAlignment};
 pub use ids::{ClipId, EffectId, GroupId, MarkerId, ProjectId, TrackId};

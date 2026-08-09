@@ -4,7 +4,7 @@ use super::{bounded, find_clip_mut, finite, EffectTarget, TrimEdge, MAX_VOLUME};
 use crate::model::keyframe::sort_track;
 use crate::model::{
     Clip, ClipId, ClipSource, Effect, GroupId, Interp, Keyframe, MediaId, ParamValue, Project,
-    Time, TrackId, Transform, Transition, POSITION_TRACK,
+    Time, TrackId, Transform, Transition, POSITION_TRACK, SPEED_TRACK,
 };
 use crate::{CoreError, Result};
 
@@ -583,7 +583,7 @@ pub(super) fn add_keyframe(
     crate::model::project::keyframe_bounded(&keyframe)?;
     // Only where a track is created, because that is the only place a name nobody reads can be
     // written; the three commands below reach an existing track or refuse on their own.
-    if effect_type.is_none() {
+    if effect_type.is_none() && key != SPEED_TRACK {
         transform_field(key)?;
     }
     let tracks = keyframes_mut(target, at, effect_type)?;
@@ -595,7 +595,30 @@ pub(super) fn add_keyframe(
             sort_track(track);
         }
     }
-    Ok(())
+    speed_ramp_allowed(target, at, effect_type, key)
+}
+
+// The rate track meets the load boundary's own check here, and through the same function, so a ramp
+// one route accepts is never a ramp the other refuses to load back.
+//
+// Checked on the mutated clip rather than on the incoming value, because "a compound clip carries no
+// ramp" is a fact about the clip, and because `keyframe.move` and `keyframe.setInterp` reach the
+// same track without passing a value at all. `Command::apply` runs on a clone the document discards
+// on error, so a refusal here leaves nothing behind.
+fn speed_ramp_allowed(
+    target: &mut Project,
+    at: &EffectTarget,
+    effect_type: Option<&str>,
+    key: &str,
+) -> Result<()> {
+    if effect_type.is_some() || key != SPEED_TRACK {
+        return Ok(());
+    }
+    let EffectTarget::Clip { clip } = at else {
+        return Ok(());
+    };
+    let (track, index) = find_clip_mut(target, clip)?;
+    crate::model::project::speed_track_bounded(&track.clips[index])
 }
 
 pub(super) fn remove_keyframe(
@@ -648,7 +671,7 @@ pub(super) fn set_keyframe_interp(
     let tracks = keyframes_mut(target, at, effect_type)?;
     let (track, index) = keyframe_at(tracks, key, time)?;
     track[index].interp = interp;
-    Ok(())
+    speed_ramp_allowed(target, at, effect_type, key)
 }
 
 // The three chains an effect can live in, behind one address. A clip's own is reached the way it
