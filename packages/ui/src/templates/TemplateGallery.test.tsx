@@ -182,6 +182,18 @@ describe("the outline a gallery card draws", () => {
   });
 });
 
+function card(id: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(`[data-template-id="${id}"]`);
+  if (found === null) throw new Error(`no card ${id}`);
+  return found;
+}
+
+function chip(category: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(`[data-category="${category}"]`);
+  if (found === null) throw new Error(`no chip ${category}`);
+  return found;
+}
+
 function showGallery(overrides: Partial<Parameters<typeof TemplateGallery>[0]> = {}): {
   chosen: Template[];
   opened: File[];
@@ -224,9 +236,66 @@ describe("TemplateGallery", () => {
   it("hands the chosen template out whole", () => {
     const { chosen } = showGallery();
 
-    fireEvent.click(screen.getByText("Verwenden"));
+    fireEvent.click(card("twofold"));
 
     expect(chosen).toEqual([template()]);
+  });
+
+  // The card is the control. A picture with a button under it makes the largest thing on the
+  // screen the one part that does nothing, and hands a phone the smallest target on the card.
+  it("makes the whole card the thing that is clicked", () => {
+    showGallery();
+
+    expect(card("twofold").tagName).toBe("BUTTON");
+    expect(card("twofold").querySelector(".v-template__poster")).toBeTruthy();
+  });
+
+  it("shows the rendered still where there is one, and the outline where there is not", () => {
+    showGallery({ posters: { twofold: "blob:a-still" } });
+
+    const still = card("twofold").querySelector<HTMLImageElement>(".v-template__still");
+    expect(still?.src).toBe("blob:a-still");
+    expect(card("twofold").querySelector(".v-template__block")).toBeNull();
+  });
+
+  // The box has to hold the template's shape before its picture arrives, or the grid reflows under
+  // the pointer the moment a still lands and a click goes to the wrong card.
+  it("keeps the template's own shape whether or not the picture is there yet", () => {
+    showGallery();
+
+    const box = card("twofold").querySelector<HTMLElement>(".v-template__poster");
+    expect(box?.style.aspectRatio).toBe("1920 / 1080");
+  });
+
+  it("filters by category and says so when a category is empty", () => {
+    const other = template({ id: "other", category: "intro", name: { de: "Auftakt", en: "Open" } });
+    render(
+      <I18nProvider>
+        <TemplateGallery
+          templates={[template(), other]}
+          onChoose={vi.fn()}
+          onOpenTemplate={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(document.querySelectorAll("[data-template-id]")).toHaveLength(2);
+
+    fireEvent.click(chip("intro"));
+
+    const left = [...document.querySelectorAll("[data-template-id]")];
+    expect(left.map((entry) => entry.getAttribute("data-template-id"))).toEqual(["other"]);
+    expect(screen.queryByTestId("template-none")).toBeNull();
+  });
+
+  // A category this build has no word for still needs a chip, or the template under it cannot be
+  // found at all. The raw key is a worse label than a translation and a far better one than none.
+  it("gives a category it has never heard of a chip under its own name", () => {
+    showGallery();
+
+    expect(chip("montage").textContent).toBe("montage");
+    expect(chip("all").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("offers saving the current project only when there is one to save", () => {
@@ -282,7 +351,7 @@ describe("TemplateWizard", () => {
     next();
 
     expect(screen.getByRole("status").textContent).toContain("Schritt 2 von 2");
-    expect(screen.getByText("Titel")).toBeTruthy();
+    expect(document.querySelector("[data-slot-id='title']")).toBeTruthy();
   });
 
   it("will not move on while a required slot is empty", () => {
@@ -295,7 +364,7 @@ describe("TemplateWizard", () => {
     showWizard({ shot: asset("chosen", 10) });
 
     expect(screen.getByText("Weiter").closest("button")?.disabled).toBe(false);
-    expect(screen.getByText("chosen.mp4")).toBeTruthy();
+    expect(document.querySelector("[data-chosen='shot']")?.textContent).toContain("chosen.mp4");
   });
 
   it("says how much material the slot needs before a file is chosen", () => {
@@ -376,7 +445,7 @@ describe("TemplateWizard", () => {
 
     next();
     fireEvent.change(screen.getByDisplayValue("Zweimal"), { target: { value: "x" } });
-    fireEvent.click(screen.getByText("Zurueck"));
+    fireEvent.click(screen.getByText("Zurück"));
     next();
     fireEvent.click(screen.getByText("Projekt erstellen"));
     window.removeEventListener("error", onError);
@@ -384,12 +453,63 @@ describe("TemplateWizard", () => {
     expect(reported).toEqual([]);
   });
 
+  // A wizard that asks across several panels and then acts on all of them at once is asking for a
+  // decision nobody has been shown. The last panel has to show every answer, including the ones
+  // from panels that have left the screen.
+  it("shows every answer on the last panel, including the ones from earlier steps", () => {
+    showWizard({ shot: asset("chosen", 10) });
+    expect(screen.queryByTestId("template-summary")).toBeNull();
+
+    next();
+    fireEvent.change(screen.getByDisplayValue("Zweimal"), { target: { value: "Mein Film" } });
+
+    const summary = screen.getByTestId("template-summary");
+    expect(summary.querySelector("[data-answer='shot']")?.textContent).toContain("chosen.mp4");
+    expect(summary.querySelector("[data-answer='title']")?.textContent).toContain("Mein Film");
+    expect(summary.querySelector("[data-answer='color']")?.textContent).toContain("#101820");
+  });
+
+  it("says so in the summary when a slot was never filled in", () => {
+    render(
+      <I18nProvider>
+        <TemplateWizard
+          template={template({
+            steps: [{ title: { de: "Alles", en: "All" }, slots: ["shot", "title", "color"] }],
+          })}
+          media={{}}
+          onPickMedia={vi.fn()}
+          onFinish={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const summary = screen.getByTestId("template-summary");
+    expect(summary.querySelector("[data-answer='shot']")?.textContent).toContain("nicht gewählt");
+  });
+
+  // The rail is what a step count stands in for: how much is left. It has to name every step and
+  // mark exactly one as the one you are on.
+  it("shows the whole path, with one step marked as the one you are on", () => {
+    showWizard({ shot: asset("chosen", 10) });
+
+    const steps = [...screen.getByTestId("template-rail").children];
+    expect(steps.map((entry) => entry.textContent)).toEqual(["Material", "Feinschliff"]);
+    expect(steps.map((entry) => entry.getAttribute("data-state"))).toEqual(["here", "ahead"]);
+
+    next();
+
+    const after = [...screen.getByTestId("template-rail").children];
+    expect(after.map((entry) => entry.getAttribute("data-state"))).toEqual(["done", "here"]);
+  });
+
   it("keeps what was already answered when a step is walked back", () => {
     const { finished } = showWizard({ shot: asset("chosen", 10) });
 
     next();
     fireEvent.change(screen.getByDisplayValue("Zweimal"), { target: { value: "Bleibt" } });
-    fireEvent.click(screen.getByText("Zurueck"));
+    fireEvent.click(screen.getByText("Zurück"));
     next();
     fireEvent.click(screen.getByText("Projekt erstellen"));
 

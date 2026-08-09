@@ -11,13 +11,28 @@
   display: flex;
   flex-direction: column;
   gap: var(--v-space-3);
-  width: min(52rem, calc(100vw - 2 * var(--v-space-4)));
+  width: min(64rem, calc(100vw - 2 * var(--v-space-4)));
   max-height: calc(100dvh - 2 * var(--v-space-4));
   overflow-y: auto;
   padding: var(--v-space-4);
   background: var(--v-bg-elevated);
   border: 1px solid var(--v-border);
-  border-radius: var(--v-radius-md);
+  border-radius: var(--v-radius-lg);
+  box-shadow: var(--v-shadow-raised);
+}
+
+/* On a phone the dialog is the screen. A centred card with a margin all round wastes the two
+   things a phone has least of, and leaves the grid one narrow column. */
+@media (max-width: 40rem) {
+  .v-templates {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding: var(--v-space-3);
+  }
 }
 
 .v-templates--wizard {
@@ -44,35 +59,127 @@
   font-size: var(--v-text-sm);
 }
 
+.v-templates__lede {
+  margin: 0;
+  color: var(--v-text-muted);
+  font-size: var(--v-text-sm);
+}
+
+.v-templates__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-2);
+  /* Sticks so the filter is still reachable after scrolling past a dozen cards, which is the only
+     moment anyone actually wants it. */
+  position: sticky;
+  top: calc(-1 * var(--v-space-1));
+  z-index: 1;
+  padding: var(--v-space-1) 0;
+  background: var(--v-bg-elevated);
+}
+
+/* The third control rank in a shape of its own: a filter is neither a command nor an icon, and the
+   pressed one has to read as a state rather than as a hover. */
+.v-chip {
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-3);
+  background: var(--v-surface);
+  color: var(--v-text-muted);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-pill);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-medium);
+  cursor: pointer;
+  transition: background var(--v-transition), color var(--v-transition);
+}
+
+.v-chip:hover {
+  background: var(--v-surface-hover);
+  color: var(--v-text);
+}
+
+.v-chip[aria-pressed="true"] {
+  background: var(--v-accent-soft);
+  color: var(--v-accent);
+  border-color: var(--v-accent);
+}
+
 .v-templates__grid {
   display: grid;
   /* Two or three across on a desk, one on a phone, without a media query deciding where. */
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: var(--v-space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.v-templates__grid > li {
+  display: flex;
+}
+
 .v-template {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--v-space-2);
-  padding: var(--v-space-3);
+  padding: var(--v-space-2);
+  padding-bottom: var(--v-space-3);
   background: var(--v-surface);
+  color: var(--v-text);
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-md);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--v-transition),
+    background var(--v-transition),
+    transform var(--v-transition);
+}
+
+.v-template:hover {
+  background: var(--v-surface-hover);
+  border-color: var(--v-accent);
+}
+
+.v-template:active {
+  transform: scale(0.99);
+}
+
+/* The picture holds the template's own shape from the first paint, before its still has been
+   rendered. A grid that reflows when a picture arrives is how a click lands on the wrong card. */
+.v-template__poster {
+  display: block;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: var(--v-bg-sunken);
+  border-radius: var(--v-radius-sm);
+}
+
+.v-template__still {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .v-template__outline {
   display: flex;
+  position: absolute;
+  inset: 0;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
+  padding: var(--v-space-2);
 }
 
 .v-template__lane {
+  display: block;
   position: relative;
-  height: 14px;
+  height: 12px;
   background: var(--v-bg);
   border-radius: 2px;
 }
@@ -94,23 +201,31 @@
 
 .v-template__name {
   margin: 0;
+  padding: 0 var(--v-space-1);
   font-size: var(--v-text-md);
+  font-weight: var(--v-weight-strong);
+  line-height: var(--v-leading-tight);
 }
 
 .v-template__blurb {
+  display: block;
   flex: 1;
   margin: 0;
+  padding: 0 var(--v-space-1);
   color: var(--v-text-muted);
   font-size: var(--v-text-sm);
+  line-height: var(--v-leading);
 }
 
 .v-template__facts {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--v-space-2);
   margin: 0;
+  padding: 0 var(--v-space-1);
   color: var(--v-text-muted);
-  font-size: var(--v-text-sm);
+  font-size: var(--v-text-xs);
 }
 
 .v-template__tag,
@@ -209,10 +324,107 @@
   align-self: flex-start;
 }
 
+/* --- the wizard --- */
+
+.v-templates__poster {
+  width: min(100%, 18rem);
+  align-self: center;
+}
+
+.v-templates__rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--v-text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--v-tracking-wide);
+}
+
+.v-templates__railstep {
+  padding-top: var(--v-space-1);
+  border-top: 2px solid var(--v-border);
+  color: var(--v-text-muted);
+  flex: 1;
+  min-width: 5rem;
+}
+
+.v-templates__railstep[data-state="here"] {
+  border-top-color: var(--v-accent);
+  color: var(--v-text);
+  font-weight: var(--v-weight-strong);
+}
+
+.v-templates__railstep[data-state="done"] {
+  border-top-color: var(--v-accent);
+}
+
+.v-templates__pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--v-space-2);
+}
+
+.v-templates__thumb {
+  display: block;
+  width: 64px;
+  height: 36px;
+  object-fit: cover;
+  background: var(--v-bg-sunken);
+  border-radius: var(--v-radius-sm);
+}
+
+.v-templates__subtitle {
+  margin: 0 0 var(--v-space-2);
+  font-size: var(--v-text-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--v-tracking-wide);
+  color: var(--v-text-muted);
+}
+
+.v-templates__summary {
+  padding: var(--v-space-3);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-templates__answers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-1);
+  margin: 0;
+  font-size: var(--v-text-sm);
+}
+
+.v-templates__answers > div {
+  display: flex;
+  gap: var(--v-space-2);
+  justify-content: space-between;
+}
+
+.v-templates__answers dt {
+  color: var(--v-text-muted);
+}
+
+.v-templates__answers dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .v-templates__actions {
   display: flex;
   align-items: center;
   gap: var(--v-space-2);
+  /* The three buttons that end every panel stay put while the fields above them scroll. */
+  position: sticky;
+  bottom: calc(-1 * var(--v-space-4));
+  padding: var(--v-space-2) 0;
+  background: var(--v-bg-elevated);
 }
 
 .v-templates__spacer {

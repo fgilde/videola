@@ -33,12 +33,12 @@ const POSTER_EDGE = 384;
  */
 export function useTemplatePosters(
   templates: readonly Template[],
-): ReadonlyMap<string, string> {
-  const [posters, setPosters] = useState<ReadonlyMap<string, string>>(new Map());
+): Readonly<Record<string, string>> {
+  const [posters, setPosters] = useState<Readonly<Record<string, string>>>({});
   // Which templates have been through `poster` already, whether or not a picture came out. Without
   // the failures in here, a build with no WebGL would retry every template on every render.
   const seen = useRef(new Set<string>());
-  const live = useRef<ReadonlyMap<string, string>>(posters);
+  const live = useRef<Readonly<Record<string, string>>>(posters);
   live.current = posters;
   // Keyed on the ids rather than the array: the catalogue is fetched once but React hands this a
   // fresh array on every state change of the dialog around it.
@@ -54,7 +54,7 @@ export function useTemplatePosters(
         seen.current.add(id);
         const made = await poster(template);
         if (made === undefined) continue;
-        setPosters((current) => new Map(current).set(id, made));
+        setPosters((current) => ({ ...current, [id]: made }));
       }
     })();
     return () => {
@@ -67,7 +67,7 @@ export function useTemplatePosters(
   // one never points at a different picture.
   useEffect(() => {
     return () => {
-      for (const url of live.current.values()) URL.revokeObjectURL(url);
+      for (const url of Object.values(live.current)) URL.revokeObjectURL(url);
     };
   }, []);
 

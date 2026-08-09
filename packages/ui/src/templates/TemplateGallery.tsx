@@ -1,14 +1,26 @@
-import { useEffect, useRef, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 
 import { FLICKS_PER_SECOND, type Template } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
-import { localized, templateBlocks, templateDuration } from "./outline";
+import {
+  categoriesOf,
+  localized,
+  templateBlocks,
+  templateDuration,
+  templateFrame,
+} from "./outline";
 
 import "./TemplateGallery.css";
 
+const ALL = "all";
+
 export interface TemplateGalleryProps {
   templates: readonly Template[];
+  /// One rendered still per template, by template id. Absent for a template whose picture is not
+  /// ready yet, or for a build with no WebGL -- the card falls back to the outline of the timeline
+  /// it will build, which is a smaller claim but still a true one.
+  posters?: Readonly<Record<string, string>>;
   error?: string;
   onChoose: (template: Template) => void;
   onOpenTemplate: (file: File) => void;
@@ -19,6 +31,7 @@ export interface TemplateGalleryProps {
 export function TemplateGallery(props: TemplateGalleryProps): ReactElement {
   const { t, locale, formatNumber } = useI18n();
   const panel = useRef<HTMLDivElement>(null);
+  const [category, setCategory] = useState(ALL);
 
   useEffect(() => {
     panel.current?.focus();
@@ -32,6 +45,19 @@ export function TemplateGallery(props: TemplateGalleryProps): ReactElement {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [props.onClose]);
 
+  const categories = useMemo(() => categoriesOf(props.templates), [props.templates]);
+  const shown = props.templates.filter(
+    (template) => category === ALL || template.manifest.category === category,
+  );
+
+  // A category the catalogue carries but this build has no word for still needs a chip, so the
+  // template under it can be found. The raw key is a worse label than a translation and a far
+  // better one than nothing.
+  const categoryLabel = (key: string): string => {
+    const translated = t(`template.category.${key}`);
+    return translated === `template.category.${key}` ? key : translated;
+  };
+
   return (
     <div className="v-templates__scrim">
       <div
@@ -44,35 +70,69 @@ export function TemplateGallery(props: TemplateGalleryProps): ReactElement {
         data-testid="template-gallery"
       >
         <h2 className="v-templates__title">{t("template.galleryTitle")}</h2>
+        <p className="v-templates__lede">{t("template.galleryLede")}</p>
         {props.error !== undefined && (
           <p className="v-templates__note" role="alert">
             {t(props.error)}
           </p>
         )}
 
+        <div className="v-templates__filters" role="group" aria-label={t("template.filterLabel")}>
+          {[ALL, ...categories].map((key) => (
+            <button
+              key={key}
+              type="button"
+              className="v-chip"
+              aria-pressed={category === key}
+              data-category={key}
+              onClick={() => setCategory(key)}
+            >
+              {key === ALL ? t("template.category.all") : categoryLabel(key)}
+            </button>
+          ))}
+        </div>
+
         <ul className="v-templates__grid">
-          {props.templates.map((template) => (
-            <li className="v-template" key={template.manifest.id} data-template-id={template.manifest.id}>
-              <Outline template={template} />
-              <h3 className="v-template__name">{localized(template.manifest.name, locale)}</h3>
-              <p className="v-template__blurb">{localized(template.manifest.description, locale)}</p>
-              <p className="v-template__facts">
-                <span className="v-template__tag">{template.manifest.category}</span>
-                <span>
-                  {t("template.seconds", {
-                    seconds: formatNumber(
-                      Math.round((templateDuration(template) / FLICKS_PER_SECOND) * 10) / 10,
-                    ),
-                  })}
+          {shown.map((template) => (
+            <li key={template.manifest.id}>
+              {/* The card is the control. A picture with a button under it makes the largest,
+                  most obvious thing on the screen the one part that does nothing, and on a phone
+                  it hands a 44 px target to something the thumb is already over. */}
+              <button
+                type="button"
+                className="v-template"
+                data-template-id={template.manifest.id}
+                onClick={() => props.onChoose(template)}
+              >
+                <Poster template={template} url={props.posters?.[template.manifest.id]} />
+                <span className="v-template__name">
+                  {localized(template.manifest.name, locale)}
                 </span>
-                <span>{t("template.slotCount", { count: template.manifest.slots.length })}</span>
-              </p>
-              <button className="v-button v-button--primary" onClick={() => props.onChoose(template)}>
-                {t("template.use")}
+                <span className="v-template__blurb">
+                  {localized(template.manifest.description, locale)}
+                </span>
+                <span className="v-template__facts">
+                  <span className="v-template__tag">
+                    {categoryLabel(template.manifest.category)}
+                  </span>
+                  <span>
+                    {t("template.seconds", {
+                      seconds: formatNumber(
+                        Math.round((templateDuration(template) / FLICKS_PER_SECOND) * 10) / 10,
+                      ),
+                    })}
+                  </span>
+                  <span>{t("template.slotCount", { count: template.manifest.slots.length })}</span>
+                </span>
               </button>
             </li>
           ))}
         </ul>
+        {shown.length === 0 && (
+          <p className="v-templates__note" data-testid="template-none">
+            {t("template.noneHere")}
+          </p>
+        )}
 
         <div className="v-templates__actions">
           {/* A real file input rather than a scripted picker: the browser already has this dialog,
@@ -106,15 +166,41 @@ export function TemplateGallery(props: TemplateGalleryProps): ReactElement {
   );
 }
 
-// One row per track, bottom track first, so the strip reads the way the timeline does. A dissolve
-// is drawn where it happens: the overlap between two blocks is the dissolve.
+/**
+ * The rendered still, or the outline of the timeline while it is not there yet.
+ *
+ * The box keeps the template's own aspect ratio either way, so a card does not change size when
+ * its picture arrives -- a grid that reflows under the pointer is how a click lands on the wrong
+ * template.
+ */
+export function Poster({ template, url }: { template: Template; url?: string }): ReactElement {
+  const frame = templateFrame(template);
+  return (
+    <span
+      className="v-template__poster"
+      data-poster={url === undefined ? undefined : ""}
+      style={{ aspectRatio: `${frame.width} / ${frame.height}` }}
+    >
+      {url === undefined ? (
+        <Outline template={template} />
+      ) : (
+        // Empty alt: the name and the description are right beside it, and a screen reader reading
+        // a description of the picture as well would say the same thing twice.
+        <img className="v-template__still" src={url} alt="" />
+      )}
+    </span>
+  );
+}
+
+// One row per track, bottom track first, so the strip reads the way the timeline does. A transition
+// is drawn where it happens: the overlap between two blocks is the transition.
 function Outline({ template }: { template: Template }): ReactElement {
   const tracks = template.project.timeline.tracks.length;
   const blocks = templateBlocks(template);
   return (
-    <div className="v-template__outline" aria-hidden="true">
+    <span className="v-template__outline" aria-hidden="true">
       {Array.from({ length: tracks }, (_, index) => (
-        <div className="v-template__lane" key={index}>
+        <span className="v-template__lane" key={index}>
           {blocks
             .filter((block) => block.track === tracks - 1 - index)
             .map((block) => (
@@ -125,8 +211,8 @@ function Outline({ template }: { template: Template }): ReactElement {
                 style={{ left: `${block.left * 100}%`, width: `${block.width * 100}%` }}
               />
             ))}
-        </div>
+        </span>
       ))}
-    </div>
+    </span>
   );
 }

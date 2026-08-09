@@ -1,4 +1,4 @@
-import type { Clip, Localized, Project, Slot, Template, Time } from "@videola/core";
+import type { Clip, Frame, Localized, Project, Slot, Template, Time } from "@videola/core";
 
 import type { Locale } from "../i18n/useI18n";
 import { projectEnd } from "../timeline/geometry";
@@ -7,6 +7,32 @@ import { projectEnd } from "../timeline/geometry";
 // cannot be a catalogue key.
 export function localized(text: Localized, locale: Locale): string {
   return locale === "de" ? text.de : text.en;
+}
+
+// The order the gallery lists categories in: roughly the order someone works, from the opening of a
+// film to the thing it is selling. A category this build has never heard of -- one that arrived on
+// a file -- lands after these rather than being hidden, because a template nobody can find is the
+// same as a template that failed to load.
+export const CATEGORY_ORDER = ["intro", "slideshow", "social", "titles", "product"];
+
+export function categoriesOf(templates: readonly Template[]): string[] {
+  const present = [...new Set(templates.map((entry) => entry.manifest.category))];
+  return [
+    ...CATEGORY_ORDER.filter((category) => present.includes(category)),
+    ...present.filter((category) => !CATEGORY_ORDER.includes(category)),
+  ];
+}
+
+// The shape a card is drawn in: the first frame the template offers, because that is the one its
+// preview is rendered at and the one it was authored for. An upright template gets an upright card,
+// which is half of what someone is choosing between.
+export function templateFrame(template: Template): Frame {
+  return (
+    template.manifest.aspectRatios[0] ?? {
+      width: template.project.settings.width,
+      height: template.project.settings.height,
+    }
+  );
 }
 
 export interface TemplateBlock {

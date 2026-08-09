@@ -74,6 +74,7 @@ import {
   type MediaGrab,
 } from "@videola/ui";
 
+import { useTemplatePosters } from "./posters";
 import { useThumbnails } from "./thumbnails";
 import { offerUpdate } from "./updates";
 
@@ -95,6 +96,8 @@ const AUTOSAVE_MS = 30_000;
 const APP_VERSION = "0.3.0";
 const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
+// A stable empty array, so the poster hook is not handed a fresh one on every render.
+const NO_TEMPLATES: readonly Template[] = [];
 
 export function App(): ReactElement {
   const [doc, setDoc] = useState<VideolaDocument>();
@@ -137,6 +140,9 @@ export function App(): ReactElement {
   // it down would mean turning AppShell's children into a render prop for one boolean.
   const layout = useLayoutMode("auto");
   const thumbnails = useThumbnails(project?.library ?? []);
+  // Only while the gallery is up. Rendering a still for every template in a dialog nobody has
+  // opened is work the editor would be doing instead of drawing the timeline.
+  const posters = useTemplatePosters(gallery ? catalogue : NO_TEMPLATES);
 
   // A stable identity per report, so an identical repeat error still replaces the DOM node
   // and gets re-announced by assistive tech instead of sitting there as unchanged content.
@@ -767,6 +773,7 @@ export function App(): ReactElement {
       {gallery && template === undefined && (
         <TemplateGallery
           templates={catalogue}
+          posters={posters}
           error={templateError}
           onChoose={(entry) => {
             setSlotMedia({});
@@ -783,6 +790,8 @@ export function App(): ReactElement {
         <TemplateWizard
           template={template}
           media={slotMedia}
+          thumbnails={thumbnails}
+          poster={posters[template.manifest.id]}
           error={templateError}
           busy={baking}
           onPickMedia={(slot, file) => void pickSlotMedia(slot, file)}
