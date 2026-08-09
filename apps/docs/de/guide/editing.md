@@ -3,7 +3,7 @@
 Diese Seite beschreibt, was die Oberfläche heute kann. Was hier nicht steht, gibt es noch nicht —
 es gibt keinen Export in der Anwendung.
 
-![Der Editor mit einem dekodierten Bild in der Vorschau](/editor-preview.png)
+![Der Editor mit einem dekodierten Bild in der Vorschau](/editor-desktop.webp)
 
 ## Medien hineinbekommen
 
@@ -244,7 +244,7 @@ fortsetzen; der erste Druck auf Abspielen tut deshalb etwas mehr als die folgend
 
 ## Auf dem Telefon
 
-![Die Medienbibliothek auf einem Telefon, die Vorschau bleibt darüber stehen](/phone-library.png)
+![Die Medienbibliothek auf einem Telefon, die Vorschau bleibt darüber stehen](/editor-phone-library.webp)
 
 Unter 768 px wechselt der Editor in eine Spalte: Vorschau und Transport bleiben oben stehen, eine
 Leiste darunter wechselt zwischen **Medien**, **Zeitleiste** und **Eigenschaften**. Das Bild muss
@@ -293,7 +293,7 @@ beobachtet.
 
 ## Auf dem Tablet
 
-![Der Editor auf einem Tablet, zwei Medien auf zwei Spuren](/tablet.png)
+![Der Editor auf einem Tablet, zwei Medien auf zwei Spuren](/editor-tablet.webp)
 
 Zwischen 768 px und 1280 px — und auf allem ohne feinen Zeiger, gleich welcher Breite — legt der
 Editor sich in zwei Spalten: die Medienbibliothek links, Bild, Transport und Eigenschaften

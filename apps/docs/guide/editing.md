@@ -3,7 +3,7 @@
 This page describes what the editing surface does today. Anything not listed here does not exist
 yet — there is no export in the application.
 
-![The editor with a decoded frame in the preview](/editor-preview.png)
+![The editor with a decoded frame in the preview](/editor-desktop.webp)
 
 ## Getting media in
 
@@ -234,7 +234,7 @@ first press of play does slightly more work than the ones after it.
 
 ## On a phone
 
-![The media library on a phone, with the preview staying above it](/phone-library.png)
+![The media library on a phone, with the preview staying above it](/editor-phone-library.webp)
 
 Below 768 px the editor switches to a single column: the preview and the transport stay at the top,
 and a tab bar underneath swaps between **Media**, **Timeline** and **Properties**. The picture has
@@ -281,7 +281,7 @@ not been observed.
 
 ## On a tablet
 
-![The editor on a tablet, two media on two tracks](/tablet.png)
+![The editor on a tablet, two media on two tracks](/editor-tablet.webp)
 
 Between 768 px and 1280 px — and on anything without a fine pointer, whatever its width — the
 editor lays out in two columns: the media library down the left, the picture, the transport and the

@@ -21,6 +21,7 @@ function sidebar(prefix: string, text: string, items: [string, string][]): Defau
 
 const CHAPTERS: [string, string][] = [
   ["Getting started", "getting-started"],
+  ["What Videola does", "features"],
   ["Editing", "editing"],
   ["Templates", "templates"],
   ["Architecture", "architecture"],
@@ -36,6 +37,7 @@ const CHAPTERS: [string, string][] = [
 
 const KAPITEL: [string, string][] = [
   ["Einstieg", "getting-started"],
+  ["Was Videola kann", "features"],
   ["Schneiden", "editing"],
   ["Vorlagen", "templates"],
   ["Architektur", "architecture"],
@@ -102,6 +104,7 @@ export default defineConfig({
       description: "A browser-based video editor on a Rust core. Import, cut on the timeline and play back; effects and export are still being built.",
       themeConfig: {
         nav: [
+          { text: "Features", link: "/guide/features" },
           { text: "Documentation", link: "/guide/getting-started" },
           { text: "Architecture", link: "/guide/architecture" },
           { text: "Downloads", link: `${REPO}/releases` },
@@ -126,6 +129,7 @@ export default defineConfig({
         "Ein Video-Editor im Browser auf einem Rust-Kern. Importieren, auf der Timeline schneiden und abspielen; Effekte und Export entstehen noch.",
       themeConfig: {
         nav: [
+          { text: "Funktionen", link: "/de/guide/features" },
           { text: "Dokumentation", link: "/de/guide/getting-started" },
           { text: "Architektur", link: "/de/guide/architecture" },
           { text: "Downloads", link: `${REPO}/releases` },

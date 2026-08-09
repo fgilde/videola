@@ -13,8 +13,8 @@ hero:
       text: Downloads
       link: https://github.com/fgilde/videola/releases
     - theme: alt
-      text: Dokumentation
-      link: /de/guide/getting-started
+      text: Was es kann
+      link: /de/guide/features
     - theme: alt
       text: Quellcode
       link: https://github.com/fgilde/videola
@@ -107,7 +107,7 @@ Teile des Entwurfs gebaut und welche geplant sind.
 ## Der Editor
 
 <figure class="shot">
-  <img src="/editor-full.png" alt="Der Videola-Editor: ein dekodiertes Videobild in der Vorschau, ein Transport mit 00:00:00.00 von 00:00:02.00 und aktivem Pause-Knopf, und ein Clip namens fixture.mp4 auf Spur V1">
+  <img src="/editor-desktop.webp" alt="Der Videola-Editor: ein dekodiertes Videobild in der Vorschau, ein Transport mit 00:00:00.00 von 00:00:02.00 und aktivem Pause-Knopf, und ein Clip namens fixture.mp4 auf Spur V1">
   <figcaption>Ein echtes Bild, im Browser dekodiert und komponiert. Der Screenshot stammt aus einem Test, der die Anwendung baut, sie in headless Chrome fährt und eine Videodatei hineinzieht — derselbe Lauf, der eine Vorschau-Canvas gefunden hat, die nie über ihre Ausgangsgröße hinauswuchs.</figcaption>
 </figure>
 
