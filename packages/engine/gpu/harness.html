@@ -360,6 +360,74 @@ test("a compound clip carries its own placement", () => {
   check("a compound at half opacity halves what is inside it", dimAt(8, 8), [128, 128, 128, 255]);
 });
 
+// A stack of tracks rather than the one `project` builds: an adjustment layer *is* a track, and
+// what it does can only be read off the tracks under it and over it.
+function layered(w, h, background, tracks) {
+  return {
+    settings: { width: w, height: h, background },
+    library: [{ id: MEDIA, width: w, height: h }],
+    timeline: {
+      tracks: tracks.map((t, i) => ({
+        id: "trk_" + i, kind: t.kind ?? "video", hidden: t.hidden ?? false, effects: [],
+        clips: (t.clips ?? []).map((c, j) => ({
+          id: c.id ?? ("clp_" + i + "_" + j), source: { kind: "media", media: MEDIA },
+          start: c.start ?? 0, duration: c.duration ?? 1000, inPoint: 0,
+          speed: { rate: 1, reverse: false, preservePitch: true },
+          blend: "normal", effects: c.effects ?? [], volume: 1, pan: 0,
+          fades: { inDuration: 0, outDuration: 0 }, keyframes: {},
+          transform: transform(c.t),
+        })),
+      })),
+    },
+  };
+}
+
+// Half the frame each, so one picture stands under the layer and the other beside it. Which is the
+// only shape that can tell "the layer graded everything" apart from "the layer graded what is
+// below it", and the second is the whole claim an adjustment track makes.
+function gradedHalves(over) {
+  return layered(16, 16, "#000000", [
+    { clips: [{ id: "clp_low", t: { scaleX: 0.5, x: -4 } }] },
+    Object.assign({ kind: "adjustment", clips: [{ id: "clp_grade", effects: [
+      { id: "eff_grade", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+    ] }] }, over || {}),
+    { clips: [{ id: "clp_high", t: { scaleX: 0.5, x: 4 } }] },
+  ]);
+}
+
+function gradedPixels(scene) {
+  const canvas = canvasOf(16, 16);
+  const compositor = new R.Compositor(R.createContext(canvas));
+  const grey = frame(16, 16, () => [64, 64, 64, 255]);
+  draw(compositor, scene, 0, new Map([["clp_low", grey], ["clp_high", grey]]),
+    floats([["eff_grade", [["amount", 2]]]]));
+  grey.close();
+  return reader(compositor.readPixels(), 16, 16);
+}
+
+// The one place an adjustment layer can be proved: pixels. A draw list can be read for the passes
+// it carries, but whether the picture underneath actually changed and the one beside it did not is
+// a question only a driver answers.
+test("an adjustment layer grades what is under it", () => {
+  const at = gradedPixels(gradedHalves());
+  check("the picture below the layer is doubled", at(4, 8), [128, 128, 128, 255]);
+  check("the picture beside it is untouched", at(12, 8), [64, 64, 64, 255]);
+});
+
+// The counterweight: the check above would also pass if the left half were doubled by something
+// that has nothing to do with the layer. Take the layer away and the left half has to go back.
+test("an adjustment layer that is switched off changes nothing", () => {
+  const hidden = gradedPixels(gradedHalves({ hidden: true }));
+  check("a hidden layer leaves the picture below it alone", hidden(4, 8), [64, 64, 64, 255]);
+
+  const empty = gradedPixels(gradedHalves({ clips: [] }));
+  check("and a layer with no clip on it grades nothing either", empty(4, 8), [64, 64, 64, 255]);
+
+  const past = gradedPixels(gradedHalves({ clips: [{ id: "clp_grade", start: 500, duration: 100,
+    effects: [{ id: "eff_grade", effectType: "brightness", enabled: true, params: {}, keyframes: {} }] }] }));
+  check("and a layer whose clip is elsewhere in time grades nothing", past(4, 8), [64, 64, 64, 255]);
+});
+
 const BRIGHTNESS = [{ id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} }];
 const CROSSFADE = { transitionType: "crossfade", duration: 1000, alignment: "in", params: {} };
 

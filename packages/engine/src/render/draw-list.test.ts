@@ -772,3 +772,117 @@ describe("a compound clip in the draw list", () => {
     expect(ids(list(project([track("trk_1", [deep])]), 0))).toEqual([]);
   });
 });
+
+// An adjustment track carries no picture. What it carries is a chain of effects that reaches
+// every clip drawn below it, which is the whole reason `TrackKind` has the value -- and until this
+// existed it had the value and nothing else.
+describe("an adjustment track", () => {
+  const graded = (over: Record<string, unknown> = {}): Clip =>
+    clip({ id: "clp_grade", effects: [effect({ id: "eff_grade", effectType: "contrast" })], ...over });
+  const resolved = params([["eff_grade", [["amount", 2]]]]);
+
+  // Three seconds of picture under the layer, so a moment outside the layer's own clip still has
+  // something drawn there -- otherwise "no grade here" and "nothing drawn here" would be the same
+  // answer and the span check would prove nothing.
+  function stack(over: Partial<Track> = {}, layer: Clip = graded()): Project {
+    return project([
+      track("trk_low", [clip({ id: "clp_low", start: 0, duration: 3 * SECOND })]),
+      track("trk_grade", [layer], { kind: "adjustment", ...over }),
+      track("trk_high", [clip({ id: "clp_high", start: 0, duration: 3 * SECOND })]),
+    ]);
+  }
+
+  // Undefined rather than an empty list where the clip is not drawn at all, so a check for "no
+  // grade" cannot be answered by a clip that is simply missing.
+  const passesOn = (drawn: DrawList, id: string): string[] | undefined =>
+    drawn.items.find((item) => item.clip === id)?.effects.map((pass) => pass.effect);
+
+  // `tracks[0]` is the bottom, so a layer covers what is under it and leaves what is over it --
+  // and checking only the first half would pass for a layer that covers everything.
+  it("reaches the clips below it and not the ones above it", () => {
+    const drawn = list(stack(), 0, resolved);
+    expect(passesOn(drawn, "clp_low")).toEqual(["contrast"]);
+    expect(passesOn(drawn, "clp_high")).toEqual([]);
+  });
+
+  it("still paints nothing of its own", () => {
+    expect(ids(list(stack(), 0, resolved))).toEqual(["clp_low", "clp_high"]);
+  });
+
+  // The clip on the layer is what carries the span, so the grade starts and stops where it does.
+  it("covers only the span of the clip that carries it", () => {
+    const timed = stack({}, graded({ start: SECOND, duration: SECOND }));
+    expect(passesOn(list(timed, 0, resolved), "clp_low")).toEqual([]);
+    expect(passesOn(list(timed, SECOND, resolved), "clp_low")).toEqual(["contrast"]);
+    expect(passesOn(list(timed, 2 * SECOND, resolved), "clp_low")).toEqual([]);
+  });
+
+  it("does nothing while its track is hidden or its layer faded out", () => {
+    expect(passesOn(list(stack({ hidden: true }), 0, resolved), "clp_low")).toEqual([]);
+    const faded = stack({}, graded({ transform: transform({ opacity: 0 }) }));
+    expect(passesOn(list(faded, 0, resolved), "clp_low")).toEqual([]);
+  });
+
+  // The clip's own chain runs first and the layer's over the result: a grade is applied to the
+  // picture as the clip finally looks, not to the picture before its own effects touched it.
+  it("runs after the effects the clip itself carries", () => {
+    const own = project([
+      track("trk_low", [clip({ id: "clp_low", effects: [effect({ id: "eff_own", effectType: "blur" })] })]),
+      track("trk_grade", [graded()], { kind: "adjustment" }),
+    ]);
+    const both = params([
+      ["eff_own", [["radius", 1]]],
+      ["eff_grade", [["amount", 2]]],
+    ]);
+    // blur is separable, so it is two passes of its own before the grade arrives.
+    expect(passesOn(list(own, 0, both), "clp_low")).toEqual(["blur", "blur", "contrast"]);
+  });
+
+  // Two layers stacked: the lower one runs first, because that is the order they were put in.
+  it("stacks with a second layer from the bottom up", () => {
+    const two = project([
+      track("trk_low", [clip({ id: "clp_low" })]),
+      track("trk_a", [graded({ id: "clp_a", effects: [effect({ id: "eff_a", effectType: "contrast" })] })], { kind: "adjustment" }),
+      track("trk_b", [graded({ id: "clp_b", effects: [effect({ id: "eff_b", effectType: "saturation" })] })], { kind: "adjustment" }),
+    ]);
+    const both = params([
+      ["eff_a", [["amount", 2]]],
+      ["eff_b", [["amount", 2]]],
+    ]);
+    expect(passesOn(list(two, 0, both), "clp_low")).toEqual(["contrast", "saturation"]);
+  });
+
+  // The second axis: a compound clip under a layer is drawn as the clips inside it, and every one
+  // of them has to come out graded. Without this the grade would stop at the fold.
+  it("reaches into a compound clip standing below it", () => {
+    const folded = project([
+      track("trk_low", [
+        compound({ id: "clp_group", start: 0, duration: 2 * SECOND }, [
+          track("trk_in", [clip({ id: "clp_a" }), clip({ id: "clp_b" })]),
+        ]),
+      ]),
+      track("trk_grade", [graded()], { kind: "adjustment" }),
+    ]);
+    const drawn = list(folded, 0, resolved);
+    expect(ids(drawn)).toEqual(["clp_a", "clp_b"]);
+    expect(passesOn(drawn, "clp_a")).toEqual(["contrast"]);
+    expect(passesOn(drawn, "clp_b")).toEqual(["contrast"]);
+  });
+
+  // And the same rule one level down: a layer inside a compound covers what is inside it and stops
+  // at the fold, rather than reaching out over the whole project.
+  it("inside a compound clip covers only what is inside it", () => {
+    const inside = project([
+      track("trk_out", [clip({ id: "clp_outside" })]),
+      track("trk_holder", [
+        compound({ id: "clp_group", start: 0, duration: 2 * SECOND }, [
+          track("trk_in", [clip({ id: "clp_inner" })]),
+          track("trk_grade_in", [graded()], { kind: "adjustment" }),
+        ]),
+      ]),
+    ]);
+    const drawn = list(inside, 0, resolved);
+    expect(passesOn(drawn, "clp_inner")).toEqual(["contrast"]);
+    expect(passesOn(drawn, "clp_outside")).toEqual([]);
+  });
+});

@@ -448,7 +448,7 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
 //
 // Track and marker colours go through the same check: both end up in an inline style in the
 // timeline, where anything unparsable is dropped without a word.
-fn hex_color(value: &str) -> Result<()> {
+pub(crate) fn hex_color(value: &str) -> Result<()> {
     let digits = value.strip_prefix('#').unwrap_or("");
     let shaped = matches!(digits.len(), 3 | 6 | 8) && digits.bytes().all(|b| b.is_ascii_hexdigit());
     if shaped {
@@ -1131,6 +1131,7 @@ mod tests {
             time: Time::ZERO,
             label: "x".into(),
             color_hex: "rebeccapurple".into(),
+            note: String::new(),
         });
 
         assert!(matches!(p.normalize(), Err(CoreError::InvalidArgument(_))));

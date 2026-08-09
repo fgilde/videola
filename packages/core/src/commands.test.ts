@@ -72,6 +72,45 @@ describe("command factories", () => {
       marker: "mrk_1",
       label: "chapter",
     });
+    expect(cmd.markerSetColor("mrk_1", "#2EA043")).toEqual({
+      type: "marker.setColor",
+      marker: "mrk_1",
+      colorHex: "#2EA043",
+    });
+    expect(cmd.markerSetNote("mrk_1", "take 3")).toEqual({
+      type: "marker.setNote",
+      marker: "mrk_1",
+      note: "take 3",
+    });
+  });
+
+  // Four numbers that cannot be mistaken for one another: a three-point edit carries a source in
+  // point, a length and a place on the timeline, and an argument in the wrong field is a cut
+  // nobody marked.
+  it("keeps the source range and the timeline position apart in a three-point edit", () => {
+    const source = { kind: "media", media: "med_a" } as const;
+    expect(cmd.clipInsert("trk_1", source, 100, 50, 900)).toEqual({
+      type: "clip.insert",
+      track: "trk_1",
+      source,
+      start: 100,
+      duration: 50,
+      inPoint: 900,
+    });
+    expect(cmd.clipOverwrite("trk_1", source, 100, 50, 900)).toEqual({
+      type: "clip.overwrite",
+      track: "trk_1",
+      source,
+      start: 100,
+      duration: 50,
+      inPoint: 900,
+    });
+  });
+
+  // The head of the medium is what "nothing marked" means, and it has to travel as an explicit
+  // zero rather than as a field the core would have to guess at.
+  it("defaults the in point of a three-point edit to the head of the medium", () => {
+    expect(cmd.clipInsert("trk_1", { kind: "media", media: "med_a" }, 0, 50).inPoint).toBe(0);
   });
 
   // A copied clip must reach the core whole -- the core is what mints new ids and refuses a

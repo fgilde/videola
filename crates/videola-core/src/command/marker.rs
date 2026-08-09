@@ -2,8 +2,7 @@ use super::bounded;
 use crate::model::{Marker, MarkerId, Project, Time};
 use crate::{CoreError, Result};
 
-// The one colour markers get in this version. A per-marker colour is a field on the model already,
-// so the command that sets it can arrive without touching anything else.
+// What a marker is given when nobody has said otherwise. `marker.setColor` takes it from there.
 const MARKER_COLOR: &str = "#F0A030";
 
 pub(super) fn add(target: &mut Project, time: Time, label: &str) -> Result<()> {
@@ -13,6 +12,7 @@ pub(super) fn add(target: &mut Project, time: Time, label: &str) -> Result<()> {
         time,
         label: label.to_string(),
         color_hex: MARKER_COLOR.to_string(),
+        note: String::new(),
     });
     // Sorted so the ruler and the snap candidates read them in the order they appear, whatever
     // order they were placed in.
@@ -29,6 +29,21 @@ pub(super) fn remove(target: &mut Project, marker: &MarkerId) -> Result<()> {
 pub(super) fn rename(target: &mut Project, marker: &MarkerId, label: &str) -> Result<()> {
     let index = index_of(target, marker)?;
     target.markers[index].label = label.to_string();
+    Ok(())
+}
+
+// The same gate the load boundary puts on every colour it reads: a marker's ends up in an inline
+// style, where anything unparsable is dropped without a word.
+pub(super) fn set_color(target: &mut Project, marker: &MarkerId, color_hex: &str) -> Result<()> {
+    crate::model::project::hex_color(color_hex)?;
+    let index = index_of(target, marker)?;
+    target.markers[index].color_hex = color_hex.to_string();
+    Ok(())
+}
+
+pub(super) fn set_note(target: &mut Project, marker: &MarkerId, note: &str) -> Result<()> {
+    let index = index_of(target, marker)?;
+    target.markers[index].note = note.to_string();
     Ok(())
 }
 

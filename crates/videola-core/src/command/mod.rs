@@ -71,6 +71,28 @@ pub enum Command {
         start: Time,
         duration: Time,
     },
+    /// The insert half of a three-point edit: place the source range `inPoint..inPoint + duration`
+    /// at `start` and move everything from there on back by `duration`, on **every** track, so
+    /// picture and sound stay together. A clip reaching across `start` is cut in two first.
+    #[serde(rename = "clip.insert")]
+    ClipInsert {
+        track: TrackId,
+        source: ClipSource,
+        start: Time,
+        duration: Time,
+        in_point: Time,
+    },
+    /// The overwrite half: place the same range at `start` and let it replace whatever occupied
+    /// that span on **this** track alone. Nothing moves, so the timeline keeps its length unless
+    /// the material reaches past the old end.
+    #[serde(rename = "clip.overwrite")]
+    ClipOverwrite {
+        track: TrackId,
+        source: ClipSource,
+        start: Time,
+        duration: Time,
+        in_point: Time,
+    },
     /// Delete a clip.
     #[serde(rename = "clip.remove")]
     ClipRemove { clip: ClipId },
@@ -237,6 +259,14 @@ pub enum Command {
     /// Change a marker's label.
     #[serde(rename = "marker.rename")]
     MarkerRename { marker: MarkerId, label: String },
+    /// Recolour a marker. A hex colour such as `#F0A030`, the same shapes every other colour in the
+    /// model accepts.
+    #[serde(rename = "marker.setColor")]
+    MarkerSetColor { marker: MarkerId, color_hex: String },
+    /// Set the note a marker carries. The label is what the ruler shows, the note is what the
+    /// marker list reads out.
+    #[serde(rename = "marker.setNote")]
+    MarkerSetNote { marker: MarkerId, note: String },
 
     /// Put an asset into the library. The id must be `med_` followed by the SHA-256 of the file's
     /// bytes, so importing the same file twice yields the same id.
@@ -298,6 +328,20 @@ impl Command {
                 start,
                 duration,
             } => clip::add(target, track, source.clone(), *start, *duration),
+            Self::ClipInsert {
+                track,
+                source,
+                start,
+                duration,
+                in_point,
+            } => clip::insert(target, track, source.clone(), *start, *duration, *in_point),
+            Self::ClipOverwrite {
+                track,
+                source,
+                start,
+                duration,
+                in_point,
+            } => clip::overwrite(target, track, source.clone(), *start, *duration, *in_point),
             Self::ClipRemove { clip } => clip::remove(target, clip),
             Self::ClipMove {
                 clip,
@@ -379,6 +423,10 @@ impl Command {
             Self::MarkerAdd { time, label } => marker::add(target, *time, label),
             Self::MarkerRemove { marker } => marker::remove(target, marker),
             Self::MarkerRename { marker, label } => marker::rename(target, marker, label),
+            Self::MarkerSetColor { marker, color_hex } => {
+                marker::set_color(target, marker, color_hex)
+            }
+            Self::MarkerSetNote { marker, note } => marker::set_note(target, marker, note),
             Self::MediaImport { asset } => project::import_media(target, asset),
             Self::MediaRemove { media } => project::remove_media(target, media),
         }
@@ -397,6 +445,8 @@ impl Command {
             Self::TrackSetPan { .. } => LABEL_TRACK_SET_PAN,
             Self::TrackSetFlags { .. } => LABEL_TRACK_SET_FLAGS,
             Self::ClipAdd { .. } => LABEL_CLIP_ADD,
+            Self::ClipInsert { .. } => LABEL_CLIP_INSERT,
+            Self::ClipOverwrite { .. } => LABEL_CLIP_OVERWRITE,
             Self::ClipRemove { .. } => LABEL_CLIP_REMOVE,
             Self::ClipMove { .. } => LABEL_CLIP_MOVE,
             Self::ClipTrim { .. } => LABEL_CLIP_TRIM,
@@ -423,6 +473,8 @@ impl Command {
             Self::MarkerAdd { .. } => LABEL_MARKER_ADD,
             Self::MarkerRemove { .. } => LABEL_MARKER_REMOVE,
             Self::MarkerRename { .. } => LABEL_MARKER_RENAME,
+            Self::MarkerSetColor { .. } => LABEL_MARKER_SET_COLOR,
+            Self::MarkerSetNote { .. } => LABEL_MARKER_SET_NOTE,
             Self::MediaImport { .. } => LABEL_MEDIA_IMPORT,
             Self::MediaRemove { .. } => LABEL_MEDIA_REMOVE,
         }
@@ -440,6 +492,8 @@ pub const LABEL_TRACK_SET_VOLUME: &str = "cmd.track.setVolume";
 pub const LABEL_TRACK_SET_PAN: &str = "cmd.track.setPan";
 pub const LABEL_TRACK_SET_FLAGS: &str = "cmd.track.setFlags";
 pub const LABEL_CLIP_ADD: &str = "cmd.clip.add";
+pub const LABEL_CLIP_INSERT: &str = "cmd.clip.insert";
+pub const LABEL_CLIP_OVERWRITE: &str = "cmd.clip.overwrite";
 pub const LABEL_CLIP_REMOVE: &str = "cmd.clip.remove";
 pub const LABEL_CLIP_MOVE: &str = "cmd.clip.move";
 pub const LABEL_CLIP_TRIM: &str = "cmd.clip.trim";
@@ -466,6 +520,8 @@ pub const LABEL_KEYFRAME_SET_INTERP: &str = "cmd.keyframe.setInterp";
 pub const LABEL_MARKER_ADD: &str = "cmd.marker.add";
 pub const LABEL_MARKER_REMOVE: &str = "cmd.marker.remove";
 pub const LABEL_MARKER_RENAME: &str = "cmd.marker.rename";
+pub const LABEL_MARKER_SET_COLOR: &str = "cmd.marker.setColor";
+pub const LABEL_MARKER_SET_NOTE: &str = "cmd.marker.setNote";
 pub const LABEL_MEDIA_IMPORT: &str = "cmd.media.import";
 pub const LABEL_MEDIA_REMOVE: &str = "cmd.media.remove";
 
@@ -481,6 +537,8 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_TRACK_SET_PAN,
     LABEL_TRACK_SET_FLAGS,
     LABEL_CLIP_ADD,
+    LABEL_CLIP_INSERT,
+    LABEL_CLIP_OVERWRITE,
     LABEL_CLIP_REMOVE,
     LABEL_CLIP_MOVE,
     LABEL_CLIP_TRIM,
@@ -507,6 +565,8 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_MARKER_ADD,
     LABEL_MARKER_REMOVE,
     LABEL_MARKER_RENAME,
+    LABEL_MARKER_SET_COLOR,
+    LABEL_MARKER_SET_NOTE,
     LABEL_MEDIA_IMPORT,
     LABEL_MEDIA_REMOVE,
 ];

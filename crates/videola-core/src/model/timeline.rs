@@ -95,6 +95,11 @@ pub struct Marker {
     pub time: Time,
     pub label: String,
     pub color_hex: String,
+    // A note is what a marker is for once there are more than three of them: the label is what the
+    // ruler can show, this is what the list reads out. Defaulted rather than optional, because a
+    // marker written before this field existed has an empty note, not an absent one.
+    #[serde(default)]
+    pub note: String,
 }
 
 #[cfg(test)]

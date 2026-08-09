@@ -15,6 +15,19 @@ pub(super) fn add(
     start: Time,
     duration: Time,
 ) -> Result<()> {
+    let clip = made(source, start, duration, Time::ZERO)?;
+    let target_track = target
+        .track_mut(track)
+        .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?;
+    target_track.clips.push(clip);
+    sort_clips(target_track);
+    Ok(())
+}
+
+// The clip `clip.add`, `clip.insert` and `clip.overwrite` all place, judged before any of them
+// moves anything. `in_point` is the source in point the range was marked at; `add` has none and
+// passes zero, which is what the whole medium means.
+fn made(source: ClipSource, start: Time, duration: Time, in_point: Time) -> Result<Clip> {
     if duration.as_flicks() <= 0 {
         return Err(CoreError::InvalidArgument(
             "duration must be positive".into(),
@@ -22,16 +35,102 @@ pub(super) fn add(
     }
     let start = bounded(start.clamp_min_zero())?;
     let duration = bounded(duration)?;
+    let in_point = bounded(in_point.clamp_min_zero())?;
     bounded(checked_add(start, duration)?)?;
+    bounded(checked_add(in_point, duration)?)?;
 
     let mut clip = Clip::new_media(MediaId::from(String::new()), start, duration);
     clip.source = source;
+    clip.in_point = in_point;
     crate::model::project::normalize_new_clip(&mut clip)?;
-    let target_track = target
+    Ok(clip)
+}
+
+// The three-point edit, insert half. Everything from the insertion point on moves back by the
+// length of the material, on every track and not only the one being edited -- an insert that moved
+// picture without moving the sound under it would put the whole timeline out of sync, which is the
+// one thing the operation must never do.
+//
+// One command, not a dozen: the gap opens on every track, a clip that reaches across the point is
+// cut in two, and the material lands, all inside a single `Command::apply`. The patch the document
+// diffs out of it is one undo step whatever the timeline looked like.
+//
+// ponytail: `track.locked` does not exempt a track. Lock is not enforced anywhere in the core
+// today, and honouring it here alone would leave one command as the only authority on what a lock
+// means -- and an exempt track would be an overlap nobody authored. When lock becomes a rule, it
+// becomes one for `clip.move` and `clip.trim` at the same time.
+pub(super) fn insert(
+    target: &mut Project,
+    track: &TrackId,
+    source: ClipSource,
+    start: Time,
+    duration: Time,
+    in_point: Time,
+) -> Result<()> {
+    if target.track_index(track).is_none() {
+        return Err(CoreError::TrackNotFound(track.clone()));
+    }
+    let clip = made(source, start, duration, in_point)?;
+    let (at, gap) = (clip.start, clip.duration);
+    for existing in target.timeline.tracks.iter_mut() {
+        split_across(existing, at)?;
+        shift_from(&mut existing.clips, at, gap)?;
+    }
+    let destination = target
         .track_mut(track)
         .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?;
-    target_track.clips.push(clip);
-    sort_clips(target_track);
+    destination.clips.push(clip);
+    sort_clips(destination);
+    Ok(())
+}
+
+// The other half: the material replaces whatever occupied that span, and nothing moves. Only the
+// track being edited is touched, which is what makes an overwrite the operation that leaves the
+// total length alone.
+//
+// Cutting at both edges first is what makes the rest one line: once no clip reaches across either
+// edge, every clip is wholly inside the span or wholly outside it.
+pub(super) fn overwrite(
+    target: &mut Project,
+    track: &TrackId,
+    source: ClipSource,
+    start: Time,
+    duration: Time,
+    in_point: Time,
+) -> Result<()> {
+    if target.track_index(track).is_none() {
+        return Err(CoreError::TrackNotFound(track.clone()));
+    }
+    let clip = made(source, start, duration, in_point)?;
+    let (at, end) = (clip.start, checked_add(clip.start, clip.duration)?);
+    let destination = target
+        .track_mut(track)
+        .ok_or_else(|| CoreError::TrackNotFound(track.clone()))?;
+    split_across(destination, at)?;
+    split_across(destination, end)?;
+    destination
+        .clips
+        .retain(|existing| existing.end() <= at || existing.start >= end);
+    destination.clips.push(clip);
+    sort_clips(destination);
+    Ok(())
+}
+
+// Cuts every clip that reaches across `at` in two, so a gap opened there opens between two clips
+// rather than through the middle of one. Two clips can straddle the same instant wherever a track
+// carries an overlap, so this walks the whole track rather than finding one.
+fn split_across(track: &mut crate::model::Track, at: Time) -> Result<()> {
+    let mut index = 0;
+    while index < track.clips.len() {
+        let clip = &track.clips[index];
+        if clip.start < at && clip.end() > at {
+            let (left, right) = halves(clip, at)?;
+            track.clips[index] = left;
+            track.clips.insert(index + 1, right);
+            index += 1;
+        }
+        index += 1;
+    }
     Ok(())
 }
 
@@ -143,13 +242,23 @@ fn trimmed_fields(current: &Clip, edge: TrimEdge, delta: Time) -> Result<(Time, 
 
 pub(super) fn split(target: &mut Project, clip: &ClipId, at: Time) -> Result<()> {
     let (track, index) = find_clip_mut(target, clip)?;
-    let original = track.clips[index].clone();
     let at = bounded(at)?;
+    let original = &track.clips[index];
     if at <= original.start || at >= original.end() {
         return Err(CoreError::InvalidArgument(
             "split point outside the clip".into(),
         ));
     }
+    let (left, right) = halves(original, at)?;
+    track.clips[index] = left;
+    track.clips.insert(index + 1, right);
+    Ok(())
+}
+
+// One clip cut in two at an instant strictly inside it. The one definition of what a cut is, so the
+// boundary `clip.split` makes by hand and the ones `clip.insert` and `clip.overwrite` make to clear
+// a span are the same cut -- including what happens to the source range and to the transitions.
+fn halves(original: &Clip, at: Time) -> Result<(Clip, Clip)> {
     let consumed = checked_sub(at, original.start)?;
     let remaining = checked_sub(original.duration, consumed)?;
 
@@ -174,9 +283,7 @@ pub(super) fn split(target: &mut Project, clip: &ClipId, at: Time) -> Result<()>
         right.in_point = left.out_point();
     }
 
-    track.clips[index] = left;
-    track.clips.insert(index + 1, right);
-    Ok(())
+    Ok((left, right))
 }
 
 pub(super) fn ripple_delete(target: &mut Project, clip: &ClipId) -> Result<()> {
