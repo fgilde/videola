@@ -57,12 +57,23 @@ function identity(): LutTable {
  * LINEAR is what makes this a lookup *table* rather than a posterising palette -- the hardware's
  * trilinear filter is the interpolation between grid points, and NEAREST would snap every pixel
  * to one of 33 tones an axis. CLAMP_TO_EDGE on all three axes, including the one WebGL1 never had.
+ *
+ * The two unpack flags are turned off around the upload and put back afterwards, and that is not
+ * defensiveness: WebGL applies `UNPACK_FLIP_Y_WEBGL` to an ArrayBufferView as readily as to a
+ * picture, and the browser's tiles keep it *on* because a still image has to be turned to match
+ * `v_uv`. A table flipped that way has its green axis reversed -- a grade wrong in one channel,
+ * which reads as a wrong table rather than as a bug. Measured rather than reasoned about: the tile
+ * check below caught exactly this.
  */
 export function uploadLut(
   gl: WebGL2RenderingContext,
   texture: WebGLTexture,
   table: LutTable,
 ): void {
+  const flip = gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL) as boolean;
+  const premultiplied = gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL) as boolean;
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   gl.bindTexture(TEXTURE_3D, texture);
   gl.texParameteri(TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -81,6 +92,8 @@ export function uploadLut(
     gl.UNSIGNED_BYTE,
     table.rgba,
   );
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flip);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplied);
 }
 
 /**
