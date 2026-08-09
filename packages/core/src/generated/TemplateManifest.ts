@@ -3,10 +3,17 @@ import type { Frame } from "./Frame";
 import type { Localized } from "./Localized";
 import type { Slot } from "./Slot";
 import type { Step } from "./Step";
+import type { Time } from "./Time";
 
 export type TemplateManifest = { schemaVersion: number, id: string, version: number, name: Localized, description: Localized, category: string, tags: Array<string>, 
 /**
  * The frames this template offers in the gallery. Every fit is worked out against the frame
  * chosen at bake time, so a portrait entry costs the author nothing but this line.
  */
-aspectRatios: Array<Frame>, slots: Array<Slot>, steps: Array<Step>, };
+aspectRatios: Array<Frame>, 
+/**
+ * The instant the gallery draws its card from. An author picks it, because only the author
+ * knows which second of their build is the one worth showing; there is no arithmetic that
+ * reliably lands on it. Absent means the start.
+ */
+posterAt?: Time | null, slots: Array<Slot>, steps: Array<Step>, };

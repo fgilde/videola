@@ -141,11 +141,20 @@ fn normalize_clip(clip: &mut Clip, depth: usize) -> Result<()> {
     normalize_keyframes(&mut clip.keyframes)?;
     match &mut clip.source {
         ClipSource::Compound { timeline } => normalize_timeline(timeline, depth + 1)?,
+        // A generator's colour is read by `hex()` in generator.ts, which falls back to black or
+        // white for anything it cannot parse — the same silent reinterpretation
+        // `settings.background` is checked against, and now reachable from a template's colour
+        // slot as well as from a hand-written project.json.
         ClipSource::Generator {
-            generator: Generator::Gradient { angle, .. },
+            generator: Generator::Gradient { from, to, angle },
         } => {
             finite(*angle)?;
+            hex_color(from)?;
+            hex_color(to)?;
         }
+        ClipSource::Generator {
+            generator: Generator::Solid { color } | Generator::Shape { color, .. },
+        } => hex_color(color)?,
         ClipSource::Generator { .. } | ClipSource::Media { .. } => {}
     }
     normalize_effects(&mut clip.effects)

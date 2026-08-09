@@ -7,4 +7,4 @@ import type { Fit } from "./Fit";
  * places a value can actually reach is fewer lines than a JSON-pointer writer and cannot name a
  * field that does not exist. Every variant here is something a viewer can see today.
  */
-export type SlotBinding = { "target": "clipMedia", clip: ClipId, fit: Fit, } | { "target": "clipLabel", clip: ClipId, } | { "target": "projectTitle" } | { "target": "background" };
+export type SlotBinding = { "target": "clipMedia", clip: ClipId, fit: Fit, } | { "target": "clipLabel", clip: ClipId, } | { "target": "projectTitle" } | { "target": "background" } | { "target": "generatorText", clip: ClipId, } | { "target": "generatorColor", clip: ClipId, };

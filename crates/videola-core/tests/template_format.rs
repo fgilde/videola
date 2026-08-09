@@ -69,10 +69,13 @@ fn to_videolat(template: &Template) -> Vec<u8> {
 
 #[test]
 fn a_shipped_template_survives_the_container_it_will_be_shared_in() {
+    // The one with the most in it: four media slots, a masked band, two text generators and a
+    // keyframed effect. If anything in the container flattens a nested map or drops a field, it
+    // shows up here rather than in whichever template happens to be first.
     let original = builtin::templates()
         .into_iter()
-        .find(|entry| entry.manifest.id == "three-shots")
-        .unwrap();
+        .find(|entry| entry.manifest.id == "soft-slideshow")
+        .expect("the soft slideshow is in the shipped set");
 
     let reopened = reader::read_template(Cursor::new(to_videolat(&original))).unwrap();
 
@@ -118,16 +121,47 @@ fn an_ordinary_project_file_is_not_mistaken_for_a_template() {
 #[test]
 fn a_template_file_whose_binding_names_no_clip_is_refused_on_load() {
     let original = builtin::templates().into_iter().next().unwrap();
+    let media = original
+        .manifest
+        .slots
+        .iter()
+        .position(|slot| slot.kind == SlotKind::Media)
+        .expect("a media slot to break");
     let bytes = to_videolat(&original);
     let broken = rewrite_entry(bytes, "template.json", |raw| {
         let mut manifest: serde_json::Value = serde_json::from_str(raw).unwrap();
-        manifest["slots"][0]["bindings"][0]["clip"] = serde_json::json!("clp_ghost");
+        manifest["slots"][media]["bindings"][0]["clip"] = serde_json::json!("clp_ghost");
         serde_json::to_string(&manifest).unwrap()
     });
 
     assert!(matches!(
         reader::read_template(Cursor::new(broken)),
         Err(CoreError::ClipNotFound(_))
+    ));
+}
+
+// The same rule for the bindings that reach a generator. These name a clip *and* the kind of
+// generator on it, so a file pointing one at nothing has to be turned away at the door rather than
+// discovered by a wizard field whose answer goes nowhere.
+#[test]
+fn a_template_file_whose_text_binding_names_no_generator_is_refused_on_load() {
+    let original = builtin::templates().into_iter().next().unwrap();
+    let words = original
+        .manifest
+        .slots
+        .iter()
+        .position(|slot| slot.kind == SlotKind::Text)
+        .expect("a text slot to break");
+    let bytes = to_videolat(&original);
+    let broken = rewrite_entry(bytes, "template.json", |raw| {
+        let mut manifest: serde_json::Value = serde_json::from_str(raw).unwrap();
+        manifest["slots"][words]["bindings"][0]["clip"] = serde_json::json!("clp_ghost");
+        serde_json::to_string(&manifest).unwrap()
+    });
+
+    assert!(matches!(
+        reader::read_template(Cursor::new(broken)),
+        Err(CoreError::InvalidArgument(_))
     ));
 }
 
