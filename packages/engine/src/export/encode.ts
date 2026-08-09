@@ -23,7 +23,7 @@ import { GeneratorFrames } from "../generate/generator";
 import { clipHashes } from "../playback";
 import { Compositor } from "../render/compositor";
 import { createContext } from "../render/context";
-import { drawList } from "../render/draw-list";
+import { drawList, drawnClips } from "../render/draw-list";
 import type { FrameSource } from "../playback";
 import { carriesSubtitles, container, SUBTITLE_CODEC } from "./format";
 import type { ExportFormat } from "./format";
@@ -174,15 +174,15 @@ export async function gatherPictures(
   project: Project,
   frame: ExportFrame,
 ): Promise<Map<string, VideoFrame>> {
-  const items = drawList(project, frame.at, frame.params, frame.transforms).items;
-  const pictures = pass.generated.pictures(project, new Set(items.map((item) => item.clip)));
-  for (const item of items) {
-    const hash = hashes.get(item.clip);
-    const at = frame.sources.get(item.clip);
+  const clips = drawnClips(drawList(project, frame.at, frame.params, frame.transforms));
+  const pictures = pass.generated.pictures(project, new Set(clips));
+  for (const clip of clips) {
+    const hash = hashes.get(clip);
+    const at = frame.sources.get(clip);
     if (hash === undefined || at === undefined) continue;
-    const source = await pass.sources.get(item.clip, hash);
+    const source = await pass.sources.get(clip, hash);
     const picture = await source?.frameAt(at);
-    if (picture !== undefined) pictures.set(item.clip, picture);
+    if (picture !== undefined) pictures.set(clip, picture);
   }
   return pictures;
 }

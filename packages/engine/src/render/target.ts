@@ -55,6 +55,14 @@ export class RenderTarget {
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
+  // Bound again without clearing, for a target that is a surface rather than a scratch pad: an
+  // isolated group is drawn onto over and over, and `bind` would wipe what the last item put there.
+  attach(): void {
+    const gl = this.#gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.#framebuffer);
+    gl.viewport(0, 0, this.#width, this.#height);
+  }
+
   dispose(): void {
     this.#gl.deleteFramebuffer(this.#framebuffer);
     this.#gl.deleteTexture(this.#texture);

@@ -19,7 +19,7 @@ import { VideoSource } from "./decode/video-source";
 import { GeneratorFrames } from "./generate/generator";
 import { Compositor } from "./render/compositor";
 import { createContext } from "./render/context";
-import { drawList } from "./render/draw-list";
+import { drawList, drawnClips } from "./render/draw-list";
 import type { GlContext } from "./render/context";
 import type { AudioGraph } from "./audio/graph";
 import type { Level } from "./audio/loudness";
@@ -333,18 +333,13 @@ export class Playback {
     params: EffectParamSnapshot,
     transforms: TransformSnapshot,
   ): Promise<Map<string, VideoFrame>> {
-    const items = drawList(project, at, params, transforms).items;
+    const clips = drawnClips(drawList(project, at, params, transforms));
     const sourceTimes = this.#sourceTimes(at);
-    const found = await Promise.all(
-      items.map((item) => this.#frameFor(item.clip, sourceTimes)),
-    );
+    const found = await Promise.all(clips.map((clip) => this.#frameFor(clip, sourceTimes)));
     const frames = new Map(found.filter((entry) => entry !== undefined));
     // Painted rather than decoded, and painted last: nothing is awaited after this, so a generator's
     // picture cannot go stale between here and the upload the way a decoded one can.
-    for (const [clip, picture] of this.#generated.pictures(
-      project,
-      new Set(items.map((item) => item.clip)),
-    )) {
+    for (const [clip, picture] of this.#generated.pictures(project, new Set(clips))) {
       frames.set(clip, picture);
     }
     return frames;

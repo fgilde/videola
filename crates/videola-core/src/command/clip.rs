@@ -674,9 +674,6 @@ pub(super) fn set_transition(
         crate::model::project::transition_bounded(transition)?;
     }
     let (track, index) = find_clip_mut(target, clip)?;
-    if transition.is_some() {
-        crate::model::project::transition_source_allowed(&track.clips[index].source)?;
-    }
     track.clips[index].transition_in = transition.cloned();
     Ok(())
 }

@@ -318,7 +318,8 @@ function nestedProject(w, h, background, clips, sourceWidth, sourceHeight, over)
     id: "clp_group", source: { kind: "compound", timeline: flat.timeline },
     start: 0, duration: 1000, inPoint: 0,
     speed: { rate: 1, reverse: false, preservePitch: true },
-    blend: "normal", effects: [], volume: 1, pan: 0,
+    blend: (over && over.blend) || "normal", effects: (over && over.effects) || [],
+    transitionIn: over && over.transitionIn, volume: 1, pan: 0,
     fades: { inDuration: 0, outDuration: 0 }, keyframes: {},
     transform: transform((over && over.t) || {}),
   };
@@ -331,15 +332,27 @@ function nestedProject(w, h, background, clips, sourceWidth, sourceHeight, over)
 
 // The whole drawing buffer, so a difference of one pixel anywhere counts -- which is what a
 // matrix composed in the wrong order produces at an edge.
-function buffer(w, h, scene, clips, pixel) {
+//
+// `renders` is how often the same compositor is asked for the same moment. An intermediate target
+// that is never cleared, or one that did not grow with the drawing buffer, produces the right
+// picture the first time and the wrong one after that, so the number is not always one.
+function buffer(w, h, scene, clips, pixel, renders, at, resolved) {
   const canvas = canvasOf(w, h);
   const context = R.createContext(canvas);
   const compositor = new R.Compositor(context);
-  const frames = new Map();
-  for (const id of clips) frames.set(id, frame(w, h, pixel));
-  draw(compositor, scene, 0, frames);
-  for (const f of frames.values()) f.close();
-  return Array.from(compositor.readPixels());
+  let pixels = [];
+  for (let pass = 0; pass < (renders ?? 1); pass += 1) {
+    const frames = new Map();
+    for (const id of clips) frames.set(id, frame(w, h, pixel));
+    draw(compositor, scene, at ?? 0, frames, resolved);
+    for (const f of frames.values()) f.close();
+    pixels = Array.from(compositor.readPixels());
+  }
+  return pixels;
+}
+
+function rendered(w, h, scene, clips, pixel, renders, at, resolved) {
+  return reader(new Uint8Array(buffer(w, h, scene, clips, pixel, renders, at, resolved)), w, h);
 }
 
 // The one claim `clip.nest` makes, and the only proof that counts for it: fold two clips into a
@@ -440,6 +453,135 @@ test("an adjustment layer that is switched off changes nothing", () => {
   const past = gradedPixels(gradedHalves({ clips: [{ id: "clp_grade", start: 500, duration: 100,
     effects: [{ id: "eff_grade", effectType: "brightness", enabled: true, params: {}, keyframes: {} }] }] }));
   check("and a layer whose clip is elsewhere in time grades nothing", past(4, 8), [64, 64, 64, 255]);
+});
+
+// Isolation, on a driver. Everything below here measures the one difference a surface of its own
+// makes: the group is composed first and only then faded, graded, blended, cropped or dissolved.
+const WHITE = () => [255, 255, 255, 255];
+const CORNERS = (x, y) => (y < 8 ? (x < 8 ? [255, 0, 0, 255] : [0, 255, 0, 255])
+  : (x < 8 ? [0, 0, 255, 255] : [255, 255, 0, 255]));
+
+// Two clips that overlap in the middle, and the compound around them faded to half. Composed
+// first, the overlap is one opaque white picture and halving it gives the same 128 as the parts
+// either side. Multiplied into each clip -- which is what a flattened compound did -- the upper
+// one is mixed into the lower at half strength and the strip they share reads 191: the seam.
+test("a compound at half opacity shows no seam where its clips overlap", () => {
+  const clips = [{ id: "clp_a", t: { scaleX: 0.5, x: -2 } }, { id: "clp_b", t: { scaleX: 0.5, x: 2 } }];
+  const scene = nestedProject(16, 16, "#000000", clips, 16, 16, { t: { opacity: 0.5 } });
+  const at = rendered(16, 16, scene, ["clp_a", "clp_b"], WHITE);
+  check("the strip only the lower clip covers", at(3, 8), [128, 128, 128, 255]);
+  check("the strip both of them cover reads the same", at(8, 8), [128, 128, 128, 255]);
+  check("and the strip only the upper clip covers", at(12, 8), [128, 128, 128, 255]);
+  // The counterweight: all three would agree at nothing at all if the group never drew.
+  check("outside the two of them there is background", at(0, 8), [0, 0, 0, 255]);
+});
+
+// A group's picture comes back off a render target, where row zero is the bottom of the frame and
+// not the top. Every check above this one was symmetric in y and would have passed upside down.
+test("an isolated compound is drawn the right way up and the right way round", () => {
+  const scene = nestedProject(16, 16, "#000000", [{ id: "clp_a" }], 16, 16, { t: { opacity: 0.5 } });
+  const at = rendered(16, 16, scene, ["clp_a"], CORNERS);
+  check("top left is half red", at(4, 4), [128, 0, 0, 255]);
+  check("top right is half green", at(12, 4), [0, 128, 0, 255]);
+  check("bottom left is half blue", at(4, 12), [0, 0, 128, 255]);
+  check("bottom right is half yellow", at(12, 12), [128, 128, 0, 255]);
+});
+
+// What "premultiplied" costs if a render target loses it, measured. What goes onto the group's
+// surface is premultiplied and what comes off it has to be, so a group at 81/255 cover over red
+// adds 81 of white to 174 of background. Multiplying by alpha a second time on the way out, or
+// reading the target as straight alpha, does not land on 81.
+test("a group carries premultiplied alpha across its own surface", () => {
+  const scene = nestedProject(16, 16, "#ff0000", [{ id: "clp_a" }], 16, 16, { t: { opacity: 81 / 255 } });
+  check("a third-covered group is two thirds background",
+    rendered(16, 16, scene, ["clp_a"], WHITE)(8, 8), [255, 81, 81, 255], 2);
+});
+
+// A crop on a compound used to be dropped, because a rectangle in group space is not a cut in any
+// one clip's own. On a surface it is exactly a cut. The anchor stays on the uncropped centre, so
+// half a frame cut off the left leaves the kept half standing on the right -- and what stands
+// there is the group's own right half, which is a check on the flip as much as on the crop.
+test("a compound carries a crop of its own", () => {
+  const scene = nestedProject(16, 16, "#000000", [{ id: "clp_a" }], 16, 16,
+    { t: { crop: { left: 0.5, top: 0, right: 0, bottom: 0 } } });
+  const at = rendered(16, 16, scene, ["clp_a"], CORNERS);
+  check("the kept half keeps the group's top right", at(10, 4), [0, 255, 0, 255]);
+  check("and its bottom right", at(10, 12), [255, 255, 0, 255]);
+  check("what was cut away is background", at(4, 8), [0, 0, 0, 255]);
+});
+
+// A blend mode on a compound used to reach only the clips that carried none of their own, so it
+// ran once per clip. Added to the background twice, the strip two clips share comes out at 192;
+// added once, over the group they compose, it is the 128 the rest of the group reads.
+test("a compound blends once, over the picture its clips compose", () => {
+  const clips = [{ id: "clp_a", t: { scaleX: 0.5, x: -2 } }, { id: "clp_b", t: { scaleX: 0.5, x: 2 } }];
+  const scene = nestedProject(16, 16, "#404040", clips, 16, 16, { blend: "add" });
+  const at = rendered(16, 16, scene, ["clp_a", "clp_b"], () => [64, 64, 64, 255]);
+  check("one clip added to the background", at(3, 8), [128, 128, 128, 255]);
+  check("and two of them add exactly as much", at(8, 8), [128, 128, 128, 255]);
+  check("outside the group the background is untouched", at(0, 8), [64, 64, 64, 255]);
+});
+
+// The one thing the core refused outright while a compound was flattened: a mix would have counted
+// the picture underneath once per nested clip. One surface, one mix -- so two clips in the group
+// dissolve exactly as one would.
+test("a transition on a compound mixes the picture underneath once", () => {
+  const clips = [{ id: "clp_a", t: { scaleX: 0.5, x: -4 } }, { id: "clp_b", t: { scaleX: 0.5, x: 4 } }];
+  const scene = nestedProject(16, 16, "#ff0000", clips, 16, 16,
+    { transitionIn: { transitionType: "crossfade", duration: 1000, alignment: "in", params: {} } });
+  const at = rendered(16, 16, scene, ["clp_a", "clp_b"], WHITE, 1, 500);
+  check("half way across, both halves are half way from red to white", at(4, 8), [255, 128, 128, 255]);
+  check("and the other half is the same", at(12, 8), [255, 128, 128, 255]);
+});
+
+// An intermediate target that is never cleared, or one that did not grow with the drawing buffer,
+// is right the first time and wrong afterwards -- the failure two surviving mutations were made of.
+test("a second frame from the same compositor is the first frame", () => {
+  const clips = [{ id: "clp_a", t: { scaleX: 0.5, x: -2 } }, { id: "clp_b", t: { scaleX: 0.5, x: 2 } }];
+  const scene = nestedProject(16, 16, "#101820", clips, 16, 16, { t: { opacity: 0.5 } });
+  const once = buffer(16, 16, scene, ["clp_a", "clp_b"], CORNERS, 1);
+  const twice = buffer(16, 16, scene, ["clp_a", "clp_b"], CORNERS, 2);
+  check("rendering the same moment twice gives the same buffer", twice, once, 0);
+});
+
+// Two clips meeting edge to edge under one blurred layer. Composed first, the pair is opaque
+// across the whole frame, so a weighted average of premultiplied colour keeps red and green adding
+// up to a whole 255 at the seam. Blurred one clip at a time, each fades to transparent at its own
+// edge, the background shows between them, and the same sum falls to 194.
+function blurredHalves(withLayer) {
+  const tracks = [
+    { clips: [{ id: "clp_left", t: { scaleX: 0.5, x: -4 } }, { id: "clp_right", t: { scaleX: 0.5, x: 4 } }] },
+  ];
+  if (withLayer) {
+    tracks.push({ kind: "adjustment", clips: [{ id: "clp_soft", effects: [
+      { id: "eff_soft", effectType: "blur", enabled: true, params: {}, keyframes: {} },
+    ] }] });
+  }
+  return layered(16, 16, "#000000", tracks);
+}
+
+function halvesPixels(scene) {
+  const canvas = canvasOf(16, 16);
+  const compositor = new R.Compositor(R.createContext(canvas));
+  const red = frame(16, 16, () => [255, 0, 0, 255]);
+  const green = frame(16, 16, () => [0, 255, 0, 255]);
+  draw(compositor, scene, 0, new Map([["clp_left", red], ["clp_right", green]]),
+    floats([["eff_soft", [["amount", 2]]]]));
+  red.close();
+  green.close();
+  return reader(compositor.readPixels(), 16, 16);
+}
+
+test("an adjustment layer blurs the composed picture, not each clip in it", () => {
+  const at = halvesPixels(blurredHalves(true));
+  check("no light is lost where the two clips meet", at(7, 8)[0] + at(7, 8)[1], 255, 2);
+  check("nor on the other side of the seam", at(8, 8)[0] + at(8, 8)[1], 255, 2);
+  check("and the seam is opaque", at(7, 8)[3], 255);
+
+  // The counterweight: the sums above would also hold for a layer that did nothing at all.
+  const sharp = halvesPixels(blurredHalves(false));
+  check("without the layer the seam is a step, not a mix", sharp(7, 8), [255, 0, 0, 255]);
+  check("so the green that reaches across it is the blur's doing", at(7, 8)[1] > 40, true);
 });
 
 const BRIGHTNESS = [{ id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} }];

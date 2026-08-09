@@ -1,12 +1,12 @@
 import { effect } from "../effects/registry";
-import { blendState, drawList } from "./draw-list";
+import { blendState, drawList, drawnClips, isGroup } from "./draw-list";
 import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
 import type { EffectParamSnapshot, Project, Time, TransformSnapshot } from "@videola/core";
 import type { Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
-import type { DrawItem } from "./draw-list";
+import type { DrawGroup, DrawItem, DrawNode } from "./draw-list";
 
 const VERTEX_SOURCE = `#version 300 es
 in vec2 a_quad;
@@ -69,6 +69,23 @@ void main() {
 }
 `;
 
+// A group's picture is already in a render target, so it arrives premultiplied and must not be
+// multiplied a second time -- and the target stores it the way the framebuffer holds it, first row
+// at the bottom, which is upside down from everything `u_uv` describes. Flipping `v` here is what
+// puts an isolated group back the right way up; every effect written so far was symmetric in y and
+// would have hidden it.
+const ISOLATED_SOURCE = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+uniform sampler2D u_source;
+uniform float u_opacity;
+out vec4 color;
+
+void main() {
+  color = texture(u_source, vec2(v_uv.x, 1.0 - v_uv.y)) * u_opacity;
+}
+`;
+
 const QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
 
 const ONE = 1;
@@ -116,7 +133,8 @@ export class Compositor {
   #textures = new Map<string, WebGLTexture>();
   #effects = new Map<string, Pipeline>();
   #screen: Pipeline | undefined;
-  #chain: RenderTarget[] = [];
+  #place: Pipeline | undefined;
+  #chain: (RenderTarget | undefined)[] = [];
   // Built on first use, like everything else here: a project nobody is measuring never makes one.
   #scope: RenderTarget | undefined;
   #mirror: WebGLTexture | undefined;
@@ -141,22 +159,8 @@ export class Compositor {
     const list = drawList(project, at, params, transforms);
     const resources = this.#resources ?? this.#build();
     this.#begin(list.background);
-    for (const item of list.items) {
-      const frame = frames.get(item.clip);
-      const fresh = frame !== undefined && uploadable(frame, this.#maxTextureSize);
-      // A frame that is late must not blank the clip. texImage2D copied the last one into the
-      // texture, so redrawing without an upload holds the picture instead of punching a hole for
-      // one tick -- and a clip that never had a frame is still left out, because its texture would
-      // sample as opaque black.
-      if (!fresh && !this.#textures.has(item.clip)) continue;
-      const source = fresh ? frame : undefined;
-      if (item.effects.length === 0 && item.mix === undefined) {
-        this.#composite(resources, item, source);
-      } else {
-        this.#chained(resources, item, source);
-      }
-    }
-    this.#release(new Set(list.items.map((item) => item.clip)));
+    this.#paint(resources, list.items, frames, undefined, 0);
+    this.#release(new Set(drawnClips(list)));
   }
 
   resize(width: number, height: number): void {
@@ -231,7 +235,7 @@ export class Compositor {
     const gl = this.#gl;
     for (const texture of this.#textures.values()) gl.deleteTexture(texture);
     this.#textures.clear();
-    for (const target of this.#chain) target.dispose();
+    for (const target of this.#chain) target?.dispose();
     this.#scope?.dispose();
     this.#scope = undefined;
     for (const pipeline of this.#effects.values()) this.#discard(pipeline);
@@ -241,6 +245,8 @@ export class Compositor {
     this.#mirror = undefined;
     if (this.#screen !== undefined) this.#discard(this.#screen);
     this.#screen = undefined;
+    if (this.#place !== undefined) this.#discard(this.#place);
+    this.#place = undefined;
     if (this.#resources !== undefined) {
       this.#discard(this.#resources.clip);
       gl.deleteBuffer(this.#resources.buffer);
@@ -259,21 +265,54 @@ export class Compositor {
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
-  // No effects and no transition: straight onto the picture, which is every clip in a project
-  // nobody has touched yet and the path worth keeping cheap.
-  #composite(resources: Resources, item: DrawItem, frame: VideoFrame | undefined): void {
-    this.#blend(item);
-    this.#drawQuad(resources, item, frame, item.opacity);
+  // One level of the draw list onto one surface. `surface` is the drawing buffer at the top and an
+  // isolated group's own target below that; `level` is how deep the recursion has come, and it is
+  // what keeps two groups from taking turns in the same scratch target.
+  #paint(
+    resources: Resources,
+    nodes: readonly DrawNode[],
+    frames: ReadonlyMap<string, VideoFrame>,
+    surface: RenderTarget | undefined,
+    level: number,
+  ): void {
+    for (const node of nodes) {
+      if (isGroup(node)) {
+        this.#isolate(resources, node, frames, surface, level);
+        continue;
+      }
+      const frame = frames.get(node.clip);
+      const fresh = frame !== undefined && uploadable(frame, this.#maxTextureSize);
+      // A frame that is late must not blank the clip. texImage2D copied the last one into the
+      // texture, so redrawing without an upload holds the picture instead of punching a hole for
+      // one tick -- and a clip that never had a frame is still left out, because its texture would
+      // sample as opaque black.
+      if (!fresh && !this.#textures.has(node.clip)) continue;
+      const source = fresh ? frame : undefined;
+      if (node.effects.length === 0 && node.mix === undefined) {
+        this.#surface(surface);
+        this.#blend(node);
+        this.#drawQuad(resources, node, source, node.opacity);
+        continue;
+      }
+      this.#chained(resources, node, source, surface, level);
+    }
   }
 
   // The frame graph for one clip: source texture, effect chain into an intermediate target, then
-  // opacity and blend onto the picture -- or, while a transition runs, a mix with the picture the
-  // frame already holds.
-  #chained(resources: Resources, item: DrawItem, frame: VideoFrame | undefined): void {
+  // opacity and blend onto the surface -- or, while a transition runs, a mix with the picture the
+  // surface already holds.
+  #chained(
+    resources: Resources,
+    item: DrawItem,
+    frame: VideoFrame | undefined,
+    surface: RenderTarget | undefined,
+    level: number,
+  ): void {
     const gl = this.#gl;
     const width = gl.drawingBufferWidth;
     const height = gl.drawingBufferHeight;
-    const [first, second] = this.#targets();
+    const first = this.#slot(level * 2);
+    const second = this.#slot(level * 2 + 1);
     gl.disable(gl.BLEND);
     first.bind(width, height);
     this.#drawQuad(resources, item, frame, 1);
@@ -285,20 +324,85 @@ export class Compositor {
       this.#pass(this.#pipeline(pass.effect), source.texture, undefined, pass.values);
       [source, spare] = [spare, source];
     }
+    this.#finish(resources, item, source, surface);
+  }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, width, height);
-    const mix = item.mix;
-    if (mix === undefined) {
-      this.#blend(item);
-      const screen = this.#screenPass(resources.buffer);
-      this.#pass(screen, source.texture, undefined, { opacity: item.opacity });
+  // The composed group, once. Its items go onto a target of their own, and only then does the
+  // group's placement, crop, chain, opacity and blend meet the picture they made -- which is the
+  // whole of the difference to drawing the same items straight onto the surface.
+  #isolate(
+    resources: Resources,
+    group: DrawGroup,
+    frames: ReadonlyMap<string, VideoFrame>,
+    surface: RenderTarget | undefined,
+    level: number,
+  ): void {
+    const gl = this.#gl;
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    const content = this.#slot(level * 2);
+    content.bind(width, height);
+    this.#paint(resources, group.items, frames, content, level + 1);
+
+    const matrix = group.matrix;
+    // Nothing between the group and the surface but its own placement: one quad, no scratch target
+    // and no pass to fill it.
+    if (matrix !== undefined && group.effects.length === 0 && group.mix === undefined) {
+      this.#surface(surface);
+      this.#blend(group);
+      this.#quad(this.#placement(resources.buffer), content.texture, matrix, group.uv, group.opacity);
       return;
     }
-    // The transition's second input is what is already on the screen, so it has to be copied off
+    let source = content;
+    let spare = this.#slot(level * 2 + 1);
+    gl.disable(gl.BLEND);
+    // A chain and a mix both run over the whole surface, so the placement has to be baked in first
+    // -- an effect applied before the group is placed would be an effect at the wrong scale.
+    if (matrix !== undefined) {
+      spare.bind(width, height);
+      this.#quad(this.#placement(resources.buffer), content.texture, matrix, group.uv, 1);
+      [source, spare] = [spare, source];
+    }
+    for (const pass of group.effects) {
+      spare.bind(width, height);
+      this.#pass(this.#pipeline(pass.effect), source.texture, undefined, pass.values);
+      [source, spare] = [spare, source];
+    }
+    this.#finish(resources, group, source, surface);
+  }
+
+  // The last step both paths share: what the chain produced, onto the surface.
+  #finish(
+    resources: Resources,
+    node: DrawItem | DrawGroup,
+    source: RenderTarget,
+    surface: RenderTarget | undefined,
+  ): void {
+    this.#surface(surface);
+    const mix = node.mix;
+    if (mix === undefined) {
+      this.#blend(node);
+      const screen = this.#screenPass(resources.buffer);
+      this.#pass(screen, source.texture, undefined, { opacity: node.opacity });
+      return;
+    }
+    // The transition's second input is what is already on the surface, so it has to be copied off
     // it: a pass cannot sample the buffer it draws into. Blending stays off -- the mix already
     // carries the picture underneath, and blending it over that picture would count it twice.
+    this.#gl.disable(this.#gl.BLEND);
     this.#pass(this.#pipeline(mix.effect), source.texture, this.#copy(), mix.values);
+  }
+
+  // Bound without clearing: a surface is drawn onto many times over one frame, and the drawing
+  // buffer was cleared once in `#begin`.
+  #surface(target: RenderTarget | undefined): void {
+    const gl = this.#gl;
+    if (target !== undefined) {
+      target.attach();
+      return;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   }
 
   #pass(
@@ -320,9 +424,9 @@ export class Compositor {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  #blend(item: DrawItem): void {
+  #blend(node: DrawItem | DrawGroup): void {
     const gl = this.#gl;
-    const blend = blendState(item.blend);
+    const blend = blendState(node.blend);
     gl.enable(gl.BLEND);
     // The alpha channel is always a plain over-operator, whatever the colours do. Letting the
     // colour equation touch alpha lets subtract compute 1 - 1 = 0, and a transparent hole in a
@@ -378,14 +482,42 @@ export class Compositor {
     }
   }
 
-  // ponytail: two full-size targets for as long as any clip carries an effect, and they stay
-  // allocated until the context goes. At 1080p that is sixteen megabytes; a pool that hands them
-  // back when no clip needs one is what a timeline full of effects would want.
-  #targets(): [RenderTarget, RenderTarget] {
-    if (this.#chain.length === 0) {
-      this.#chain = [new RenderTarget(this.#gl), new RenderTarget(this.#gl)];
-    }
-    return [this.#chain[0]!, this.#chain[1]!];
+  // Two full-size targets per level of isolation, allocated the first time a level is reached and
+  // held until the context goes. A project without a compound or an adjustment layer never leaves
+  // level zero and pays for two, the same as before isolation existed.
+  //
+  // ponytail: nothing hands a target back. Eight levels of nesting is eighteen full-frame targets,
+  // 143 MB at 1080p, and it stays allocated for the life of the compositor even after the playhead
+  // has left the deepest compound. A pool keyed by "in use this frame" is the upgrade.
+  #slot(index: number): RenderTarget {
+    const existing = this.#chain[index];
+    if (existing !== undefined) return existing;
+    const target = new RenderTarget(this.#gl);
+    this.#chain[index] = target;
+    return target;
+  }
+
+  // The one pipeline that draws a texture the compositor itself produced: placed by a matrix like
+  // a clip, but read as the premultiplied, bottom-up picture a render target holds.
+  #placement(buffer: WebGLBuffer): Pipeline {
+    this.#place ??= this.#link(buffer, VERTEX_SOURCE, ISOLATED_SOURCE, 1);
+    return this.#place;
+  }
+
+  #quad(
+    pipeline: Pipeline,
+    texture: WebGLTexture,
+    matrix: readonly number[],
+    uv: readonly [number, number, number, number],
+    opacity: number,
+  ): void {
+    const gl = this.#gl;
+    gl.useProgram(pipeline.program);
+    gl.bindVertexArray(pipeline.vao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    setUniforms(gl, pipeline.program, { u_matrix: matrix, u_uv: uv, u_opacity: opacity });
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   #copy(): WebGLTexture {
@@ -490,6 +622,7 @@ export class Compositor {
     this.#scope = undefined;
     this.#mirror = undefined;
     this.#screen = undefined;
+    this.#place = undefined;
     this.#resources = undefined;
   }
 }

@@ -10,7 +10,7 @@ import type {
   Transform,
 } from "@videola/core";
 
-import { drawList } from "./draw-list";
+import { drawList, drawnClips } from "./draw-list";
 import type { DrawList } from "./draw-list";
 
 // The resolved parameter batch is empty unless a case supplies its own -- most of these projects
@@ -55,8 +55,7 @@ function project(tracks: Track[], background = "#000000"): Project {
   } as unknown as Project;
 }
 
-const ids = (tracks: Track[], at: number): string[] =>
-  list(project(tracks), at).items.map((item) => item.clip);
+const ids = (tracks: Track[], at: number): string[] => drawnClips(list(project(tracks), at));
 
 describe("drawList edges", () => {
   it("never shows a clip of duration zero", () => {

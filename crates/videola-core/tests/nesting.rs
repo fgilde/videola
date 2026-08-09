@@ -262,11 +262,13 @@ fn a_transition() -> Transition {
     }
 }
 
-// A transition mixes its clip with the picture underneath, and a compound arrives at the
-// compositor as several clips -- the mix would count that picture once per nested clip.
+// A transition mixes its clip with the picture underneath. A compound now reaches the compositor
+// as one composed picture, so the mix runs once whatever the compound holds -- which is what makes
+// this authorable at all; while a compound arrived as its several clips, the mix would have counted
+// the picture underneath once per nested clip and the command was refused.
 #[test]
 #[allow(clippy::unwrap_used)]
-fn a_transition_on_a_compound_clip_is_refused() {
+fn a_transition_on_a_compound_clip_is_accepted() {
     let mut doc = doc_with_tracks(1);
     let clip = add_clip(&mut doc, 0, 0.0, 2.0);
     doc.dispatch(Dispatch::new(Command::ClipNest {
@@ -275,13 +277,15 @@ fn a_transition_on_a_compound_clip_is_refused() {
     .unwrap();
     let compound = doc.project().timeline.tracks[0].clips[0].id.clone();
 
-    assert!(matches!(
-        doc.dispatch(Dispatch::new(Command::ClipSetTransition {
-            clip: compound,
-            transition: Some(a_transition()),
-        })),
-        Err(CoreError::InvalidArgument(_))
-    ));
+    doc.dispatch(Dispatch::new(Command::ClipSetTransition {
+        clip: compound,
+        transition: Some(a_transition()),
+    }))
+    .unwrap();
+
+    assert!(doc.project().timeline.tracks[0].clips[0]
+        .transition_in
+        .is_some());
 }
 
 #[test]
@@ -298,11 +302,11 @@ fn a_transition_on_an_ordinary_clip_is_still_accepted() {
         .is_ok());
 }
 
-// The load path and the command handler share the check, so a project file cannot smuggle in what
-// the command refuses.
+// The load path and the command handler agree, so a file written by an editor that can author this
+// opens in one that can draw it.
 #[test]
 #[allow(clippy::unwrap_used)]
-fn a_stored_transition_on_a_compound_clip_fails_to_load() {
+fn a_stored_transition_on_a_compound_clip_loads() {
     let mut project = videola_core::model::Project::default();
     let mut track = Track::new(TrackKind::Video, "V1".into());
     let mut inner = Track::new(TrackKind::Video, "nested".into());
@@ -325,8 +329,5 @@ fn a_stored_transition_on_a_compound_clip_fails_to_load() {
     track.clips.push(compound);
     project.timeline.tracks.push(track);
 
-    assert!(matches!(
-        Document::from_project(project),
-        Err(CoreError::InvalidArgument(_))
-    ));
+    assert!(Document::from_project(project).is_ok());
 }

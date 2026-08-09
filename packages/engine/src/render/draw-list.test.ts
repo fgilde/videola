@@ -15,8 +15,8 @@ import type {
   Transition,
 } from "@videola/core";
 
-import { blendState, drawList } from "./draw-list";
-import type { DrawItem, DrawList } from "./draw-list";
+import { blendState, drawList, drawnClips, isGroup } from "./draw-list";
+import type { DrawGroup, DrawItem, DrawList, DrawNode } from "./draw-list";
 
 // The resolved parameter batch is empty unless a case supplies its own -- most of these projects
 // have no effect on any clip.
@@ -123,14 +123,50 @@ function project(tracks: Track[], width = 1920, height = 1080, background = "#00
 
 // The unit quad runs (0,0) top-left to (1,1) bottom-right; this is where a corner of it lands in
 // clipspace, where (-1,-1) is bottom-left.
-function corner(item: DrawItem, x: number, y: number): [number, number] {
-  const m = (index: number): number => item.matrix[index] ?? Number.NaN;
+function corner(placed: { matrix?: readonly number[] }, x: number, y: number): [number, number] {
+  const m = (index: number): number => placed.matrix?.[index] ?? Number.NaN;
   // The `+ 0` normalises the negative zero an unrotated matrix carries, which toEqual reports as
   // a difference from zero.
   return [m(0) * x + m(3) * y + m(6) + 0, m(1) * x + m(4) * y + m(7) + 0];
 }
 
-const ids = (list: { items: DrawItem[] }): string[] => list.items.map((item) => item.clip);
+const ids = (drawn: DrawList): string[] => drawnClips(drawn);
+
+// The clips of a list whatever they are wrapped in, so a case about one clip's own values does not
+// have to know how many groups stand over it.
+function leaves(nodes: readonly DrawNode[]): DrawItem[] {
+  return nodes.flatMap((node) => (isGroup(node) ? leaves(node.items) : [node]));
+}
+
+function groups(nodes: readonly DrawNode[]): DrawGroup[] {
+  return nodes.flatMap((node) => (isGroup(node) ? [node, ...groups(node.items)] : []));
+}
+
+// The whole chain a clip's picture runs through: its own passes first, then those of every group
+// standing over it, innermost first. Undefined where the clip is not drawn at all, so a check for
+// "no grade" cannot be answered by a clip that is simply missing.
+function chainOn(drawn: DrawList, id: string): string[] | undefined {
+  const walk = (nodes: readonly DrawNode[], over: readonly string[]): string[] | undefined => {
+    for (const node of nodes) {
+      const own = node.effects.map((pass) => pass.effect);
+      if (!isGroup(node)) {
+        if (node.clip === id) return [...own, ...over];
+        continue;
+      }
+      const found = walk(node.items, [...own, ...over]);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  return walk(drawn.items, []);
+}
+
+// The one group a case built, when a case built exactly one.
+function group(drawn: DrawList): DrawGroup {
+  const [only, ...rest] = groups(drawn.items);
+  if (only === undefined || rest.length > 0) throw new Error(`expected one group, got ${rest.length + (only ? 1 : 0)}`);
+  return only;
+}
 
 describe("drawList visibility", () => {
   it("takes a clip that covers the moment and leaves the ones that do not", () => {
@@ -185,7 +221,7 @@ describe("drawList visibility", () => {
 describe("drawList geometry", () => {
   const only = (clips: Clip[], width = 1920, height = 1080): DrawItem => {
     const drawn = list(project([track("trk_1", clips)], width, height), 0);
-    const [item] = drawn.items;
+    const [item] = leaves(drawn.items);
     if (item === undefined) throw new Error("expected one item");
     return item;
   };
@@ -371,7 +407,7 @@ function params(entries: [string, [string, number][]][]): EffectParamSnapshot {
 }
 
 function only(clips: Clip[], at: number, resolved: EffectParamSnapshot = new Map()): DrawItem {
-  const [item] = list(project([track("trk_1", clips)]), at, resolved).items;
+  const [item] = leaves(list(project([track("trk_1", clips)]), at, resolved).items);
   if (item === undefined) throw new Error("expected one item");
   return item;
 }
@@ -696,7 +732,7 @@ describe("a compound clip in the draw list", () => {
         ),
       ]),
     ]);
-    const item = list(shifted, 0).items[0]!;
+    const item = leaves(list(shifted, 0).items)[0]!;
     // Half the frame, centred: the top-left corner of a full-frame clip lands halfway out.
     expect(corner(item, 0, 0)).toEqual([-0.5, 0.5]);
     expect(corner(item, 1, 1)).toEqual([0.5, -0.5]);
@@ -719,13 +755,16 @@ describe("a compound clip in the draw list", () => {
         ),
       ]),
     ]);
-    const item = list(both, 0).items[0]!;
+    const item = leaves(list(both, 0).items)[0]!;
     // 480 project pixels inside a group at half scale is 240 on screen, a quarter of the frame.
     expect(corner(item, 0.5, 0.5)[0]).toBeCloseTo(0.25);
     expect(corner(item, 0, 0)).toEqual([-0.25, 0.5]);
   });
 
-  it("multiplies its opacity into the clips inside it", () => {
+  // The whole of isolation, read off the value: the fade belongs to the composed group and the
+  // clips in it keep the opacity they were authored with. Multiplied into each of them -- the
+  // 0.25 this used to produce -- is what shows the seam where two of them overlap.
+  it("keeps its opacity on the group instead of multiplying it into the clips inside", () => {
     const dimmed = project([
       track("trk_1", [
         compound(
@@ -739,12 +778,15 @@ describe("a compound clip in the draw list", () => {
         ),
       ]),
     ]);
-    expect(list(dimmed, 0).items[0]?.opacity).toBe(0.25);
+    const drawn = list(dimmed, 0);
+    expect(group(drawn).opacity).toBe(0.5);
+    expect(leaves(drawn.items).map((item) => item.opacity)).toEqual([0.5]);
   });
 
   // The chain runs the clip's own effects first and the group's over the result, which is the
-  // order a frame graph would apply them in.
-  it("runs its own effects after those of the clip inside it", () => {
+  // order a frame graph would apply them in -- and the group's run over one picture, so they sit
+  // on the group rather than on every clip in it.
+  it("runs its own effects over the composed group, after those of the clip inside it", () => {
     const chained = project([
       track("trk_1", [
         compound({ id: "clp_group", effects: [effect({ id: "eff_group", effectType: "contrast" })] }, [
@@ -756,10 +798,79 @@ describe("a compound clip in the draw list", () => {
       ["eff_clip", [["amount", 1]]],
       ["eff_group", [["amount", 2]]],
     ]);
-    expect(list(chained, 0, resolved).items[0]?.effects.map((pass) => pass.effect)).toEqual([
-      "brightness",
-      "contrast",
+    const drawn = list(chained, 0, resolved);
+    expect(chainOn(drawn, "clp_a")).toEqual(["brightness", "contrast"]);
+    expect(group(drawn).effects.map((pass) => pass.effect)).toEqual(["contrast"]);
+    expect(leaves(drawn.items)[0]?.effects.map((pass) => pass.effect)).toEqual(["brightness"]);
+  });
+
+  // The cheap path, and the reason `clip.nest` can still promise byte for byte the same picture: a
+  // group with nothing to say about its composed picture is folded flat, and no target is asked for.
+  it("is drawn flat while it has no opacity, blend, effect, crop or transition of its own", () => {
+    expect(groups(list(nested, 0).items)).toEqual([]);
+  });
+
+  // And the four that each buy a surface. Every one of them changes what the composed picture
+  // looks like, so every one of them has to stop the fold.
+  it("is isolated as soon as one of the five is set", () => {
+    const isolates = (over: Record<string, unknown>, at = 0): number =>
+      groups(
+        list(
+          project([
+            track("trk_1", [
+              compound({ id: "clp_group", start: 0, duration: 4 * SECOND, ...over }, [
+                track("trk_in", [clip({ id: "clp_a" })]),
+              ]),
+            ]),
+          ]),
+          at,
+          params([["eff_group", [["amount", 2]]]]),
+        ).items,
+      ).length;
+
+    expect(isolates({ transform: transform({ opacity: 0.5 }) })).toBe(1);
+    expect(isolates({ blend: "screen" })).toBe(1);
+    expect(isolates({ effects: [effect({ id: "eff_group", effectType: "contrast" })] })).toBe(1);
+    expect(isolates({ transform: transform({ crop: { left: 0.1, top: 0, right: 0, bottom: 0 } }) })).toBe(1);
+    // Half way into the dissolve: at its very first instant a transition draws nothing at all.
+    expect(isolates({ transitionIn: transition({ duration: SECOND }) }, SECOND / 2)).toBe(1);
+    expect(isolates({})).toBe(0);
+    expect(isolates({}, SECOND / 2)).toBe(0);
+  });
+
+  // A crop on a compound used to be dropped on the floor, because a rectangle in group space is
+  // not a cut in any one clip's own. On a surface it is exactly a cut, and `uv` is where it lands.
+  it("carries a crop of its own as the rectangle of the group that is sampled", () => {
+    const cut = project([
+      track("trk_1", [
+        compound(
+          {
+            id: "clp_group",
+            start: 0,
+            duration: 4 * SECOND,
+            transform: transform({ crop: { left: 0.25, top: 0, right: 0.25, bottom: 0.5 } }),
+          },
+          [track("trk_in", [clip({ id: "clp_a" })])],
+        ),
+      ]),
     ]);
+    expect(group(list(cut, 0)).uv).toEqual([0.25, 0, 0.5, 0.5]);
+  });
+
+  // A transition on a compound was refused by the core because the mix would have counted the
+  // picture underneath once per nested clip. One group, one mix -- so it is a mix like any other.
+  it("mixes with the picture underneath once, however many clips it holds", () => {
+    const dissolving = project([
+      track("trk_1", [
+        compound(
+          { id: "clp_group", start: 0, duration: 4 * SECOND, transitionIn: transition({ duration: SECOND }) },
+          [track("trk_in", [clip({ id: "clp_a" }), clip({ id: "clp_b" })])],
+        ),
+      ]),
+    ]);
+    const drawn = list(dissolving, SECOND / 2);
+    expect(group(drawn).mix?.values.progress).toBe(0.5);
+    expect(leaves(drawn.items).map((item) => item.mix)).toEqual([undefined, undefined]);
   });
 
   it("stops at the nesting depth the loader accepts", () => {
@@ -792,10 +903,7 @@ describe("an adjustment track", () => {
     ]);
   }
 
-  // Undefined rather than an empty list where the clip is not drawn at all, so a check for "no
-  // grade" cannot be answered by a clip that is simply missing.
-  const passesOn = (drawn: DrawList, id: string): string[] | undefined =>
-    drawn.items.find((item) => item.clip === id)?.effects.map((pass) => pass.effect);
+  const passesOn = chainOn;
 
   // `tracks[0]` is the bottom, so a layer covers what is under it and leaves what is over it --
   // and checking only the first half would pass for a layer that covers everything.
@@ -803,6 +911,18 @@ describe("an adjustment track", () => {
     const drawn = list(stack(), 0, resolved);
     expect(passesOn(drawn, "clp_low")).toEqual(["contrast"]);
     expect(passesOn(drawn, "clp_high")).toEqual([]);
+  });
+
+  // The whole of the change: the chain belongs to the composed picture below the layer, not to
+  // each clip in it. A blur that sees the clips one at a time never sees the seam between them.
+  it("puts its chain on the group it stands over, not on the clips in it", () => {
+    const drawn = list(stack(), 0, resolved);
+    const covering = group(drawn);
+    expect(covering.effects.map((pass) => pass.effect)).toEqual(["contrast"]);
+    expect(covering.items.map((node) => (isGroup(node) ? "group" : node.clip))).toEqual(["clp_low"]);
+    expect(leaves(drawn.items).map((item) => item.effects)).toEqual([[], []]);
+    // It covers the frame it is drawn onto, so it needs no placement and costs no pass to get one.
+    expect(covering.matrix).toBeUndefined();
   });
 
   it("still paints nothing of its own", () => {

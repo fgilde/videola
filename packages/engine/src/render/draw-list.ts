@@ -41,9 +41,46 @@ export interface DrawItem {
   mix?: EffectPass;
 }
 
+// A set of items composited to a surface of its own and drawn from there as one picture. That is
+// the whole of what isolation means: opacity, blend mode, effect chain and crop meet the composed
+// group once instead of meeting every item in it separately. A compound clip becomes one of these,
+// and so does everything an adjustment layer stands over.
+export interface DrawGroup {
+  // Absent where the group already fills the surface it is drawn onto -- an adjustment layer has
+  // no placement of its own, and saying so here is what spares it a pass that would copy a frame
+  // onto itself.
+  matrix?: readonly number[];
+  uv: readonly [number, number, number, number];
+  opacity: number;
+  blend: BlendMode;
+  effects: readonly EffectPass[];
+  mix?: EffectPass;
+  items: readonly DrawNode[];
+}
+
+export type DrawNode = DrawItem | DrawGroup;
+
+export function isGroup(node: DrawNode): node is DrawGroup {
+  return "items" in node;
+}
+
 export interface DrawList {
   background: readonly [number, number, number, number];
-  items: DrawItem[];
+  items: DrawNode[];
+}
+
+// Every clip the list draws, however deep it sits: what the frame cache has to have ready. Ids are
+// unique across the project, so the nesting is of no interest to a caller that only needs pictures.
+export function drawnClips(list: DrawList): string[] {
+  const clips: string[] = [];
+  const walk = (nodes: readonly DrawNode[]): void => {
+    for (const node of nodes) {
+      if (isGroup(node)) walk(node.items);
+      else clips.push(node.clip);
+    }
+  };
+  walk(list.items);
+  return clips;
 }
 
 export interface BlendState {
@@ -75,9 +112,10 @@ export function drawList(
 ): DrawList {
   const frame = { width: project.settings.width, height: project.settings.height };
   const scene: Scene = { library: project.library, frame, params, transforms };
-  const items: DrawItem[] = [];
-  collect(project.timeline, at, scene, NO_ENCLOSURE, 0, items);
-  return { background: parseColor(project.settings.background), items };
+  return {
+    background: parseColor(project.settings.background),
+    items: collect(project.timeline, at, scene, undefined, 0),
+  };
 }
 
 // Everything a walk over one timeline needs that does not change with depth. A compound clip is
@@ -93,134 +131,107 @@ interface Scene {
   transforms: TransformSnapshot;
 }
 
-// What the compound clips above a clip contribute to how it is drawn: where the group is placed,
-// how far it has been faded, what it is blended with and which effects run over it.
-interface Enclosure {
-  matrix?: readonly number[];
-  opacity: number;
-  effects: readonly EffectPass[];
-  blend: BlendMode;
-}
-
-const NO_ENCLOSURE: Enclosure = { opacity: 1, effects: [], blend: "normal" };
-
-// A compound clip is flattened into the clips inside it rather than composited to a surface of its
-// own: the group's placement is a matrix and composes exactly, and so does the instant it shows of
-// its own timeline. A compound whose transform, opacity and speed are untouched therefore produces
-// byte for byte the draw list its clips produced before they were folded -- which is the whole
-// claim `clip.nest` makes, and what the pixel harness checks on a driver.
+// Walks one timeline from the bottom track up. Two things become a `DrawGroup` here and nothing
+// else does: a compound clip that has something to say about its composed picture, and the stack
+// of tracks an adjustment layer stands over.
 //
-// ponytail: the group is not isolated. Opacity multiplies into each nested clip (visible where two
-// of them overlap), the group's effects run per clip rather than once over the composed picture,
-// its blend mode only reaches clips that do not carry one of their own, and a crop on a compound
-// is ignored -- a rectangle in group space cannot be expressed as a cut in each clip's own. All
-// four want the sub-list rendered into a RenderTarget and drawn as one quad, which is the same
-// machinery `#chained` already runs for the effect chain, one level deeper. A transition on a
-// compound is the one case that would be actively wrong rather than merely different, and the core
-// refuses it (see `transition_source_allowed`).
+// `matrix` is the placement of the flattened compounds this timeline is standing in, or nothing at
+// the top and inside every isolated group -- an isolated group's items are composited in the frame
+// they were authored against, and the placement meets the result rather than each of them.
 function collect(
   timeline: Timeline,
   at: Time,
   scene: Scene,
-  enclosure: Enclosure,
+  matrix: readonly number[] | undefined,
   depth: number,
-  into: DrawItem[],
-): void {
-  if (depth > MAX_COMPOUND_DEPTH) return;
+): DrawNode[] {
+  if (depth > MAX_COMPOUND_DEPTH) return [];
   // Per timeline, not once for the project: an adjustment track inside a compound clip covers what
   // is inside that compound and nothing else, which is the same rule one level down.
   const layers = adjustmentLayers(timeline, at, scene);
+  let nodes: DrawNode[] = [];
   for (const [index, track] of timeline.tracks.entries()) {
+    // `tracks[0]` is the bottom, so everything gathered before this height is what the layer
+    // covers -- and it is that composed picture, not the clips in it, that the chain runs over.
+    const layer = layers.get(index);
+    if (layer !== undefined && nodes.length > 0) {
+      nodes = [{ uv: FULL, opacity: 1, blend: "normal", effects: layer, items: nodes }];
+    }
     if (!paints(track)) continue;
-    const under = beneath(layers, index, enclosure);
     for (const clip of track.clips) {
       if (clip.source.kind === "compound") {
-        const inner = enclose(clip, at, scene, under);
-        if (inner === undefined) continue;
-        collect(clip.source.timeline, inner.at, scene, inner.enclosure, depth + 1, into);
+        nodes.push(...nested(clip, clip.source.timeline, at, scene, matrix, depth));
         continue;
       }
-      const item = drawItem(clip, at, scene, under);
-      if (item !== undefined) into.push(item);
+      const item = drawItem(clip, at, scene, matrix);
+      if (item !== undefined) nodes.push(item);
     }
   }
+  return nodes;
 }
 
-// An adjustment track's effects, and the height in the stack they start at. `tracks[0]` is the
-// bottom, so a layer covers every track with a *lower* index -- everything drawn underneath it.
-interface AdjustmentLayer {
-  above: number;
-  effects: readonly EffectPass[];
-}
-
-// What the adjustment tracks of one timeline are contributing at this instant. A layer only counts
-// while one of its clips is running: an adjustment track is a track of clips like any other, and
-// the span of the clip is the span the grade applies over.
-function adjustmentLayers(timeline: Timeline, at: Time, scene: Scene): AdjustmentLayer[] {
-  const layers: AdjustmentLayer[] = [];
+// What the adjustment tracks of one timeline are contributing at this instant, by the height in
+// the stack they start at. A layer only counts while one of its clips is running: an adjustment
+// track is a track of clips like any other, and the span of the clip is the span the grade applies
+// over.
+function adjustmentLayers(timeline: Timeline, at: Time, scene: Scene): Map<number, EffectPass[]> {
+  const layers = new Map<number, EffectPass[]>();
   for (const [above, track] of timeline.tracks.entries()) {
     if (track.kind !== "adjustment" || track.hidden) continue;
+    const effects: EffectPass[] = [];
     for (const clip of track.clips) {
       if (at < clip.start || at >= clip.start + clip.duration) continue;
       // The one thing on an adjustment clip that is not an effect and still has to be read: a
       // layer faded to nothing is a layer switched off, which is how it is switched off.
       const placed = scene.transforms.get(clip.id) ?? clip.transform;
       if (placed.opacity <= 0) continue;
-      const effects = effectPasses(clip, scene.params);
-      if (effects.length > 0) layers.push({ above, effects });
+      effects.push(...effectPasses(clip, scene.params));
     }
+    if (effects.length > 0) layers.set(above, effects);
   }
   return layers;
 }
 
-// The chain a clip on this track runs through: its own effects first, then every adjustment layer
-// standing over it from the bottom up, then whatever a compound clip around all of it contributes.
-// The layers are collected bottom-first, so the order they were stacked in is the order they run.
-//
-// ponytail: the passes run per clip, not once over the composed picture. Where two clips overlap
-// under one layer, a blur sees each of them on its own rather than the seam between them, and an
-// effect at strength one applied to both is not the same as applying it once to what they made
-// together. Doing it properly wants the tracks below the layer rendered into a target of their own
-// and the chain run over that -- the same isolation a compound clip is still waiting for, and the
-// two arrive together or not at all.
-function beneath(
-  layers: readonly AdjustmentLayer[],
-  index: number,
-  enclosure: Enclosure,
-): Enclosure {
-  const covering = layers.filter((layer) => layer.above > index);
-  if (covering.length === 0) return enclosure;
-  return {
-    ...enclosure,
-    effects: [...covering.flatMap((layer) => layer.effects), ...enclosure.effects],
-  };
-}
-
-// The compound's own contribution, and the instant its timeline is showing. Project time towards
-// the nested timeline, the same direction and the same clamp the core's batch query uses -- the
-// two must agree on which clips are visible or a clip lands in the draw list with no frame behind
-// it.
-function enclose(
+// The compound clip, either as one isolated group or as the clips inside it. Project time towards
+// the nested timeline first, the same direction and the same clamp the core's batch query uses --
+// the two must agree on which clips are visible or a clip lands in the draw list with no frame
+// behind it.
+function nested(
   clip: Clip,
+  timeline: Timeline,
   at: Time,
   scene: Scene,
-  enclosure: Enclosure,
-): { at: Time; enclosure: Enclosure } | undefined {
+  matrix: readonly number[] | undefined,
+  depth: number,
+): DrawNode[] {
   const inner = readableSourceTimeAt(clip, at);
-  if (inner === undefined) return undefined;
-  const transform = clip.transform;
-  const opacity = transform.opacity * enclosure.opacity;
-  if (opacity <= 0) return undefined;
-  const own = quadMatrix(transform, FULL, scene.frame, scene.frame);
-  return {
-    at: inner,
-    enclosure: {
-      matrix: concat(enclosure.matrix, own),
-      opacity,
-      effects: [...effectPasses(clip, scene.params), ...enclosure.effects],
-      blend: clip.blend === "normal" ? enclosure.blend : clip.blend,
-    },
-  };
+  if (inner === undefined) return [];
+  const transform = scene.transforms.get(clip.id) ?? clip.transform;
+  const opacity = transform.opacity;
+  if (opacity <= 0) return [];
+  const uv = croppedRect(transform);
+  if (uv[2] <= 0 || uv[3] <= 0) return [];
+  const effects = effectPasses(clip, scene.params);
+  const mix = mixPass(clip, at, opacity);
+  if (mix !== undefined && mix.values.progress === 0) return [];
+  const own = concat(matrix, quadMatrix(transform, uv, scene.frame, scene.frame));
+  // A group that would hand its surface's contents straight back is drawn flat instead: the
+  // placement of a compound is a matrix and composes exactly, so folding clips into one that
+  // neither fades, blends, grades, crops nor dissolves produces byte for byte the draw list those
+  // clips produced before -- which is the claim `clip.nest` makes, and one an intermediate target
+  // could only approximate.
+  if (opacity === 1 && effects.length === 0 && clip.blend === "normal" && !cropped(uv) && mix === undefined) {
+    return collect(timeline, inner, scene, own, depth + 1);
+  }
+  const items = collect(timeline, inner, scene, undefined, depth + 1);
+  if (items.length === 0) return [];
+  return [
+    { matrix: own, uv, opacity, blend: clip.blend, effects, ...(mix === undefined ? {} : { mix }), items },
+  ];
+}
+
+function cropped(uv: readonly [number, number, number, number]): boolean {
+  return uv[0] !== 0 || uv[1] !== 0 || uv[2] !== 1 || uv[3] !== 1;
 }
 
 const FULL: readonly [number, number, number, number] = [0, 0, 1, 1];
@@ -304,7 +315,7 @@ function drawItem(
   clip: Clip,
   at: Time,
   scene: Scene,
-  enclosure: Enclosure,
+  matrix: readonly number[] | undefined,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
   // The core resolved the keyframes; `clip.transform` is the value at rest, reached only when the
@@ -315,7 +326,7 @@ function drawItem(
   // spares the decoder a frame nobody sees.
   const placed = scene.transforms.get(clip.id) ?? clip.transform;
   const transform = generatorMotion(clip, at, scene.frame, placed);
-  const opacity = transform.opacity * enclosure.opacity;
+  const opacity = transform.opacity;
   if (opacity <= 0) return undefined;
   const source = sourceSize(clip, scene.library, scene.frame);
   if (source === undefined) return undefined;
@@ -327,11 +338,11 @@ function drawItem(
   if (mix !== undefined && mix.values.progress === 0) return undefined;
   return {
     clip: clip.id,
-    matrix: concat(enclosure.matrix, quadMatrix(transform, uv, source, scene.frame)),
+    matrix: concat(matrix, quadMatrix(transform, uv, source, scene.frame)),
     uv,
     opacity,
-    blend: clip.blend === "normal" ? enclosure.blend : clip.blend,
-    effects: [...effectPasses(clip, scene.params), ...enclosure.effects],
+    blend: clip.blend,
+    effects: effectPasses(clip, scene.params),
     ...(mix === undefined ? {} : { mix }),
   };
 }
