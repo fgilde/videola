@@ -51,3 +51,4 @@ Thumbs.db
 
 # Renderer-Bundle des Servers
 apps/server/renderer/bundle.js
+apps/web/browser/effects.png

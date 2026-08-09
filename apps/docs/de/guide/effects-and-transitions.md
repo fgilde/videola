@@ -1,8 +1,9 @@
 # Effekte und Übergänge
 
-**Zehn Effekte, fünf Übergänge, zwei Masken und eine Textmaschine.** Jede Farbe auf dieser Seite ist
-an einem echten Treiber gemessen und nicht behauptet — `pnpm --filter @videola/engine test:gpu` fährt
-258 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
+**Zehn Effekte, sieben Übergänge, zwei Masken und eine Textmaschine — ausgewählt in einer
+Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an einem
+echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 303
+Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
 
 ## Ein Effekt ist ein Manifest und ein Fragment-Shader
 
@@ -12,8 +13,11 @@ Eine Datei pro Effekt unter `packages/engine/src/effects`, die ein Manifest expo
 export const contrast: EffectManifest = {
   id: "contrast",
   name: { de: "Kontrast", en: "Contrast" },
+  blurb: { de: "Spreizt oder staucht …", en: "Spreads or flattens …" },
   category: "color",
   inputs: 1,
+  // Womit die Kachel der Bibliothek gezeichnet wird -- nie mit den Vorgaben, siehe unten.
+  preview: { amount: 2.4 },
   params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
   fragmentSource: /* GLSL */,
 };
@@ -55,6 +59,37 @@ Jeder symmetrische Effekt verdeckt das. Aufgefallen ist es, als der Wischer zum 
 stand und von unten kam. Ein Effekt, dem die Richtung wichtig ist, rechnet um statt anzunehmen: eine
 Richtung, die auf dem Schirm im Uhrzeigersinn lesen soll — dieselbe Konvention wie die Drehung der
 Transformation — ist innerhalb eines Durchgangs `vec2(cos a, -sin a)`.
+
+### Ein Parameter ist eine Fließkommazahl oder eine Farbe
+
+Bis zu diesem Meilenstein trug jedes Manifest ausschließlich Fließkommazahlen, und genau daran war
+eine LUT gescheitert. `ParamValue` im Rust-Kern trägt `Color`, `Int`, `Bool`, `Vec2` und `Choice`,
+seit das Modell geschrieben wurde; was fehlte, war irgendetwas zwischen Projektdatei und Uniform,
+das hätte sagen können, welche Sorte ein Parameter ist.
+
+Ein Manifestparameter nennt jetzt seine `kind`. Sie ist optional und steht standardmäßig auf
+`"float"`, damit jedes Manifest, das vor der zweiten Sorte geschrieben wurde, weiterhin lesbar ist —
+auch die des Tons, hinter denen ein `AudioParam` steht und die nie etwas anderes sein können.
+
+```ts
+{ kind: "color", key: "colour", name: { de: "Farbe", en: "Colour" }, default: [0, 0, 0, 1] }
+```
+
+Eine Farbe wird **gerade** verfasst, jeder Kanal 0 bis 1, und auf dem Weg zur Uniform
+premultipliziert — dieselbe Naht, über die auch der Projekthintergrund gelesen wird, und aus
+demselben Grund. `clampColor` ist die Schranke, und sie erzwingt den Vertrag, auf dem die ganze
+Kette ruht: kein Kanal über seinem eigenen Alpha. Die Prüfung, die dort einen Fehler fängt, füttert
+nicht 1,4 — das klemmt ein RGBA8-Ziel von allein und beweist nichts. Sie füttert einen Kanal *über
+Alpha und unter Eins*, und dort hört ein Texel auf, eine gültige premultiplizierte Farbe zu sein,
+ohne dass irgendetwas dahinter es bemerkt.
+
+In der Oberfläche ist eine Farbe die Auswahl des Browsers selbst. `input[type=color]` bringt
+Pipette, Farbkreis, zuletzt benutzte Farben und den Systemdialog mit, den man ohnehin kennt; was
+eine eigene Auswahl hinzufügte, wäre ein zweiter Satz Fehler.
+
+`ponytail:` die Auswahl kennt kein Alpha, sie ändert also rgb und trägt weiter, welches Alpha das
+Modell hielt — und ein Farbparameter bekommt keinen Keyframe-Schalter, obwohl `ParamValue::lerp`
+einen bereits interpolieren kann.
 
 ## Zwei Durchgänge für einen separablen Kern
 
@@ -227,6 +262,59 @@ einer kommenden Ecke von ihr weg, bevor sie einbiegt. Zentripetales Catmull-Rom 
 Punkte und teilt durch die Sehnenlängen; das ist der Tausch für den Tag, an dem ein Pfad sichtbar
 über einen Schlüssel hinausschleift.
 
+## Die Bibliothek, und woher ihre Bilder kommen
+
+Dreizehn Namen in einem Auswahlfeld sind eine Liste. Was sie ersetzt hat, ist ein Regal: nach
+Kategorien geordnet, durchsuchbar über beide Sprachen und über den Satz unter jedem Namen — und
+**jeder Eintrag zeigt, was er tut**.
+
+Eine Kachel ist keine Illustration des Effekts. Sie ist der Fragment-Shader dieses Effekts selbst,
+über einem echten Bild, durch dasselbe Bildschirmviereck und dieselbe Uniform-Konvention wie in der
+Zeitleiste — `EffectPreview` in `packages/engine/src/render/preview.ts`, das sich
+`SCREEN_VERTEX_SOURCE` mit dem Compositor teilt, damit `v_uv` nicht im Editor so und in der Kachel,
+die ihn zeigen will, andersherum läuft.
+
+**Das Bild ist das, was der Editor gerade zeigt.** Die Vorschau-Leinwand wird lesbar angelegt und
+trägt das komponierte Bild am Abspielkopf bereits, die Quelle für das ganze Raster kostet also ein
+`drawImage` in eine 192x108-Kladde und keinen Dekoder. Das ist die Entscheidung, die klar gesagt
+gehört, denn die naheliegende Alternative ist ein Dekodiervorgang je Kachel — und ein Dekodiervorgang
+je Kachel, um einen Dialog zu füllen, ist genau das, was eine Bibliothek kaputt wirken lässt.
+Die Durchgänge selbst sind nicht das Teure: eine Kachel zu 192x108 sind zwanzigtausend Fragmente, die
+siebzehn der heutigen Bibliothek zusammen ein Sechstel eines einzigen 1080p-Bildes. Darum wird hier
+nichts träge geladen und nichts zwischen zwei Öffnungen aufbewahrt — ein Zwischenspeicher zeigte das Bild von
+dort, wo der Abspielkopf einmal stand.
+
+Wo die Zeitleiste kein Bild hergibt — ein leeres Projekt oder ein Abspielkopf in einer Lücke —
+fallen die Kacheln auf ein **erzeugtes Referenzbild** zurück: ein Farbtonverlauf quer, ein
+Helligkeitsabfall nach unten, harte senkrechte Balken für die beiden Kerne und ein sattes Grün für
+das Chroma-Keying. Es ist immer noch die Ausgabe des Effekts selbst; nur das Material ist von uns.
+Es ist zugleich das, wogegen die Pixelprüfungen messen — denn ein Bild, das jedem Effekt etwas zu
+tun gibt, ist das einzige, bei dem eine Kachel, die nichts zeigt, dem Effekt anzulasten ist und
+nicht dem Material.
+
+Zwei Folgen daraus, dass aus dem echten Bild gezeichnet wird, beide ehrlich und beide wissenswert:
+
+- **Die Kachel des Chroma-Keyings tut nichts an Material, das nie vor einer Wand gedreht wurde.**
+  Genau das täte der Effekt an diesem Material, und eine Kachel, die etwas anderes vorgäbe, wäre das
+  Versprechen ohne die Deckung.
+- **Helligkeit und Kontrast sehen an einem gesättigten Testbild ähnlich aus**, weil Balken, die
+  schon am Anschlag sind, nicht heller werden können. An echtem Material tun sie es.
+
+### Ein Manifest nennt seine eigene sprechende Einstellung
+
+Die Kachel aus den Vorgabewerten zu zeichnen wäre die Falle gewesen: ein Faktor von 1 und eine Wärme
+von 0 sind das unangetastete Bild, das halbe Regal hätte also einen Effekt versprochen und einen
+gezeigt, der nichts tut. Jedes Manifest trägt darum ein `preview` — die eine Einstellung, die seinen
+Punkt macht. Die der Sättigung ist die Null und keine Anhebung, weil Schwarzweiß die eine
+Einstellung ist, die niemand für das Original hält. Die einer Blende über Farbe ist **nicht** die
+Mitte, denn in der Mitte ist eine solche Blende nichts als ein flaches Rechteck der Farbe, durch die
+sie blendet, und sagt nichts über den Effekt, der es erzeugt hat.
+
+Die Pixelprüfung dahinter ist die, auf der diese ganze Funktion ruht: Die Kachel jedes Manifests
+muss sich von dem Bild, aus dem sie gezeichnet wurde, um mehr als acht Stufen unterscheiden,
+gemittelt über jeden Kanal jedes Pixels. Eine Kachel, die zurückkam, ist nichts wert; eine Kachel,
+die *verändert* zurückkam, ist die Aussage.
+
 ## Übergänge
 
 Ein Übergang ist ein Effekt mit zwei Eingängen, kein zweites Teilsystem. `u_second` ist das Bild, das
@@ -237,9 +325,20 @@ seinen eigenen Effekten, und `progress` läuft über das Fenster des Übergangs 
 |---|---|---|
 | Überblendung | — | ein schlichtes Mischen der beiden |
 | Wischen | `angle` 0–360, `softness` 0–1 | eine Kante zieht übers Bild |
-| Schieben | `angle` 0–360 | der ankommende Clip schiebt den abgehenden hinaus |
+| Schieben | `angle` 0–360, `push` 0–1 | der ankommende Clip kommt herein; `push` sagt, wie weit er den abgehenden vor sich her schiebt |
+| Kreisblende | `centerX`, `centerY`, `softness` | ein Kreis öffnet sich auf den ankommenden Clip |
 | Zoomen | `from` 0,05–4 | der ankommende Clip wächst aus der Mitte |
-| Schwarzblende | `level` 0–1 | hinaus durch eine flache Farbe und wieder herein |
+| Weichzeichnen-Blende | `amount` 0–48 | eine Überblendung, die in der Mitte weich wird und an beiden Enden wieder scharf |
+| Blende über Farbe | `colour` | hinaus durch eine frei gewählte Farbe und wieder herein |
+
+Ein Schieben mit `push` 1 schiebt das abgehende Bild aus dem Rahmen, mit 0 bleibt es stehen und das
+ankommende schiebt sich darüber. Zwei Shader, deren einziger Unterschied eine Multiplikation mit
+null ist, sind zwei Shader zu viel.
+
+Eine Kreisblende misst ihre Reichweite zu der Ecke, die von ihrer Mitte tatsächlich am weitesten
+entfernt ist, in einem um das Seitenverhältnis korrigierten Raum. Eine feste Diagonale stimmt für
+einen mittigen Kreis auf einem quadratischen Bild und sonst nirgends — bei 16:9 oder von einer in
+die Ecke geschobenen Mitte endet der Übergang, während noch Zwickel des abgehenden Clips stehen.
 
 Winkel sind Grad im Uhrzeigersinn auf dem Schirm: 0 kommt von links, 90 von oben.
 
@@ -351,13 +450,18 @@ Projekt wirklich einen Effekt trägt.
 - **Eine Maske je Form und Clip.** `effect.add` behandelt einen wiederholten Typ als Nichtstun, ein
   zweites Rechteck braucht also die Kette nach Effekt-Id statt nach Effekttyp.
 - **Noch kein Editor für einen Bewegungspfad.** Der Kern löst die Kurve auf und der Renderer
-  zeichnet sie, aber die Punkte werden per Kommando gesetzt statt in der Vorschau gezogen — der
-  Inspektor hat keine `vec2`-Zeile, weil das Effektmanifest keinen Parametertyp jenseits eines
-  Floats kennt.
+  zeichnet sie, aber die Punkte werden per Kommando gesetzt statt in der Vorschau gezogen. Das
+  Manifest kennt jetzt eine Parametersorte, eine `vec2`-Zeile ist also ein kleinerer Schritt als
+  vorher; was ein Pfad eigentlich will, ist ein Griff im Bild und nicht zwei weitere Zahlen in einer
+  Leiste.
 - **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
   dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
-- **LUT-Import** braucht einen Dateiimport, eine 3D-Textur und einen Parameter, der kein Float ist.
-  Das Manifest hat noch kein `type`-Feld; dort gehörte es hin.
+- **LUT-Import** fehlt weiterhin, und die Parametersorte ist nicht mehr das, was im Weg steht: ein
+  Manifestparameter nennt jetzt eine, und eine Farbe legt den ganzen Weg von der Projektdatei bis zu
+  einer `vec4`-Uniform zurück. Übrig sind die anderen drei Viertel — ein `.cube`-Parser, ein Ort für
+  eine Tabelle, die für eine Projektdatei bei weitem zu groß ist, und eine dritte Textureinheit,
+  gebunden durch Compositor, Vorschau und Export-Worker gleichermaßen. Das ist eine Änderung am
+  Bildgraphen, nicht an einem Manifest.
 - **Form- und Countdown-Generatoren malen nichts.** Sie stehen im Modell, sie stehen nicht im Menü,
   und ein Clip, dessen Generator dieser Renderer nicht malen kann, fällt aus der Zeichenliste, statt
   als leeres Rechteck gezeichnet zu werden.
@@ -377,5 +481,6 @@ Projekt wirklich einen Effekt trägt.
 ## Wo es gemessen wird
 
 `pnpm --filter @videola/engine test:gpu` fährt den ganzen Compositor gegen headless Chrome mit
-SwiftShader und prüft echte Pixel, einschließlich jeder Farbaussage auf dieser Seite. Kein Playwright,
+SwiftShader und prüft echte Pixel, einschließlich jeder Farbaussage auf dieser Seite und jeder
+Kachel der Bibliothek. Kein Playwright,
 kein Browser-Download; `CHROME_PATH` setzen, wenn die ausführbare Datei woanders liegt.

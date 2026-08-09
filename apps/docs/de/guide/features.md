@@ -41,9 +41,17 @@ Zug über zweihundert Bewegungen ist **ein** Undo-Schritt.
 ## Effekte, Übergänge und Text
 
 Helligkeit, Kontrast, Sättigung, Farbtemperatur, Vignette, Weichzeichnen, Schärfen und
-Chroma-Keying. Überblendung, Wischen, Schieben, Zoom und Blende über eine Farbe. Rechteckige und
-elliptische Masken mit weicher Kante und Invertierung; zwei Masken in einer Kette schneiden sich.
-Ein Textgenerator mit Gestaltung sowie Ein-, Aus- und Schleifenanimation.
+Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
+über eine frei gewählte Farbe. Rechteckige und elliptische Masken mit weicher Kante und
+Invertierung; zwei Masken in einer Kette schneiden sich. Ein Textgenerator mit Gestaltung sowie
+Ein-, Aus- und Schleifenanimation.
+
+Ausgewählt werden sie in einer **Bibliothek zum Ansehen**: nach Kategorien geordnet, in beiden
+Sprachen durchsuchbar — und jede Kachel darin ist der Shader dieses Effekts selbst, gerechnet über
+das Bild, das der Editor gerade zeigt, in Daumennagelgröße. Keine gemalte Illustration und kein
+Beispielfoto: Was die Kachel verspricht, liefert die Zeitleiste, weil es derselbe Shader ist. Ein
+Übergang zeigt den Moment, der am meisten über ihn sagt — bei einer Überblendung die Mitte, bei
+einer Blende über Farbe gerade nicht.
 
 Jeder Parameter ist keyframebar — auch Position, Skalierung, Drehung und Deckkraft eines Clips — und
 eine `position`-Spur macht aus einer Reihe von Schlüsseln einen **Bewegungspfad**, der als Kurve
@@ -58,8 +66,10 @@ Maus. Einen Kurveneditor gibt es noch nicht: ein Projekt, das Bezier-Anfasser tr
 behält seine Form, aber ziehen kann sie hier niemand — siehe
 [Schneiden](./editing.md#die-keyframe-spur).
 
-Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 258 solcher
-Prüfungen laufen bei jedem Bau. Ein zu einem Drittel gedeckter Pixel über Rot muss **81** ergeben —
+Die Wirkung jedes Effekts wird an echten Pixeln eines echten Treibers gemessen: 303 solcher
+Prüfungen laufen bei jedem Bau, und jede Kachel der Bibliothek ist eine davon — eine Kachel, die das
+Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau scheitern. Ein zu einem Drittel
+gedeckter Pixel über Rot muss **81** ergeben —
 das liefert premultipliziertes Alpha; die naheliegende Antwort 255 fällt durch.
 
 ## Umzeiten und Voreinstellungen

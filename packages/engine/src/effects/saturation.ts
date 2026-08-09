@@ -27,8 +27,15 @@ void main() {
 export const saturation: EffectManifest = {
   id: "saturation",
   name: { de: "Sättigung", en: "Saturation" },
+  blurb: {
+    de: "Von Schwarzweiß bis kräftig bunt, ohne die Helligkeit zu verschieben.",
+    en: "From black and white to vivid, leaving brightness where it was.",
+  },
   category: "color",
   inputs: 1,
+  // Nought rather than a boost: black and white is the one setting nobody mistakes for the
+  // untouched picture, whatever the material happens to be.
+  preview: { amount: 0 },
   // Zero is black and white, which is why this library has no separate monochrome effect: it would
   // be the same shader with the slider nailed down.
   params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 2 }],

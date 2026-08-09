@@ -37,8 +37,13 @@ void main() {
 export const maskEllipse: EffectManifest = {
   id: "mask-ellipse",
   name: { de: "Maske (Ellipse)", en: "Mask (ellipse)" },
+  blurb: {
+    de: "Lässt nur eine Ellipse stehen, der Rest wird durchsichtig.",
+    en: "Keeps an ellipse and makes the rest transparent.",
+  },
   category: "key",
   inputs: 1,
+  preview: { width: 0.7, height: 0.7, feather: 0.12 },
   params: [
     { key: "centerX", name: { de: "Mitte X", en: "Centre X" }, default: 0.5, min: -1, max: 2 },
     { key: "centerY", name: { de: "Mitte Y", en: "Centre Y" }, default: 0.5, min: -1, max: 2 },

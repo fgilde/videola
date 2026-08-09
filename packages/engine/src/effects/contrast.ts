@@ -26,8 +26,13 @@ void main() {
 export const contrast: EffectManifest = {
   id: "contrast",
   name: { de: "Kontrast", en: "Contrast" },
+  blurb: {
+    de: "Spreizt oder staucht den Abstand zwischen Licht und Schatten.",
+    en: "Spreads or flattens the distance between light and shadow.",
+  },
   category: "color",
   inputs: 1,
+  preview: { amount: 2.4 },
   // A slope about mid grey. 0 flattens the picture to that grey, 1 leaves it alone, and 4 is past
   // the point where an 8-bit source has any midtones left to separate.
   params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],

@@ -4,6 +4,7 @@ import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
 import type { EffectParamSnapshot, Project, Time, TransformSnapshot } from "@videola/core";
+import type { Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
 import type { DrawItem } from "./draw-list";
 
@@ -40,7 +41,10 @@ void main() {
 `;
 
 // The same unit quad, stretched over the whole target: what every pass of the effect chain draws.
-const SCREEN_VERTEX_SOURCE = `#version 300 es
+// Exported because the browser's preview tiles run the same passes over a still picture, and a
+// second copy of this is how `v_uv` would come to run one way in the editor and the other in the
+// tile that claims to show it.
+export const SCREEN_VERTEX_SOURCE = `#version 300 es
 in vec2 a_quad;
 out vec2 v_uv;
 
@@ -251,7 +255,7 @@ export class Compositor {
     pipeline: Pipeline,
     source: WebGLTexture,
     second: WebGLTexture | undefined,
-    values: Readonly<Record<string, number>>,
+    values: Readonly<Record<string, Uniform>>,
   ): void {
     const gl = this.#gl;
     gl.useProgram(pipeline.program);
@@ -441,8 +445,8 @@ export class Compositor {
 
 // The shader names its uniforms `u_<key>`, and that prefix is the whole convention between a
 // manifest's parameter list and its GLSL.
-function prefixed(values: Readonly<Record<string, number>>): Record<string, number> {
-  const uniforms: Record<string, number> = {};
+function prefixed(values: Readonly<Record<string, Uniform>>): Record<string, Uniform> {
+  const uniforms: Record<string, Uniform> = {};
   for (const [key, value] of Object.entries(values)) uniforms[`u_${key}`] = value;
   return uniforms;
 }

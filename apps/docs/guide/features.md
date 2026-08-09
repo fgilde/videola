@@ -38,9 +38,15 @@ drag — two hundred pointer moves — is **one** undo step.
 ## Effects, transitions and text
 
 Brightness, contrast, saturation, colour temperature, vignette, blur, sharpen and chroma key.
-Cross dissolve, wipe, slide, zoom and dip-to-colour. Rectangular and elliptical masks with feather
-and invert; two masks in one chain intersect. A text generator with styling and in, out and loop
-animation.
+Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
+masks with feather and invert; two masks in one chain intersect. A text generator with styling and
+in, out and loop animation.
+
+They are chosen from a **browser you can look at**, grouped by category and searchable in both
+languages — and every tile in it is that effect's own shader run over the frame the editor is
+showing, at the size of a thumbnail. Not a painted illustration and not a stock photograph: what the
+tile promises is what the timeline delivers, because it is the same shader. A transition's tile shows
+the moment that says the most about it, which for a dissolve is halfway and for a dip is not.
 
 Every parameter can be keyframed — including a clip's position, scale, rotation and opacity — and a
 `position` track turns a series of keys into a **motion path** interpolated as a curve rather than
@@ -54,8 +60,10 @@ with a finger as well as with a mouse. There is no curve editor yet: a project t
 handles keeps them and keeps its shape, but nothing here can drag one — see
 [Editing](./editing.md#the-keyframe-lane).
 
-Each effect's behaviour is measured against real pixels rendered by a real driver: 258 such checks
-run on every build. A third-covered pixel over red must read 81, which is what premultiplied alpha
+Each effect's behaviour is measured against real pixels rendered by a real driver: 303 such checks
+run on every build, and every tile in the browser is one of them — a tile that failed to change the
+picture it was drawn from fails the build. A third-covered pixel over red must read 81, which is
+what premultiplied alpha
 gives; the reflex answer of 255 fails.
 
 ## Retiming and presets

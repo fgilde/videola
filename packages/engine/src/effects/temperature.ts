@@ -20,8 +20,13 @@ void main() {
 export const temperature: EffectManifest = {
   id: "temperature",
   name: { de: "Farbtemperatur", en: "Colour temperature" },
+  blurb: {
+    de: "Zieht das Bild ins Warme oder ins Kalte.",
+    en: "Pulls the picture towards warm or towards cold.",
+  },
   category: "color",
   inputs: 1,
+  preview: { amount: 0.85 },
   // Signed, and zero is the untouched picture: one slider that runs from cold through neutral to
   // warm is what people reach for, rather than two that fight each other.
   params: [{ key: "amount", name: { de: "Wärme", en: "Warmth" }, default: 0, min: -1, max: 1 }],

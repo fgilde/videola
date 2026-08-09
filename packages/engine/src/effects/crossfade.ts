@@ -20,8 +20,13 @@ void main() {
 export const crossfade: EffectManifest = {
   id: "crossfade",
   name: { de: "Überblendung", en: "Cross dissolve" },
+  blurb: {
+    de: "Blendet den vorigen Clip in diesen über.",
+    en: "Dissolves the previous clip into this one.",
+  },
   category: "transition",
   inputs: 2,
+  preview: { progress: 0.5 },
   // Not authored by hand: the draw list works `progress` out of the transition's window and the
   // moment being drawn. It is declared all the same, because that is how it reaches the shader.
   params: [

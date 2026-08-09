@@ -28,8 +28,13 @@ void main() {
 export const sharpen: EffectManifest = {
   id: "sharpen",
   name: { de: "Schärfen", en: "Sharpen" },
+  blurb: {
+    de: "Hebt Kanten und feine Zeichnung hervor.",
+    en: "Brings out edges and fine detail.",
+  },
   category: "detail",
   inputs: 1,
+  preview: { amount: 4 },
   params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
   fragmentSource: FRAGMENT_SOURCE,
 };

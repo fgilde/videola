@@ -71,7 +71,9 @@ function floats(entries) {
 // as ParamValue the way a project file carries them.
 function params(values) {
   const out = {};
-  for (const [key, value] of Object.entries(values || {})) out[key] = { kind: "float", value };
+  for (const [key, value] of Object.entries(values || {})) {
+    out[key] = Array.isArray(value) ? { kind: "color", value } : { kind: "float", value };
+  }
   return out;
 }
 
@@ -987,8 +989,104 @@ test("a dip goes out through a colour and back", () => {
     [0, 0, 0, 255]);
   check("three quarters in, the incoming clip is halfway up", crossing("dip", 750).at(2, 2),
     [0, 0, 128, 255]);
-  check("and the level chooses the colour",
-    crossing("dip", 500, { params: { level: 1 } }).at(2, 2), [255, 255, 255, 255]);
+  check("and the colour is a colour, not a shade of grey",
+    crossing("dip", 500, { params: { colour: [0, 0.5, 1, 1] } }).at(2, 2), [0, 128, 255, 255]);
+});
+
+// The first parameter in this library that is not a float, and the whole path it travels: a
+// ParamValue::Color off the model, through the manifest's own guard, into a vec4 uniform.
+test("a colour parameter reaches the shader as a colour", () => {
+  // Half covered, and therefore half of every channel once premultiplied. The reflex answer for
+  // white is 255, and it belongs to straight alpha -- through the over-operator it would paint the
+  // dip twice as bright as it is.
+  const half = crossing("dip", 500, { params: { colour: [1, 1, 1, 128 / 255] } });
+  check("a half-covered white dip is half a white, not a white",
+    half.at(2, 2), [128, 128, 128, 128]);
+  check("and the page shows through the half that is not covered",
+    overPage(half.canvas, "#ff0000", 2, 2), [255, 128, 128, 255]);
+
+  // The gap no target closes on its own. RGBA8 clamps a channel above one, so feeding 1.4 proves
+  // nothing; a channel above *alpha* and below one is where a texel stops being a legal
+  // premultiplied colour and nothing downstream notices.
+  const overshoot = crossing("dip", 500, { params: { colour: [0.9, 0.9, 0.9, 0.4] } });
+  const [r, g, b, a] = overshoot.at(2, 2);
+  check("a colour brighter than its own coverage is brought back under it",
+    [r <= a + 1, g <= a + 1, b <= a + 1, a > 2 && a < 253], [true, true, true, true]);
+
+  // A hand-authored project can put any kind on any key, and a float where a colour belongs must
+  // read as the manifest's default -- black at full cover -- rather than as an unset uniform.
+  check("a value of the wrong kind falls back to the declared default",
+    crossing("dip", 500, { params: { colour: 0.5 } }).at(2, 2), [0, 0, 0, 255]);
+});
+
+// A round shape is the one thing about this that a unit test cannot see: an iris that came out an
+// axis-aligned square, or an ellipse on a wide frame, satisfies every claim about progress.
+test("an iris opens a circle and not a box", () => {
+  const half = crossing("iris", 500, { params: { softness: 0 } });
+  check("the middle is the incoming clip", half.at(8, 8), BLUE);
+  check("straight out from the centre, still inside the circle", half.at(3, 8), BLUE);
+  // The same distance again along the other axis. Inside a square of that half-width this point is
+  // covered; inside a circle of that radius it is not, and that is the whole difference.
+  check("the same distance out diagonally, already outside it", half.at(3, 3), RED);
+  check("and the corner is the outgoing clip", half.at(0, 0), RED);
+});
+
+// The reason the reach is measured rather than assumed: on anything but a centred circle on a square
+// frame, a fixed diagonal ends the transition with wedges of the outgoing clip still standing.
+test("an iris has finished when it says it has", () => {
+  const wide = crossing("iris", 999, { size: 16, params: { softness: 0 } });
+  check("a centred iris leaves no corner behind",
+    [...wide.at(0, 0), ...wide.at(15, 15)], [...BLUE, ...BLUE]);
+  const corner = crossing("iris", 999, { params: { softness: 0, centerX: 0.05, centerY: 0.05 } });
+  check("and neither does one opening from a corner",
+    [...corner.at(15, 15), ...corner.at(0, 15)], [...BLUE, ...BLUE]);
+});
+
+// The one claim about an iris a square frame cannot answer. `crossing` only builds square rigs, so
+// this goes through the tile renderer, which is the other place the same shader runs.
+test("an iris stays a circle on a frame that is not square", () => {
+  const wide = new R.EffectPreview(96, 48);
+  const inside = R.referencePicture(96, 48);
+  const outside = R.referencePicture(96, 48, 180);
+  const round = Object.assign({}, R.effect("iris"), { preview: { progress: 0.5, softness: 0 } });
+  wide.render(round, inside, outside);
+  const at = reader(wide.readPixels(), 96, 48);
+  const incoming = flat(inside);
+  const outgoing = flat(outside);
+  const near = (one, other) =>
+    Math.abs(one[0] - other[0]) + Math.abs(one[1] - other[1]) + Math.abs(one[2] - other[2]) < 16;
+  // Twenty pixels out from the middle, once across and once down. In an ellipse -- which is what a
+  // circle measured in `v_uv` is on a wide frame -- one of the two is inside and the other is not.
+  check("twenty pixels across is inside", near(at(28, 24), incoming(28, 24)), true);
+  check("and twenty pixels down is inside too", near(at(48, 4), incoming(48, 4)), true);
+  check("thirty across is outside", near(at(18, 24), outgoing(18, 24)), true);
+  wide.dispose();
+});
+
+test("a blur dissolve is soft in the middle and sharp at the ends", () => {
+  const edge = { lower: (x) => (x < 8 ? RED : YELLOW), upper: (x) => (x < 8 ? RED : YELLOW) };
+  // The same picture on both sides, so what changes across the transition is the softness alone and
+  // not the mix -- a dissolve between two different pictures is blurred and mixed at once.
+  const middle = crossing("blur-dissolve", 500, edge);
+  const late = crossing("blur-dissolve", 999, edge);
+  const green = (reading) => reading(7, 8)[1];
+  check("halfway across, the hard edge has been smeared over",
+    green(middle.at) > 12 && green(middle.at) < 243, true);
+  check("and at the end it is hard again", green(late.at) < 12, true);
+  check("with the amount at nought it is a plain dissolve all the way through",
+    green(crossing("blur-dissolve", 500, Object.assign({ params: { amount: 0 } }, edge)).at) < 12,
+    true);
+});
+
+// One effect with a knob rather than two shaders: at nought the outgoing picture stands still and
+// the incoming one slides over it, at one it is shoved out of the frame.
+test("a slide can shove the outgoing clip or leave it standing", () => {
+  const shoved = crossing("slide", 500, SPLIT);
+  const held = crossing("slide", 500, Object.assign({ params: { push: 0 } }, SPLIT));
+  check("shoved, the outgoing picture has moved off its own boundary", shoved.at(12, 8), RED);
+  check("held, the same fragment still shows what stands there", held.at(12, 8), YELLOW);
+  check("and the incoming clip arrives the same way either way",
+    [...shoved.at(4, 8), ...held.at(4, 8)], [...BLUE, ...BLUE]);
 });
 
 // Effect and transition crossed on a transition that is not the cross dissolve: the incoming clip's
@@ -1271,6 +1369,154 @@ test("offscreen canvas", () => {
   f.close();
   check("the export worker's canvas renders the same picture",
     reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255]);
+});
+
+// The effect browser's tiles. A tile that came back is worth nothing; what has to hold is that it
+// came back *changed*, changed by the effect it is named after, and changed the same way up as the
+// picture in the editor.
+const TILE = 64;
+
+// The tile, read as a picture: (0, 0) is its top-left corner.
+function tile(preview, manifest, source, second) {
+  preview.render(manifest, source, second);
+  return reader(preview.readPixels(), TILE, TILE);
+}
+
+// The source picture as the page sees it, for comparison against a tile drawn from it.
+function flat(canvas) {
+  const two = canvasOf(canvas.width, canvas.height).getContext("2d");
+  two.drawImage(canvas, 0, 0);
+  const data = two.getImageData(0, 0, canvas.width, canvas.height).data;
+  const at = (x, y) => (y * canvas.width + x) * 4;
+  return (x, y) => Array.from(data.slice(at(x, y), at(x, y) + 4));
+}
+
+// How far two readings of the same grid are apart, averaged over the whole tile. A single sampled
+// pixel would let an effect that touches one corner pass as one that touches the picture.
+function apart(one, other) {
+  let sum = 0;
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const a = one(x, y);
+      const b = other(x, y);
+      for (let c = 0; c < 4; c += 1) sum += Math.abs(a[c] - b[c]);
+    }
+  }
+  return sum / (TILE * TILE * 4);
+}
+
+test("every tile in the browser shows its own effect at work", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const other = R.referencePicture(TILE, TILE, 180);
+  const untouched = flat(picture);
+  for (const manifest of R.effectManifests()) {
+    const drawn = tile(preview, manifest, picture, other);
+    // Eight levels averaged over every channel of every pixel. Below that a tile is the same frame
+    // with a rounding error on it, which is a promise the browser cannot keep.
+    check(`${manifest.id} changes the picture it is drawn from`, apart(drawn, untouched) > 8, true);
+  }
+  preview.dispose();
+});
+
+test("a tile is drawn from the frame, not from a picture kept for the effect", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const one = tile(preview, R.effect("brightness"), R.referencePicture(TILE, TILE));
+  const rows = [];
+  for (let y = 0; y < TILE; y += 1) rows.push(Array.from({ length: TILE }, (_, x) => one(x, y)));
+  const two = tile(preview, R.effect("brightness"), R.referencePicture(TILE, TILE, 180));
+  check("the same effect over two different frames gives two different tiles",
+    apart(two, (x, y) => rows[y][x]) > 8, true);
+  preview.dispose();
+});
+
+test("a tile runs v_uv the same way up as the editor does", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const other = R.referencePicture(TILE, TILE, 180);
+  // A wipe at 90 degrees reads clockwise on screen, so at half progress the clip it is bringing in
+  // holds the top of the frame. Every effect built before the first wipe was symmetric about y and
+  // would have passed an upside-down tile without a word.
+  const sideways = Object.assign({}, R.effect("wipe"),
+    { preview: { progress: 0.5, angle: 90, softness: 0.01 } });
+  const drawn = tile(preview, sideways, picture, other);
+  check("the incoming picture is at the top", drawn(32, 6), flat(picture)(32, 6), 6);
+  check("and the outgoing one at the bottom", drawn(32, 57), flat(other)(32, 57), 6);
+  preview.dispose();
+});
+
+test("a transition tile really mixes the two pictures", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const other = R.referencePicture(TILE, TILE, 180);
+  const drawn = tile(preview, R.effect("crossfade"), picture, other);
+  const a = flat(picture)(20, 20);
+  const b = flat(other)(20, 20);
+  check("half way is half of each", drawn(20, 20), [0, 1, 2, 3].map((c) => (a[c] + b[c]) / 2), 4);
+  // Without a second input the shader would sample an empty texture and fade the tile away, which
+  // reads as a transition that dissolves to nothing.
+  const alone = tile(preview, R.effect("crossfade"), picture);
+  check("and one asked for without a second picture falls back to the one it has",
+    alone(20, 20), a, 4);
+  preview.dispose();
+});
+
+test("a separable effect runs both of its sweeps in a tile", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  // One white quadrant on black: the only picture where a missing sweep shows, because the vertical
+  // boundary is softened by the first sweep and the horizontal one only by the second.
+  const canvas = canvasOf(TILE, TILE);
+  const two = canvas.getContext("2d");
+  two.fillStyle = "#000000";
+  two.fillRect(0, 0, TILE, TILE);
+  two.fillStyle = "#ffffff";
+  two.fillRect(0, 0, TILE / 2, TILE / 2);
+  const drawn = tile(preview, R.effect("blur"), canvas);
+  const between = (a, b) => a > 12 && a < 243 && b > 12 && b < 243;
+  check("the vertical edge is soft, which is the horizontal sweep",
+    between(drawn(TILE / 2 - 1, 8)[0], drawn(TILE / 2, 8)[0]), true);
+  check("and the horizontal edge is soft, which is the vertical one",
+    between(drawn(8, TILE / 2 - 1)[0], drawn(8, TILE / 2)[0]), true);
+  preview.dispose();
+});
+
+test("a tile carries premultiplied alpha like everything else downstream", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const canvas = canvasOf(TILE, TILE);
+  const two = canvas.getContext("2d");
+  two.fillStyle = "#ffffff";
+  two.fillRect(0, 0, TILE, TILE);
+  // A feathered mask is the one effect here that manufactures partial coverage, so it is where an
+  // invalid premultiplied texel would be made. The band between the two edges is the only place
+  // worth looking: outside it the RGBA8 target clamps on its own and a check proves nothing.
+  const feathered = Object.assign({}, R.effect("mask-ellipse"),
+    { preview: { width: 0.7, height: 0.7, feather: 0.3 } });
+  const drawn = tile(preview, feathered, canvas);
+  let inBand = 0;
+  let invalid = 0;
+  for (let y = 0; y < TILE; y += 1) {
+    for (let x = 0; x < TILE; x += 1) {
+      const [r, g, b, a] = drawn(x, y);
+      if (a <= 2 || a >= 253) continue;
+      inBand += 1;
+      if (r > a + 1 || g > a + 1 || b > a + 1) invalid += 1;
+    }
+  }
+  check("the feather really produced partial coverage", inBand > 200, true);
+  check("and no texel in it carries more colour than coverage", invalid, 0);
+
+  // A frame that is itself half transparent -- a masked clip, or a gap over a transparent
+  // background. The tile's own source has to arrive premultiplied, because everything downstream of
+  // it expects that; unpremultiplied, a half-covered white reads 255 instead of 128, which is the
+  // reflex answer for straight alpha and the one thing this whole pipeline is not.
+  const veil = canvasOf(TILE, TILE);
+  const paint = veil.getContext("2d");
+  paint.fillStyle = "rgba(255, 255, 255, 0.502)";
+  paint.fillRect(0, 0, TILE, TILE);
+  const untouched = Object.assign({}, R.effect("crossfade"), { preview: { progress: 1 } });
+  check("a half-covered white frame reaches the tile as half a white",
+    tile(preview, untouched, veil, veil)(32, 32), [128, 128, 128, 128]);
+  preview.dispose();
 });
 
 // The one thing a phone does routinely. Everything below rebuilds lazily, so the proof is a

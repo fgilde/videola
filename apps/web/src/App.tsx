@@ -6,6 +6,7 @@ import {
   createProjectBackend,
   createTemplateBackend,
   createWasmBackend,
+  on,
   FLICKS_PER_SECOND,
   readTemplateFile,
   timeToSeconds,
@@ -51,7 +52,9 @@ import {
 import type { Peaks, Session } from "@videola/media";
 import {
   AppShell,
+  chosenTransition,
   DropZone,
+  EffectBrowser,
   ExportDialog,
   Inspector,
   MediaLibrary,
@@ -74,6 +77,7 @@ import {
   type MediaGrab,
 } from "@videola/ui";
 
+import { effectTiles, revokeTiles } from "./effectTiles";
 import { useTemplatePosters } from "./posters";
 import { useThumbnails } from "./thumbnails";
 import { offerUpdate } from "./updates";
@@ -122,6 +126,8 @@ export function App(): ReactElement {
   const [formats, setFormats] = useState<ExportFormatChoice[]>([]);
   const [progress, setProgress] = useState<ExportProgress>();
   const [exportError, setExportError] = useState<string>();
+  const [browsing, setBrowsing] = useState<1 | 2>();
+  const [tiles, setTiles] = useState<ReadonlyMap<string, string>>();
   const [gallery, setGallery] = useState(false);
   const [catalogue, setCatalogue] = useState<Template[]>([]);
   const [template, setTemplate] = useState<Template>();
@@ -568,6 +574,54 @@ export function App(): ReactElement {
     setTemplateError(undefined);
   }, []);
 
+  // The clip the shelf is being opened for. Read from the project rather than kept beside the
+  // selection, so that adding an effect and reopening shows the chain as it now stands.
+  const selectedClip =
+    selection[0] === undefined || project === undefined
+      ? undefined
+      : project.timeline.tracks.flatMap((track) => track.clips).find((c) => c.id === selection[0]);
+
+  // The tiles are drawn when the shelf opens and thrown away when it closes. Nothing is kept: the
+  // frame they are drawn from is the one at the playhead, so a cache would be showing the picture
+  // from wherever the playhead used to be -- and the whole grid costs less than one frame of
+  // playback to make. See `effectTiles` for what the passes actually cost.
+  useEffect(() => {
+    if (browsing === undefined) return;
+    let dropped = false;
+    let made: ReadonlyMap<string, string> | undefined;
+    effectTiles(canvas).then(
+      (tiles) => {
+        made = tiles;
+        if (dropped) return revokeTiles(tiles);
+        setTiles(tiles);
+      },
+      (err: unknown) => reportError("error.actionFailed", err),
+    );
+    return () => {
+      dropped = true;
+      setTiles(undefined);
+      if (made !== undefined) revokeTiles(made);
+    };
+  }, [browsing, canvas, reportError]);
+
+  // A one-input effect joins the clip's chain; a two-input one is its transition, and replaces
+  // whatever was there. Which of the two is not the browser's business -- it offers what the
+  // registry declared and hands back a name.
+  const addFromBrowser = useCallback(
+    (id: string) => {
+      const chosen = selectedClip;
+      const manifest = effectManifests().find((candidate) => candidate.id === id);
+      if (chosen === undefined || manifest === undefined) return;
+      edit(
+        manifest.inputs === 2
+          ? cmd.clipSetTransition(chosen.id, chosenTransition(id, chosen.transitionIn ?? undefined))
+          : cmd.effectAdd(on.clip(chosen.id), id),
+      );
+      setBrowsing(undefined);
+    },
+    [edit, selectedClip],
+  );
+
   // The ordinary import: hashed, into storage, probed. A slot answer is the asset that comes out of
   // it, so material chosen in the wizard is in no way different from material dropped on the editor.
   const pickSlotMedia = useCallback(
@@ -770,12 +824,31 @@ export function App(): ReactElement {
                   transformsAt={doc.transformsAt}
                   dispatch={edit}
                   onSeek={seek}
+                  onBrowse={setBrowsing}
                 />
               )}
             </>
           )}
         </div>
       </DropZone>
+      {browsing !== undefined && selectedClip !== undefined && (
+        <EffectBrowser
+          offers={effectManifests()}
+          only={browsing}
+          // Both kinds refuse a second of the same: `effect.add` treats a repeated type as a no-op,
+          // and a clip has one transition. A button that would do nothing says so instead.
+          taken={
+            browsing === 2
+              ? selectedClip.transitionIn == null
+                ? []
+                : [selectedClip.transitionIn.transitionType]
+              : selectedClip.effects.map((authored) => authored.effectType)
+          }
+          tiles={tiles}
+          onAdd={addFromBrowser}
+          onClose={() => setBrowsing(undefined)}
+        />
+      )}
       {gallery && template === undefined && (
         <TemplateGallery
           templates={catalogue}

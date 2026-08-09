@@ -1,6 +1,6 @@
 import { MAX_COMPOUND_DEPTH, readableSourceTimeAt } from "@videola/core";
 
-import { clampParam, effect } from "../effects/registry";
+import { effect, paramUniform } from "../effects/registry";
 import { paintsGenerator } from "../generate/generator";
 import { generatorMotion } from "../generate/motion";
 
@@ -18,13 +18,13 @@ import type {
   TransformSnapshot,
   Transition,
 } from "@videola/core";
-import type { EffectManifest } from "../effects/registry";
+import type { EffectManifest, Uniform } from "../effects/registry";
 
 // One entry per shader pass, with every uniform the shader declares already resolved, clamped and
 // named the way the shader names it. The compositor looks nothing up.
 export interface EffectPass {
   effect: string;
-  values: Readonly<Record<string, number>>;
+  values: Readonly<Record<string, Uniform>>;
 }
 
 export interface DrawItem {
@@ -337,17 +337,18 @@ function windowStart(start: Time, transition: Transition): Time {
 }
 
 // Unpacking the `ParamValue` is the only thing TypeScript does to a parameter -- the value itself,
-// keyframed or not, was decided in the core. What is usable as a uniform is `clampParam`'s call.
+// keyframed or not, was decided in the core. What is usable as a uniform is `paramUniform`'s call,
+// and it is the same call for a colour as for a float: a project may carry any kind on any key.
 //
 // Takes a lookup rather than a map because the two callers hold their values differently: an
 // effect's arrive resolved from the core, a transition's straight off the model.
 function uniforms(
   manifest: EffectManifest,
   lookup: (key: string) => ParamValue | undefined,
-): Record<string, number> {
-  const values: Record<string, number> = {};
+): Record<string, Uniform> {
+  const values: Record<string, Uniform> = {};
   for (const param of manifest.params) {
-    values[param.key] = clampParam(param, lookup(param.key)?.value);
+    values[param.key] = paramUniform(param, lookup(param.key)?.value);
   }
   return values;
 }

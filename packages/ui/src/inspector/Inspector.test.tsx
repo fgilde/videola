@@ -35,11 +35,24 @@ const CROSSFADE: EffectDescriptor = {
   ],
 };
 
+// Where the first non-float parameter in the library lives. What it proves here is not the dip but
+// the kind: a manifest parameter that is not a slider gets a control that is not one.
+const DIP: EffectDescriptor = {
+  id: "dip",
+  name: { de: "Blende über Farbe", en: "Dip to colour" },
+  inputs: 2,
+  params: [
+    { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
+    { kind: "color", key: "colour", name: { de: "Farbe", en: "Colour" }, default: [0, 0, 0, 1] },
+  ],
+};
+
 interface Rig {
   sent: { command: Command; key?: string }[];
   seeks: Time[];
   asked: Time[];
   askedTransforms: Time[];
+  browsed: (1 | 2)[];
   dispatch: Mock;
 }
 
@@ -56,13 +69,24 @@ interface Scene {
    * core answers with the static transform -- so the fake answers the same thing.
    */
   transformAt?: (at: Time) => Record<string, number>;
+  /** What this build can draw. The default is the pair the keyframe and transition rows need. */
+  effects?: readonly EffectDescriptor[];
+  /** The whole resolved batch, for a parameter `amountAt` has no shape for. */
+  resolved?: EffectParamSnapshot;
   dispatch?: (command: Command, key?: string) => void;
 }
 
 function show(scene: Scene = {}): Rig {
   const clip = scene.clip ?? clipWithMedia();
   const project = scene.project ?? makeProject([makeTrack("trk_1", [clip])], [MEDIA]);
-  const rig: Rig = { sent: [], seeks: [], asked: [], askedTransforms: [], dispatch: vi.fn() };
+  const rig: Rig = {
+    sent: [],
+    seeks: [],
+    asked: [],
+    askedTransforms: [],
+    browsed: [],
+    dispatch: vi.fn(),
+  };
   rig.dispatch.mockImplementation((command: Command, key?: string) => {
     rig.sent.push({ command, key });
     scene.dispatch?.(command, key);
@@ -70,6 +94,7 @@ function show(scene: Scene = {}): Rig {
 
   const effectParamsAt = (at: Time): EffectParamSnapshot => {
     rig.asked.push(at);
+    if (scene.resolved !== undefined) return scene.resolved;
     const raw = scene.rawAmountAt?.(at);
     const amount = scene.amountAt?.(at);
     if (raw === undefined && amount === undefined) return new Map();
@@ -88,11 +113,12 @@ function show(scene: Scene = {}): Rig {
         project={project}
         clip={clip.id}
         playhead={scene.playhead ?? 0}
-        effects={[BRIGHTNESS, CROSSFADE]}
+        effects={scene.effects ?? [BRIGHTNESS, CROSSFADE]}
         effectParamsAt={effectParamsAt}
         transformsAt={transformsAt}
         dispatch={rig.dispatch}
         onSeek={(time) => rig.seeks.push(time)}
+        onBrowse={(only) => rig.browsed.push(only)}
       />
     </I18nProvider>,
   );
@@ -136,6 +162,16 @@ function withBrightness(keyframes: Record<string, unknown[]> = {}, amount = 1): 
   };
 }
 
+function withDip(): Overrides {
+  return {
+    effects: [{ id: "eff_1", effectType: "dip", enabled: true, params: {}, keyframes: {} }],
+  };
+}
+
+function colourAt(value: unknown): EffectParamSnapshot {
+  return new Map([["eff_1", new Map<string, ParamValue>([["colour", value as ParamValue]])]]);
+}
+
 function key(time: Time, value: number, interp: Interp = "linear"): unknown {
   return { time, value: float(value), interp };
 }
@@ -157,11 +193,8 @@ function press(name: string): void {
 }
 
 /** The effect types the picker is holding out, or nothing when there is no picker at all. */
-function offered(): string[] {
-  const picker = screen.queryByLabelText("Effekt hinzufügen") as HTMLSelectElement | null;
-  return picker === null
-    ? []
-    : [...picker.options].map((option) => option.value).filter((value) => value !== "");
+function browseButton(): HTMLButtonElement {
+  return screen.getByRole("button", { name: "Effekte durchsuchen" }) as HTMLButtonElement;
 }
 
 function slide(input: HTMLInputElement, value: number): void {
@@ -181,6 +214,7 @@ describe("the inspector", () => {
           transformsAt={() => new Map()}
           dispatch={vi.fn()}
           onSeek={vi.fn()}
+          onBrowse={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -516,37 +550,33 @@ describe("the inspector", () => {
 
   // A transition is an effect with two inputs, and the draw list only ever runs a one-input
   // manifest as a clip effect. Offering the other kind would add something nothing draws.
-  it("offers only single-input effects to add to a clip", () => {
+  it("offers only single-input effects as transitions", () => {
     show();
 
-    expect(offered()).toEqual(["brightness"]);
-    // And the other way round: an effect with one input is not a transition either.
+    // An effect with one input is not a transition, and the draw list would never run it as one.
     const select = screen.getByLabelText("Übergang") as HTMLSelectElement;
     expect([...select.options].map((option) => option.value)).toEqual(["", "crossfade"]);
   });
 
-  // The picker is a choice that acts, so what it is worth is the command it sends.
-  it("adds the effect that was picked", () => {
+  // The two ways into the browser ask it for different shelves, which is what makes the label on
+  // each button true rather than decorative.
+  it("opens the browser on effects from the effect list and on transitions from the transition row", () => {
     const rig = show();
 
-    act(
-      () =>
-        void fireEvent.change(screen.getByLabelText("Effekt hinzufügen"), {
-          target: { value: "brightness" },
-        }),
-    );
+    act(() => void fireEvent.click(browseButton()));
+    act(() => void fireEvent.click(screen.getByRole("button", { name: "Übergänge durchsuchen" })));
 
-    expect(rig.sent.map((entry) => entry.command)).toEqual([
-      { type: "effect.add", target: { kind: "clip", clip: "clp_1" }, effectType: "brightness" },
-    ]);
+    expect(rig.browsed).toEqual([1, 2]);
+    // Opening a shelf is not an edit, and nothing about the clip has changed yet.
+    expect(rig.sent).toEqual([]);
   });
 
-  it("stops offering an effect the clip already carries", () => {
+  it("stops offering effects once the clip carries every one this build has", () => {
     show({ clip: clipWithMedia(withBrightness()) });
 
-    // Brightness is the only offer this rig has, so the whole picker goes with it. The row below
-    // is what says the effect landed rather than the control simply having been forgotten.
-    expect(offered()).toEqual([]);
+    // Brightness is the only single-input offer this rig has, so there is nothing left to browse
+    // for. The row below is what says the effect landed rather than the control being forgotten.
+    expect(browseButton().disabled).toBe(true);
     expect(screen.getByLabelText("Stärke")).toBeTruthy();
   });
 
@@ -802,6 +832,66 @@ describe("the inspector", () => {
     window.removeEventListener("error", onError);
     expect(escaped).toEqual([]);
     expect(screen.queryAllByRole("alert")).toHaveLength(0);
+  });
+  // The parameter kind reaching the surface. A colour is not a slider, and a row that rendered one
+  // anyway would put a number between 0 and 1 where a picker belongs.
+  describe("a colour parameter", () => {
+    const showDip = (value: unknown): Rig =>
+      show({ clip: clipWithMedia(withDip()), effects: [DIP], resolved: colourAt(value) });
+    const picker = (): HTMLInputElement => screen.getByLabelText("Farbe") as HTMLInputElement;
+
+    it("gets a picker rather than a slider", () => {
+      showDip({ kind: "color", value: [1, 0, 0, 1] });
+
+      expect(picker().type).toBe("color");
+      expect(picker().value).toBe("#ff0000");
+      expect(screen.queryByRole("slider", { name: "Farbe" })).toBeNull();
+    });
+
+    it("sends what was picked as a colour, not as a number", () => {
+      const rig = showDip({ kind: "color", value: [0, 0, 0, 1] });
+
+      act(() => void fireEvent.change(picker(), { target: { value: "#3366ff" } }));
+
+      expect(rig.sent).toHaveLength(1);
+      expect(rig.sent[0]!.command).toEqual({
+        type: "effect.setParam",
+        target: { kind: "clip", clip: "clp_1" },
+        effectType: "dip",
+        key: "colour",
+        value: { kind: "color", value: [0.2, 0.4, 1, 1] },
+      });
+      // One key for the whole picker: dragging round a colour wheel is one gesture, and thirty
+      // undo steps for it are thirty ways to lose the one that mattered.
+      expect(rig.sent[0]!.key).toBe("color:eff_1:colour");
+    });
+
+    // A hand-authored project can put anything on a colour key, and a picker fed a channel outside
+    // the unit interval shows a colour no shader would ever produce.
+    it("shows a value from outside the unit cube pulled back into it", () => {
+      showDip({ kind: "color", value: [4, -1, 0.5, 1] });
+
+      expect(picker().value).toBe("#ff0080");
+    });
+
+    it("falls back to the declared default for a value of the wrong kind", () => {
+      showDip(float(0.5));
+
+      expect(picker().value).toBe("#000000");
+    });
+
+    // The picker has no alpha of its own, so it carries back whatever the model held -- which on a
+    // hand-authored project is whatever was written there. Unguarded, editing the colour is how an
+    // impossible alpha gets stored a second time, this time by the application itself.
+    it("carries the alpha back inside the unit interval, not as it was found", () => {
+      const rig = showDip({ kind: "color", value: [0, 0, 0, 5] });
+
+      act(() => void fireEvent.change(picker(), { target: { value: "#3366ff" } }));
+
+      expect(rig.sent[0]!.command).toMatchObject({
+        value: { kind: "color", value: [0.2, 0.4, 1, 1] },
+      });
+    });
   });
 });
 

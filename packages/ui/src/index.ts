@@ -23,3 +23,4 @@ export * from "./templates/outline";
 export * from "./shell/AppShell";
 export * from "./shell/PanelTabs";
 export * from "./shell/TopBar";
+export * from "./effects/EffectBrowser";

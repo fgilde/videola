@@ -34,8 +34,13 @@ void main() {
 export const zoom: EffectManifest = {
   id: "zoom",
   name: { de: "Zoomen", en: "Zoom" },
+  blurb: {
+    de: "Der neue Clip wächst aus der Bildmitte heran.",
+    en: "The new clip grows in from the centre.",
+  },
   category: "transition",
   inputs: 2,
+  preview: { progress: 0.5, from: 0.4 },
   params: [
     { key: "progress", name: { de: "Fortschritt", en: "Progress" }, default: 1, min: 0, max: 1 },
     // How small the incoming clip starts. Above 1 it starts oversized and shrinks into place, which

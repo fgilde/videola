@@ -12,6 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "dist");
 const shot = join(here, "preview.png");
 const templateShot = join(here, "templates.png");
+const effectShot = join(here, "effects.png");
 const phoneShot = join(here, "phone.png");
 const phoneLibraryShot = join(here, "phone-library.png");
 const phoneInspectorShot = join(here, "phone-inspector.png");
@@ -276,12 +277,20 @@ try {
     [...desktop, "--virtual-time-budget=300000", `--screenshot=${templateShot}`],
     300_000,
   );
+  // The effect library, for the same reason the template run is its own launch: it opens on a fresh
+  // editor, and the picture at the end of the budget has to be the shelf rather than whatever the
+  // run before it left on screen.
+  const shelved = await drive(
+    `http://localhost:${PORT}/?effects=1&virtual=1`,
+    [...desktop, "--virtual-time-budget=300000", `--screenshot=${effectShot}`],
+    300_000,
+  );
   const pocket = await driveTouch(PHONE, "phone=1", 180_000, "the phone");
   // The mode that had a layout rule and no run behind it. It is also the only viewport where a
   // drag from the library onto a track can be driven with a finger, because it is the only one
   // where both panels are on screen at the same time.
   const slate = await driveTouch(TABLET, "tablet=1", 180_000, "the tablet");
-  const results = [...live, ...drawn, ...baked, ...pocket, ...slate];
+  const results = [...live, ...drawn, ...baked, ...shelved, ...pocket, ...slate];
   for (const note of results.filter((entry) => entry.name.startsWith("ENV "))) {
     console.log(note.name);
   }
@@ -292,7 +301,7 @@ try {
   }
   const failed = results.filter((entry) => !entry.ok).length;
   console.log(`${results.length - failed}/${results.length} application checks passed`);
-  for (const path of [shot, templateShot, phoneShot, phoneLibraryShot, phoneInspectorShot, tabletShot]) {
+  for (const path of [shot, templateShot, effectShot, phoneShot, phoneLibraryShot, phoneInspectorShot, tabletShot]) {
     console.log(`screenshot: ${path}`);
   }
   process.exitCode = failed === 0 ? 0 : 1;
