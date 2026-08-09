@@ -204,9 +204,13 @@ export function TemplateWizard(props: TemplateWizardProps): ReactElement {
                 </div>
               </>
             )}
+            {/* A textarea rather than a text input, because the text generator honours a hard line
+                break and an <input> silently drops one. A title shipped over two lines would
+                otherwise come back as one the moment the field was rendered -- and leaving a field
+                alone must never change the design it was showing. */}
             {slot.kind === "text" && (
-              <input
-                type="text"
+              <textarea
+                rows={2}
                 value={valueOf(slot)}
                 onChange={(event) => setText({ ...text, [slot.id]: event.target.value })}
               />

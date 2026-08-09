@@ -30,8 +30,13 @@ const MIN_STRETCH_RATE: f32 = 0.25;
 // rhythm the template never asked for.
 const STAND_IN: &str = "med_preview_stand_in";
 const STAND_IN_SECONDS: f64 = 3_600.0;
-const STAND_IN_FROM: &str = "#3a4250";
-const STAND_IN_TO: &str = "#20242c";
+// Light enough to read as a filled rectangle against the card it sits on, and flat enough that
+// nobody mistakes it for a design decision. A stand-in darker than the surface behind it makes a
+// template whose material fills the frame look like an empty card, which is the worst thing a
+// gallery can do -- it hides the good templates behind the ones that happen to carry more text.
+const STAND_IN_FROM: &str = "#5d6675";
+const STAND_IN_TO: &str = "#343b46";
+const STAND_IN_ANGLES: [f32; 3] = [135.0, 45.0, 200.0];
 
 fn stand_in(frame: Frame) -> MediaAsset {
     let mut asset = MediaAsset::new(
@@ -312,6 +317,11 @@ impl Template {
             .collect();
         let mut project = self.bake(&answers, Some(&settings))?;
 
+        // The ramp is turned a little further for each stand-in in turn. Two pictures side by side
+        // -- a split screen, an inset over a backdrop -- are two different pictures, and drawing
+        // both in exactly the same grey makes the seam between them disappear, which is the one
+        // thing those templates exist to show.
+        let mut nth = 0;
         for track in &mut project.timeline.tracks {
             for clip in &mut track.clips {
                 if !matches!(&clip.source, ClipSource::Media { media } if media.as_str() == STAND_IN)
@@ -322,9 +332,10 @@ impl Template {
                     generator: Generator::Gradient {
                         from: STAND_IN_FROM.into(),
                         to: STAND_IN_TO.into(),
-                        angle: 135.0,
+                        angle: STAND_IN_ANGLES[nth % STAND_IN_ANGLES.len()],
                     },
                 };
+                nth += 1;
                 // A stand-in is never too short, so any slowing left over from the bake would be a
                 // rate this preview invented rather than one the template asked for.
                 clip.speed.rate = 1.0;

@@ -276,10 +276,14 @@
 }
 
 .v-templates__chosen {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
   color: var(--v-text);
 }
 
-.v-templates input[type="text"] {
+.v-templates input[type="text"],
+.v-templates textarea {
   min-height: var(--v-touch-target);
   padding: 0 var(--v-space-2);
   background: var(--v-surface);
@@ -288,6 +292,12 @@
   border-radius: var(--v-radius-md);
   font: inherit;
   font-size: var(--v-text-sm);
+}
+
+.v-templates textarea {
+  padding: var(--v-space-2);
+  resize: vertical;
+  line-height: var(--v-leading);
 }
 
 /* Everything but the room the caret needs: that is the one thing a select cannot inherit from the

@@ -174,19 +174,21 @@ fn bold_open() -> Template {
 /// this version has of revealing a shot out of a shape rather than out of a fade.
 fn iris_open() -> Template {
     let mut back = video_track("trk_back", "V1");
+    // A strong colour rather than near-black: a circle cut out of a dark field over a dark card is
+    // a circle nobody can see, and the reveal is the whole of what this template is.
     back.clips
-        .push(solid_clip("clp_back", 0.0, 4.6, "#12141b"));
+        .push(solid_clip("clp_back", 0.0, 4.6, "#2f6fed"));
 
     let mut front = video_track("trk_front", "V2");
     let mut shot = placeholder("clp_shot", 0.0, 4.6);
-    shot.effects.push(iris("eff_iris", 0.2, 1.9));
+    shot.effects.push(iris("eff_iris", 0.2, 3.4));
     front.clips.push(shot);
 
     let mut word = text_track("trk_word", "T1");
     word.clips.push(text_clip(
         "clp_word",
-        1.1,
-        3.3,
+        0.7,
+        3.7,
         "AUFGEDECKT",
         &[
             ("fontSize", json!(0.075)),
@@ -244,7 +246,7 @@ fn iris_open() -> Template {
         INTRO,
         vec!["maske", "blende", "wort"],
         vec![LANDSCAPE, SQUARE],
-        1.6,
+        1.3,
         slots,
         project_with(LANDSCAPE, "#12141b", vec![back, front, word]),
     )
@@ -276,7 +278,7 @@ fn soft_slideshow() -> Template {
     let mut bar = solid_clip("clp_band", 0.0, total, "#05070c");
     bar.transform.opacity = 0.82;
     bar.effects
-        .push(band_mask("eff_band", 0.5, 0.885, 1.0, 0.30, 0.16));
+        .push(band_mask("eff_band", 0.5, 0.885, 1.0, 0.30, 0.06));
     band.clips.push(bar);
 
     let mut kicker = text_track("trk_kicker", "T1");
@@ -286,7 +288,7 @@ fn soft_slideshow() -> Template {
         total - 0.8,
         "REISETAGEBUCH",
         &[
-            ("fontSize", json!(0.026)),
+            ("fontSize", json!(0.032)),
             ("fontWeight", json!(700)),
             ("letterSpacing", json!(0.3)),
             ("align", json!("left")),
@@ -306,7 +308,7 @@ fn soft_slideshow() -> Template {
         total - 0.8,
         "Vier Bilder, eine Geschichte",
         &[
-            ("fontSize", json!(0.052)),
+            ("fontSize", json!(0.06)),
             ("fontWeight", json!(650)),
             ("align", json!("left")),
             ("x", json!(0.06)),
@@ -399,11 +401,12 @@ fn beat_slideshow() -> Template {
         total,
         "IM TAKT",
         &[
-            ("fontSize", json!(0.05)),
+            ("fontSize", json!(0.075)),
             ("fontWeight", json!(800)),
-            ("letterSpacing", json!(0.34)),
-            ("y", json!(0.09)),
-            ("strokeWidth", json!(0.02)),
+            ("letterSpacing", json!(0.26)),
+            ("y", json!(0.13)),
+            ("background", json!("#101625d9")),
+            ("padding", json!(0.45)),
             ("shadowBlur", json!(0.3)),
             ("animateIn", json!("fade")),
             ("animateInSeconds", json!(0.3)),
@@ -1761,7 +1764,7 @@ mod tests {
             panic!("the header is not a text generator");
         };
         assert_eq!(style["color"], serde_json::json!("#1188ff"));
-        assert_eq!(style["letterSpacing"], serde_json::json!(0.34));
+        assert_eq!(style["letterSpacing"], serde_json::json!(0.26));
     }
 
     // The preview is what the gallery card is, so the one thing it must not do is invent a picture
