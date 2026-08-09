@@ -1307,6 +1307,109 @@ test("an edited title is painted again", () => {
   frames.close();
 });
 
+// A subtitle, on a caption track, drawn by the compositor. Its own track kind is what lets a
+// subtitle file be written without the lower thirds coming too -- but a kind the renderer walked
+// past would be a caption nobody ever sees, and only pixels can say which of the two happened.
+function captioned(over) {
+  const spec = over || {};
+  const size = spec.size || 64;
+  const scene = project(size, size, spec.background || "#ffffff", []);
+  scene.timeline.tracks[0] = { id: "trk_0", kind: spec.kind || "caption",
+    hidden: spec.hidden === true, clips: [{
+      id: "clp_0", start: 0, duration: 1000, blend: "normal", effects: [],
+      transform: transform(),
+      source: { kind: "generator", generator: {
+        type: "text", content: spec.content || "Hello",
+        style: Object.assign({}, R.CAPTION_STYLE, spec.style) } } }] };
+  const context = R.createContext(canvasOf(size, size));
+  const compositor = new R.Compositor(context);
+  const frames = new R.GeneratorFrames();
+  compositor.render(scene, 0, frames.pictures(scene, new Set(["clp_0"])), new Map(), new Map());
+  const pixels = compositor.readPixels();
+  frames.close();
+  return { at: reader(pixels, size, size) };
+}
+
+// The lightest and the darkest pixel in the band a subtitle occupies. What makes a caption legible
+// is that those two stay far apart whatever is behind it -- white letters on a white sky are white
+// letters nobody can read, and no count of lit pixels would notice.
+function bandContrast(shot, size) {
+  let light = 0;
+  let dark = 255;
+  for (let y = Math.floor(size * 0.72); y < Math.floor(size * 0.97); y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const green = shot.at(x, y)[1];
+      light = Math.max(light, green);
+      dark = Math.min(dark, green);
+    }
+  }
+  return light - dark;
+}
+
+// The topmost row the caption disturbs. The background is white here, so anything the subtitle put
+// down -- plate, stroke or letter -- is darker than what it covered.
+function highestMark(shot, size) {
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) if (shot.at(x, y)[1] < 200) return y;
+  }
+  return size;
+}
+
+test("a caption track reaches the picture", () => {
+  const shot = captioned({});
+  check("the subtitle marks the frame", highestMark(shot, 64) < 64, true);
+  check("and the top of the frame is untouched", shot.at(32, 4), [255, 255, 255, 255]);
+});
+
+test("a hidden caption track paints nothing, which is what takes it out of an export", () => {
+  const shot = captioned({ hidden: true });
+  check("the band a subtitle would fill is nothing but background", shot.at(32, 54),
+    [255, 255, 255, 255]);
+  check("and there is no mark anywhere", highestMark(shot, 64), 64);
+});
+
+// The default style's one job: readable on a bright sky and on a night interior both. Measured as
+// the spread between the lightest and the darkest pixel where the subtitle sits, on each background
+// in turn -- and against the same words with the plate taken away, which is the arrangement that
+// would sail through a check that only ever looked at a dark background.
+test("the default caption style is readable on light and on dark", () => {
+  const onLight = bandContrast(captioned({ background: "#ffffff" }), 64);
+  const onDark = bandContrast(captioned({ background: "#101010" }), 64);
+  check("readable over white", onLight > 120, true);
+  check("readable over near-black", onDark > 120, true);
+
+  // Everything that carries an edge taken away, not only the plate: the text generator's own
+  // default already casts a drop shadow, so a control that removed the plate alone would still be
+  // legible and would prove nothing about which part is doing the work.
+  const plain = bandContrast(captioned({ background: "#ffffff",
+    style: { background: "", strokeWidth: 0, shadowY: 0, shadowBlur: 0 } }), 64);
+  check("and white letters with nothing behind them on a white sky are what it beats",
+    [plain < 40, plain < onLight], [true, true]);
+});
+
+test("a caption sits low in the frame, where a subtitle belongs", () => {
+  const top = highestMark(captioned({}), 64);
+  check("nothing is drawn in the upper half", top > 32, true);
+  check("and it stays inside the frame", top < 60, true);
+});
+
+// The two-line subtitle the brief warns about: a hard newline has to survive all the way to the
+// rasteriser, and the second line has to be drawn below the first rather than beside it.
+test("a two-line caption is two lines tall", () => {
+  const rows = (shot) => {
+    let count = 0;
+    for (let y = 0; y < 64; y += 1) {
+      for (let x = 0; x < 64; x += 1) {
+        if (shot.at(x, y)[1] < 200) { count += 1; break; }
+      }
+    }
+    return count;
+  };
+  const one = rows(captioned({ content: "Hello" }));
+  const two = rows(captioned({ content: "Hello\nthere" }));
+  check("the second line makes the block taller", two > one, true);
+});
+
 // Wrapping, measured as the height of the block rather than as a line count: a title that ignores its
 // own width is one long line, and one long line is one line tall.
 function tallness(shot, size) {
