@@ -435,6 +435,30 @@ mod tests {
         assert!((previous - 1.0).abs() < 1e-3, "it has to arrive, got {previous}");
     }
 
+    // The four values the pixel harness draws a quad at, pinned here because this is where the
+    // curve is decided. `an eased keyframe puts the quad somewhere...` in gpu/harness.html measures
+    // that they reach the screen; it does not decide what they are.
+    //
+    // Halfway in time is 1.5 pixels of travel out of 32, where a straight ramp is 16 -- the gap a
+    // curve is worth, and the only reading that tells the two apart at all.
+    #[test]
+    fn the_curve_the_pixel_harness_draws_resolves_to_these_values() {
+        let mut a = kf(0.0, -16.0, Interp::Bezier);
+        a.handle_out = Some([0.9, 0.05]);
+        let mut b = kf(4.0, 16.0, Interp::Linear);
+        b.handle_in = Some([0.95, 0.1]);
+        let track = vec![a, b];
+
+        let at = |seconds: f64| match evaluate(&track, Time::from_seconds(seconds)) {
+            Some(ParamValue::Float(value)) => value,
+            other => panic!("expected a float, got {other:?}"),
+        };
+        assert_eq!(at(0.0), -16.0);
+        assert_eq!(at(4.0), 16.0);
+        assert!((at(2.0) - -14.545_43).abs() < 0.01, "midpoint {}", at(2.0));
+        assert!((at(3.0) - -11.914_12).abs() < 0.01, "three quarters {}", at(3.0));
+    }
+
     const SECOND: f64 = FLICKS_PER_SECOND as f64;
 
     fn area(track: &[Keyframe], from: f64, to: f64) -> f64 {

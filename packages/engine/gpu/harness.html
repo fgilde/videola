@@ -287,6 +287,37 @@ test("a motion path carries the quad off the straight line between its keys", ()
   check("the middle of the path is neither halfway nor level", middle, [30, 24], 0);
 });
 
+// A bezier easing at pixels, which is what makes a curve editor provable rather than merely drawn.
+// The core resolves the shape -- `the_curve_the_pixel_harness_draws_resolves_to_these_values` in
+// keyframe.rs pins these numbers -- and the one reading that can tell a curve from a straight line
+// is the middle: at both ends every easing ever written agrees with every other.
+//
+// The ramp runs x from -16 at 0s to 16 at 4s with handles [0.9, 0.05] and [0.95, 0.1], the pair a
+// drag in the curve field produces. Halfway through it stands at -14.55, not at 0.
+test("an eased keyframe puts the quad somewhere a straight ramp never would", () => {
+  const { compositor, scene } = rig(64, 64, "#000000", [{}], 8, 8);
+  const f = frame(8, 8, () => [255, 255, 255, 255]);
+  const columnAt = (x) => {
+    draw(compositor, scene, 0, new Map([["clp_0", f]]), new Map(),
+      new Map([["clp_0", transform({ x: x })]]));
+    const at = reader(compositor.readPixels(), 64, 64);
+    for (let column = 0; column < 64; column += 1) if (at(column, 32)[0] > 128) return column;
+    return -1;
+  };
+  const start = columnAt(-16);
+  const bent = columnAt(-14.54543);
+  const straight = columnAt(0);
+  const end = columnAt(16);
+  f.close();
+
+  check("the ramp starts left of centre", start, 12, 0);
+  check("and ends right of it", end, 44, 0);
+  check("a straight ramp is halfway across at half time", straight, 28, 0);
+  // Fifteen columns from where a line would be, and one from where the ramp began: the whole point
+  // of an eased key is that almost nothing has happened yet.
+  check("the eased one has barely left the first key", bent, 13, 0);
+});
+
 test("geometry", () => {
   const { compositor, scene } = rig(16, 16, "#000000",
     [{ t: { rotation: 90, anchorX: 0, anchorY: 0, scaleX: 0.5, scaleY: 0.5 } }], 16, 16);
