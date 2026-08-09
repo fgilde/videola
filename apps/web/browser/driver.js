@@ -624,6 +624,54 @@ async function announce() {
     checkAtMost("the programme measures in the band the fixture belongs in", lufs, -15);
     checkAtLeast("and not lower than the material can be", lufs, -30);
     check("measuring raised nothing", banner(), "");
+
+    await mixerTools(lufs);
+  }
+
+  // The three things a real browser has to say about the new mixer, and the one it cannot: the
+  // meters swinging needs an audio device, which a headless Chrome does not have. What is checked
+  // here is that they exist, that they cost the layout nothing, and that the two actions that go
+  // out to the samples come back with a project that changed.
+  async function mixerTools(measured) {
+    const meters = all('[data-testid="meter"]');
+    // One per strip and one for the master. Counted against the strips that are there, so a
+    // meter drawn only on the master could not pass this by arithmetic.
+    check("every strip has a meter and so does the master",
+      meters.length, all(".v-mixer__strip").length);
+    // The mixer row is clamped and checked as a whole above; this is the one control that has
+    // twice pushed through that clamp, so it is pinned at its own declared height.
+    checkAtMost("a meter is ten pixels tall and not a share of the window",
+      Math.round(meters[0].getBoundingClientRect().height), 12);
+    check("the meter says what it is measuring", meters[0].getAttribute("role"), "meter");
+
+    // Normalising renders the timeline again. What lands in the readout has to be a reading of
+    // the corrected project -- so it has to have moved, and it has to have moved to the target.
+    check("the fixture does not start on the streaming target",
+      Math.abs(measured + 14) > 1, true);
+    labelled("Auf Ziel bringen").click();
+    const brought = await until("a reading after normalising", () => {
+      const text = q('[data-testid="mixer-loudness"]').textContent;
+      const value = Number(text.replace(" LUFS", ""));
+      return text.endsWith("LUFS") && Math.abs(value - measured) > 0.05 ? value : null;
+    }, 60000);
+    checkNear("normalising lands the programme on the target it was given", brought, -14, 0.6);
+    check("and it moved the master fader to get there",
+      Number(q('[data-testid="mixer-master"] input[type=range]').value) !== 1, true);
+    check("normalising raised nothing", banner(), "");
+
+    // Cutting the silence out of a track. The fixture is dense material, so what is asserted is
+    // the shape of the result rather than a count: whatever it took out, it left every clip that
+    // survived where it stood -- a gap and not a ripple -- and it raised nothing.
+    const strip = q(".v-mixer__strip");
+    const track = strip.dataset.trackId;
+    const before = all("[data-clip-id]").map((clip) => clip.offsetLeft);
+    q('[aria-label^="Stille in"]').click();
+    await sleep(400);
+    check("cutting silence raised nothing", banner(), "");
+    check("and it left every clip that survived where it stood",
+      all("[data-clip-id]").every((clip) => before.includes(clip.offsetLeft)), true);
+    check("the strip that was cut is still there",
+      q('[data-track-id="' + track + '"]') !== null, true);
   }
 
   // Everything a phone has to be able to do: bring material in, arrange it with a finger, and

@@ -22,6 +22,24 @@ export interface AudioEffectManifest {
   build(ctx: BaseAudioContext): AudioEffectNode;
 }
 
+// A plain gain, and the only insert here that does nothing at all until it is automated. That is
+// what it is for: ducking needs somewhere to write a curve, and a bus fader is one number rather
+// than a keyframe track. Ahead of the fader like every other insert, so the fader still rides the
+// ducked signal and pulling it down does not undo the duck.
+//
+// The range is the fader's, so a duck can be written in the same numbers a strip already shows.
+const gain: AudioEffectManifest = {
+  id: "gain",
+  name: { de: "Verstärkung", en: "Gain" },
+  params: [
+    { key: "gain", name: { de: "Verstärkung", en: "Gain" }, default: 1, min: 0, max: 4 },
+  ],
+  build(ctx) {
+    const node = ctx.createGain();
+    return { node, knobs: new Map([["gain", node.gain]]) };
+  },
+};
+
 // A peaking band rather than a shelf or a cut: it is the only filter shape that can both add and
 // remove at a chosen place, so one effect covers "less boxy" and "more air" without a second one.
 //
@@ -115,7 +133,7 @@ const limiter: AudioEffectManifest = {
   },
 };
 
-const MANIFESTS: readonly AudioEffectManifest[] = [eq, compressor, limiter];
+const MANIFESTS: readonly AudioEffectManifest[] = [gain, eq, compressor, limiter];
 
 export function audioEffect(type: string): AudioEffectManifest | undefined {
   return MANIFESTS.find((manifest) => manifest.id === type);

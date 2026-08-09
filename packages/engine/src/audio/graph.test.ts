@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Clip, Interp, MediaAsset, Project, Time, Track } from "@videola/core";
 
-import { AudioGraph, hasAudibleClips, measureLoudness } from "./graph";
-import { integratedLufs } from "./loudness";
+import { AudioGraph, hasAudibleClips, MASTER_METER, measureLoudness } from "./graph";
+import { integratedLufs, SILENT_LEVEL } from "./loudness";
 import type { AudioBufferSource } from "./graph";
 
 const SAMPLE_RATE = 48_000;
@@ -639,6 +639,125 @@ describe("AudioGraph, waveform peaks", () => {
     graph.waveforms(16);
 
     expect(decode).toHaveBeenCalledOnce();
+  });
+});
+
+// The taps are in the signal path, so an offline render leaves each of them holding the last window
+// that went through it -- which is a real reading of real samples, taken through the same
+// AnalyserNode a browser drives at sixty frames a second. What cannot be checked here is the
+// *running* of it: an offline render has no wall clock and no output device, so "the bar moves while
+// the transport rolls" is left to the eye.
+describe("AudioGraph, bus levels", () => {
+  it("has a master reading and nothing else before anything is scheduled", () => {
+    const ctx = context(0.1);
+    const graph = new AudioGraph(ctx, dc(ctx));
+
+    expect([...graph.levels().keys()]).toEqual([MASTER_METER]);
+    expect(graph.levels().get(MASTER_METER)).toEqual(SILENT_LEVEL);
+  });
+
+  it("reads the level the master is actually putting out", async () => {
+    const ctx = context(0.5);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(project([track("A1", [clip({ volume: 0.5 })])]));
+    graph.startAt(0, 0);
+    await drain(ctx);
+
+    const level = graph.levels().get(MASTER_METER);
+
+    // Direct current at half scale: peak and effective value are the same number, and that number
+    // is the clip gain rather than the material's own full scale.
+    expect(level?.peak).toBeCloseTo(-6.02, 1);
+    expect(level?.rms).toBeCloseTo(-6.02, 1);
+  });
+
+  // The tap sits after the track's fader and its pan, which is what a strip's meter is asked about.
+  // Two tracks at two gains is what tells a per-track meter from a copy of the master's.
+  it("gives every track its own reading", async () => {
+    const ctx = context(0.5);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(
+      project([
+        track("A1", [clip({ volume: 1 })], { volume: 0.5 }),
+        track("A2", [clip({ id: "clp_2", volume: 1 })], { volume: 0.25 }),
+      ]),
+    );
+    graph.startAt(0, 0);
+    await drain(ctx);
+    const levels = graph.levels();
+
+    expect(levels.get("A1")?.peak).toBeCloseTo(-6.02, 1);
+    expect(levels.get("A2")?.peak).toBeCloseTo(-12.04, 1);
+    // Both tracks land on the master, so it reads louder than either of them alone.
+    expect(levels.get(MASTER_METER)?.peak).toBeCloseTo(-2.5, 1);
+  });
+
+  // Mute and solo live on the bus gain, ahead of the tap, so a silenced track has to read silent --
+  // a meter that still swung on a muted strip would be reading the clips instead of the bus.
+  it("reads a muted track as silent while the master still has the other one", async () => {
+    const ctx = context(0.5);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(
+      project([
+        track("A1", [clip()], { muted: true }),
+        track("A2", [clip({ id: "clp_2", volume: 0.5 })]),
+      ]),
+    );
+    graph.startAt(0, 0);
+    await drain(ctx);
+    const levels = graph.levels();
+
+    expect(levels.get("A1")?.peak).toBe(Number.NEGATIVE_INFINITY);
+    expect(levels.get("A2")?.peak).toBeCloseTo(-6.02, 1);
+  });
+
+  // The two axes crossing: a meter and a fade. At the end of a fade-out the bar has to be down with
+  // it, because the fade is automation on the gain the tap sits behind.
+  it("follows a fade down", async () => {
+    const ctx = context(1);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(
+      project([track("A1", [clip({ fades: { inDuration: 0, outDuration: SECOND } })])]),
+    );
+    graph.startAt(0, 0);
+    await drain(ctx);
+
+    // The window is 2048 frames, which at 48 kHz is the last 42.7 ms of the fade -- so the loudest
+    // sample left in it is the gain the ramp had 42.7 ms from the end, 0.0427, and that is
+    // -27.4 dBFS. Spelled out because "quiet" would pass for a meter reading the wrong bus.
+    expect(graph.levels().get(MASTER_METER)?.peak).toBeCloseTo(-27.4, 1);
+  });
+
+  it("reads silent once the transport has stopped", async () => {
+    const ctx = context(0.5);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(project([track("A1", [clip()])]));
+    graph.startAt(0, 0);
+    await drain(ctx);
+    graph.stop();
+
+    expect(graph.levels().get(MASTER_METER)).toEqual(SILENT_LEVEL);
+  });
+
+  // A strip the mixer no longer draws must not keep reporting, or a deleted track leaves a bar
+  // swinging next to the ones that are still there.
+  it("forgets a track the project no longer has", async () => {
+    const ctx = context(0.5);
+    const graph = new AudioGraph(ctx, dc(ctx));
+    await graph.prepare(project([track("A1", [clip()]), track("A2", [clip({ id: "clp_2" })])]));
+    graph.startAt(0, 0);
+    await graph.prepare(project([track("A1", [clip()])]));
+
+    expect([...graph.levels().keys()].sort()).toEqual(["A1", MASTER_METER]);
+  });
+
+  // The tap is in the line, not beside it, so this is the assertion that it stays a tap: an
+  // AnalyserNode that coloured what passed through would move every other number in this file.
+  it("passes the signal through unchanged", async () => {
+    const ctx = context(0.5);
+    const out = await render(ctx, dc(ctx), project([track("A1", [clip({ volume: 0.375 })])]));
+
+    expect(at(out, 0.25)).toBe(0.375);
   });
 });
 

@@ -153,8 +153,10 @@ One strip per track, ordered the way the timeline stacks them rather than the wa
 them — `tracks[0]` is the bottom of the stack, and a mixer listing them in that order would put the
 top track's strip last.
 
-Each strip carries a volume fader, a pan control from left through centre to right, and the mute and
-solo buttons. One drag of a fader is one step in the undo history, not one per pixel.
+Each strip carries a level meter, a volume fader, a pan control from left through centre to right,
+and the mute and solo buttons. One drag of a fader is one step in the undo history, not one per
+pixel. Below them sit the two actions that need the samples rather than the project alone: the
+picker that ducks this track under another, and the button that cuts the silence out of it.
 
 Below those sits the strip's insert chain: a button per effect the build can make a sound with, and
 once one has been added, a row per parameter with the same keyframe controls the inspector uses. A
@@ -165,6 +167,119 @@ what is heard.
 Last on the right, set apart by a border, is the **master strip**: the project's own fader and the
 mastering chain. Everything to its left feeds it.
 
+## Level meters
+
+Every strip carries a meter, the track strips and the master alike, and every one of them is a real
+tap in the signal path rather than a bar beside it: an `AnalyserNode` sits **in** the line, because a
+node with no route to the output is not processed at all and a meter hung off the side would read
+zero for exactly as long as nobody checked. An analyser passes its input through unchanged, which is
+why the export still renders sample for sample the same as playback does.
+
+A track's tap sits **after** its fader and its pan, so a strip reports what that track is sending and
+not what its clips were before anyone touched the desk. Mute and solo are on the bus gain ahead of
+it, so a silenced track reads silent.
+
+Three numbers per bar, all in dBFS:
+
+- **Peak** — the loudest sample in the window, drawn as the pale part of the bar. This is what says
+  whether anything clipped.
+- **Effective value** — the root mean square, drawn solid. This is what the eye reads as loudness: a
+  sine's peak stands 3 dB above its own effective value and a square wave's does not.
+- **Hold** — a marker at the loudest peak lately, falling at 20 dB a second. A transient that lasts
+  one buffer is one nobody sees without it.
+
+The bar is linear in **decibels** over a 60 dB scale, not in amplitude: half the bar is 30 dB down.
+That is the whole reason a meter is readable — the quiet end of the range gets as much room as the
+loud one. The last six decibels turn the bar red.
+
+The whole desk is read once per animation frame and nothing about it goes through React: the loop
+writes three lengths and one class straight onto the elements. A mixer with ten strips costs one
+`getFloatTimeDomainData` per strip per frame over a 2048-frame window, and no re-render at all.
+
+::: warning What is not measured
+A headless browser has no audio output, so the meters *moving while the transport rolls* is the one
+thing the tests cannot see. What is measured is everything either side of it: the arithmetic against
+real rendered samples, and the taps themselves against a real offline render — a track at half gain
+reads −6.02 dBFS through the real `AnalyserNode`.
+:::
+
+## Bringing a project to a target
+
+The mixer's master strip offers the three targets anyone actually asks for — −14 LUFS for streaming,
+−16 for a podcast, −23 for broadcast — and a button that moves the master fader until the programme
+measures there.
+
+**It measures again after correcting.** What appears in the readout afterwards is a reading and never
+the target that was asked for, which matters in the cases where the target cannot be reached: a
+programme already at the fader's ceiling of 4, or a silent one, then says so with a number instead of
+claiming success.
+
+::: tip Why one pass lands, and why it is checked anyway
+The fear is the reasonable one: a compressor or a limiter is not a gain, it stops limiting as its
+input comes down, and `DynamicsCompressorNode` adds its own makeup on top. It does not apply here,
+and the reason is the wiring rather than the node — **inserts sit ahead of the fader**, so the
+mastering chain sees the same signal at every fader setting and the fader is a plain gain over
+whatever leaves it. Measured, with a limiter engaged twenty decibels under the material: one pass.
+
+What does not follow is that the arithmetic may be believed. The R128 gates are level-dependent —
+moving a programme changes which of its blocks clear the absolute gate at −70 LUFS — so what comes
+back is always a reading.
+:::
+
+## Ducking
+
+Pulling the music down while somebody is talking. Pick the voice track from the picker on the music
+track's strip, and the music comes down while the voice is there and back up after.
+
+**It writes keyframes, not an automatic.** The music bus gets a `Gain` insert and a curve on it: four
+corners a phrase — open, down, down, open — the fall taken a quarter of a second *before* the phrase
+starts, because a bed that begins to come down on the first syllable has already covered it, and the
+rise half a second after. Two phrases close enough that the rise would still be climbing when the
+next fall began leave the bed down in between, which is what a console does and what an editor would
+have drawn by hand.
+
+Because it is keyframes, the whole of it is yours afterwards: every corner is a value on a row in the
+strip, with the same diamond, the same previous and next, and the same interpolation the inspector
+gives any other parameter. Ducking again over a re-cut voice track replaces the curve rather than
+laying a second one over it, and the whole duck comes off in a single undo.
+
+::: tip Why not a sidechain compressor
+Because the Web Audio API has no sidechain. `DynamicsCompressorNode` takes one input and there is no
+second one to key it off, so a sidechain here would have to be built out of an analyser and a gain
+written per animation frame — the staircase every other envelope in this graph exists to avoid. The
+keyframes cost nothing extra: the insert chain already automates every parameter it has, sample by
+sample on the audio thread, and preview and export read the same track of them.
+:::
+
+The insert sits ahead of the fader like every other one, so the duck and the strip's own fader
+multiply rather than fight — and so do the duck and a clip's fade, which is on the clip gain further
+upstream. Measured: a bed at half gain under a fade at half reads a quarter.
+
+## Finding and cutting silence
+
+The button on a track strip finds the pauses in it and takes them out, leaving a gap where each one
+was.
+
+The detection is read from **the peaks the timeline is already drawing**, at a resolution fine enough
+for the job — the samples were decoded for playback and scanned once for the strip, so this is a
+third pass over a few thousand floats rather than over a few million. A bucket counts as sounding if
+it reaches −40 dBFS; gaps shorter than 250 ms are inside a phrase rather than between two and get
+closed up; what is left and still shorter than 150 ms was a click and not a phrase; and every phrase
+is grown by a tenth of a second at both ends, so the cut falls in the pause and not on the first
+syllable.
+
+A bucket is turned back into a moment by inverting the core's own source mapping, not by dividing a
+duration. That is what makes it right for a clip that is not playing straight: under a speed ramp the
+peaks are laid out over the *buffer*, and the buffer is not proportional to project time at all. A
+reversed clip needs no case of its own — its buffer is already the reversed copy the graph plays.
+
+::: warning A gap, not a ripple
+The cut leaves everything after it where it stands. Rippling would pull the rest of this track
+earlier and leave every other track — the picture the voice belongs to above all — where it was.
+Silence removal is worth having; silence removal that walks the sound off the lips is not. Closing
+the timeline up afterwards is a ripple-delete on the gaps, which is one command you can see and undo.
+:::
+
 ## What is not here yet
 
 Named rather than hinted at, because a control that does nothing is worse than no control:
@@ -172,8 +287,12 @@ Named rather than hinted at, because a control that does nothing is worse than n
 - **Filter shapes other than a peaking band.** The equaliser cannot be a high- or low-pass, because a
   filter type is a choice and the effect manifests carry floats only. `ParamValue` already has a
   `choice` kind; the shelves arrive with the widget that can edit one.
-- **Live level metering.** Peak and gain-reduction meters need a per-bus analyser read per frame.
-- **Ducking, noise reduction, beat detection, spatial panning beyond stereo.**
+- **Gain-reduction metering.** The strips show what a bus is sending; how hard its compressor is
+  working is a second reading, and `DynamicsCompressorNode.reduction` is where it would come from.
+- **Noise reduction, beat detection, spatial panning beyond stereo.**
+- **Bus automation in the timeline's keyframe lane.** A duck's corners are editable on the strip
+  that wrote them, with the same controls the inspector uses; the lane below a clip draws clip
+  keyframes only, and drawing a track's would mean giving a lane an identity that is not a clip.
 - **True peak (dBTP).** The peak reading is sample peak; an inter-sample peak needs oversampling.
 - **Lip sync is nowhere measured.** Headless browsers have no audio output, so the offset between
   picture and sound is reasoned about rather than observed.

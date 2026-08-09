@@ -23,7 +23,8 @@ import { audibleClips } from "../nesting";
 import { clampParam } from "../effects/registry";
 import { audioEffect } from "./effects";
 import type { EffectParam } from "./effects";
-import { integratedLufs } from "./loudness";
+import { integratedLufs, levelFrom, SILENT_LEVEL } from "./loudness";
+import type { Level } from "./loudness";
 
 export interface AudioBufferSource {
   bufferFor(hash: string, from: Time, to: Time): Promise<AudioBuffer>;
@@ -37,6 +38,14 @@ interface Voice {
 
 // Long enough that a volume slider cannot click, short enough that it still feels immediate.
 const MASTER_GLIDE_SECONDS = 0.01;
+
+/** The key `levels` reports the master bus under; every other key is a track id. */
+export const MASTER_METER = "master";
+
+// 2048 frames is 43 ms at 48 kHz -- longer than a frame at sixty, so a meter read once per frame
+// sees every sample that went past rather than a slice of each one. Smaller windows make the
+// effective value jitter; larger ones smear a transient into the average around it.
+const METER_WINDOW = 2048;
 
 // How finely a keyframe segment is sampled between its two corners. Only a curve needs it -- a
 // linear segment lands every extra sample back on the line it already had -- and eight is where a
@@ -55,6 +64,9 @@ export class AudioGraph {
   #playing: AudioBufferSourceNode[] = [];
   #buffers = new Map<string, AudioBuffer>();
   #generation = 0;
+  #meters = new Map<string, AnalyserNode>();
+  #levels = new Map<string, Level>();
+  #window = new Float32Array(METER_WINDOW);
 
   /**
    * `params` is the core's own resolver -- `Document.effectParamsAt` -- and the reason a keyframed
@@ -67,7 +79,11 @@ export class AudioGraph {
     this.#source = source;
     this.#params = params;
     this.#master = ctx.createGain();
-    this.#master.connect(ctx.destination);
+    // In the line rather than hanging off it: a node with no route to the destination is not pulled,
+    // so a meter tapped as a dead branch reads zero for exactly as long as nobody checks. An
+    // AnalyserNode's output is its input unchanged, which the export's sample-for-sample agreement
+    // with playback is the standing proof of -- both run this same graph.
+    this.#master.connect(this.#meter(MASTER_METER)).connect(ctx.destination);
   }
 
   // ponytail: every clip's audio is decoded up front and held for the length of the session. An
@@ -92,6 +108,11 @@ export class AudioGraph {
     // nothing about which project state is current. Whoever started last owns the graph.
     if (generation !== this.#generation) return;
     this.#master.gain.value = project.master.volume;
+    // A deleted track must stop reporting a level, or the mixer keeps a strip alive for it.
+    const alive = new Set([MASTER_METER, ...project.timeline.tracks.map((track) => track.id)]);
+    for (const id of [...this.#meters.keys()]) {
+      if (!alive.has(id)) this.#meters.delete(id);
+    }
     this.#tracks = project.timeline.tracks;
     this.#masterEffects = project.master.effects;
     this.#voices = voices;
@@ -135,8 +156,43 @@ export class AudioGraph {
     );
   }
 
+  /**
+   * What every bus is putting out right now, keyed by track id and by `MASTER_METER`. One call per
+   * animation frame answers the whole desk, because the expensive part is the read and not the
+   * arithmetic -- and because a strip that lagged a frame behind its neighbour would look wrong.
+   *
+   * `elapsed` is the wall time since the last call, which is what the hold marker falls by. Nothing
+   * is scheduled means nothing is playing, and a meter left standing at the last block it saw would
+   * be reporting sound that stopped -- so a stopped transport reads silent rather than frozen.
+   */
+  levels(elapsed = 0): ReadonlyMap<string, Level> {
+    const rolling = this.#playing.length > 0;
+    const next = new Map<string, Level>();
+    for (const [id, node] of this.#meters) {
+      if (!rolling) {
+        next.set(id, SILENT_LEVEL);
+        continue;
+      }
+      node.getFloatTimeDomainData(this.#window);
+      next.set(id, levelFrom([this.#window], this.#levels.get(id), elapsed));
+    }
+    this.#levels = next;
+    return next;
+  }
+
   setMasterVolume(volume: number): void {
     this.#master.gain.setTargetAtTime(volume, this.#ctx.currentTime, MASTER_GLIDE_SECONDS);
+  }
+
+  // Kept across `startAt`, unlike everything in `#live`: a seek rebuilds every bus around it, and a
+  // meter that were rebuilt with them would lose its hold marker every time the playhead moved.
+  #meter(id: string): AnalyserNode {
+    const existing = this.#meters.get(id);
+    if (existing !== undefined) return existing;
+    const node = this.#ctx.createAnalyser();
+    node.fftSize = METER_WINDOW;
+    this.#meters.set(id, node);
+    return node;
   }
 
   // One medium missing must not take the rest of the timeline with it. The library is where a
@@ -195,7 +251,13 @@ export class AudioGraph {
     gain.gain.value = soloing && !track.solo ? 0 : track.muted ? 0 : track.volume;
     const panner = this.#ctx.createStereoPanner();
     panner.pan.value = track.pan;
-    gain.connect(panner).connect(masterIn);
+    // After the fader and the pan, which is what the strip's meter is asked about: what this track
+    // is sending, not what its clips were before anyone touched the desk. The tap is disconnected
+    // first because it outlives the bus around it -- a seek builds a new one every time, and the
+    // meter has to survive that or a hold marker would be reset by scrubbing.
+    const meter = this.#meter(track.id);
+    meter.disconnect();
+    gain.connect(panner).connect(meter).connect(masterIn);
     this.#live.push(gain, panner);
     return this.#chain(track.effects, gain, contextTime, projectTime);
   }
