@@ -773,11 +773,11 @@ Projekt wirklich einen Effekt trägt.
   einem Shader.
 - **Eine Maske je Form und Clip.** `effect.add` behandelt einen wiederholten Typ als Nichtstun, ein
   zweites Rechteck braucht also die Kette nach Effekt-Id statt nach Effekttyp.
-- **Noch kein Editor für einen Bewegungspfad.** Der Kern löst die Kurve auf und der Renderer
-  zeichnet sie, aber die Punkte werden per Kommando gesetzt statt in der Vorschau gezogen. Der
-  Geometrie-Rahmen ist die halbe Antwort — ein Griff im Bild, gegen die Matrix des Compositors
-  geprüft — und was fehlt, ist die Bahn der Positions-Keys zu zeichnen und einen Key darauf greifbar
-  zu machen: ein Overlay, das eine Keyframe-Spur liest statt einer aufgelösten Transformation.
+- **Der Bewegungspfad wird jetzt gezeichnet und ist ziehbar.** Sobald zwei Positions-Keys da sind,
+  erscheint die Bahn als gestrichelte Linie auf dem Bild — aus dem Kern an achtundvierzig
+  Zeitpunkten abgetastet statt von Key zu Key gezeichnet — mit einem Griff auf jedem Key. Was fehlt,
+  ist ein Griff für die Kontrollpunkte eines *Bezier*-Abschnitts im Bild; die werden im Kurvenfeld
+  an der Zeitleiste gezogen.
 - **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
   dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
 - **Eine `.cube` mit einem Definitionsbereich außer 0 bis 1 wird abgelehnt**, eine eindimensionale

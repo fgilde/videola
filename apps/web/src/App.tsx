@@ -94,6 +94,7 @@ import {
   pickFiles,
   Preview,
   projectEnd,
+  MotionPath,
   Scopes,
   SourceBar,
   Stage,
@@ -176,6 +177,13 @@ const NO_PROXIES: ReadonlyMap<string, ProxyState> = new Map();
 // Held down, a rotation goes in whole steps. Fifteen degrees is the step every editor uses, and it
 // is what makes an upright picture reachable by hand.
 const ROTATE_STEP = 15;
+
+// The keyframe track that carries a motion path, spelled the way the core spells it.
+const POSITION_TRACK = "position";
+
+// Enough for a smooth curve at any pane size, and few enough that a drag over the picture costs
+// less than a frame of playback.
+const PATH_SAMPLES = 48;
 
 // The ceiling on how finely a track is scanned for a duck or for its pauses. Twenty milliseconds a
 // bucket is what the detector wants; over a long timeline that is more buckets than a peak reader
@@ -946,6 +954,88 @@ export function App(): ReactElement {
     };
   }, [doc, project, playhead, selectedClip]);
 
+  // The line the clip travels, sampled rather than drawn from the keys: what a segment does
+  // between two of them is the core's answer -- an ease, a bezier's handles, a hold -- and a line
+  // through the keys alone would be a second, prettier claim about where the clip goes.
+  //
+  // Three tracks can move a clip and any of them counts: the `position` track a template authors as
+  // a shape, and the `x` and `y` tracks the properties panel writes when either field is put on the
+  // clock. Drawing only the first would mean a path nobody can make from inside the editor.
+  //
+  // Keyed on the clip and not on `staged`: `staged` is resolved at the playhead and so changes with
+  // every frame of playback, and forty-eight lookups a frame is the main thread. The path is the
+  // whole journey, not a moment of it.
+  const motion = useMemo(() => {
+    if (doc === undefined || selectedClip === undefined) return undefined;
+    const tracks = selectedClip.keyframes;
+    const times = [
+      ...new Set(
+        [POSITION_TRACK, "x", "y"].flatMap((name) => (tracks[name] ?? []).map((key) => key.time)),
+      ),
+    ].sort((left, right) => left - right);
+    if (times.length < 2) return undefined;
+
+    const from = selectedClip.start;
+    const span = selectedClip.duration;
+    const path: StagePoint[] = [];
+    for (let step = 0; step <= PATH_SAMPLES; step += 1) {
+      const at = from + Math.round((span * step) / PATH_SAMPLES);
+      const resolved = doc.transformsAt(at).get(selectedClip.id);
+      if (resolved !== undefined) path.push({ x: resolved.x, y: resolved.y });
+    }
+    // A key's place on the picture is where the clip stands at its instant, the same question the
+    // path is sampled from -- so a handle sits on the line rather than beside it.
+    const keys = times.map((time) => {
+      const resolved = doc.transformsAt(time).get(selectedClip.id);
+      const authored = tracks[POSITION_TRACK]?.find((key) => key.time === time);
+      return {
+        time,
+        at: { x: resolved?.x ?? 0, y: resolved?.y ?? 0 },
+        interp: authored?.interp ?? tracks.x?.find((key) => key.time === time)?.interp ?? "linear",
+        asPath: authored !== undefined,
+      };
+    });
+    return { path, keys };
+  }, [doc, selectedClip]);
+
+  const pathKey = useRef<string | undefined>(undefined);
+  const onPathDrag = useCallback(
+    (index: number, at: StagePoint) => {
+      if (selectedClip === undefined || motion === undefined) return;
+      const key = motion.keys[index];
+      if (key === undefined) return;
+      pathKey.current ??= `path-${selectedClip.id}-${index}-${(actionSequence += 1)}`;
+      const target = { kind: "clip" as const, clip: selectedClip.id };
+      // Written back into the track it came from. A key on the `position` track is one vec2; a key
+      // the properties panel wrote is an `x` and a `y`, and moving only one of them would drag the
+      // clip sideways when the pointer went diagonally. `keyframe.add` at an instant a key already
+      // sits at takes its place, so neither route can leave two keys at one time.
+      if (key.asPath) {
+        edit(
+          cmd.keyframeAdd(
+            target,
+            null,
+            POSITION_TRACK,
+            key.time,
+            { kind: "vec2", value: [at.x, at.y] },
+            key.interp,
+          ),
+          pathKey.current,
+        );
+        return;
+      }
+      edit(
+        cmd.keyframeAdd(target, null, "x", key.time, { kind: "float", value: at.x }, key.interp),
+        pathKey.current,
+      );
+      edit(
+        cmd.keyframeAdd(target, null, "y", key.time, { kind: "float", value: at.y }, key.interp),
+        pathKey.current,
+      );
+    },
+    [edit, motion, selectedClip],
+  );
+
   // One drag is one step. The key is minted when the drag begins and dropped when it ends, so a
   // hundred pointer moves coalesce into a single entry in the history -- the same bargain the
   // timeline's own drags make.
@@ -1276,15 +1366,28 @@ export function App(): ReactElement {
                 onResize={repaint}
                 overlay={
                   staged === undefined ? undefined : (
-                    <Stage
-                      frame={{ width: project.settings.width, height: project.settings.height }}
-                      quad={staged.quad}
-                      label={staged.name}
-                      onDrag={onStageDrag}
-                      onDrop={() => {
-                        stageKey.current = undefined;
-                      }}
-                    />
+                    <>
+                      {motion !== undefined && (
+                        <MotionPath
+                          frame={{ width: project.settings.width, height: project.settings.height }}
+                          path={motion.path}
+                          keys={motion.keys.map((key) => key.at)}
+                          onDragKey={onPathDrag}
+                          onDrop={() => {
+                            pathKey.current = undefined;
+                          }}
+                        />
+                      )}
+                      <Stage
+                        frame={{ width: project.settings.width, height: project.settings.height }}
+                        quad={staged.quad}
+                        label={staged.name}
+                        onDrag={onStageDrag}
+                        onDrop={() => {
+                          stageKey.current = undefined;
+                        }}
+                      />
+                    </>
                   )
                 }
               />

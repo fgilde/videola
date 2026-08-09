@@ -181,3 +181,43 @@
 .v-stage__handle:hover {
   fill: var(--v-accent);
 }
+
+/* ------------------------------------------------------------------- the motion path */
+
+/* Under the geometry box in the stack, because a corner handle and a path key can land on the same
+   spot and the box is what a drag most often means. */
+.v-path {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.v-path__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Dashed, so the line reads as scaffolding rather than as something in the picture -- and stroked
+   in screen pixels, or the same path would be four pixels wide on a 4K project and one on a 720p. */
+.v-path__line {
+  fill: none;
+  stroke: var(--v-warning, #f0a030);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.v-path__key {
+  fill: var(--v-accent-contrast);
+  stroke: var(--v-warning, #f0a030);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: fill;
+  cursor: grab;
+}
+
+.v-path__key:hover {
+  fill: var(--v-warning, #f0a030);
+}

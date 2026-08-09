@@ -43,8 +43,9 @@ matrix the compositor hands the GPU — the two are checked against each other o
 uneven scale, rotation, an off-centre anchor and every combination with a crop — so the handles sit
 on the picture rather than near it, and the whole drag is one undo step.
 
-Every parameter can be keyframed, including a clip's position, scale and rotation, and a `position`
-track turns a series of keys into a motion path. Keyframes are edited on a lane on the timeline's own
+Every parameter can be keyframed, including a clip's position, scale and rotation, and a series of
+position keys draws its motion path on the frame — sampled from the core at forty-eight instants, so
+the line is the one the export follows, with a handle on every key to drag. Keyframes are edited on a lane on the timeline's own
 axis. The interpolation happens in the Rust core, so the preview and the export cannot read different
 values.
 

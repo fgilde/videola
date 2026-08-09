@@ -175,6 +175,24 @@ coalescing key is minted on the way down and dropped on the way up, so a hundred
 one <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Every one of them goes through `clip.setTransform`, so the fields
 in the properties panel move with the box and a keyframe set from either side means the same thing.
 
+### The line it travels
+
+Put `Position X` or `Position Y` on the clock at two instants and the trajectory appears on the
+frame as a dashed line, with a handle on every key. Drag a handle and the clip stands somewhere else
+at that instant and nowhere else — which is what makes it a path rather than a second way of setting
+the transform.
+
+The line is **sampled**, not drawn from the keys: forty-eight instants across the clip, each asked of
+the core. What a segment does between two keys is the core's answer — an ease, a bezier's handles, a
+hold — and a line drawn corner to corner would be a second, prettier claim about where the clip goes.
+The handles sit on the line for the same reason: a key's place is where the clip stands at its
+instant, which is the same question the line is sampled from.
+
+Three tracks can move a clip and any of them draws a path: the `position` track, which a template
+authors as one shape, and the `x` and `y` tracks the properties panel writes. A key is written back
+into the track it came from — one `vec2` for the first, an `x` and a `y` for the others, because
+moving only one of a pair would drag the clip sideways when the pointer went diagonally.
+
 ## Locked tracks
 
 The padlock beside a track's name is a promise: nothing on that track moves until it is unlocked

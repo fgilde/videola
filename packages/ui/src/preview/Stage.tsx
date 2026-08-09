@@ -1,11 +1,9 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
+import { stagePoint, stageScale, stageViewBox, type StagePoint } from "./stageGeometry";
 
-export interface StagePoint {
-  x: number;
-  y: number;
-}
+export type { StagePoint } from "./stageGeometry";
 
 /** Which part of the box was taken hold of. A number is a corner, clockwise from the top left. */
 export type StageGrab = "move" | "rotate" | 0 | 1 | 2 | 3;
@@ -51,10 +49,7 @@ export function Stage({ frame, quad, label, onDrag, onDrop }: StageProps): React
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
-    const measure = (): void => {
-      const width = host.clientWidth;
-      setPerPixel(width > 0 ? frame.width / width : 1);
-    };
+    const measure = (): void => setPerPixel(stageScale(host.clientWidth, frame));
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -63,12 +58,7 @@ export function Stage({ frame, quad, label, onDrag, onDrop }: StageProps): React
   function projectPoint(event: PointerEvent<Element>): StagePoint {
     const host = hostRef.current;
     if (host === null) return { x: 0, y: 0 };
-    const box = host.getBoundingClientRect();
-    if (box.width === 0 || box.height === 0) return { x: 0, y: 0 };
-    return {
-      x: ((event.clientX - box.left) / box.width) * frame.width - frame.width / 2,
-      y: ((event.clientY - box.top) / box.height) * frame.height - frame.height / 2,
-    };
+    return stagePoint(host.getBoundingClientRect(), frame, event.clientX, event.clientY);
   }
 
   function grab(part: StageGrab) {
@@ -119,7 +109,7 @@ export function Stage({ frame, quad, label, onDrag, onDrop }: StageProps): React
     <div className="v-stage" ref={hostRef} data-testid="stage">
       <svg
         className="v-stage__svg"
-        viewBox={`${-frame.width / 2} ${-frame.height / 2} ${frame.width} ${frame.height}`}
+        viewBox={stageViewBox(frame)}
         preserveAspectRatio="none"
         role="group"
         aria-label={t("stage.label", { name: label })}

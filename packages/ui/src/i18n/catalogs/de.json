@@ -69,6 +69,8 @@
   "transport.stepBack": "Ein Bild zurück",
   "transport.stepForward": "Ein Bild vor",
   "transport.position": "Position",
+  "path.label": "Bewegungspfad",
+  "path.key": "Pfadpunkt {index}",
   "stage.label": "Geometrie von {name}",
   "stage.move": "Bild verschieben",
   "stage.rotate": "Bild drehen",

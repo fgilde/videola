@@ -615,6 +615,39 @@ async function announce() {
     await sleep(300);
     checkNear("and the whole drag is one step to undo", Number(rowSlider("Position X").value),
       before, 1);
+
+    // And the line the clip travels, once there is one. Two keys on Position X at two instants is
+    // a clip that moves, which is the whole condition for a path -- and the path is sampled from
+    // the core, so what is drawn is what the export will do.
+    check("a clip that stands still has no path drawn on it", q('[data-testid="motion-path"]'), null);
+    toStart();
+    button("Keyframe für Position X (px) am Playhead").click();
+    await sleep(200);
+    forward(15);
+    dragSlider(rowSlider("Position X"), [40, 90, 140]);
+    const path = await until("the motion path", () => q(".v-path__line"));
+    checkAtLeast("the line is sampled rather than drawn corner to corner",
+      path.getAttribute("points").split(" ").length, 20);
+    check("with a handle on every key", all("[data-path-key]").length, 2);
+
+    // Dragging a key is not driven here. Synthesised on this handle it takes the page down with
+    // it -- reproducibly, and not through anything the checks can see: no banner, no console, and
+    // no report. What a drag reports is measured in MotionPath.test.tsx against a stubbed box, and
+    // what it writes is one `keyframe.add` per key at the instant that key already sits at. Left
+    // as an open question in STATE.md rather than as a check that hangs the run.
+
+    // Put the timeline back the way the rest of the run expects to find it: no keys, no path, and
+    // the playhead at the start. A check that leaves its own state behind is a check that breaks
+    // the next one.
+    // Two steps, because that is what was made: putting the field on the clock, and the drag that
+    // wrote the second key. A third undo would reach back into work this check did not do.
+    for (let step = 0; step < 2; step += 1) {
+      button("Rückgängig").click();
+      await sleep(200);
+    }
+    check("and undoing takes the path with it", q(".v-path__line"), null);
+    toStart();
+    await sleep(200);
   }
 
   async function colour() {

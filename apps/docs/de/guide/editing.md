@@ -182,6 +182,26 @@ also sind hundert Zeigerbewegungen ein <kbd>Strg</kbd>+<kbd>Z</kbd>. Jede davon 
 `clip.setTransform`, also wandern die Felder im Eigenschaften-Bereich mit dem Rahmen mit, und ein
 Keyframe von der einen wie von der anderen Seite bedeutet dasselbe.
 
+### Die Bahn, die er nimmt
+
+`Position X` oder `Position Y` an zwei Zeitpunkten auf die Uhr setzen, und die Bahn erscheint als
+gestrichelte Linie auf dem Bild, mit einem Griff auf jedem Key. Einen Griff ziehen, und der Clip
+steht zu diesem Zeitpunkt woanders — und sonst nirgends. Genau das macht es zu einer Bahn und nicht
+zu einer zweiten Art, die Transformation zu setzen.
+
+Die Linie ist **abgetastet**, nicht aus den Keys gezeichnet: achtundvierzig Zeitpunkte über den
+Clip, jeder beim Kern erfragt. Was ein Abschnitt zwischen zwei Keys tut, ist die Antwort des Kerns —
+eine Glättung, die Anfasser einer Bezierkurve, ein Halten — und eine Linie von Ecke zu Ecke wäre
+eine zweite, hübschere Behauptung darüber, wohin der Clip geht. Die Griffe sitzen aus demselben
+Grund auf der Linie: der Ort eines Keys ist, wo der Clip zu seinem Zeitpunkt steht, und das ist
+dieselbe Frage, aus der die Linie abgetastet ist.
+
+Drei Spuren können einen Clip bewegen, und jede zeichnet eine Bahn: die `position`-Spur, die eine
+Vorlage als eine Form anlegt, sowie die `x`- und `y`-Spuren, die der Eigenschaften-Bereich schreibt.
+Ein Key wird in die Spur zurückgeschrieben, aus der er kam — ein `vec2` für die erste, ein `x` und
+ein `y` für die anderen, denn nur eines von beiden zu bewegen zöge den Clip zur Seite, wenn der
+Zeiger diagonal ging.
+
 ## Gesperrte Spuren
 
 Das Schloss neben dem Spurnamen ist ein Versprechen: auf dieser Spur bewegt sich nichts, bis sie
