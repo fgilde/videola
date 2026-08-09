@@ -1,8 +1,9 @@
 # Effects and transitions
 
-**Ten effects, five transitions, two masks and a text engine.** Every colour on this page was
-measured against a real driver rather than asserted — `pnpm --filter @videola/engine test:gpu` runs
-258 pixel checks through headless Chrome, and each claim below is one of them.
+**Ten effects, seven transitions, two masks and a text engine — chosen from a browser that shows
+you each one at work.** Every colour on this page was measured against a real driver rather than
+asserted: `pnpm --filter @videola/engine test:gpu` runs 303 pixel checks through headless Chrome, and
+each claim below is one of them.
 
 ## An effect is a manifest and a fragment shader
 
@@ -12,8 +13,11 @@ One file per effect under `packages/engine/src/effects`, exporting a manifest:
 export const contrast: EffectManifest = {
   id: "contrast",
   name: { de: "Kontrast", en: "Contrast" },
+  blurb: { de: "Spreizt oder staucht …", en: "Spreads or flattens …" },
   category: "color",
   inputs: 1,
+  // What the browser's tile is drawn with -- never the defaults, see below.
+  preview: { amount: 2.4 },
   params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
   fragmentSource: /* GLSL */,
 };
@@ -41,7 +45,8 @@ What a fragment source may rely on:
 | `in vec2 v_uv` | the fragment's place on the frame, **y running up the picture** |
 | `uniform sampler2D u_source` | the chain so far, premultiplied |
 | `uniform sampler2D u_second` | the second input, premultiplied, only when `inputs` is 2 |
-| `uniform float u_<key>` | one per declared parameter |
+| `uniform float u_<key>` | one per declared float parameter |
+| `uniform vec4 u_<key>` | one per declared colour parameter, **premultiplied** |
 | `uniform float u_pass` | which sweep this is, only when `passes` is 2 |
 | `textureSize(u_source, 0)` | the texel size, for any kernel that needs one |
 
@@ -55,6 +60,35 @@ Every symmetric effect hides this. It surfaced when the wipe was first pointed a
 from the bottom. An effect that cares about direction converts rather than assuming: a heading meant
 to read clockwise on screen, the same convention as the transform's rotation, is
 `vec2(cos a, -sin a)` inside a pass.
+
+### A parameter is a float or a colour
+
+Until this milestone every manifest carried floats and nothing else, and that was the wall a LUT ran
+into. `ParamValue` in the Rust core has carried `Color`, `Int`, `Bool`, `Vec2` and `Choice` since the
+model was written; what was missing was anything between the project file and the uniform that could
+say which one a parameter is.
+
+A manifest parameter now declares its `kind`. It is optional and defaults to `"float"`, so every
+manifest written before there was a second kind still reads -- including the audio ones, which have
+an `AudioParam` behind them and can never be anything else.
+
+```ts
+{ kind: "color", key: "colour", name: { de: "Farbe", en: "Colour" }, default: [0, 0, 0, 1] }
+```
+
+A colour is authored **straight**, each channel 0 to 1, and premultiplied on the way to the uniform
+-- the same seam the project background is read across, for the same reason. `clampColor` is the
+guard, and it enforces the contract the whole pipeline rests on: no channel above its own alpha. The
+check that catches a mistake there does not feed it 1.4, because an RGBA8 target clamps that on its
+own and proves nothing. It feeds a channel *above alpha and below one*, which is where a texel stops
+being a legal premultiplied colour and nothing downstream notices.
+
+In the surface a colour is the browser's own picker. `input[type=color]` brings an eyedropper, a
+wheel, a recent list and the system dialogue a person already knows; what a custom one would add is a
+second set of bugs.
+
+`ponytail:` the picker has no alpha, so it edits rgb and carries whatever alpha the model held -- and
+a colour parameter gets no keyframe switch, although `ParamValue::lerp` already interpolates one.
 
 ## Two passes for a separable kernel
 
@@ -218,6 +252,54 @@ but close in time pull the curve into an overshoot — it leans away from a comi
 turning into it. Centripetal Catmull-Rom takes the same four points and divides by the chord
 lengths; that is the swap to make the day a path visibly loops past a key.
 
+## The browser, and where its pictures come from
+
+Thirteen names in a dropdown is a list. What replaced it is a shelf: grouped by category, searchable
+over both languages and over the sentence under each name, and **every entry shows what it does**.
+
+A tile is not an illustration of the effect. It is the effect's own fragment shader, over a real
+frame, through the same screen quad and the same uniform convention the timeline uses --
+`EffectPreview` in `packages/engine/src/render/preview.ts`, which shares `SCREEN_VERTEX_SOURCE` with
+the compositor so that `v_uv` cannot come to run one way in the editor and the other in the tile that
+claims to show it.
+
+**The frame is the one the editor is showing.** The preview canvas is created readable and already
+holds the composited picture at the playhead, so the source for the whole grid costs one `drawImage`
+into a 192x108 scratch and no decoder at all. That is the decision worth stating plainly, because the
+obvious alternative is one decode per tile, and twenty decodes to fill one dialog is what makes a
+library feel broken. The passes themselves are not the expensive part -- fifteen tiles at 192x108 are
+three hundred thousand fragments between them, a seventh of a single 1080p frame -- which is why
+nothing here is loaded lazily and nothing is cached between openings. A cache would be showing the
+picture from wherever the playhead used to be.
+
+Where the timeline has no picture to give -- an empty project, or a playhead in a gap -- the tiles
+fall back to a **generated reference frame**: a hue sweep across, a fall in brightness down, hard
+vertical bars for the two kernels and a full green for the chroma key. It is still the effect's own
+output; only the material is ours. It is also what the pixel checks measure against, because a frame
+chosen to give every effect something to work on is the only one where a tile that shows nothing is
+the effect's fault rather than the footage's.
+
+Two consequences of drawing from the real frame, both honest and both worth knowing:
+
+- **The chroma key's tile does nothing on material that was never shot against a screen.** That is
+  what the effect would do to your footage, and a tile that pretended otherwise would be the promise
+  without the cover.
+- **Brightness and contrast look alike on a saturated test pattern**, because bars already at full
+  cannot get brighter. On real material they do not.
+
+### A manifest names its own telling setting
+
+Drawing a tile from the parameter defaults would have been the trap: a gain of 1 and a warmth of 0
+are the untouched picture, so half the shelf would have promised an effect and shown one that does
+nothing. Each manifest therefore carries a `preview` -- the one setting that makes its own point.
+Saturation's is nought rather than a boost, because black and white is the setting nobody mistakes
+for the original. A dip's is **not** the midpoint, because the middle of a dip is a flat rectangle of
+the colour it dips through and says nothing about the effect that produced it.
+
+The pixel check behind that is the one this whole feature rests on: every manifest's tile has to
+differ from the picture it was drawn from by more than eight levels, averaged over every channel of
+every pixel. A tile that came back is worth nothing; a tile that came back *changed* is the claim.
+
 ## Transitions
 
 A transition is an effect with two inputs, not a second subsystem. `u_second` is the picture the
@@ -228,9 +310,20 @@ effects, and `progress` runs from nothing to everything across the transition's 
 |---|---|---|
 | Cross dissolve | — | a plain mix of the two |
 | Wipe | `angle` 0–360, `softness` 0–1 | an edge travels across the frame |
-| Slide | `angle` 0–360 | the incoming clip pushes the outgoing one out |
+| Slide | `angle` 0–360, `push` 0–1 | the incoming clip comes in; `push` is how much of the outgoing one it shoves out |
+| Iris | `centerX`, `centerY`, `softness` | a circle opens onto the incoming clip |
 | Zoom | `from` 0.05–4 | the incoming clip grows out of the middle |
-| Dip to colour | `level` 0–1 | out through a flat colour and back in |
+| Blur dissolve | `amount` 0–48 | a dissolve that goes soft in the middle and sharp again at both ends |
+| Dip to colour | `colour` | out through a colour of your choosing and back in |
+
+A slide at `push` 1 shoves the outgoing picture out of the frame; at 0 it stands still and the
+incoming one slides over it. Two shaders whose only difference is a multiplication by zero is two
+shaders too many.
+
+An iris measures its reach to the corner that is actually farthest from its centre, in a space
+corrected for the frame's aspect. A fixed diagonal is right for a centred circle on a square frame
+and wrong everywhere else — on 16:9, or from a centre pushed into a corner, it ends the transition
+with wedges of the outgoing clip still standing.
 
 Angles are degrees clockwise on screen: 0 comes in from the left, 90 from the top.
 
@@ -341,12 +434,17 @@ project actually carries an effect.
 - **One mask of each shape per clip.** `effect.add` treats a repeated type as a no-op, so a second
   rectangle needs the chain keyed by effect id rather than by effect type.
 - **No editor for a motion path yet.** The core resolves the curve and the renderer draws it, but
-  the points are placed by command rather than dragged on the preview — the inspector has no
-  `vec2` row, because the effect manifest has no parameter type beyond a float.
+  the points are placed by command rather than dragged on the preview. The manifest now has a
+  parameter kind, so a `vec2` row is a smaller step than it was; what a path really wants is a handle
+  on the picture rather than two more numbers in a panel.
 - **Motion blur** needs more than one moment per output frame, which means more than one decoded
   frame per output frame. That is a change to the gather, not to a shader.
-- **LUT import** needs a file import, a 3D texture and a parameter that is not a float. The manifest
-  has no `type` field yet; that is where it would go.
+- **LUT import** is still missing, and the parameter kind is no longer what stands in the way — a
+  manifest parameter now declares one, and a colour travels the whole path from the project file to
+  a `vec4` uniform. What is left is the other three quarters of it: a `.cube` parser, somewhere to
+  keep a table far too large to sit in a project file, and a third texture unit bound through the
+  compositor, the preview and the export worker alike. That is a change to the frame graph rather
+  than to a manifest.
 - **Shape and countdown generators paint nothing.** They are in the model, they are not in the menu,
   and a clip whose generator this renderer cannot paint is dropped from the draw list rather than
   drawn as an empty rectangle.
@@ -365,5 +463,6 @@ project actually carries an effect.
 ## Where it is measured
 
 `pnpm --filter @videola/engine test:gpu` runs the whole compositor against headless Chrome with
-SwiftShader and checks real pixels, including every claim on this page about a colour. No Playwright,
+SwiftShader and checks real pixels, including every claim on this page about a colour and every tile
+in the browser. No Playwright,
 no browser download; set `CHROME_PATH` if the executable is somewhere unusual.
