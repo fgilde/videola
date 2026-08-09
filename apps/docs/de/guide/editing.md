@@ -386,13 +386,48 @@ Zeilen, die ein Bewegungspfad übernommen hat, sind durchgestrichen und mit *vom
 gekennzeichnet. Versteckt werden sie nicht: die Keyframes stehen weiterhin in der Datei, und die
 Spur ist dazu da, zu zeigen, was gespeichert ist.
 
-**Was fehlt, ist ein Kurveneditor.** Das Modell trägt `handle_in` und `handle_out` je Keyframe, und
-`Interp::Bezier` schickt sie durch eine kubische Bezier — aber kein Befehl setzt sie, und hier kann
-niemand einen Anfasser ziehen. Die drei benannten Voreinstellungen sind alles, was diese Oberfläche
-schreibt. Ein Projekt, das mit Anfassern ankommt, behält sie und behält seine Form; es lässt sich
-hier nur nicht umformen. Die Abschnittsformen sagen, welcher Verlauf einen Abstand steuert; sie
-zeichnen die Kurve nicht, und sie zu zeichnen hieße, den Kern nach Abtastwerten zu fragen statt sie
-zu rechnen — aus demselben Grund, aus dem die Zeilen aufgelöste Werte lesen.
+### Das Kurvenfeld
+
+Neben dem Verlauf trägt die Leiste ein Klappfeld **Kurve**. Es öffnet über den Spuren, so wie die
+Markerliste es tut, und zeigt den einen Abschnitt, der beim gewählten Keyframe beginnt: ein
+quadratisches Feld, in dem der Weg von 0 beim linken Schlüssel bis 1 beim rechten aufgetragen ist,
+mit der gleichmäßigen Diagonalen gestrichelt dahinter, damit die Form als Abweichung von ihr lesbar
+wird — und, sobald der Schlüssel auf `bezier` steht, den beiden Anfassern, die sie formen, jeder an
+das Ende des Abschnitts angebunden, das er steuert.
+
+**Warum nicht in der Spur.** Die Keyframe-Spur fährt auf der Zeitachse der Zeitleiste; genau das
+lässt einen Keyframe mit dem Lineal und dem Abspielkopf fluchten, ohne dass sich irgendetwas
+darüber einigen müsste, wo *jetzt* ist. Eine Kurve braucht eine Wertachse, die die Spur nicht hat,
+und eine 26 px hohe Zeile (44 px am Finger) hat keinen Platz dafür. Sie braucht auch Platz in die
+Breite: ein Abschnitt ist meist der Bruchteil einer Sekunde, bei Normalzoom also rund fünfzig Pixel
+— weniger als ein Fingerziel, ein Anfasser darauf wäre ohne Hineinzoomen der ganzen Zeitleiste
+nicht zu ziehen. Die x-Achse des Feldes ist auch gar keine zweite Zeitachse: sie ist die eigene
+0..1 des Abschnitts, das Einheitsquadrat, in dem ein Anfasserpaar ohnehin gespeichert wird — genau
+so, wie CSS `cubic-bezier` es schreibt.
+
+**Die Linie kommt aus dem Kern.** Das Feld fragt `keyframe::segment_shape` nach seinen Abtastwerten
+— dieselbe Funktion, die `interpolate` auf die Werte anwendet. Ein zweites Easing in TypeScript
+bestünde jede Prüfung an den Enden und wäre in der Mitte falsch, und eine Kurve, die anders
+aussieht, als sie wirkt, ist der eine Fehler, den ein Kurveneditor nicht haben darf.
+
+Das Ziehen eines Anfassers schickt `keyframe.setHandles`, eine Sendung je Zeigerbewegung unter einem
+Coalesce-Key: ein Zug ist ein Undo-Schritt. Jede Schreibung trägt das ganze Paar, das der Keyframe
+hält — nur den einen unter der Hand zu senden würde den anderen auf die Voreinstellung
+zurücksetzen. `handle_out` gehört zum gewählten Schlüssel, `handle_in` zum nächsten, deshalb hat der
+letzte Keyframe einer Spur kein eigenes Feld — sein ankommender Anfasser wird über das Feld des
+Schlüssels davor erreicht. Die drei Voreinstellungen bleiben ein Klick; die Kurve ist der vierte
+Eintrag daneben, kein Modus, der sie ablöst.
+
+Zwei Regeln zeigt das Feld, statt sie nur zu befolgen. Eine Zeile, die ein Bewegungspfad übernommen
+hat, sagt das auch im Feld und nicht nur in der Zeilenüberschrift — die Kurve ist echt und ändert
+trotzdem kein Bild. Und einer **Ratenspur wird `bezier` gar nicht erst angeboten**:
+`keyframe::integrate` hat unter einer Bezier keine exakte Fläche, mit ihr fiele die Additivität, auf
+der `consumed_source` steht, und der Kern lehnt die Änderung ab. Ein Eintrag, der nur eine Absage
+erzeugen kann, ist schlechter als ein Eintrag, den es nicht gibt.
+
+Ein Anfasser außerhalb des Einheitsquadrats — das Überschwingen, aus dem ein Abprall gemacht ist —
+wird korrekt gespeichert, geladen und animiert, aber das Feld heftet ihn an seinen Rand, und der
+erste Zug zieht ihn flach.
 
 ## Geschwindigkeitsrampen
 

@@ -257,6 +257,23 @@ pub enum Command {
         time: Time,
         interp: Interp,
     },
+    /// Set the bezier handles of a keyframe, which is what a curve editor drags. `handleOut` shapes
+    /// the travel away from this key and `handleIn` the travel arriving at it, both as a point in
+    /// the segment's own unit square — the same pair CSS `cubic-bezier` takes. `null` clears one
+    /// back to the default ease-in-out shape.
+    ///
+    /// Only read while the neighbouring key's `interp` is `bezier`; setting a pair on a `linear`
+    /// key stores a shape that takes effect the moment somebody switches it over, which is what
+    /// lets an editor prepare a curve and a preset stay a single click.
+    #[serde(rename = "keyframe.setHandles")]
+    KeyframeSetHandles {
+        target: EffectTarget,
+        effect_type: Option<String>,
+        key: String,
+        time: Time,
+        handle_in: Option<[f32; 2]>,
+        handle_out: Option<[f32; 2]>,
+    },
 
     /// Put a marker on the timeline at `time`.
     #[serde(rename = "marker.add")]
@@ -431,6 +448,22 @@ impl Command {
                 time,
                 interp,
             } => clip::set_keyframe_interp(target, at, effect_type.as_deref(), key, *time, *interp),
+            Self::KeyframeSetHandles {
+                target: at,
+                effect_type,
+                key,
+                time,
+                handle_in,
+                handle_out,
+            } => clip::set_keyframe_handles(
+                target,
+                at,
+                effect_type.as_deref(),
+                key,
+                *time,
+                *handle_in,
+                *handle_out,
+            ),
             Self::MarkerAdd { time, label } => marker::add(target, *time, label),
             Self::MarkerRemove { marker } => marker::remove(target, marker),
             Self::MarkerRename { marker, label } => marker::rename(target, marker, label),
@@ -482,6 +515,7 @@ impl Command {
             Self::KeyframeRemove { .. } => LABEL_KEYFRAME_REMOVE,
             Self::KeyframeMove { .. } => LABEL_KEYFRAME_MOVE,
             Self::KeyframeSetInterp { .. } => LABEL_KEYFRAME_SET_INTERP,
+            Self::KeyframeSetHandles { .. } => LABEL_KEYFRAME_SET_HANDLES,
             Self::MarkerAdd { .. } => LABEL_MARKER_ADD,
             Self::MarkerRemove { .. } => LABEL_MARKER_REMOVE,
             Self::MarkerRename { .. } => LABEL_MARKER_RENAME,
@@ -530,6 +564,7 @@ pub const LABEL_KEYFRAME_ADD: &str = "cmd.keyframe.add";
 pub const LABEL_KEYFRAME_REMOVE: &str = "cmd.keyframe.remove";
 pub const LABEL_KEYFRAME_MOVE: &str = "cmd.keyframe.move";
 pub const LABEL_KEYFRAME_SET_INTERP: &str = "cmd.keyframe.setInterp";
+pub const LABEL_KEYFRAME_SET_HANDLES: &str = "cmd.keyframe.setHandles";
 pub const LABEL_MARKER_ADD: &str = "cmd.marker.add";
 pub const LABEL_MARKER_REMOVE: &str = "cmd.marker.remove";
 pub const LABEL_MARKER_RENAME: &str = "cmd.marker.rename";
@@ -576,6 +611,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_KEYFRAME_REMOVE,
     LABEL_KEYFRAME_MOVE,
     LABEL_KEYFRAME_SET_INTERP,
+    LABEL_KEYFRAME_SET_HANDLES,
     LABEL_MARKER_ADD,
     LABEL_MARKER_REMOVE,
     LABEL_MARKER_RENAME,

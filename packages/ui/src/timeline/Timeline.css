@@ -367,6 +367,75 @@
   text-overflow: ellipsis;
 }
 
+/* ------------------------------------------------------------------- the curve field */
+
+/* Closed by default and opening over the tracks, the same shape the marker list has and for the
+   same reason: the timeline is the shortest panel on this screen, and a square field nobody has
+   opened must not take a row away from it. Laid out in the bar as a plain control. */
+.v-keycurve__disclosure {
+  position: relative;
+}
+
+.v-keycurve__summary {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--v-space-3);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  background: var(--v-surface);
+  color: var(--v-text);
+  font-size: var(--v-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.v-keycurve__summary::-webkit-details-marker {
+  display: none;
+}
+
+.v-keycurve__summary:hover {
+  background: var(--v-surface-hover);
+}
+
+/* Smaller than the inspector's tone curve, and by overriding the one token that rule already reads
+   rather than by writing a second rule of its own. Two hundred pixels still leaves a 44 px handle
+   a fifth of the field to travel in, and a panel any larger covers the tracks it floats over. */
+.v-keycurve {
+  --v-control-max: 100%;
+  /* The panel carries the width and the field fills it, because an absolutely positioned box has
+     no width of its own to give a percentage meaning. Never wider than the screen it opens on. */
+  inline-size: min(216px, 90vw);
+  position: absolute;
+  z-index: 20;
+  inset-block-start: calc(100% + var(--v-space-1));
+  inset-inline-start: 0;
+  padding: var(--v-space-2);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  box-shadow: var(--v-shadow);
+}
+
+/* Each handle tied to the key it belongs to, so which end of the segment it governs is read rather
+   than guessed. Fainter than the curve: it is scaffolding, not the shape. */
+.v-keycurve__tether {
+  stroke: var(--v-accent);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.v-keycurve__hint {
+  max-width: var(--v-control-max);
+  margin: var(--v-space-1) 0 0;
+  color: var(--v-text-muted);
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading);
+}
+
 /* Inside .v-timeline__content, below the tracks: one x axis for the whole surface, so the time a
    keyframe is drawn at is the time the ruler and the playhead are drawn at -- not a second
    mapping that agrees with the first until somebody zooms. */

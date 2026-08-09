@@ -36,6 +36,7 @@ export const COMMAND_LABELS = [
   "cmd.keyframe.remove",
   "cmd.keyframe.move",
   "cmd.keyframe.setInterp",
+  "cmd.keyframe.setHandles",
   "cmd.marker.add",
   "cmd.marker.remove",
   "cmd.marker.rename",

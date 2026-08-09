@@ -105,6 +105,15 @@ function draw(scene, playhead, dispatch) {
       project: scene,
       playhead: playhead || 0,
       effects: [BRIGHTNESS],
+      // A fixture, and deliberately not a claim about any shape. There is no wasm on a file:// page
+      // and every check in this file is about boxes on the page. That the plotted line really is
+      // the core's own easing is proven where the core actually runs: keyframeEditing.test.tsx
+      // loads the module and reads the path back, and gpu/harness.html measures it at pixels.
+      curveShape: function (left, right, count) {
+        const shape = [];
+        for (let i = 0; i < count; i += 1) shape.push(i / (count - 1));
+        return shape;
+      },
       dispatch: dispatch || function (command, key) { sent.push({ command: command, key: key }); },
       onSeek: function (time) { seeks.push(time); },
     })));
@@ -532,6 +541,90 @@ test("a keyframe drag is one undo step", function () {
     moves.every(function (entry) { return entry.key === moves[0].key; }), true);
   check("and it addresses the clip's own transform",
     moves[0] === undefined ? "nothing sent" : moves[0].command.effectType, null);
+});
+
+// ---------------------------------------------------------------- the curve field as geometry
+
+// The same clip, with the first key set to the one interpolation that carries a shape to drag.
+function curvedClip() {
+  const only = keyframedClip();
+  only.keyframes.opacity[0].interp = "bezier";
+  return only;
+}
+
+// Picked, then opened: the field lives behind a disclosure so a curve nobody asked for takes no
+// row of the shortest panel on the screen.
+function openCurve() {
+  draw(project([track("trk_1", [curvedClip()])]));
+  pointer("pointerdown", q("[data-clip-id]"), atSurface(200, 90));
+  pointer("pointerup", surface(), atSurface(200, 90));
+  const key = all(".v-keylane__key").filter(function (node) {
+    return node.dataset.keyframeTime === String(1 * SECOND);
+  })[0];
+  pointer("pointerdown", key, atSurface(10, 10));
+  pointer("pointerup", surface(), atSurface(10, 10));
+  // Through the summary, the way a person opens one: the element's own state is overwritten by the
+  // next render, and every pointer move of a handle drag is one.
+  T.flushSync(function () { q(".v-keycurve__summary").click(); });
+  reset();
+  return q("[data-testid='keyframe-curve-disclosure']");
+}
+
+test("the curve field sits beside the picked keyframe, not on the timeline's axis", function () {
+  openCurve();
+  const field = q("[data-testid='keyframe-curve']");
+  check("the field is there once a key is picked and the disclosure opened", field !== null, true);
+  check("and outside the scrolling area, like the rest of the bar",
+    surface().contains(field), false);
+  check("and outside the lane, which has no value axis to put it on",
+    q(".v-keylane").contains(field), false);
+
+  // A curve is read as a square: the same span across as up, so a shape is not stretched into
+  // looking gentler than it is.
+  const box = q(".v-curve").getBoundingClientRect();
+  check("the field is square", Math.round(box.width - box.height), 0);
+  checkAtLeast("and big enough to aim inside", Math.round(box.width), 120);
+
+  // It must not push the tracks off the screen: the picture is the largest zone here.
+  checkAtLeast("the timeline still has room for its tracks below it",
+    Math.round(q(".v-timeline__body").getBoundingClientRect().height), 100);
+});
+
+test("curve handle touch targets", function () {
+  openCurve();
+  const handle = q("[data-curve-handle='out']").getBoundingClientRect();
+  if (POINTER === "fine") {
+    checkAtMost("a mouse gets a compact handle", Math.round(handle.width), 32);
+  } else {
+    // A handle a finger cannot hit is not a handle. Both directions, because a curve handle sits
+    // in open field with nothing wider around it to aim at instead.
+    checkAtLeast("a finger gets a whole touch target across", Math.round(handle.width), 44);
+    checkAtLeast("and the same up and down", Math.round(handle.height), 44);
+  }
+});
+
+test("a curve drag is one undo step", function () {
+  openCurve();
+  const handle = q("[data-curve-handle='out']");
+  const box = handle.getBoundingClientRect();
+  const from = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+  pointer("pointerdown", handle, from);
+  for (let i = 1; i <= 20; i += 1) {
+    pointer("pointermove", handle, { clientX: from.clientX + i * 2, clientY: from.clientY - i });
+  }
+  pointer("pointerup", handle, { clientX: from.clientX + 40, clientY: from.clientY - 20 });
+
+  const writes = sent.filter(function (entry) {
+    return entry.command.type === "keyframe.setHandles";
+  });
+  checkAtLeast("the drag wrote a handle", writes.length, 1);
+  check("every step under one coalesce key",
+    writes.every(function (entry) { return entry.key === writes[0].key; }), true);
+  // Both halves of the pair every time: sending only the one under the hand clears the other.
+  check("and each write carries the whole pair the keyframe holds",
+    writes.every(function (entry) {
+      return "handleIn" in entry.command && "handleOut" in entry.command;
+    }), true);
 });
 
 // ---------------------------------------------------------------- the inspector as geometry

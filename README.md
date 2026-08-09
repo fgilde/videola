@@ -100,9 +100,10 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No motion blur, no noise reduction, no beat detection. No curve editor for keyframe
-easing: a project carrying bezier handles keeps them and keeps its shape, but nothing here can drag
-one. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent: the
+No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
+handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
+to its edge, and a curve cannot be copied from one parameter to another. `track.locked` is not
+enforced anywhere. The magnetic timeline is deliberately absent: the
 useful half is ripple delete and trim, and the rest would change the model's overlap rule that
 transitions, layering and roll/slide all depend on. FFmpeg is not bundled; the export uses the
 browser's own encoders.

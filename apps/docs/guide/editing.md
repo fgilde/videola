@@ -368,12 +368,43 @@ removes that keyframe rather than the clip under it.
 Rows a motion path has taken over are struck through and marked *overridden by the path*. They are
 not hidden: the keyframes are still in the file, and the lane exists to show what is stored.
 
-**What is missing is a curve editor.** The model carries `handle_in` and `handle_out` per keyframe
-and `Interp::Bezier` feeds them through a cubic bezier, but no command sets them and nothing here
-can drag one — the three named presets are all this surface authors. A project that arrives with
-handles keeps them and keeps its shape; it just cannot be reshaped here. The segment styles say
-which interpolation times a gap; they do not draw the curve, and drawing one would mean asking the
-core for samples rather than computing them, for the same reason the rows read resolved values.
+### The curve field
+
+Beside the interpolation, the bar carries a **Curve** disclosure. It opens over the tracks the way
+the marker list does, and it shows the one segment that starts at the picked keyframe: a square
+field with the travel plotted from 0 at the left key to 1 at the right one, the even-paced diagonal
+dashed behind it so the shape reads as a departure from it, and — once the key is set to
+`bezier` — the two handles that shape it, each tethered to the end of the segment it governs.
+
+**Why it is not in the lane.** The lane rides the timeline's own time axis, which is what makes a
+keyframe line up with the ruler and the playhead without anything having to agree on where *now*
+is. A curve needs a value axis the lane has not got, and a 26 px row (44 px under a finger) has
+nowhere to put one. It also needs room across: a segment is usually a fraction of a second, which
+at the default zoom is about fifty pixels — less than one touch target, so a handle on the
+timeline's axis could not be dragged without zooming the whole timeline to it. The field's x is not
+a second time axis at all: it is the segment's own 0..1, the unit square a handle pair is already
+stored in, exactly as CSS `cubic-bezier` spells it.
+
+**The line comes out of the core.** The field asks `keyframe::segment_shape` for its samples —
+the same function `interpolate` applies to move the picture. Easing written again in TypeScript
+would pass every end-point check ever written and be wrong in the middle, and a curve that looks
+like one thing while animating like another is the one fault a curve editor must not have.
+
+Dragging a handle sends `keyframe.setHandles`, one dispatch per pointer move under one coalesce key,
+so one drag is one undo step. Each write carries the whole pair the keyframe holds: sending only the
+one under the hand would clear the other back to the default. `handle_out` belongs to the picked key
+and `handle_in` to the key after it, so the last keyframe of a track has no field of its own — its
+arriving handle is reached from the field of the key before it. The three presets stay a single
+click; the curve is the fourth entry beside them, not a mode that replaces them.
+
+Two rules the field shows rather than merely obeys. A row a motion path has taken over says so
+inside the field as well as in the lane header — the curve is real, and it changes no picture. And
+a **rate track is never offered `bezier` at all**: `keyframe::integrate` has no exact area under a
+bezier, the additivity `consumed_source` rests on would go with it, and the core refuses the change.
+An entry that could only ever produce a refusal is worse than an entry that is not there.
+
+A handle beyond the unit square — the overshoot a bounce is made of — is stored, loaded and
+animated correctly, but the field pins it to its edge and the first drag flattens it.
 
 ## Speed ramps
 

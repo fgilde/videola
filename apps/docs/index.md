@@ -103,11 +103,12 @@ features:
 
 ## What is not there yet
 
-No motion blur, no noise reduction, no beat detection, and no curve editor for keyframe easing — a
-project carrying bezier handles keeps them and keeps its shape, but nothing here can drag one. No
-on-canvas editor for a motion path. `track.locked` is not enforced anywhere. The magnetic timeline is
-deliberately absent, and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the
-export uses the browser's own encoders.
+No motion blur, no noise reduction, no beat detection. Keyframe easing has a curve field with
+handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
+to its edge, and a curve cannot be copied from one parameter to another. No on-canvas editor for a
+motion path. `track.locked` is not enforced anywhere. The magnetic timeline is deliberately absent,
+and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
+browser's own encoders.
 
 The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
 design are built and which are planned.

@@ -2,6 +2,7 @@ import type {
   ClipId,
   Dispatch,
   DispatchResult,
+  Keyframe,
   LoadWarning,
   MediaKind,
   ParamValue,
@@ -47,8 +48,22 @@ export type EffectParams = (at: Time) => EffectParamSnapshot;
 export type TransformSnapshot = ReadonlyMap<string, Transform>;
 export type Transforms = (at: Time) => TransformSnapshot;
 
+// The shape of one keyframe segment: `samples` numbers from the left key to the right one, each the
+// fraction of the way the track has travelled there. 0 at the left key, 1 at the right, and past
+// either where a bezier handle overshoots.
+//
+// The one thing a curve editor draws, and it comes out of the core for the reason the three above
+// do: a second easing written in TypeScript would be a curve that looks like one thing and animates
+// like another, which is the single fault a curve tool must not have.
+export type CurveShape = (
+  left: Keyframe,
+  right: Keyframe,
+  samples: number,
+) => readonly number[];
+
 export interface DocumentBackend {
   state(): Project;
+  curveShape: CurveShape;
   sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
   effectParamsAt(at: Time): EffectParamSnapshot;
   transformsAt(at: Time): TransformSnapshot;

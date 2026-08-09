@@ -218,16 +218,51 @@ fn interpolate(left: &Keyframe, right: &Keyframe, at: Time) -> ParamValue {
         .unwrap_or_else(|| left.value.clone())
 }
 
+// The pair a `Bezier` key falls back to when it carries no handles of its own: CSS `ease-in-out`,
+// which is the shape most people mean by "a curve" before they have dragged anything. A curve
+// editor opens on this rather than on a straight line, so the first drag adjusts a shape instead
+// of inventing one.
+pub const DEFAULT_HANDLE_OUT: [f32; 2] = [0.42, 0.0];
+pub const DEFAULT_HANDLE_IN: [f32; 2] = [0.58, 1.0];
+
 fn ease(left: &Keyframe, right: &Keyframe, t: f32) -> f32 {
     match left.interp {
         Interp::Hold | Interp::Linear => t,
         Interp::Ease => t * t * (3.0 - 2.0 * t),
         Interp::Bezier => {
-            let out = left.handle_out.unwrap_or([0.42, 0.0]);
-            let in_ = right.handle_in.unwrap_or([0.58, 1.0]);
-            cubic_bezier_y_at(out, in_, t)
+            let out = left.handle_out.unwrap_or(DEFAULT_HANDLE_OUT);
+            let in_ = right.handle_in.unwrap_or(DEFAULT_HANDLE_IN);
+            // `cubic_bezier_y_at` bisects on x and so needs x to rise across the span. Clamped
+            // here rather than at either boundary, because a project written by hand reaches this
+            // through `evaluate` and a dragged handle reaches it through `keyframe.setHandles` --
+            // one clamp makes the search's precondition true for both. The y components are left
+            // alone: a handle above 1 or below 0 is an overshoot, which is a shape somebody wanted.
+            cubic_bezier_y_at(
+                [out[0].clamp(0.0, 1.0), out[1]],
+                [in_[0].clamp(0.0, 1.0), in_[1]],
+                t,
+            )
         }
     }
+}
+
+/// How far along one segment the track stands, `t` of the way through the gap between two keys.
+/// 0 at the left key, 1 at the right one, and whatever the easing says in between -- above 1 or
+/// below 0 where a bezier handle overshoots.
+///
+/// This is what a curve editor draws, and the reason it is here rather than in the surface: the
+/// alternative is a second implementation of `ease` in TypeScript, and a curve that looks like one
+/// thing and animates like another is the one fault a curve editor must not have. `interpolate`
+/// below is the same number applied to a pair of values.
+pub fn segment_shape(left: &Keyframe, right: &Keyframe, t: f32) -> f32 {
+    // `ease` answers `t` for a hold because `interpolate` never asks it -- it returns the left
+    // value outright. Drawn, that is a flat line that steps up at the far end, and drawing the
+    // straight line `ease` would hand over here is exactly the disagreement this function exists
+    // to rule out.
+    if left.interp == Interp::Hold {
+        return if t >= 1.0 { 1.0 } else { 0.0 };
+    }
+    ease(left, right, t.clamp(0.0, 1.0))
 }
 
 // ponytail: 24 bisection steps instead of Newton iteration — enough for sub-pixel accuracy;
@@ -338,6 +373,90 @@ mod tests {
             mid < 25.0,
             "ease-in-out should lag linear at t=0.25, got {mid}"
         );
+    }
+
+    // The three presets, read at a quarter rather than at the ends. Checked at 0 and 1 every one of
+    // them agrees with every other, which is how a curve editor ships drawing straight lines.
+    #[test]
+    fn the_drawn_shape_of_each_preset_differs_where_it_is_meant_to() {
+        let right = kf(2.0, 100.0, Interp::Linear);
+        let quarter = |interp| segment_shape(&kf(0.0, 0.0, interp), &right, 0.25);
+
+        assert!((quarter(Interp::Linear) - 0.25).abs() < 1e-6);
+        assert!(quarter(Interp::Ease) < 0.25, "ease has to lag at a quarter");
+        assert_eq!(quarter(Interp::Hold), 0.0);
+        assert_eq!(
+            segment_shape(&kf(0.0, 0.0, Interp::Hold), &right, 1.0),
+            1.0,
+            "a hold still arrives at the far end"
+        );
+    }
+
+    // The claim the whole curve editor rests on: the line it draws is the number the picture moves
+    // by. A second easing written in the surface passes every end-point check and fails this one.
+    #[test]
+    fn the_shape_a_curve_editor_draws_is_the_one_evaluate_animates() {
+        let mut a = kf(0.0, 0.0, Interp::Bezier);
+        a.handle_out = Some([0.9, 0.05]);
+        let mut b = kf(2.0, 100.0, Interp::Linear);
+        b.handle_in = Some([0.95, 0.1]);
+        let track = vec![a.clone(), b.clone()];
+
+        for step in 1..20 {
+            let t = step as f32 / 20.0;
+            let Some(ParamValue::Float(animated)) =
+                evaluate(&track, Time::from_seconds(2.0 * t as f64))
+            else {
+                panic!("expected a float");
+            };
+            let drawn = segment_shape(&a, &b, t) * 100.0;
+            assert!(
+                (animated - drawn).abs() < 0.5,
+                "at t={t} the curve draws {drawn} and animates {animated}"
+            );
+        }
+    }
+
+    // A handle dragged past the ends of the span would leave x non-monotone, and the bisection in
+    // `cubic_bezier_y_at` searches a curve that doubles back -- which reads as a shape nobody drew.
+    #[test]
+    fn a_handle_beyond_the_span_is_still_a_curve_that_rises() {
+        let mut a = kf(0.0, 0.0, Interp::Bezier);
+        a.handle_out = Some([-4.0, 0.0]);
+        let mut b = kf(2.0, 100.0, Interp::Linear);
+        b.handle_in = Some([9.0, 1.0]);
+
+        let mut previous = -1.0;
+        for step in 0..=20 {
+            let value = segment_shape(&a, &b, step as f32 / 20.0);
+            assert!(value >= previous, "the shape fell back at step {step}");
+            previous = value;
+        }
+        assert!((previous - 1.0).abs() < 1e-3, "it has to arrive, got {previous}");
+    }
+
+    // The four values the pixel harness draws a quad at, pinned here because this is where the
+    // curve is decided. `an eased keyframe puts the quad somewhere...` in gpu/harness.html measures
+    // that they reach the screen; it does not decide what they are.
+    //
+    // Halfway in time is 1.5 pixels of travel out of 32, where a straight ramp is 16 -- the gap a
+    // curve is worth, and the only reading that tells the two apart at all.
+    #[test]
+    fn the_curve_the_pixel_harness_draws_resolves_to_these_values() {
+        let mut a = kf(0.0, -16.0, Interp::Bezier);
+        a.handle_out = Some([0.9, 0.05]);
+        let mut b = kf(4.0, 16.0, Interp::Linear);
+        b.handle_in = Some([0.95, 0.1]);
+        let track = vec![a, b];
+
+        let at = |seconds: f64| match evaluate(&track, Time::from_seconds(seconds)) {
+            Some(ParamValue::Float(value)) => value,
+            other => panic!("expected a float, got {other:?}"),
+        };
+        assert_eq!(at(0.0), -16.0);
+        assert_eq!(at(4.0), 16.0);
+        assert!((at(2.0) - -14.545_43).abs() < 0.01, "midpoint {}", at(2.0));
+        assert!((at(3.0) - -11.914_12).abs() < 0.01, "three quarters {}", at(3.0));
     }
 
     const SECOND: f64 = FLICKS_PER_SECOND as f64;

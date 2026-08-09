@@ -101,10 +101,10 @@ fn adding_at_an_occupied_time_replaces_that_keyframe() {
     assert_eq!(track[0].interp, Interp::Hold);
 }
 
-// No command carries bezier handles, so the only thing an upsert can do with the pair a project
-// arrived with is destroy it. One drag of a slider over a keyframed parameter would then flatten a
-// curve nobody can put back -- the surface that would have to offer the undo cannot author handles
-// either, and `keyframe.setInterp` beside it changes the interpolation without touching them.
+// An upsert carries a value and an interpolation and no handles, so the only thing it could do with
+// the pair already on the key is destroy it. One drag of a slider over a keyframed parameter would
+// then flatten a curve that took a curve editor to draw -- and `keyframe.setInterp` beside it
+// changes the interpolation without touching them for the same reason.
 #[test]
 #[allow(clippy::unwrap_used)]
 fn replacing_a_keyframe_keeps_the_curve_shape_it_was_authored_with() {
@@ -142,7 +142,8 @@ fn a_keyframe_written_on_empty_ground_carries_no_handles() {
     assert_eq!(track[0].handle_out, None);
 }
 
-// Handles can only arrive by loading a project: no command takes them.
+// A pair that arrived by loading a project rather than through `keyframe.setHandles`. Both routes
+// have to end at the same shape, and the command's own runs are further down this file.
 #[allow(clippy::unwrap_used)]
 fn bend(doc: &mut Document) {
     let mut project = doc.project().clone();
@@ -153,6 +154,215 @@ fn bend(doc: &mut Document) {
     track[0].handle_out = Some([0.9, 0.05]);
     track[1].handle_in = Some([0.95, 0.1]);
     *doc = Document::from_project(project).unwrap();
+}
+
+fn set_handles(
+    clip: &ClipId,
+    seconds: f64,
+    handle_in: Option<[f32; 2]>,
+    handle_out: Option<[f32; 2]>,
+) -> Command {
+    Command::KeyframeSetHandles {
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: Some("brightness".into()),
+        key: "amount".into(),
+        time: Time::from_seconds(seconds),
+        handle_in,
+        handle_out,
+    }
+}
+
+// A curve editor's whole job, in the core: two keys, a pair of handles dragged onto the left one,
+// and a value halfway along that is no longer halfway between them. Read at the middle rather than
+// at the ends, where every easing ever written agrees with every other.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn dragged_handles_bend_the_value_between_two_keys() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 0.0, 0.0, Interp::Bezier)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(add(&clip, 2.0, 1.0, Interp::Linear)))
+        .unwrap();
+    // The shape a bezier key opens on is ease-in-out, which is symmetric: it reaches the halfway
+    // value at the halfway instant, exactly where a straight line would.
+    let Some(ParamValue::Float(default)) = amount_at(doc.project(), 1.0) else {
+        panic!("expected a float");
+    };
+    assert!((default - 0.5).abs() < 1e-3, "opened bent, at {default}");
+
+    doc.dispatch(Dispatch::new(set_handles(
+        &clip,
+        0.0,
+        None,
+        Some([0.9, 0.05]),
+    )))
+    .unwrap();
+    doc.dispatch(Dispatch::new(set_handles(
+        &clip,
+        2.0,
+        Some([0.95, 0.1]),
+        None,
+    )))
+    .unwrap();
+
+    let Some(ParamValue::Float(middle)) = amount_at(doc.project(), 1.0) else {
+        panic!("expected a float");
+    };
+    // Pinned rather than merely "below the line": both handles shape one segment, and with the
+    // arriving one left at its default this reads 0.200 instead. A loose bound passes either way,
+    // which is a run that cannot tell a command writing one handle from one writing the pair.
+    assert!(
+        (middle - 0.045_455).abs() < 1e-3,
+        "the pair has to shape the middle, got {middle}"
+    );
+    assert_eq!(amount_at(doc.project(), 0.0), Some(ParamValue::Float(0.0)));
+    assert_eq!(amount_at(doc.project(), 2.0), Some(ParamValue::Float(1.0)));
+
+    let track = &doc.project().timeline.tracks[0].clips[0].effects[0].keyframes["amount"];
+    assert_eq!(track[0].handle_out, Some([0.9, 0.05]));
+    assert_eq!(track[1].handle_in, Some([0.95, 0.1]));
+}
+
+// The same hole `normalize` closes on the load path, on the route a drag takes. A NaN handle runs
+// through `cubic_bezier_y_at` into the interpolated value and reaches JavaScript as `null`.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_non_finite_handle_is_refused_and_leaves_the_shape_standing() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 0.0, 0.0, Interp::Bezier)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(add(&clip, 2.0, 1.0, Interp::Linear)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(set_handles(
+        &clip,
+        0.0,
+        None,
+        Some([0.9, 0.05]),
+    )))
+    .unwrap();
+
+    assert!(doc
+        .dispatch(Dispatch::new(set_handles(
+            &clip,
+            0.0,
+            None,
+            Some([f32::NAN, 0.0]),
+        )))
+        .is_err());
+    assert_eq!(
+        doc.project().timeline.tracks[0].clips[0].effects[0].keyframes["amount"][0].handle_out,
+        Some([0.9, 0.05])
+    );
+}
+
+// `null` is how the editor takes a curve back off a key without deleting the key.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn clearing_the_handles_puts_the_default_shape_back() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 0.0, 0.0, Interp::Bezier)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(add(&clip, 2.0, 1.0, Interp::Linear)))
+        .unwrap();
+    let plain = amount_at(doc.project(), 1.0);
+
+    doc.dispatch(Dispatch::new(set_handles(
+        &clip,
+        0.0,
+        None,
+        Some([0.9, 0.05]),
+    )))
+    .unwrap();
+    assert_ne!(amount_at(doc.project(), 1.0), plain);
+
+    doc.dispatch(Dispatch::new(set_handles(&clip, 0.0, None, None)))
+        .unwrap();
+    assert_eq!(amount_at(doc.project(), 1.0), plain);
+    assert_eq!(
+        doc.project().timeline.tracks[0].clips[0].effects[0].keyframes["amount"][0].handle_out,
+        None
+    );
+}
+
+// One drag is one undo step, and the step it undoes is the shape the curve had before it -- not the
+// shape the last pointer move left behind.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_handle_drag_under_one_key_is_one_undo_step() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 0.0, 0.0, Interp::Bezier)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(add(&clip, 2.0, 1.0, Interp::Linear)))
+        .unwrap();
+    let before = doc.history().labels().len();
+    let plain = amount_at(doc.project(), 1.0);
+
+    for step in 0..60 {
+        doc.dispatch(
+            Dispatch::new(set_handles(
+                &clip,
+                0.0,
+                None,
+                Some([0.2 + step as f32 / 100.0, 0.0]),
+            ))
+            .coalesce("curve-1"),
+        )
+        .unwrap();
+    }
+
+    assert_eq!(doc.history().labels().len(), before + 1);
+    doc.undo().unwrap();
+    assert_eq!(amount_at(doc.project(), 1.0), plain);
+}
+
+// The rule the surface has to show and the core has to enforce: a rate track has no exact area
+// under a bezier, so a curve editor standing on one may not offer the shape at all. Handles alone
+// are harmless -- nothing reads them while the key is linear -- and the refusal sits where it can
+// actually bite.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_speed_track_still_refuses_the_interpolation_a_curve_needs() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(speed_key(&clip, 1.0, 2.0, Interp::Linear)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(Command::KeyframeSetHandles {
+        target: EffectTarget::Clip { clip: clip.clone() },
+        effect_type: None,
+        key: "speed".into(),
+        time: Time::from_seconds(1.0),
+        handle_in: None,
+        handle_out: Some([0.9, 0.05]),
+    }))
+    .unwrap();
+
+    assert!(doc
+        .dispatch(Dispatch::new(Command::KeyframeSetInterp {
+            target: EffectTarget::Clip { clip },
+            effect_type: None,
+            key: "speed".into(),
+            time: Time::from_seconds(1.0),
+            interp: Interp::Bezier,
+        }))
+        .is_err());
+}
+
+// A time nothing sits at is the same refusal every other keyframe command gives, and the reason a
+// drag on a key that was just deleted cannot write a shape onto a key that never existed.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn handles_on_a_keyframe_that_is_not_there_are_refused() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(add(&clip, 0.0, 0.0, Interp::Bezier)))
+        .unwrap();
+
+    assert!(doc
+        .dispatch(Dispatch::new(set_handles(
+            &clip,
+            1.5,
+            None,
+            Some([0.5, 0.5]),
+        )))
+        .is_err());
 }
 
 // A slider dragged over a keyframed parameter is the Inspector's own version of the timeline

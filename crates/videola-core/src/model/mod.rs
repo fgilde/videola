@@ -14,7 +14,7 @@ pub use clip::{
 };
 pub use effect::{Effect, Transition, TransitionAlignment};
 pub use ids::{ClipId, EffectId, GroupId, MarkerId, ProjectId, TrackId};
-pub use keyframe::{evaluate, Interp, Keyframe};
+pub use keyframe::{evaluate, segment_shape, Interp, Keyframe};
 pub use media::{MediaAsset, MediaId, MediaKind};
 pub use param::ParamValue;
 pub use project::{

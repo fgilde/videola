@@ -107,10 +107,11 @@ features:
 
 ## Was noch fehlt
 
-Kein Motion-Blur, keine Rauschreduktion, keine Beat-Erkennung, und kein Kurveneditor für die
-Keyframe-Glättung — ein Projekt mit Bezier-Anfassern behält sie und behält seine Form, aber ziehen
-kann sie hier niemand. Kein Editor für einen Bewegungspfad auf dem Bild. `track.locked` wird nirgends
-durchgesetzt. Die Magnetic-Timeline fehlt bewusst, und das
+Kein Motion-Blur, keine Rauschreduktion, keine Beat-Erkennung. Die Keyframe-Glättung hat ein
+Kurvenfeld mit ziehbaren Anfassern, aber ein Anfasser außerhalb des Einheitsquadrats — das
+Überschwingen, aus dem ein Abprall gemacht ist — wird an dessen Rand geklemmt, und eine Kurve lässt
+sich nicht von einem Parameter auf einen anderen übertragen. Kein Editor für einen Bewegungspfad auf
+dem Bild. `track.locked` wird nirgends durchgesetzt. Die Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

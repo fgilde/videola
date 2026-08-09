@@ -490,6 +490,14 @@ fn every_command_undoes_to_the_exact_prior_state() {
             time: Time::from_seconds(0.5),
             interp: Interp::Hold,
         },
+        |Fixture { clip, .. }| Command::KeyframeSetHandles {
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: Some("brightness".into()),
+            key: "amount".into(),
+            time: Time::from_seconds(0.5),
+            handle_in: None,
+            handle_out: Some([0.9, 0.05]),
+        },
         |_| Command::MediaImport {
             asset: MediaAsset::new(
                 MediaId::from_bytes(b"a second undo coverage medium"),

@@ -1252,6 +1252,7 @@ export function App(): ReactElement {
                   playhead={playhead}
                   waveforms={waveforms}
                   effects={effectManifests()}
+                  curveShape={doc?.curveShape}
                   dispatch={edit}
                   onSeek={seek}
                   onSelectionChange={setSelection}
