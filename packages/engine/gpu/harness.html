@@ -544,6 +544,58 @@ test("a second frame from the same compositor is the first frame", () => {
   check("rendering the same moment twice gives the same buffer", twice, once, 0);
 });
 
+// What isolation costs, counted rather than estimated: every render target is a framebuffer, and
+// the driver is asked for one only when a level of isolation is first reached. Wrapping the call
+// is the whole measurement -- no production code learns that anything is counting.
+function framebuffersFor(scene, clips, resolved) {
+  const canvas = canvasOf(64, 64);
+  const context = R.createContext(canvas);
+  let made = 0;
+  const create = context.gl.createFramebuffer.bind(context.gl);
+  context.gl.createFramebuffer = () => {
+    made += 1;
+    return create();
+  };
+  const compositor = new R.Compositor(context);
+  const frames = new Map();
+  for (const id of clips) frames.set(id, frame(64, 64, () => [255, 255, 255, 255]));
+  // Twice, because a target that is asked for again every frame is a leak this would not see once.
+  draw(compositor, scene, 0, frames, resolved);
+  draw(compositor, scene, 0, frames, resolved);
+  for (const f of frames.values()) f.close();
+  return made;
+}
+
+test("isolation is paid for by the level, and only where it is used", () => {
+  const flat = project(64, 64, "#000000", [{ id: "clp_0" }], 64, 64);
+  check("a project without a group asks for no target at all", framebuffersFor(flat, ["clp_0"]), 0);
+
+  const faded = nestedProject(64, 64, "#000000", [{ id: "clp_a" }], 64, 64, { t: { opacity: 0.5 } });
+  check("a group that only fades needs one surface and no scratch",
+    framebuffersFor(faded, ["clp_a"]), 1);
+
+  const graded = nestedProject(64, 64, "#000000", [{ id: "clp_a" }], 64, 64,
+    { effects: [{ id: "eff_g", effectType: "brightness", enabled: true, params: {}, keyframes: {} }] });
+  check("a group with a chain needs its surface and one to ping-pong with",
+    framebuffersFor(graded, ["clp_a"], floats([["eff_g", [["amount", 1]]]])), 2);
+
+  // Eight levels, each faded: one surface per level and nothing else, held for the life of the
+  // compositor. At 1080p that is 8.3 MB a level -- 66 MB for a project nested as deep as one may be.
+  let scene = project(64, 64, "#000000", [{ id: "clp_leaf" }], 64, 64);
+  for (let level = 0; level < 8; level += 1) {
+    const outer = nestedProject(64, 64, "#000000", [{ id: "clp_leaf" }], 64, 64, { t: { opacity: 0.9 } });
+    outer.timeline.tracks[0].clips[0].source.timeline = scene.timeline;
+    scene = outer;
+  }
+  check("eight levels of faded compounds cost eight surfaces",
+    framebuffersFor(scene, ["clp_leaf"]), 8);
+  // And the counterweight: eight targets would also be asked for by a compositor that drew nothing.
+  // 0.9 to the eighth is 0.4305 of a white picture over black, rounded to eight bits at every one
+  // of the eight surfaces on the way out.
+  check("and the picture still arrives through all eight",
+    rendered(64, 64, scene, ["clp_leaf"], () => [255, 255, 255, 255])(32, 32)[0], 109);
+});
+
 // Two clips meeting edge to edge under one blurred layer. Composed first, the pair is opaque
 // across the whole frame, so a weighted average of premultiplied colour keeps red and green adding
 // up to a whole 255 at the seam. Blurred one clip at a time, each fades to transparent at its own
