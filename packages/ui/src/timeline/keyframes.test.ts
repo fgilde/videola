@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { FLICKS_PER_SECOND, type Clip, type Effect, type Interp, type Keyframe } from "@videola/core";
 
-import { keyframeSpan, laneRows, occupied, offeredFor, POSITION_TRACK } from "./keyframes";
+import { keyframeSpan, laneRows, offeredFor, POSITION_TRACK } from "./keyframes";
 import { makeClip } from "./Timeline.test";
 
 const SECOND = FLICKS_PER_SECOND;
@@ -125,24 +125,6 @@ describe("keyframeSpan", () => {
 
   it("never runs backwards on a clip of no length", () => {
     expect(keyframeSpan(makeClip("clp_1", SECOND, 0))).toEqual({ from: SECOND, to: SECOND });
-  });
-});
-
-describe("occupied", () => {
-  const track = [key(1), key(3)];
-
-  it("reports the neighbour a move would land on", () => {
-    expect(occupied(track, 3 * SECOND, 1 * SECOND)).toBe(true);
-  });
-
-  // A drag that has not left its own key yet is not a collision with itself; the core accepts
-  // that move, and calling it occupied would freeze the first pixel of every drag.
-  it("does not count the keyframe being dragged", () => {
-    expect(occupied(track, 3 * SECOND, 3 * SECOND)).toBe(false);
-  });
-
-  it("reports empty ground as free", () => {
-    expect(occupied(track, 2 * SECOND, 1 * SECOND)).toBe(false);
   });
 });
 

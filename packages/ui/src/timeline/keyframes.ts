@@ -66,14 +66,6 @@ export function keyframeSpan(clip: Clip): { from: Time; to: Time } {
 }
 
 /**
- * Whether a keyframe already sits where a drag wants to go. The core refuses that move, and asking
- * first is what stops an ordinary drag across a neighbour from raising a refusal every few pixels.
- */
-export function occupied(track: readonly Keyframe[], time: Time, except: Time): boolean {
-  return track.some((entry) => entry.time === time && entry.time !== except);
-}
-
-/**
  * The interpolations this surface can author. Bezier is missing because nothing here can drag a
  * handle, and a curve shape that cannot be undone from the surface that set it is worse than one
  * that was never offered. A keyframe loaded from a file may still carry it -- see `offeredFor`.

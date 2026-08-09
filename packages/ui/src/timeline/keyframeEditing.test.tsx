@@ -45,7 +45,11 @@ interface Scene {
   clip: ClipId;
 }
 
-async function sceneWithKeyframes(times: number[] = [1, 3]): Promise<Scene> {
+async function sceneWithKeyframes(
+  times: number[] = [1, 3],
+  start = 0,
+  seconds = 10,
+): Promise<Scene> {
   const doc = new VideolaDocument(await createWasmBackend());
   doc.dispatch(cmd.trackAdd("video", "V1"));
   const track = doc.state.timeline.tracks[0]?.id ?? "";
@@ -53,8 +57,8 @@ async function sceneWithKeyframes(times: number[] = [1, 3]): Promise<Scene> {
     cmd.clipAdd(
       track,
       { kind: "generator", generator: { type: "solid", color: "#ff0000" } },
-      0,
-      10 * SECOND,
+      start * SECOND,
+      seconds * SECOND,
     ),
   );
   const clip = onlyClip(doc).id;
@@ -169,17 +173,39 @@ describe("the keyframe lane", () => {
     expect(screen.getByTestId("keyframe-lane")).toBeTruthy();
   });
 
-  // The one claim the lane exists to make. A keyframe at two seconds has to be drawn where the
-  // ruler puts two seconds, from the same conversion -- not from a second axis of its own.
-  it("draws a keyframe at the pixel the timeline puts its time at", async () => {
-    const { doc } = await sceneWithKeyframes([1, 3]);
+  // The one claim the lane exists to make. A keyframe at four seconds is drawn where the ruler puts
+  // four seconds, out of the same conversion -- not on an axis of its own.
+  //
+  // The clip starts at two seconds on purpose. On a clip that starts at zero, timeline time and
+  // clip-relative time are the same number, and a lane doing its arithmetic against the clip would
+  // pass this unnoticed -- which is exactly what an earlier version of this run did.
+  it("draws a keyframe at the pixel the timeline puts its time at, not at its offset in the clip", async () => {
+    const { doc } = await sceneWithKeyframes([3, 5], 2);
     render(<Harness doc={doc} />);
     down(clipElement(), { clientX: 100 });
 
     expect(keys().map((key) => key.style.left)).toEqual([
-      `${(1 * SECOND) / DEFAULT_FLICKS_PER_PIXEL}px`,
       `${(3 * SECOND) / DEFAULT_FLICKS_PER_PIXEL}px`,
+      `${(5 * SECOND) / DEFAULT_FLICKS_PER_PIXEL}px`,
     ]);
+  });
+
+  // The lane windows like the tracks do. One clip's track can hold thousands of keys -- a project
+  // written by hand or by an importer -- and a node per key would make the node count a function
+  // of the material rather than of the viewport.
+  it("draws only the keyframes and gaps the visible window reaches", async () => {
+    const { doc } = await sceneWithKeyframes([1, 150, 180], 0, 200);
+    render(<Harness doc={doc} />);
+    down(clipElement(), { clientX: 100 });
+
+    expect(keys().map((key) => key.dataset.keyframeTime)).toEqual([String(SECOND)]);
+    // One of the two gaps: 1 s to 150 s crosses the window and has to be drawn even though only
+    // one of its ends is in it; 150 s to 180 s lies entirely beyond it.
+    expect(
+      [...document.querySelectorAll<HTMLElement>(".v-keylane__segment")].map(
+        (node) => node.style.width,
+      ),
+    ).toHaveLength(1);
   });
 
   it("names every keyframe with the parameter it belongs to and the instant it sits at", async () => {
@@ -234,6 +260,24 @@ describe("dragging a keyframe", () => {
       expect(times(doc)).toEqual([1 * SECOND, 5 * SECOND]);
     });
   }
+
+  // The bar above the lane is aimed at an instant, and a drag changes that instant. Without the
+  // selection travelling with the key, everything the bar offers goes on pointing at a moment
+  // nothing sits at any more -- and `Delete` then falls through to the clip under it.
+  it("leaves the bar aimed at the keyframe after it has been dragged", async () => {
+    const { doc } = await sceneWithKeyframes([1, 5]);
+    render(<Harness doc={doc} />);
+    down(clipElement(), { clientX: 100 });
+    const startX = (1 * SECOND) / DEFAULT_FLICKS_PER_PIXEL;
+
+    down(keyAt(SECOND), { clientX: startX });
+    move({ clientX: startX + 60 });
+    up({ clientX: startX + 60 });
+    fireEvent.keyDown(screen.getByTestId("timeline"), { key: "Delete" });
+
+    expect(times(doc)).toEqual([5 * SECOND]);
+    expect(doc.state.timeline.tracks[0]?.clips).toHaveLength(1);
+  });
 
   it("keeps the value and the interpolation the keyframe was authored with", async () => {
     const { doc, clip } = await sceneWithKeyframes([1, 5]);
@@ -384,6 +428,22 @@ describe("what can be done to a picked keyframe", () => {
     });
 
     expect(document.querySelector<HTMLElement>(".v-keylane__segment")?.dataset.interp).toBe("ease");
+  });
+
+  // The bar has to be aimed at the keyframe that was picked and not merely at its row. With two
+  // keys set differently, a bar that reported the first one regardless would read "Linear" here.
+  it("reports what the picked keyframe is set to, not what the first one on its row is", async () => {
+    const { doc, clip } = await sceneWithKeyframes([1, 3]);
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", 3 * SECOND, "hold"));
+    render(<Harness doc={doc} />);
+    down(clipElement(), { clientX: 100 });
+
+    down(keyAt(3 * SECOND), { clientX: 10 });
+    up({ clientX: 10 });
+
+    expect((screen.getByLabelText("Verlauf ab diesem Keyframe") as HTMLSelectElement).value).toBe(
+      "hold",
+    );
   });
 
   it("takes the bar away once the keyframe it was aimed at is gone", async () => {

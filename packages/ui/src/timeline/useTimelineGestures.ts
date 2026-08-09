@@ -23,7 +23,7 @@ import {
   type TimeRange,
   type ZoomBy,
 } from "./geometry";
-import { keyframeSpan, occupied } from "./keyframes";
+import { keyframeSpan } from "./keyframes";
 import {
   snapCandidates,
   snapSpan,
@@ -265,7 +265,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       }
 
       const dx = event.clientX - active.clientX;
-      const dy = active.mode === "keyframe" ? 0 : event.clientY - active.clientY;
+      const dy = event.clientY - active.clientY;
       if (!active.live) {
         if (Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) return;
         // A press that turns into a drag is no longer a press.
@@ -462,10 +462,10 @@ function applyKeyframe(
   const snapped = snapTime(wanted, candidatesFor(config, []), options);
   const to = Math.min(Math.max(snapped.time, span.from), span.to);
   if (to === active.at) return snapped.candidate;
-  // Asked before it is sent, not caught after: landing on a neighbour is the one refusal an
-  // ordinary drag across a track produces, and `attempt` swallowing it would leave the drag stuck
-  // against it rather than sliding past.
-  if (occupied(trackOf(found.clip, active.keyframe), to, active.at)) return snapped.candidate;
+  // Landing on a neighbour needs no guard of its own. `attempt` swallows the refusal and
+  // `active.at` only advances on success, so the next step -- measured from where the gesture
+  // began rather than from where the key now is -- clears the neighbour and lands past it. A guard
+  // stood here first and survived its counter-check without changing one outcome.
   const command = cmd.keyframeMove(
     on.clip(active.keyframe.clip),
     active.keyframe.effectType,
@@ -479,16 +479,6 @@ function applyKeyframe(
     config.onSelectKeyframe({ ...active.keyframe, time: to });
   });
   return snapped.candidate;
-}
-
-// The track the drag is on, read back out of the project rather than held from the press: the core
-// re-sorts on every move, so the array the press saw is not the array the next step writes to.
-function trackOf(clip: Clip, at: KeyframeHit): readonly Keyframe[] {
-  const tracks =
-    at.effectType === null
-      ? clip.keyframes
-      : (clip.effects.find((effect) => effect.effectType === at.effectType)?.keyframes ?? {});
-  return tracks[at.key] ?? [];
 }
 
 // A ripple trim of the head leaves the clip's start where it is, so the edge on screen never moves
