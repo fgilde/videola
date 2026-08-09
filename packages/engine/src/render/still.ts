@@ -4,6 +4,7 @@ import { GeneratorFrames } from "../generate/generator";
 import { VideoSource } from "../decode/video-source";
 import { Compositor } from "./compositor";
 import { createContext } from "./context";
+import { LutStore } from "./lut";
 
 import type { EffectParams, Project, SourceTimes, Time, Transforms } from "@videola/core";
 import type { FrameSource } from "../playback";
@@ -36,6 +37,11 @@ export async function renderStills(request: StillRequest): Promise<Blob[]> {
     generated: new GeneratorFrames(),
   };
   const hashes = clipHashes(request.project);
+  // The same store the editor and the export worker fill, out of the same OPFS entries: a still an
+  // agent asks for has to be the picture the editor shows, and a grade left out of it here would
+  // be exactly the divergence this whole path exists to rule out.
+  const luts = new LutStore();
+  await luts.ensure(request.project);
   try {
     const stills: Blob[] = [];
     for (const at of request.times) {
@@ -46,7 +52,14 @@ export async function renderStills(request: StillRequest): Promise<Blob[]> {
         transforms: request.transforms(at),
       };
       const pictures = await gatherPictures(pass, hashes, request.project, frame);
-      compositor.render(request.project, at, pictures, frame.params, frame.transforms);
+      compositor.render(
+        request.project,
+        at,
+        pictures,
+        frame.params,
+        frame.transforms,
+        luts.tables(),
+      );
       stills.push(await canvas.convertToBlob({ type: "image/png" }));
     }
     return stills;

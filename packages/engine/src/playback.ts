@@ -20,6 +20,7 @@ import { GeneratorFrames } from "./generate/generator";
 import { Compositor } from "./render/compositor";
 import { createContext } from "./render/context";
 import { drawList } from "./render/draw-list";
+import { LutStore } from "./render/lut";
 import type { GlContext } from "./render/context";
 import type { AudioGraph } from "./audio/graph";
 import type { Level } from "./audio/loudness";
@@ -85,6 +86,7 @@ export class Playback {
   #hashes: ReadonlyMap<string, string> = new Map();
   #sources = new Map<string, Promise<FrameSource | undefined>>();
   #generated = new GeneratorFrames();
+  #luts = new LutStore();
   #rolling = false;
   #rate = 0;
   #painting = false;
@@ -320,7 +322,7 @@ export class Playback {
     const params = this.#effectParams(at);
     const transforms = this.#transforms(at);
     const frames = await this.#frames(project, at, params, transforms);
-    compositor.render(project, at, frames, params, transforms);
+    compositor.render(project, at, frames, params, transforms, this.#luts.tables());
   }
 
   // ponytail: two clips of the same medium share one source, and decoding for the second can
@@ -334,6 +336,11 @@ export class Playback {
     transforms: TransformSnapshot,
   ): Promise<Map<string, VideoFrame>> {
     const items = drawList(project, at, params, transforms).items;
+    // Asked per tick rather than per load: a grade is chosen while the editor is running, and a
+    // load-time read would leave the picture ungraded until something else reloaded the project.
+    // Every table it already holds is a map hit, so a timeline whose looks have not changed pays
+    // one set comparison.
+    await this.#luts.ensure(project);
     const sourceTimes = this.#sourceTimes(at);
     const found = await Promise.all(
       items.map((item) => this.#frameFor(item.clip, sourceTimes)),

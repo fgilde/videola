@@ -1,6 +1,6 @@
 import { MAX_COMPOUND_DEPTH, readableSourceTimeAt } from "@videola/core";
 
-import { effect, paramUniform } from "../effects/registry";
+import { effect, lutMedia, paramUniform } from "../effects/registry";
 import { paintsGenerator } from "../generate/generator";
 import { generatorMotion } from "../generate/motion";
 
@@ -25,6 +25,15 @@ import type { EffectManifest, Uniform } from "../effects/registry";
 export interface EffectPass {
   effect: string;
   values: Readonly<Record<string, Uniform>>;
+  /**
+   * The library asset a lookup-table parameter names, present exactly when the effect declares
+   * one. The empty string means nothing is chosen, which the compositor draws through the identity
+   * table -- the untouched picture, not the black one an unbound sampler gives.
+   *
+   * Not in `values` because it is not a uniform: a table reaches the shader as a texture on the
+   * third unit, and this is the name the executor looks that texture up by.
+   */
+  lut?: string;
 }
 
 export interface DrawItem {
@@ -350,12 +359,13 @@ function effectPasses(clip: Clip, params: EffectParamSnapshot): EffectPass[] {
     if (manifest === undefined || manifest.inputs !== 1) continue;
     const resolved = params.get(authored.id);
     const values = uniforms(manifest, (key) => resolved?.get(key));
+    const table = namedLut(manifest, (key) => resolved?.get(key));
     if (manifest.passes === undefined) {
-      passes.push({ effect: manifest.id, values });
+      passes.push({ effect: manifest.id, values, ...table });
       continue;
     }
     for (let sweep = 0; sweep < manifest.passes; sweep += 1) {
-      passes.push({ effect: manifest.id, values: { ...values, pass: sweep } });
+      passes.push({ effect: manifest.id, values: { ...values, pass: sweep }, ...table });
     }
   }
   return passes;
@@ -407,9 +417,22 @@ function uniforms(
 ): Record<string, Uniform> {
   const values: Record<string, Uniform> = {};
   for (const param of manifest.params) {
+    // A table is a texture, not a uniform; `namedLut` takes it instead.
+    if (param.kind === "lut") continue;
     values[param.key] = paramUniform(param, lookup(param.key)?.value);
   }
   return values;
+}
+
+// Present as a key on the pass exactly when the effect declares a table, absent otherwise, so the
+// compositor can tell "this effect wants the third unit bound" from "this effect never looks at
+// it" without consulting the manifest again.
+function namedLut(
+  manifest: EffectManifest,
+  lookup: (key: string) => ParamValue | undefined,
+): { lut?: string } {
+  const param = manifest.params.find((entry) => entry.kind === "lut");
+  return param === undefined ? {} : { lut: lutMedia(lookup(param.key)?.value) };
 }
 
 // A generator fills the frame, because that is the only size it has: text, a solid and a gradient are

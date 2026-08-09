@@ -1,9 +1,11 @@
 import { effect } from "../effects/registry";
 import { blendState, drawList } from "./draw-list";
+import { IDENTITY_LUT, LUT_UNIT, TEXTURE_3D, uploadLut } from "./lut";
 import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
 import type { EffectParamSnapshot, Project, Time, TransformSnapshot } from "@videola/core";
+import type { LutTable } from "@videola/media";
 import type { Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
 import type { DrawItem } from "./draw-list";
@@ -71,6 +73,12 @@ void main() {
 
 const QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
 
+const NO_LUTS: ReadonlyMap<string, LutTable> = new Map();
+
+// The key the identity table is held under. No media id is ever the empty string -- one is `med_`
+// and sixty-four hex digits -- so it cannot collide with a table somebody loaded.
+const IDENTITY = "";
+
 const ONE = 1;
 const ONE_MINUS_SRC_ALPHA = 0x0303;
 const FUNC_ADD = 0x8006;
@@ -120,6 +128,9 @@ export class Compositor {
   // Built on first use, like everything else here: a project nobody is measuring never makes one.
   #scope: RenderTarget | undefined;
   #mirror: WebGLTexture | undefined;
+  // Keyed by media id, plus one under the empty string for the identity. Uploaded on first sight
+  // and kept until nothing names them, the same measure the clip textures are held by.
+  #lutTextures = new Map<string, WebGLTexture>();
   #resources: Resources | undefined;
   #disposed = false;
   #unsubscribe: () => void;
@@ -130,16 +141,26 @@ export class Compositor {
     this.#unsubscribe = context.onLost(() => this.#forget());
   }
 
+  /**
+   * `luts` is the same kind of contract as `frames`: the tables arrive decided, keyed by the media
+   * id a grade names, and this walks the list rather than fetching anything. Both callers that
+   * draw a timeline -- the editor's playback and the export worker -- fill it from the same store
+   * out of the same OPFS entries, which is what makes the file and the preview the same picture.
+   * A grade whose table is missing draws through the identity, so a broken import is the untouched
+   * clip rather than a black one.
+   */
   render(
     project: Project,
     at: Time,
     frames: ReadonlyMap<string, VideoFrame>,
     params: EffectParamSnapshot,
     transforms: TransformSnapshot,
+    luts: ReadonlyMap<string, LutTable> = NO_LUTS,
   ): void {
     if (this.#disposed || this.#gl.isContextLost()) return;
     const list = drawList(project, at, params, transforms);
     const resources = this.#resources ?? this.#build();
+    this.#lutSlots(luts);
     this.#begin(list.background);
     for (const item of list.items) {
       const frame = frames.get(item.clip);
@@ -236,6 +257,8 @@ export class Compositor {
     this.#scope = undefined;
     for (const pipeline of this.#effects.values()) this.#discard(pipeline);
     if (this.#mirror !== undefined) gl.deleteTexture(this.#mirror);
+    for (const texture of this.#lutTextures.values()) gl.deleteTexture(texture);
+    this.#lutTextures.clear();
     this.#chain = [];
     this.#effects.clear();
     this.#mirror = undefined;
@@ -282,7 +305,7 @@ export class Compositor {
     let spare = second;
     for (const pass of item.effects) {
       spare.bind(width, height);
-      this.#pass(this.#pipeline(pass.effect), source.texture, undefined, pass.values);
+      this.#pass(this.#pipeline(pass.effect), source.texture, undefined, pass.values, pass.lut);
       [source, spare] = [spare, source];
     }
 
@@ -298,7 +321,7 @@ export class Compositor {
     // The transition's second input is what is already on the screen, so it has to be copied off
     // it: a pass cannot sample the buffer it draws into. Blending stays off -- the mix already
     // carries the picture underneath, and blending it over that picture would count it twice.
-    this.#pass(this.#pipeline(mix.effect), source.texture, this.#copy(), mix.values);
+    this.#pass(this.#pipeline(mix.effect), source.texture, this.#copy(), mix.values, mix.lut);
   }
 
   #pass(
@@ -306,6 +329,7 @@ export class Compositor {
     source: WebGLTexture,
     second: WebGLTexture | undefined,
     values: Readonly<Record<string, Uniform>>,
+    lut?: string,
   ): void {
     const gl = this.#gl;
     gl.useProgram(pipeline.program);
@@ -313,6 +337,13 @@ export class Compositor {
     if (second !== undefined) {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, second);
+    }
+    // Bound whenever the pass declares a table, whether or not one is loaded: a sampler left on an
+    // empty unit reads as opaque black, so "nothing chosen" has to be the identity table rather
+    // than no texture at all.
+    if (lut !== undefined) {
+      gl.activeTexture(gl.TEXTURE0 + LUT_UNIT);
+      gl.bindTexture(TEXTURE_3D, this.#lutTexture(lut));
     }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
@@ -386,6 +417,39 @@ export class Compositor {
       this.#chain = [new RenderTarget(this.#gl), new RenderTarget(this.#gl)];
     }
     return [this.#chain[0]!, this.#chain[1]!];
+  }
+
+  // Uploads the tables that are new and lets go of the ones nothing names any more. A media id is
+  // the hash of the file's bytes, so an id that is already here cannot have come to mean a
+  // different table -- which is what makes "have I seen this id" a sound test for "is this texture
+  // current".
+  #lutSlots(luts: ReadonlyMap<string, LutTable>): void {
+    const gl = this.#gl;
+    for (const [id, table] of luts) {
+      if (this.#lutTextures.has(id)) continue;
+      const texture = gl.createTexture();
+      uploadLut(gl, texture, table);
+      this.#lutTextures.set(id, texture);
+    }
+    for (const [id, texture] of this.#lutTextures) {
+      if (id === IDENTITY || luts.has(id)) continue;
+      gl.deleteTexture(texture);
+      this.#lutTextures.delete(id);
+    }
+  }
+
+  // The named table if it is loaded, the identity otherwise -- which covers both "nothing chosen"
+  // and "the file behind this grade could not be read". Either way the clip comes out as it went
+  // in, which is the honest answer; a black clip would not be.
+  #lutTexture(id: string): WebGLTexture {
+    const named = this.#lutTextures.get(id);
+    if (named !== undefined) return named;
+    const existing = this.#lutTextures.get(IDENTITY);
+    if (existing !== undefined) return existing;
+    const texture = this.#gl.createTexture();
+    uploadLut(this.#gl, texture, IDENTITY_LUT);
+    this.#lutTextures.set(IDENTITY, texture);
+    return texture;
   }
 
   #copy(): WebGLTexture {
@@ -467,6 +531,10 @@ export class Compositor {
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, "u_source"), 0);
     if (inputs === 2) gl.uniform1i(gl.getUniformLocation(program, "u_second"), 1);
+    // Unconditional, and it needs no flag on the manifest: a program that never declares `u_table`
+    // has no location for it, `getUniformLocation` answers null, and a null location is a no-op
+    // the specification promises rather than an error.
+    gl.uniform1i(gl.getUniformLocation(program, "u_table"), LUT_UNIT);
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -485,6 +553,7 @@ export class Compositor {
   // deleted -- deleting them would address objects of whatever context comes next.
   #forget(): void {
     this.#textures.clear();
+    this.#lutTextures.clear();
     this.#effects.clear();
     this.#chain = [];
     this.#scope = undefined;

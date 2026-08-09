@@ -1,9 +1,11 @@
-import { previewValues } from "../effects/registry";
+import { previewLut, previewValues } from "../effects/registry";
 import { SCREEN_VERTEX_SOURCE } from "./compositor";
 import { createContext } from "./context";
+import { IDENTITY_LUT, LUT_UNIT, TEXTURE_3D, uploadLut } from "./lut";
 import { compileProgram, setUniforms } from "./program";
 import { RenderTarget } from "./target";
 
+import type { LutTable } from "@videola/media";
 import type { EffectManifest, Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
 
@@ -77,6 +79,10 @@ export class EffectPreview {
   #pipelines = new Map<string, { program: WebGLProgram; vao: WebGLVertexArrayObject }>();
   #buffer: WebGLBuffer;
   #textures: [WebGLTexture, WebGLTexture];
+  // One 3D texture, reloaded per tile: at most one effect in the grid declares a table, and a tile
+  // is drawn once. The identity goes in it for every effect that does not, so no shader ever finds
+  // the third unit empty.
+  #table: WebGLTexture | undefined;
   // One, not the compositor's pair: `passes` is at most two, so the second sweep already draws onto
   // the canvas and never needs somewhere else to land.
   #target: RenderTarget | undefined;
@@ -122,6 +128,10 @@ export class EffectPreview {
       // samples as transparent black -- a tile that fades to nothing and claims that is the effect.
       this.#upload(this.#textures[1], second ?? source);
     }
+    // The manifest's own table for an effect that has one, the identity for every other -- the
+    // same rule the compositor follows, so a tile and a timeline that show the same grade got
+    // there the same way.
+    this.#uploadTable(previewLut(manifest) ?? IDENTITY_LUT);
     const values = previewValues(manifest);
     const sweeps = manifest.passes ?? 1;
     // No blending anywhere: a pass replaces what it draws over. Blending the output onto the canvas
@@ -174,6 +184,8 @@ export class EffectPreview {
     }
     this.#pipelines.clear();
     for (const texture of this.#textures) gl.deleteTexture(texture);
+    if (this.#table !== undefined) gl.deleteTexture(this.#table);
+    this.#table = undefined;
     this.#target?.dispose();
     this.#target = undefined;
     gl.deleteBuffer(this.#buffer);
@@ -193,6 +205,10 @@ export class EffectPreview {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.#textures[1]);
     }
+    if (this.#table !== undefined) {
+      gl.activeTexture(gl.TEXTURE0 + LUT_UNIT);
+      gl.bindTexture(TEXTURE_3D, this.#table);
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, source);
     const uniforms: Record<string, Uniform> = {};
@@ -209,6 +225,9 @@ export class EffectPreview {
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, "u_source"), 0);
     if (manifest.inputs === 2) gl.uniform1i(gl.getUniformLocation(program, "u_second"), 1);
+    // The same unconditional binding the compositor makes, and the same number: a tile that put
+    // the table on a different unit would be showing a picture the timeline cannot reproduce.
+    gl.uniform1i(gl.getUniformLocation(program, "u_table"), LUT_UNIT);
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.#buffer);
@@ -223,6 +242,11 @@ export class EffectPreview {
   #scratch(): RenderTarget {
     this.#target ??= new RenderTarget(this.#gl);
     return this.#target;
+  }
+
+  #uploadTable(table: LutTable): void {
+    this.#table ??= this.#gl.createTexture();
+    uploadLut(this.#gl, this.#table, table);
   }
 
   #upload(texture: WebGLTexture, picture: TexImageSource): void {
