@@ -67,6 +67,13 @@ function project(tracks, markers) {
   };
 }
 
+// Both surfaces name effect parameters from the same manifest the application hands them, so a
+// lane row and the inspector row it belongs to cannot end up calling one parameter two things.
+const BRIGHTNESS = {
+  id: "brightness", name: { de: "Helligkeit", en: "Brightness" }, inputs: 1,
+  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
+};
+
 const host = document.createElement("div");
 host.id = "host";
 document.body.append(host);
@@ -90,6 +97,7 @@ function draw(scene, playhead, dispatch) {
     root.render(T.createElement(T.I18nProvider, null, T.createElement(T.Timeline, {
       project: scene,
       playhead: playhead || 0,
+      effects: [BRIGHTNESS],
       dispatch: dispatch || function (command, key) { sent.push({ command: command, key: key }); },
       onSeek: function (time) { seeks.push(time); },
     })));
@@ -425,6 +433,96 @@ test("limit dragging", function () {
   check("a refused edit never escapes the gesture", escaped, 0);
 });
 
+// ---------------------------------------------------------------- the keyframe lane as geometry
+
+// Two tracks on one clip, three keys on the first. The second is there so "one row per track" is
+// a claim the fixture can fail.
+function keyframedClip() {
+  return clip("clp_1", 0, 10, {
+    keyframes: {
+      opacity: [
+        { time: 1 * SECOND, value: { kind: "float", value: 0 }, interp: "linear" },
+        { time: 4 * SECOND, value: { kind: "float", value: 1 }, interp: "hold" },
+        { time: 7 * SECOND, value: { kind: "float", value: 0.5 }, interp: "ease" },
+      ],
+    },
+    effects: [{ id: "eff_1", effectType: "brightness", enabled: true,
+      params: { amount: { kind: "float", value: 1 } },
+      keyframes: { amount: [{ time: 2 * SECOND, value: { kind: "float", value: 0 }, interp: "linear" }] } }],
+  });
+}
+
+function drawLane() {
+  draw(project([track("trk_1", [keyframedClip()])]));
+  // The lane follows the clip selection, the same one the inspector follows.
+  pointer("pointerdown", q("[data-clip-id]"), atSurface(200, 90));
+  pointer("pointerup", surface(), atSurface(200, 90));
+  reset();
+}
+
+test("the lane is drawn on the timeline's own axis", function () {
+  drawLane();
+  const rows = all(".v-keylane__row");
+  check("one row per non-empty track", rows.length, 2);
+
+  const keys = all(".v-keylane__key");
+  check("one point per keyframe", keys.length, 4);
+
+  // The claim the whole lane rests on: a keyframe at four seconds stands where the ruler's four
+  // second tick stands, measured on the page rather than derived from the same arithmetic twice.
+  const four = keys.filter(function (node) {
+    return node.dataset.keyframeTime === String(4 * SECOND);
+  })[0];
+  const tick = all(".v-ruler__tick").filter(function (node) {
+    return node.textContent.indexOf(":04.") >= 0;
+  })[0];
+  check("a key stands on the ruler tick of its own time",
+    tick === undefined || four === undefined
+      ? "missing"
+      : Math.round(four.getBoundingClientRect().left + four.getBoundingClientRect().width / 2
+          - tick.getBoundingClientRect().left),
+    0);
+
+  // The playhead crosses the lane rather than stopping above it -- one surface, one instant.
+  const head = q(".v-timeline__playhead").getBoundingClientRect();
+  const lane = q(".v-keylane").getBoundingClientRect();
+  checkAtLeast("the playhead reaches the bottom of the lane",
+    Math.round(head.bottom - lane.bottom), 0);
+});
+
+test("keyframe touch targets", function () {
+  drawLane();
+  const key = q(".v-keylane__key").getBoundingClientRect();
+  const row = q(".v-keylane__row").getBoundingClientRect();
+  if (POINTER === "fine") {
+    checkAtMost("a mouse gets a compact point", Math.round(key.width), 32);
+    checkAtMost("on a compact row", Math.round(row.height), 32);
+  } else {
+    // A keyframe is a point in time with nothing wider around it to hit instead, so the hit area
+    // has to be the whole target in both directions -- there is no second chance to aim at.
+    checkAtLeast("a finger gets a whole touch target to aim at", Math.round(key.width), 44);
+    checkAtLeast("and a row tall enough to hold it", Math.round(row.height), 44);
+  }
+});
+
+test("a keyframe drag is one undo step", function () {
+  drawLane();
+  const key = q(".v-keylane__key");
+  const from = key.getBoundingClientRect().left + key.getBoundingClientRect().width / 2;
+  pointer("pointerdown", key, { clientX: from, clientY: key.getBoundingClientRect().top + 4 });
+  for (let i = 1; i <= 30; i += 1) {
+    pointer("pointermove", surface(), { clientX: from + i * 3, clientY: key.getBoundingClientRect().top + 4 });
+  }
+  pointer("pointerup", surface(), { clientX: from + 90, clientY: key.getBoundingClientRect().top + 4 });
+
+  const moves = sent.filter(function (entry) { return entry.command.type === "keyframe.move"; });
+  checkAtLeast("the drag moved the keyframe", moves.length, 1);
+  check("every step under one coalesce key",
+    moves.every(function (entry) { return entry.key === moves[0].key; }), true);
+  check("and it addresses the clip's own transform",
+    moves[0] === undefined ? "nothing sent" : moves[0].command.effectType, null);
+});
+
 // ---------------------------------------------------------------- the inspector as geometry
 
 const panel = document.createElement("div");
@@ -433,16 +531,15 @@ panel.className = "v-shell";
 document.body.append(panel);
 const panelRoot = T.createRoot(panel);
 
-const BRIGHTNESS = {
-  id: "brightness", name: { de: "Helligkeit", en: "Brightness" }, inputs: 1,
-  params: [{ key: "amount", name: { de: "Stärke", en: "Amount" }, default: 1, min: 0, max: 4 }],
-};
-
 function clipWithEffect() {
   return clip("clp_1", 0, 10, {
     source: { kind: "media", media: "med_1" },
     transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5,
       opacity: 1, crop: { left: 0, top: 0, right: 0, bottom: 0 } },
+    // A keyframed transform field as well as a keyframed effect parameter: the two go through
+    // different addresses in the command layer and only one of them used to have a switch.
+    keyframes: { rotation: [{ time: 0, value: { kind: "float", value: 0 }, interp: "linear" },
+                            { time: 5 * SECOND, value: { kind: "float", value: 180 }, interp: "linear" }] },
     effects: [{ id: "eff_1", effectType: "brightness", enabled: true,
       params: { amount: { kind: "float", value: 1 } },
       keyframes: { amount: [{ time: 0, value: { kind: "float", value: 0 }, interp: "linear" },
@@ -465,6 +562,11 @@ function drawInspector(layout) {
       effects: [BRIGHTNESS],
       effectParamsAt: function () {
         return new Map([["eff_1", new Map([["amount", { kind: "float", value: 0 }]])]]);
+      },
+      // What the core would resolve. The fixture keyframes `rotation`, so the row that shows it
+      // has to read 90 rather than the 0 the clip holds at rest.
+      transformsAt: function () {
+        return new Map([["clp_1", Object.assign({}, only.transform, { rotation: 90 })]]);
       },
       dispatch: function (command, key) { sent.push({ command: command, key: key }); },
       onSeek: function (time) { seeks.push(time); },
