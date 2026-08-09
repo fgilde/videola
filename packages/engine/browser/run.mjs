@@ -154,6 +154,20 @@ function ffmpegChecks(path, expected) {
     Math.round(expected.seconds * 100),
   );
   add("ffmpeg decodes every frame back", report.decoded.trim(), "");
+  // The independent reader on the one thing our own demuxer is not asked about: a subtitle track
+  // written beside the picture rather than drawn into it. A player has to find it, not us.
+  if (expected.subtitles === true) {
+    // Two shapes for one track. Matroska carries WebVTT as a subtitle stream and ffprobe names it
+    // `webvtt`; ISO base media carries it in a `wvtt` box, which ffmpeg does not demux as subtitles
+    // at all and reports as a data stream under that tag. Both are the track being in the file --
+    // insisting on the Matroska shape would have called a correct MP4 a failure.
+    const track = report.probed.streams.find(
+      (stream) => stream.codec_name === "webvtt" || stream.codec_tag_string === "wvtt",
+    );
+    add("ffprobe finds the subtitle track in the file", track !== undefined, true);
+    add("and it is a track of its own, beside the picture and the sound",
+      report.probed.streams.length, expected.hasAudio === false ? 2 : 3);
+  }
   // A browser can carry a format's picture and refuse its sound -- Chrome on Linux encodes H.264
   // and not AAC -- and the export then writes a silent file on purpose. Asking ffmpeg for a track
   // that is deliberately absent is not a failure of the export, so what is checked is that the

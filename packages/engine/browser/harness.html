@@ -125,6 +125,33 @@ async function buildProject(webm) {
   doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, 0, HALF));
   doc.dispatch(R.cmd.clipAdd(tracks[0].id, { kind: "media", media: video }, HALF, HALF));
   doc.dispatch(R.cmd.clipAdd(tracks[1].id, { kind: "media", media: audio }, 0, SECOND));
+  // One subtitle across the whole range, so every frame in the file has one to carry -- burned into
+  // the picture or written beside it, depending on what the run asks for.
+  //
+  // A loud plate rather than the default, and deliberately: what is in question here is whether a
+  // caption reaches the encoder at all, and the default plate is 70% black over a fixture whose
+  // lower band is already black -- invisible through a lossy encode and through anything measuring
+  // it. That the default is legible is a question about typography, and it is answered at pixels in
+  // the GPU harness. This one is about transport, so it uses a colour a number can compare.
+  doc.dispatch(R.cmd.trackAdd("caption", "C1"));
+  doc.dispatch(
+    R.cmd.clipAdd(
+      doc.state.timeline.tracks[2].id,
+      {
+        kind: "generator",
+        generator: {
+          type: "text",
+          content: "Untertitel",
+          // Low and small enough that the box sits inside the subtitle band and nowhere near the
+          // middle of the frame, which is where every other check in this file reads its pixel.
+          style: { y: 0.86, fontSize: 0.12, maxWidth: 0.8, padding: 0.4,
+                   background: "#ff00ff", color: "#ff00ff", strokeWidth: 0 },
+        },
+      },
+      0,
+      SECOND,
+    ),
+  );
   return doc;
 }
 
@@ -141,6 +168,9 @@ function options(over) {
     videoBitrate: 4_000_000,
     audioBitrate: 128_000,
     range: { from: 0, to: SECOND },
+    // Beside the picture rather than in it, so the frame checks above read the colour bars they
+    // were written for and the file still has a subtitle track for ffprobe to find.
+    captions: "separate",
     ...over,
   };
 }
@@ -176,7 +206,14 @@ async function readBack(bytes) {
     for await (const sample of sink.samples()) {
       sample.draw(context, 0, 0);
       const pixel = context.getImageData(WIDTH / 2, HEIGHT / 2, 1, 1).data;
-      frames.push({ timestamp: sample.timestamp, pixel: [pixel[0], pixel[1], pixel[2]] });
+      // Where a subtitle stands, so a burned-in caption can be told from one written beside the
+      // picture -- at the centre the two files are identical, which is the point of the centre.
+      const low = context.getImageData(WIDTH / 2, Math.round(HEIGHT * 0.86), 1, 1).data;
+      frames.push({
+        timestamp: sample.timestamp,
+        pixel: [pixel[0], pixel[1], pixel[2]],
+        band: [low[0], low[1], low[2]],
+      });
       sample.close();
     }
     return { info, frames, hasAudio: (await input.getPrimaryAudioTrack()) !== null };
@@ -390,6 +427,35 @@ async function main() {
       [frames[0].pixel, frames[OUTPUT_FRAMES - 1].pixel], [[255, 0, 255], [255, 0, 255]], 14);
   });
 
+  // The two halves of "the subtitles arrive in the export". Burned in, the words are in the picture
+  // and ffmpeg decodes them as pixels; separate, the picture is untouched and the words are a track
+  // of their own -- which is what the ffprobe checks on the written file then confirm.
+  await test("a caption is burned into the picture when the run asks for it", async () => {
+    const run = (captions) =>
+      R.startExport({
+        project: doc.state,
+        sourceTimes: doc.sourceTimesAt,
+        effectParams: doc.effectParamsAt,
+        transforms: doc.transformsAt,
+        options: options({ captions }),
+        createWorker: worker,
+      }).result;
+
+    const burned = await readBack((await run("burned")).bytes);
+    const beside = await readBack((await run("separate")).bytes);
+
+    const differs = (a, b) =>
+      Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+    check("the caption is in the picture where a subtitle stands",
+      differs(burned.frames[0].band, beside.frames[0].band) > 60, true);
+    check("and it is the colour it was painted, through the encoder and back",
+      burned.frames[0].band, [255, 0, 255], 20);
+    check("and nowhere near the middle of it, which is the material",
+      differs(burned.frames[0].pixel, beside.frames[0].pixel) < 20, true);
+    check("while a separate track leaves every frame as the material was",
+      beside.frames.length, OUTPUT_FRAMES);
+  });
+
   await test("cancelling mid-run leaves nothing behind", async () => {
     const handle = R.startExport({
       project: doc.state,
@@ -442,6 +508,7 @@ async function report() {
         videoCodec: chosen?.id === "webm" ? "vp9" : "h264",
         audioCodec: chosen?.id === "webm" ? "opus" : "aac",
         hasAudio: chosenHasAudio,
+        subtitles: true,
       },
     }),
   });
