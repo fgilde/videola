@@ -35,6 +35,20 @@ sixteen instants and the audio render sample for sample.
 Everything runs through Pointer Events, so mouse, pen and finger take the same path, and a whole
 drag — two hundred pointer moves — is **one** undo step.
 
+The classical cut is here too: mark a range in a medium with <kbd>I</kbd> and <kbd>O</kbd>, then
+<kbd>,</kbd> **inserts** it at the playhead — opening the same gap on every track, so sound stays
+with picture — or <kbd>.</kbd> **overwrites** with it, replacing what was there and leaving the
+timeline the length it was. Each is one command, so an insert across three tracks and a dozen clips
+is one <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
+
+An **adjustment track** carries no picture of its own: its clips' effects run over everything drawn
+below them, so five shots are graded at once instead of five times. That the picture underneath
+changes and the picture beside it does not is checked on real pixels, because that is the only place
+the claim exists.
+
+Markers carry a colour and a note, and the list beside the marker button jumps between them —
+<kbd>Shift</kbd> and an arrow key does the same from the keyboard.
+
 ## Effects, transitions and text
 
 ![The effect browser: tiles by category, each rendered through the effect it offers](/editor-effects.webp)
@@ -116,6 +130,12 @@ it is not a brickwall, and the documentation says so rather than implying otherw
 The audio clock leads and the picture follows, because audio drift is audible and a dropped frame is
 not. Frame rates stay rational to the last division — 30000/1001 is not 29.97, and a frame step
 built from the decimal drifts off the ruler within a few hundred frames.
+
+<kbd>J</kbd>, <kbd>K</kbd> and <kbd>L</kbd> shuttle backwards, halt and shuttle forwards, stepping up
+through 1, 2, 4 and 8 with each press in the same direction. That rate belongs to the transport and
+not to the material: a clip's own speed, ramp and all, is untouched by it and reaches the export as
+it was authored. The preview can be drawn at half or a quarter resolution, which is the cheapest
+performance there is on a large project and never reaches the exported file.
 
 Export writes MP4 with H.264 and AAC, or WebM with VP9 and Opus, in a worker, through the same
 compositor the preview uses. Progress is reported and cancelling really stops it. A browser that can

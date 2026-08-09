@@ -300,6 +300,34 @@ The pixel check behind that is the one this whole feature rests on: every manife
 differ from the picture it was drawn from by more than eight levels, averaged over every channel of
 every pixel. A tile that came back is worth nothing; a tile that came back *changed* is the claim.
 
+## Adjustment tracks
+
+A track of kind **adjustment** carries no picture of its own. What it carries is clips, and the
+effect chain of a clip on it runs over **everything drawn below** it for as long as that clip lasts.
+`tracks[0]` is the bottom of the stack, so a layer covers every track with a lower index and leaves
+every track above it alone — which is the whole of what an adjustment layer means, and the reason to
+grade five shots at once instead of putting the same effect on five clips.
+
+The clip on the layer is an ordinary clip. Its span is the span the grade applies over, its effects
+are authored in the inspector like any others, and fading it to nothing switches the layer off.
+Hiding the track does the same. A layer inside a compound clip covers what is inside that compound
+and stops at the fold; a layer outside one reaches into it and grades every clip it holds.
+
+Two or more layers stack from the bottom up, and a clip's own effects always run first: a grade is
+applied to the picture as the clip finally looks, not to the picture before the clip's own effects
+touched it.
+
+This is checkable in one place and one place only, and that is pixels. The GPU harness puts one
+picture under a layer and another beside it and reads both back: the one below has to change and the
+one beside it must not — and a hidden layer, a layer with no clip on it and a layer whose clip is
+elsewhere in time all have to change neither.
+
+The passes run per clip rather than once over the composed picture. Where two clips overlap under one
+layer, a blur sees each of them on its own rather than the seam between them, and an effect applied
+to both is not the same as the effect applied once to what they made together. Doing that properly
+wants the tracks below the layer rendered into a target of their own — the same isolation a compound
+clip is still waiting for, and the two arrive together or not at all.
+
 ## Transitions
 
 A transition is an effect with two inputs, not a second subsystem. `u_second` is the picture the
@@ -453,8 +481,10 @@ project actually carries an effect.
   and nothing creates them.
 - **`transitionOut` is never read.** A cut between two clips is authored as the incoming clip's
   `transitionIn`, because the outgoing clip is drawn first and cannot mix with what comes after it.
-- **Adjustment tracks, track effects and master effects still paint nothing.** The seam is in the
-  draw list; the machinery is the same chain, applied to a track's intermediate target.
+- **Track effects and master effects still paint nothing.** The seam is in the draw list; the
+  machinery is the same chain, applied to a track's intermediate target. Adjustment *tracks* do
+  reach the picture now (see above), by handing their chain to the clips below rather than by
+  composing those clips first.
 - **`overlay` and `difference` still fall back to `normal`.** They need the destination as a
   texture, which the transition path has — a small step rather than a missing piece.
 - **Fonts in the export worker are whatever the worker can resolve.** A generic family always works;

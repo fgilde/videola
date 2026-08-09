@@ -315,6 +315,36 @@ muss sich von dem Bild, aus dem sie gezeichnet wurde, um mehr als acht Stufen un
 gemittelt über jeden Kanal jedes Pixels. Eine Kachel, die zurückkam, ist nichts wert; eine Kachel,
 die *verändert* zurückkam, ist die Aussage.
 
+## Anpassungsspuren
+
+Eine Spur der Art **adjustment** trägt kein eigenes Bild. Sie trägt Clips, und die Effektkette eines
+Clips auf ihr läuft über **alles, was darunter gezeichnet wird**, solange dieser Clip dauert.
+`tracks[0]` ist unten im Stapel, eine Ebene bedeckt also jede Spur mit kleinerem Index und lässt jede
+darüber in Ruhe — das ist alles, was eine Anpassungsebene ausmacht, und der Grund, fünf Einstellungen
+auf einmal zu graden, statt denselben Effekt auf fünf Clips zu legen.
+
+Der Clip auf der Ebene ist ein gewöhnlicher Clip. Seine Spanne ist die Spanne, über die das Grading
+wirkt, seine Effekte werden im Inspector gebaut wie alle anderen, und ihn auf null zu blenden
+schaltet die Ebene ab. Die Spur zu verbergen tut dasselbe. Eine Ebene innerhalb eines Compound-Clips
+bedeckt, was in diesem Compound liegt, und hört an der Faltung auf; eine Ebene außerhalb reicht
+hinein und gradet jeden Clip darin.
+
+Zwei oder mehr Ebenen stapeln sich von unten nach oben, und die eigenen Effekte eines Clips laufen
+immer zuerst: ein Grading wirkt auf das Bild, wie der Clip am Ende aussieht, nicht auf das Bild,
+bevor seine eigenen Effekte es angefasst haben.
+
+Nachweisbar ist das an genau einer Stelle, und das sind Pixel. Die GPU-Prüfstrecke stellt ein Bild
+unter eine Ebene und ein zweites daneben und liest beide zurück: das darunter muss sich ändern, das
+daneben nicht — und eine verborgene Ebene, eine Ebene ohne Clip und eine Ebene, deren Clip anderswo
+in der Zeit liegt, dürfen keines von beiden ändern.
+
+Die Durchgänge laufen je Clip und nicht einmal über das zusammengesetzte Bild. Wo sich zwei Clips
+unter einer Ebene überlappen, sieht ein Weichzeichner jeden für sich statt der Naht zwischen ihnen,
+und ein Effekt auf beide ist nicht dasselbe wie derselbe Effekt einmal auf das, was die beiden
+zusammen ergeben. Es richtig zu tun verlangt, die Spuren unter der Ebene in ein eigenes Ziel zu
+rendern — dieselbe Isolierung, auf die ein Compound-Clip noch wartet, und die beiden kommen
+gemeinsam oder gar nicht.
+
 ## Übergänge
 
 Ein Übergang ist ein Effekt mit zwei Eingängen, kein zweites Teilsystem. `u_second` ist das Bild, das
@@ -471,8 +501,10 @@ Projekt wirklich einen Effekt trägt.
 - **`transitionOut` wird nie gelesen.** Ein Schnitt zwischen zwei Clips wird als `transitionIn` des
   ankommenden Clips verfasst, weil der abgehende Clip zuerst gezeichnet wird und sich nicht mit dem
   mischen kann, was danach kommt.
-- **Anpassungsspuren, Spureffekte und Master-Effekte malen weiterhin nichts.** Die Naht sitzt in der
-  Zeichenliste; die Mechanik ist dieselbe Kette, angewandt auf das Zwischenziel einer Spur.
+- **Spureffekte und Master-Effekte malen weiterhin nichts.** Die Naht sitzt in der Zeichenliste;
+  die Mechanik ist dieselbe Kette, angewandt auf das Zwischenziel einer Spur. Anpassungs*spuren*
+  erreichen das Bild inzwischen (siehe oben), indem sie ihre Kette an die Clips darunter reichen,
+  statt diese Clips vorher zusammenzusetzen.
 - **`overlay` und `difference` fallen weiterhin auf `normal` zurück.** Sie brauchen das Ziel als
   Textur, was der Übergangsweg hat — ein kleiner Schritt statt eines fehlenden Stücks.
 - **Fonts im Export-Worker sind, was der Worker auflösen kann.** Eine generische Familie geht immer;

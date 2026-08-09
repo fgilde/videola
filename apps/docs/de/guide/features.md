@@ -38,6 +38,20 @@ nachgewiesen.
 Alles läuft über Pointer Events, damit Maus, Stift und Finger denselben Weg nehmen, und ein ganzer
 Zug über zweihundert Bewegungen ist **ein** Undo-Schritt.
 
+Der klassische Schnitt ist ebenfalls da: einen Bereich im Medium mit <kbd>I</kbd> und <kbd>O</kbd>
+markieren, dann **fügt** <kbd>,</kbd> ihn am Playhead ein — mit derselben Lücke auf jeder Spur, damit
+Ton beim Bild bleibt — oder <kbd>.</kbd> **überschreibt** damit, ersetzt also, was dort lag, und
+lässt die Zeitleiste so lang, wie sie war. Jedes davon ist ein Command; ein Einfügen über drei Spuren
+und ein Dutzend Clips ist ein <kbd>Strg</kbd>+<kbd>Z</kbd>.
+
+Eine **Anpassungsspur** trägt kein eigenes Bild: die Effekte ihrer Clips laufen über alles, was
+darunter gezeichnet wird, damit fünf Einstellungen auf einmal gegradet werden statt fünfmal. Dass
+sich das Bild darunter ändert und das daneben nicht, ist an echten Pixeln geprüft — der einzige Ort,
+an dem diese Aussage überhaupt existiert.
+
+Marker tragen eine Farbe und eine Notiz, und die Liste neben dem Marker-Knopf springt zwischen ihnen;
+<kbd>Umschalt</kbd> und eine Pfeiltaste tut dasselbe von der Tastatur aus.
+
 ## Effekte, Übergänge und Text
 
 ![Der Effekt-Browser: Kacheln nach Kategorien, jede durch den Effekt gerendert, den sie anbietet](/editor-effects.webp)
@@ -124,6 +138,13 @@ drauf, ist also keine Brickwall — und die Doku sagt das, statt etwas anderes a
 Der Ton führt und das Bild folgt, weil Audio-Drift hörbar ist und ein ausgelassenes Bild nicht.
 Bildraten bleiben bis zur letzten Division rational — 30000/1001 ist nicht 29,97, und ein Bildschritt
 aus der Dezimalzahl läuft schon nach wenigen hundert Bildern vom Lineal weg.
+
+<kbd>J</kbd>, <kbd>K</kbd> und <kbd>L</kbd> schalten rückwärts, halten an und schalten vorwärts, mit
+jedem Druck in dieselbe Richtung eine Stufe höher: 1, 2, 4, 8. Diese Rate gehört dem Transport und
+nicht dem Material — die Geschwindigkeit eines Clips samt Rampe bleibt davon unberührt und erreicht
+den Export so, wie sie gebaut wurde. Die Vorschau lässt sich auf halbe oder viertel Auflösung
+stellen, die billigste Leistungssteigerung bei großem Material, und sie erreicht die exportierte
+Datei nie.
 
 Der Export schreibt MP4 mit H.264 und AAC oder WebM mit VP9 und Opus, in einem Worker, durch denselben
 Compositor wie die Vorschau. Der Fortschritt wird gemeldet, und ein Abbruch stoppt wirklich. Ein

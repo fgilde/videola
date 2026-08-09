@@ -40,6 +40,60 @@ Relinking asks for the file and checks it: the id of a medium *is* the SHA-256 o
 only the same file is accepted. Another file would be a different medium wearing this one's name,
 and every clip pointing at it would quietly show the wrong picture.
 
+## In and out points
+
+The classical cut is three points: where the material starts, where it ends, and where on the
+timeline it goes. The **scissors** button beside a library entry arms that medium and opens the
+**source bar** under the transport.
+
+| Key | Result |
+|---|---|
+| <kbd>I</kbd> | marks the in point at the source position |
+| <kbd>O</kbd> | marks the out point there |
+| <kbd>,</kbd> | inserts the marked range at the playhead |
+| <kbd>.</kbd> | overwrites with it at the playhead |
+
+The four keys listen on the window, like the transport's, so they work while the focus is in the
+timeline. All four have buttons beside them: a finger has no keyboard, and a range marked with the
+scrub bar and placed with two buttons is the same edit.
+
+Nothing marked means the whole medium, which is what a clip nobody has trimmed yet is. An out point
+at or before the in point is not a range and the two buttons are disabled — the surface can see
+that, so it does not send a command for the core to refuse and the banner to report.
+
+The range lands on the track the selected clip is on. With nothing selected it lands on the first
+track the material belongs on, which is the rule an import already follows, and where there is no
+such track one is made. The playhead moves to the end of what was placed, so a run of edits stacks
+up instead of laying every take over the one before it.
+
+The source bar has no picture. Scrubbing one needs a decoder per position and a second compositor
+beside the one drawing the timeline, which is a monitor rather than a control; what is here is the
+timecode, and the poster the library shows says which medium it belongs to.
+
+### What insert and overwrite each promise
+
+**Insert** opens a gap at the playhead the length of the range and moves everything from there on
+back by exactly that much — on **every** track, not only the one being edited. That is the one thing
+an insert must never get wrong: sound and picture are separate tracks, and a gap that opened on only
+one of them would put the timeline out of step from that point on for the rest of the film. A clip
+that reaches across the insertion point is cut in two first, and the far half reads on from where
+the near half stopped, so taking the material back out again leaves a cut nobody can see. Groups
+travel whole, across tracks included.
+
+**Overwrite** places the range at the playhead and lets it replace whatever occupied that span, on
+the one track named. Nothing moves, so the timeline keeps the length it had unless the material
+reaches past the old end. A clip the span falls wholly inside is left as a head and a tail; a clip
+the span merely clips is cut back to the edge; a clip it covers is gone, and its transition goes
+with it — a dissolve belongs to the edge it was authored on, and that edge no longer exists.
+
+Both are **one** command, so both are one step on the undo stack however many clips moved. An insert
+across three tracks and a dozen clips is a single <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
+
+Two things they do not do. `track.locked` does not exempt a track from an insert's ripple: a lock is
+not enforced anywhere in the core yet, and honouring it in one command alone would make that command
+the only authority on what a lock means — and an exempt track would be an overlap nobody authored.
+Markers do not ripple either; they keep their absolute positions.
+
 ## The timeline
 
 | Gesture | Result |
@@ -153,10 +207,22 @@ from a saved file stays one.
 
 ### Markers
 
-**Set marker** in the toolbar, or <kbd>M</kbd>, puts one at the playhead. Clicking a marker moves
-the playhead there; its own context menu deletes it. Markers are snap candidates, which is what they
-are mostly for — `marker.rename` exists as a command for the API and the MCP server, but the
-surface offers no text field for it yet.
+**Set marker** in the toolbar, or <kbd>M</kbd>, puts one at the playhead. Clicking a marker on the
+ruler moves the playhead there; its own context menu deletes it. Markers are snap candidates, which
+is half of what they are for.
+
+**Markers (n)** beside the button opens the list, over the tracks rather than above them — the
+picture is the largest zone on this screen and a list nobody has opened must not take a row of it.
+Every marker is a row: a colour, the timecode as a button that jumps there, a name and a note.
+
+The colour is the operating system's own picker and comes back as the `#rrggbb` the core already
+accepts. The name is what the ruler could show; the note is the longer text, and it is what a list
+of thirty markers is read by. Typing in either is one undo step per field and per marker rather than
+one per letter.
+
+<kbd>Shift</kbd>+<kbd>→</kbd> and <kbd>Shift</kbd>+<kbd>←</kbd> jump to the next marker in that
+direction. Standing exactly on one does not count as being ahead of it, so the key moves on rather
+than landing on the same marker again.
 
 ### On magnetic timelines
 
@@ -364,6 +430,36 @@ built from the decimal drifts off the ruler within a few hundred frames.
 
 Browsers start an `AudioContext` suspended and only allow it to resume after a user gesture, so the
 first press of play does slightly more work than the ones after it.
+
+### J, K and L
+
+| Key | Result |
+|---|---|
+| <kbd>J</kbd> | rewinds; each press in the same direction steps up 1, 2, 4, 8 |
+| <kbd>K</kbd> | halts |
+| <kbd>L</kbd> | plays forward, up the same ladder |
+
+A press against the direction of travel drops straight back to the first rung rather than counting
+back down, which is what makes tapping <kbd>J</kbd> out of a fast forward feel like a brake. The
+rate is shown beside the timecode while it is not the ordinary one, and the two triangle buttons do
+the same thing for a hand with no keyboard under it. A rewind ends at the head of the timeline and
+halts there.
+
+This is the **transport's** rate and not a clip's. A clip's speed — including a ramp, which is a
+curve rather than a factor — is a property of the material and travels with it into the export; this
+one exists only while somebody is shuttling, and nothing in the project ever reads it.
+
+Sound plays at ordinary speed and at no other. An `AudioBufferSourceNode` is scheduled against real
+time and cannot follow a shuttle, so the alternative is not fast audio but audio drifting further
+from the picture with every second — which is worse than none.
+
+### Preview resolution
+
+The select beside the timecode draws the preview at **1/2** or **1/4** of the screen's own
+resolution. The element keeps its size and the browser stretches the smaller buffer back over it, so
+the picture only gets softer — the cheapest thing there is to trade for a preview that keeps up on a
+big project. The export never sees it: it renders into a context of its own, at the size the export
+dialogue was given.
 
 ## On a phone
 

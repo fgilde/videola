@@ -43,6 +43,65 @@ SHA-256 seines Inhalts, also wird nur dieselbe Datei angenommen. Eine andere wä
 Medium unter dem Namen dieses einen, und jeder Clip, der darauf zeigt, zeigte still das falsche
 Bild.
 
+## In- und Out-Punkte
+
+Der klassische Schnitt hat drei Punkte: wo das Material anfängt, wo es aufhört, und wo auf der
+Zeitleiste es hin soll. Die **Schere** neben einem Bibliothekseintrag rüstet dieses Medium und
+öffnet die **Quellzeile** unter dem Transport.
+
+| Taste | Wirkung |
+|---|---|
+| <kbd>I</kbd> | setzt den In-Punkt an die Stelle in der Quelle |
+| <kbd>O</kbd> | setzt dort den Out-Punkt |
+| <kbd>,</kbd> | fügt den markierten Bereich am Playhead ein |
+| <kbd>.</kbd> | schreibt ihn am Playhead darüber |
+
+Die vier Tasten lauschen am Fenster wie die des Transports und wirken daher auch, wenn der Fokus in
+der Zeitleiste steht. Zu allen vieren gibt es Schaltflächen: ein Finger hat keine Tastatur, und ein
+mit der Scrubleiste markierter und mit zwei Knöpfen gesetzter Bereich ist derselbe Schnitt.
+
+Nichts markiert heißt das ganze Medium — das ist ein Clip, den noch niemand getrimmt hat. Ein
+Out-Punkt auf oder vor dem In-Punkt ist kein Bereich, und dann sind beide Knöpfe abgeschaltet: die
+Oberfläche sieht das selbst und schickt kein Kommando, das der Kern ablehnen und das Banner melden
+müsste.
+
+Der Bereich landet auf der Spur, auf der der gewählte Clip liegt. Ist nichts gewählt, landet er auf
+der ersten Spur, auf die das Material gehört — dieselbe Regel, der ein Import schon folgt —, und gibt
+es keine solche Spur, wird eine angelegt. Der Playhead rückt ans Ende des Gesetzten, damit eine Folge
+von Schnitten sich aneinanderreiht, statt jede Aufnahme über die vorige zu legen.
+
+Die Quellzeile hat kein Bild. Eine Quelle zu scrubben braucht einen Dekoder je Stelle und einen
+zweiten Compositor neben dem, der die Zeitleiste zeichnet — das ist ein Monitor und kein
+Bedienelement. Was hier steht, ist der Timecode, und das Vorschaubild der Bibliothek sagt, zu
+welchem Medium er gehört.
+
+### Was Einfügen und Überschreiben jeweils versprechen
+
+**Einfügen** öffnet am Playhead eine Lücke in der Länge des Bereichs und schiebt alles ab dort um
+genau so viel nach hinten — auf **jeder** Spur, nicht nur auf der bearbeiteten. Das ist das eine, was
+ein Einfügen niemals falsch machen darf: Ton und Bild liegen auf getrennten Spuren, und eine Lücke,
+die sich nur auf einer von beiden öffnet, bringt die Zeitleiste ab dort für den Rest des Films aus
+dem Takt. Ein Clip, der über die Einfügestelle reicht, wird vorher zweigeteilt, und die hintere
+Hälfte liest dort weiter, wo die vordere aufgehört hat — nimmt man das Material wieder heraus, bleibt
+ein Schnitt, den niemand sieht. Gruppen wandern ganz, auch über Spuren hinweg.
+
+**Überschreiben** setzt den Bereich an den Playhead und lässt ihn ersetzen, was diese Spanne
+belegte — auf der einen genannten Spur. Nichts verschiebt sich, die Zeitleiste behält also ihre
+Länge, sofern das Material nicht über das alte Ende hinausreicht. Ein Clip, in den die Spanne ganz
+hineinfällt, bleibt als Kopf und als Schwanz stehen; ein Clip, den sie nur anschneidet, wird auf die
+Kante zurückgenommen; ein Clip, den sie ganz bedeckt, ist weg — und sein Übergang geht mit: eine
+Blende gehört zu der Kante, auf der sie gebaut wurde, und die gibt es nicht mehr.
+
+Beides ist **ein** Command und damit je ein Schritt auf dem Undo-Stapel, wie viele Clips sich auch
+bewegt haben. Ein Einfügen über drei Spuren und ein Dutzend Clips ist ein einziges
+<kbd>Strg</kbd>+<kbd>Z</kbd>.
+
+Zweierlei tun sie nicht. `track.locked` nimmt eine Spur nicht vom Rippeln aus: eine Sperre wird im
+Kern bisher nirgends durchgesetzt, und sie ausgerechnet in einem Command zu achten machte dieses
+Command zur einzigen Autorität darüber, was eine Sperre bedeutet — und eine ausgenommene Spur wäre
+eine Überlappung, die niemand gebaut hat. Marker rippeln ebenfalls nicht; sie behalten ihre absoluten
+Positionen.
+
 ## Die Timeline
 
 | Geste | Wirkung |
@@ -161,9 +220,22 @@ aus einer Datei wieder geöffneter Compound bleibt einer.
 ### Marker
 
 **Marker setzen** in der Werkzeugleiste oder <kbd>M</kbd> setzt einen am Playhead. Ein Klick auf
-einen Marker springt mit dem Playhead dorthin; sein eigenes Kontextmenü löscht ihn. Marker sind
-Fangkandidaten, und dafür sind sie vor allem da — `marker.rename` gibt es als Kommando für die API
-und den MCP-Server, ein Textfeld dafür hat die Oberfläche noch nicht.
+einen Marker im Lineal springt mit dem Playhead dorthin; sein eigenes Kontextmenü löscht ihn. Marker
+sind Fangkandidaten, und das ist die eine Hälfte dessen, wofür sie da sind.
+
+**Marker (n)** daneben öffnet die Liste, und zwar über den Spuren statt über ihnen — das Bild ist der
+größte Bereich dieses Bildschirms, und eine Liste, die niemand geöffnet hat, darf ihm keine Zeile
+wegnehmen. Jeder Marker ist eine Zeile: eine Farbe, der Timecode als Knopf, der dorthin springt, ein
+Name und eine Notiz.
+
+Die Farbe kommt aus dem Farbwähler des Betriebssystems und zurück als das `#rrggbb`, das der Kern
+ohnehin annimmt. Der Name ist das, was das Lineal zeigen könnte; die Notiz ist der längere Text, und
+an ihr liest man eine Liste von dreißig Markern. Tippen ist je Feld und je Marker ein Undo-Schritt
+und nicht einer je Buchstabe.
+
+<kbd>Umschalt</kbd>+<kbd>→</kbd> und <kbd>Umschalt</kbd>+<kbd>←</kbd> springen zum nächsten Marker in
+dieser Richtung. Genau auf einem zu stehen zählt nicht als davor, damit die Taste weitergeht statt
+wieder auf demselben Marker zu landen.
 
 ### Zur magnetischen Timeline
 
@@ -385,6 +457,38 @@ Bildschritt aus der Dezimalzahl läuft schon nach wenigen hundert Bildern vom Li
 
 Browser starten einen `AudioContext` angehalten und lassen ihn erst nach einer Nutzergeste
 fortsetzen; der erste Druck auf Abspielen tut deshalb etwas mehr als die folgenden.
+
+### J, K und L
+
+| Taste | Wirkung |
+|---|---|
+| <kbd>J</kbd> | läuft rückwärts; jeder Druck in dieselbe Richtung steigt 1, 2, 4, 8 |
+| <kbd>K</kbd> | hält an |
+| <kbd>L</kbd> | läuft vorwärts, dieselbe Leiter hinauf |
+
+Ein Druck gegen die Fahrtrichtung fällt sofort auf die erste Stufe zurück, statt herunterzuzählen —
+das ist es, was ein Antippen von <kbd>J</kbd> aus dem schnellen Vorlauf wie eine Bremse anfühlen
+lässt. Die Rate steht neben dem Timecode, solange sie nicht die gewöhnliche ist, und die beiden
+Dreiecksknöpfe tun dasselbe für eine Hand ohne Tastatur darunter. Ein Rücklauf endet am Anfang der
+Zeitleiste und hält dort an.
+
+Das ist die Rate des **Transports** und nicht die eines Clips. Die Geschwindigkeit eines Clips —
+auch eine Rampe, die eine Kurve ist und kein Faktor — ist eine Eigenschaft des Materials und wandert
+mit ihm in den Export; diese hier existiert nur, solange jemand schaltet, und nichts im Projekt liest
+sie je.
+
+Ton läuft bei einfacher Geschwindigkeit und bei keiner anderen. Ein `AudioBufferSourceNode` ist gegen
+die echte Zeit geplant und kann einer Schaltung nicht folgen; die Alternative wäre also nicht
+schneller Ton, sondern Ton, der mit jeder Sekunde weiter vom Bild wegläuft — und das ist schlechter
+als keiner.
+
+### Wiedergabe-Auflösung
+
+Die Auswahl neben dem Timecode zeichnet die Vorschau auf **1/2** oder **1/4** der Auflösung des
+Bildschirms. Das Element behält seine Größe, der Browser zieht den kleineren Puffer darüber, und das
+Bild wird nur weicher — die billigste Leistungssteigerung, die es für eine Vorschau gibt, die bei
+großem Material mitkommen soll. Der Export sieht davon nichts: er rendert in einen eigenen Kontext,
+in der Größe, die der Export-Dialog bekommen hat.
 
 ## Auf dem Telefon
 
