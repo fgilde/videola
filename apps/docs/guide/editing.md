@@ -198,6 +198,43 @@ Keys travel with whatever they animate, and with their interpolation and handles
 dropped the easing would hand back a move that lands in the right place and gets there wrongly. The
 whole press is one step in the history, however many clips it touched.
 
+## Finding the cuts in a recording
+
+**Built.** A card off a camera is one long file with a dozen takes in it, and the first thing anybody
+does with it is find the joins by hand. **Find the cuts in this clip**, in the clip's context menu
+beside the split, does it by looking.
+
+Every frame of the clip is reduced to a grid of 32 by 18 brightnesses — Rec. 709 luma, so a cut between
+two frames of the same brightness and different hue is still a cut — and consecutive grids are compared
+as a mean absolute difference. A moment where that difference is both large in absolute terms *and much
+larger than the moments around it* is a cut, and the clip is split there.
+
+| Rule | Why it is there |
+|---|---|
+| A threshold of 0.12 | a tenth of the whole brightness range, averaged over every cell: a cut between two shots clears it, a flash or a hand across the lens does not |
+| Three times the neighbourhood | what tells a cut from a **dissolve**. A dissolve changes the picture as much as a cut does, spread over a second — so it clears any threshold a cut clears, on every one of its frames. A cut is a *spike*, and this is the test for one |
+| The neighbourhood as a **median** | because the window may contain another cut, and one large value drags a mean up far enough to hide the next join. Measured: two cuts eight frames apart, one loud and one modest, and a mean loses the modest one |
+| Eight frames between cuts | nothing cuts twice inside a few frames; a flash frame otherwise reports two, and the louder of the pair is the real join |
+
+**Frame by frame, off the proxy.** Sampling every second frame would halve the work and report a cut up
+to two frames late — and two frames of the previous take at the head of a clip is exactly what somebody
+would then fix by hand, which is the work this was meant to save. The proxy rather than the original,
+because a cut is a change in the whole picture and the smallest copy shows it just as clearly.
+
+**A cut is reported as the first frame of the new shot**, which is the frame a split has to land on.
+Splitting at the last frame of the old shot would leave one frame of the old take at the head of the new
+clip.
+
+**Source times, turned back into instants by the core.** The scan reads the file and knows nothing about
+where the clip sits or how fast it runs, so what it returns are moments of the *source*.
+`timelineTimeAt` inverts the map the renderer uses in the other direction — by bisection, because that
+map is the integral of a rate track and a ramp leaves it no closed-form inverse. It is monotone, rising
+at a forward rate and falling at a reversed one, which is exactly what bisection answers; forty steps
+put it inside one flick. A cut in material the clip trims away has no instant and is dropped.
+
+Every split goes out under one coalesce key, so a card that turns out to have forty takes in it is one
+press of undo and not forty.
+
 ## Cutting at the markers
 
 The marker list carries one action of its own: cut every clip the markers pass through. With beats

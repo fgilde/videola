@@ -131,6 +131,13 @@ export interface TimelineProps {
   /** Cut every clip the markers pass through. Absent where the host offers no such edit. */
   onSplitAtMarkers?: () => void;
   /**
+   * Find the cuts inside one clip and split it at them. The host owns it: the scan decodes frames, and
+   * turning what it finds back into instants needs the document rather than a snapshot of it.
+   */
+  onDetectCuts?: (clip: ClipId) => void;
+  /** True while a scan is running, so the entry says so instead of looking like it did nothing. */
+  detecting?: boolean;
+  /**
    * Hold one frame of this clip for a while. Composed of two cuts and a rate of zero, which needs the
    * project as it stands *between* those edits — so it is the host's to run, not this component's: a
    * prop is a snapshot, and the second cut would name a clip the first one had already retired.
@@ -159,6 +166,8 @@ export function Timeline({
   dispatch,
   onSeek,
   onSplitAtMarkers,
+  onDetectCuts,
+  detecting = false,
   onFreeze,
   onSelectionChange,
   grab,
@@ -795,6 +804,8 @@ export function Timeline({
           onPaste={paste}
           onPasteLook={pasteLook}
           onFreeze={onFreeze}
+          onDetectCuts={onDetectCuts}
+          detecting={detecting}
         />
       )}
     </section>
@@ -815,6 +826,8 @@ interface MenuProps {
   onPaste: () => void;
   onPasteLook: () => void;
   onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
+  onDetectCuts?: (clip: ClipId) => void;
+  detecting?: boolean;
 }
 
 // Every entry either does something or is disabled. What decides that is read at render time and
@@ -879,6 +892,18 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
       label: t("timeline.split"),
       disabled: !(playhead > clip.start && playhead < clip.start + clip.duration),
       onSelect: close(() => dispatch(cmd.clipSplit(clip.id, playhead))),
+    },
+    {
+      // Beside the split, because it is the same job done by looking rather than by hand: the scan
+      // reads every frame of the clip and splits where the picture changes far more than it did
+      // around it. Only for a clip that has a medium behind it -- a generator has no cuts to find --
+      // and disabled while one is running, because a second scan would fight the first for decoders.
+      label: t(props.detecting === true ? "timeline.detectingCuts" : "timeline.detectCuts"),
+      disabled:
+        props.onDetectCuts === undefined ||
+        props.detecting === true ||
+        clip.source.kind !== "media",
+      onSelect: close(() => props.onDetectCuts?.(clip.id)),
     },
     {
       // Two seconds, which is what a beat on a face is. It has to fit inside the clip with material

@@ -1077,6 +1077,7 @@ async function announce() {
     if (virtual) await keyframeLane(await keyframes());
 
     await captions();
+    await detected();
     await inserted();
     await keysAndView();
     await soundAndChain();
@@ -2228,6 +2229,58 @@ async function announce() {
     await sleep(200);
     check("and it can be taken off the chain", labelled("Überbrücken"), undefined);
     check("operating the chain raised nothing", banner(), "");
+  }
+
+  // Scene detection, end to end. A file with one hard cut in the middle is dropped, its clip is asked to
+  // find its own cuts, and the timeline has to come back with two clips split at that cut. Nothing
+  // below this line is reachable from a unit test: the scan decodes every frame of the clip through
+  // WebCodecs and reduces each one on a canvas, and jsdom has neither.
+  //
+  // It undoes itself, so what follows works on the project it was handed.
+  async function detected() {
+    const before = all("[data-clip-id]").length;
+    const bytes = await (await fetch("/cuts.mp4")).blob();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], "cuts.mp4", { type: "video/mp4" }));
+    drag("drop", q(".v-dropzone"), transfer);
+    await until("the dropped clip", () => all("[data-clip-id]").length === before + 1, 30000);
+    const dropped = all("[data-clip-id]").at(-1);
+    check("dropping the cut fixture raised nothing", banner(), "");
+
+    contextMenu(dropped);
+    // Awaited, because a menu opens on a state change and React has to commit before it is in the DOM.
+    const entry = await until("the clip menu", () => menuItem("Schnitte in diesem Clip finden"));
+    check("a media clip is offered a scan", entry.disabled, false);
+    entry.click();
+
+    // One decode and one read per frame of a two-second clip, so it is seconds rather than
+    // milliseconds -- and the entry says so while it runs, which is the whole reason it has a second
+    // label.
+    await until("the scan to report", () => q('[data-testid="cuts-found"]'), 120000);
+    check("the scan says what it found",
+      q('[data-testid="cuts-found"]').textContent.includes("gefunden"), true);
+    check("and the clip was split at the cut", all("[data-clip-id]").length, before + 2);
+    check("scanning raised nothing", banner(), "");
+
+    // Where the cut is: the fixture changes colour exactly halfway, so the second piece starts within
+    // a few frames of one second. Two frames of the previous take at the head of a clip is precisely
+    // what somebody would otherwise fix by hand.
+    // Where the cut landed, read off the timeline's own axis: at the resting zoom a second is a
+    // hundred pixels, and the fixture changes colour exactly halfway through its two seconds. Within
+    // four frames, because a scan reports the first frame of the new shot and an encoder puts that
+    // frame where its own keyframes allow.
+    const pieces = all("[data-clip-id]").slice(-2);
+    const width = pieces[0].getBoundingClientRect().width;
+    checkNear("and it lands where the picture changes", width, 100, 14);
+    q('[data-testid="cuts-found"] button').click();
+    await sleep(100);
+
+    // One press of undo for the whole split, whatever it found.
+    button("Rückgängig").click();
+    await sleep(300);
+    check("one press takes the whole split back", all("[data-clip-id]").length, before + 1);
+    button("Rückgängig").click();
+    await until("the project as it was", () => (all("[data-clip-id]").length === before ? true : null), 10000);
   }
 
   async function dropFixture() {

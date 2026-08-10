@@ -210,6 +210,46 @@ Verlauf fallen ließe, gäbe eine Bewegung zurück, die an der richtigen Stelle 
 dorthin gelangt. Der ganze Tastendruck ist ein Schritt in der Historie, gleich wie viele Clips er
 berührt hat.
 
+## Die Schnitte in einer Aufnahme finden
+
+**Gebaut.** Eine Karte aus der Kamera ist eine lange Datei mit einem Dutzend Takes darin, und das
+Erste, was jemand damit tut, ist die Übergänge von Hand zu suchen. **Schnitte in diesem Clip finden**,
+im Kontextmenü des Clips neben dem Teilen, tut es durch Hinsehen.
+
+Jedes Bild des Clips wird auf ein Raster von 32 mal 18 Helligkeiten reduziert — Rec.-709-Luma, damit ein
+Schnitt zwischen zwei Bildern gleicher Helligkeit und anderer Farbe ein Schnitt bleibt — und
+aufeinanderfolgende Raster werden als mittlere absolute Differenz verglichen. Ein Moment, in dem diese
+Differenz groß ist *und deutlich größer als die Momente um sie herum*, ist ein Schnitt, und dort wird
+geteilt.
+
+| Regel | Warum sie da ist |
+|---|---|
+| Schwelle 0,12 | ein Zehntel des ganzen Helligkeitsbereichs, über alle Zellen gemittelt: ein Schnitt zwischen zwei Einstellungen überschreitet sie, ein Blitz oder eine Hand vor der Linse nicht |
+| Dreimal die Nachbarschaft | das unterscheidet einen Schnitt von einer **Blende**. Eine Blende ändert das Bild so stark wie ein Schnitt, nur über eine Sekunde verteilt — sie überschreitet also jede Schwelle, die ein Schnitt überschreitet, auf jedem ihrer Bilder. Ein Schnitt ist eine *Spitze*, und das ist die Prüfung darauf |
+| Die Nachbarschaft als **Median** | weil im Fenster ein weiterer Schnitt liegen kann, und ein großer Wert zieht einen Mittelwert so weit hoch, dass der nächste Übergang verschwindet. Gemessen: zwei Schnitte acht Bilder auseinander, einer laut und einer bescheiden — ein Mittelwert verliert den bescheidenen |
+| Acht Bilder Abstand | nichts schneidet zweimal innerhalb weniger Bilder; ein Blitzbild meldete sonst zwei, und der lautere der beiden ist der echte Übergang |
+
+**Bild für Bild, vom Proxy.** Jedes zweite Bild abzutasten halbierte die Arbeit und meldete einen
+Schnitt bis zu zwei Bilder zu spät — und zwei Bilder des vorigen Takes am Anfang eines Clips sind genau
+das, was jemand dann von Hand wegschneidet, also die Arbeit, die das hier sparen sollte. Der Proxy und
+nicht das Original, denn ein Schnitt ist eine Änderung des ganzen Bildes, und die kleinste Kopie zeigt
+sie genauso deutlich.
+
+**Ein Schnitt wird als erstes Bild der neuen Einstellung gemeldet**, und genau dort muss ein Teilen
+landen. Am letzten Bild der alten Einstellung zu teilen ließe ein Bild des alten Takes am Anfang des
+neuen Clips stehen.
+
+**Quellzeiten, die der Kern zurück in Zeitpunkte verwandelt.** Der Lauf liest die Datei und weiß nichts
+davon, wo der Clip sitzt oder wie schnell er läuft — was er liefert, sind Momente der *Quelle*.
+`timelineTimeAt` kehrt die Abbildung um, die der Renderer in der anderen Richtung benutzt: per
+Bisektion, denn diese Abbildung ist das Integral einer Ratenspur, und eine Rampe lässt ihr keine
+geschlossene Umkehrung. Sie ist monoton — steigend bei vorwärts, fallend bei rückwärts —, und genau das
+beantwortet eine Bisektion; vierzig Schritte treffen auf einen Flick. Ein Schnitt in Material, das der
+Clip wegschneidet, hat keinen Zeitpunkt und fällt weg.
+
+Alle Teilungen gehen unter einem Coalesce-Key hinaus: eine Karte mit vierzig Takes ist ein Druck auf
+Rückgängig und nicht vierzig.
+
 ## An den Markern schneiden
 
 Die Markerliste hat eine eigene Aktion: jeden Clip schneiden, durch den ein Marker läuft. Mit den

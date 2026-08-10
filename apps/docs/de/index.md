@@ -102,6 +102,8 @@ features:
 - **Geometrie auf dem Bild** — ein Rahmen mit Ecken- und Drehgriffen, dessen Ecken aus genau der
   Matrix stammen, die der Compositor der GPU übergibt, und die Bahn, die Positions-Keys beschreiben:
   aus dem Kern abgetastet statt von Ecke zu Ecke gezeichnet.
+- **Schnitte durch Hinsehen** — eine Kamerakarte ist eine Datei mit einem Dutzend Takes darin; der Lauf
+  liest jedes Bild und teilt, wo sich das Bild viel stärker ändert als drumherum — in einem Undo-Schritt.
 - **Surround** — Stereo oder 5.1, eine Position je Spur statt eines Reglers zwischen zwei Boxen,
   paarweise Platzierung mit konstanter Leistung, und ein LFE-Weg, der ein Band ist.
 - **Rauschunterdrückung** — spektral, aus den Pausen des Clips selbst gelernt: das Rauschen im eigenen

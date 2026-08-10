@@ -123,6 +123,10 @@ const server = createServer((req, res) => {
   if (url === "/fixture.webm")
     return send(res, readFileSync(join(here, "fixture.webm")), "video/webm");
   if (url === "/second.mp4") return send(res, readFileSync(join(here, "second.mp4")), TYPES[".mp4"]);
+  // Two seconds with one hard cut in the middle, for the scan. Generated once with ffmpeg and kept in
+  // the repository like the other two: a fixture built at test time would make the check depend on a
+  // tool nobody promised the runner has.
+  if (url === "/cuts.mp4") return send(res, readFileSync(join(here, "cuts.mp4")), TYPES[".mp4"]);
   if (url === "/driver.js") return send(res, readFileSync(join(here, "driver.js")), TYPES[".js"]);
   const path = join(dist, url === "/" ? "index.html" : decodeURIComponent(url));
   if (!existsSync(path) || statSync(path).isDirectory()) {

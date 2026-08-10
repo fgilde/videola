@@ -4,7 +4,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { cmd, FLICKS_PER_SECOND, MAX_COMPOUND_DEPTH, on, readableSourceTimeAt } from "./commands";
+import {
+  cmd,
+  FLICKS_PER_SECOND,
+  MAX_COMPOUND_DEPTH,
+  on,
+  readableSourceTimeAt,
+  timelineTimeAt,
+} from "./commands";
+import { frameHold } from "./presets";
 import { VideolaDocument } from "./document";
 import type { Clip, Interp, Project } from "./generated";
 import { createProjectBackend, createWasmBackend } from "./wasm-backend";
@@ -485,5 +493,81 @@ describe("a project state through the real WASM backend", () => {
 
     expect(restored.state.timeline.tracks[0]!.clips[0]!.source.kind).toBe("compound");
     expect(restored.sourceTimesAt(SECOND / 2)).toEqual(built.sourceTimesAt(SECOND / 2));
+  });
+});
+
+// The inverse of the source-time map, against clips the real core built and the forward map this file
+// already pins to Rust. A cut found by looking at frames is a *source* moment, and putting a split
+// where it belongs means turning it back into an instant on the timeline.
+describe("from a source moment back to the timeline", () => {
+  async function clipFrom(start: number, inPoint: number, duration: number): Promise<Clip> {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, start, duration));
+    const made = clipOn(doc, 0);
+    if (inPoint > 0) doc.dispatch(cmd.clipSlip(made.id, inPoint));
+    return clipOn(doc, 0);
+  }
+
+  it("inverts the ordinary case exactly", async () => {
+    const clip = await clipFrom(2 * SECOND, SECOND, 4 * SECOND);
+
+    for (const at of [2 * SECOND, 3 * SECOND, 5 * SECOND]) {
+      const source = readableSourceTimeAt(clip, at);
+      expect(source).toBeDefined();
+      expect(timelineTimeAt(clip, source!)).toBe(at);
+    }
+  });
+
+  it("answers nothing for material the clip never shows", async () => {
+    const clip = await clipFrom(2 * SECOND, SECOND, 4 * SECOND);
+
+    expect(timelineTimeAt(clip, 0)).toBeUndefined();
+    expect(timelineTimeAt(clip, 30 * SECOND)).toBeUndefined();
+  });
+
+  it("inverts a clip running at double speed", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const first = clipOn(doc, 0);
+    doc.dispatch(cmd.clipSetSpeed(first.id, 2, false, true));
+    const clip = clipOn(doc, 0);
+
+    // A second into the clip is two seconds of source, and back again.
+    expect(readableSourceTimeAt(clip, SECOND)).toBe(2 * SECOND);
+    expect(timelineTimeAt(clip, 2 * SECOND)).toBe(SECOND);
+  });
+
+  // A reversed clip maps a rising instant onto a falling source time. Bisection answers a monotone map
+  // whichever way it runs, and this is the check that the direction is not assumed.
+  it("inverts a reversed clip, where the map falls instead of rising", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 2 * SECOND));
+    const first = clipOn(doc, 0);
+    doc.dispatch(cmd.clipSetSpeed(first.id, 1, true, true));
+    const clip = clipOn(doc, 0);
+
+    const source = readableSourceTimeAt(clip, SECOND);
+    expect(source).toBeDefined();
+    const back = timelineTimeAt(clip, source!);
+    expect(back).toBeDefined();
+    // Within a frame: two instants of a reversed clip can share a source time after rounding, and the
+    // answer is one of them rather than the one the forward map happened to be asked about.
+    expect(Math.abs(back! - SECOND)).toBeLessThan(SECOND / 30);
+  });
+
+  // Every instant of a hold shows one source moment, so the inverse has a whole stretch to choose from.
+  // The earliest is the one a split wants: cutting at the head of a hold rather than inside it.
+  it("answers the head of a frame hold rather than the middle of it", async () => {
+    const doc = await timeline();
+    doc.dispatch(cmd.clipAdd(trackId(doc, 0), { kind: "media", media: MEDIA }, 0, 4 * SECOND));
+    const clip = clipOn(doc, 0);
+    for (const command of frameHold(clip, 2 * SECOND)) doc.dispatch(command);
+    const held = clipOn(doc, 0);
+
+    const frozen = readableSourceTimeAt(held, 3 * SECOND);
+    expect(frozen).toBeDefined();
+    const at = timelineTimeAt(held, frozen!);
+    expect(at).toBeDefined();
+    expect(at!).toBeLessThanOrEqual(3 * SECOND);
   });
 });

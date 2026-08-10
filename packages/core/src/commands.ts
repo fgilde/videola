@@ -108,6 +108,46 @@ export function sourceTimeAt(clip: Clip, at: Time): Time | undefined {
   return clip.speed.reverse ? clip.inPoint + consumedSource(clip) - offset : clip.inPoint + offset;
 }
 
+/**
+ * The other direction: which instant on the timeline shows a given moment of the source.
+ *
+ * Found by bisection over the clip's own span rather than by arithmetic, because there is no formula to
+ * invert. `sourceTimeAt` is the integral of a rate track, and a ramp makes it a curve whose inverse has
+ * no closed form — but it is *monotone*, rising at a forward rate and falling at a reversed one, and a
+ * monotone map is exactly what bisection answers. Forty steps put the answer inside one flick of a
+ * clip of any length.
+ *
+ * Undefined where the source moment is one this clip never shows: material it trims away, or anything
+ * outside its range. A caller that wanted a nearest instant would be asking for a different question,
+ * and one that guessed would put a cut where the material is not.
+ *
+ * The rate can be zero — a frame hold — and then a whole stretch of the timeline shows one source
+ * moment. Any instant in that stretch is a correct answer, and this returns the earliest one, which is
+ * the one a split would want: cutting at the head of a hold rather than in the middle of it.
+ */
+export function timelineTimeAt(clip: Clip, sourceAt: Time): Time | undefined {
+  const end = clip.start + clip.duration;
+  const first = sourceTimeAt(clip, clip.start);
+  const last = sourceTimeAt(clip, end - 1);
+  if (first === undefined || last === undefined) return undefined;
+  const rising = last >= first;
+  const low = rising ? first : last;
+  const high = rising ? last : first;
+  if (sourceAt < low || sourceAt > high) return undefined;
+  let lower = clip.start;
+  let upper = end - 1;
+  while (upper - lower > 1) {
+    const middle = lower + Math.floor((upper - lower) / 2);
+    const at = sourceTimeAt(clip, middle);
+    if (at === undefined) return undefined;
+    // Rising or falling, the same two lines: whichever half still contains the target becomes the
+    // range. Written with the comparison flipped rather than with two loops.
+    if (rising ? at <= sourceAt : at >= sourceAt) lower = middle;
+    else upper = middle;
+  }
+  return lower;
+}
+
 // How much source a clip spends between two instants on the timeline. `consumedSource` is this
 // asked for the whole clip; the audio graph asks it for the part still to play, and gets a buffer
 // offset that is the very source time the picture is drawn from rather than a second computation

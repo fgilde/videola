@@ -37,6 +37,11 @@ one and pasting it back is a different operation, and it loses where the clip wa
 A drag over empty timeline draws a **rubber band** and selects what it touches; dragged shut it gives
 the selection back.
 
+**Find the cuts in this clip** reads every frame of a clip and splits it where the picture changes far
+more than it did around it — a card off a camera, cut into its takes in one undo step. A dissolve is not
+reported as a cut, and neither is a pan: the test is a spike against its own neighbourhood rather than a
+threshold. See [Editing](./editing.md#finding-the-cuts-in-a-recording).
+
 Ripple delete closes the gap it leaves. Groups move together. Cut, copy and paste work on whole
 clips, markers sit on the ruler, and a selection can be folded into a **compound clip** — that the
 picture does not change when you do is proven against the whole frame buffer, the draw list at

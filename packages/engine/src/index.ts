@@ -73,6 +73,10 @@ export type {
   EffectPass,
 } from "./render/draw-list";
 export { EffectPreview, referencePicture } from "./render/preview";
+export { frameSignature, sceneCuts, signatureDistance, SCENE_DEFAULTS, SIGNATURE_SIZE } from "./detect/scenes";
+export type { SceneOptions } from "./detect/scenes";
+export { scanForCuts, scanSeconds } from "./detect/scan";
+export type { ScanRequest } from "./detect/scan";
 export { blurAmounts, exposure, itemFor, placementAt, SHUTTER_SAMPLES } from "./render/motion-blur";
 export type { Smear } from "./render/motion-blur";
 export { compileProgram, setUniforms } from "./render/program";

@@ -40,6 +40,12 @@ war.
 Ein Zug über leere Zeitleiste zieht ein **Gummiband** und wählt aus, was es berührt; zugezogen gibt es
 die Auswahl wieder her.
 
+**Schnitte in diesem Clip finden** liest jedes Bild eines Clips und teilt dort, wo sich das Bild viel
+stärker ändert als drumherum — eine Kamerakarte, in einem Undo-Schritt in ihre Takes zerlegt. Eine
+Blende wird nicht als Schnitt gemeldet und ein Schwenk auch nicht: geprüft wird auf eine Spitze gegen die
+eigene Nachbarschaft und nicht auf eine Schwelle. Siehe
+[Schneiden](./editing.md#die-schnitte-in-einer-aufnahme-finden).
+
 Ripple-Löschen schließt die Lücke, die es hinterlässt. Gruppen bewegen sich gemeinsam. Ausschneiden,
 Kopieren und Einfügen arbeiten auf ganzen Clips, Marker sitzen im Lineal, und eine Auswahl lässt sich
 zu einem **Compound-Clip** zusammenfassen — dass sich das Bild dabei nicht ändert, ist gegen den

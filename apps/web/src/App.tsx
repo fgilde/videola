@@ -15,11 +15,13 @@ import {
   readTemplateFile,
   toSrt,
   ASPECTS,
+  consumedSource,
   freezeFrame,
   insert,
   markerTimes,
   reframe,
   splitAtTimes,
+  timelineTimeAt,
   timeToSeconds,
   VideolaDocument,
   type ClipId,
@@ -41,6 +43,7 @@ import {
   AudioGraph,
   AudioSource,
   beatMarkers,
+  clipHashes,
   clipQuad,
   cutSilence,
   duckCommands,
@@ -58,6 +61,7 @@ import {
   quadCentre,
   rotatedTo,
   scaledBy,
+  scanForCuts,
   silentSpans,
   speechSpans,
   startExport,
@@ -264,6 +268,12 @@ export function App(): ReactElement {
   // What an Audiola mix left behind. Said rather than swallowed: a mastering chain has no counterpart
   // in a video editor, and somebody should hear that from here rather than notice it there.
   const [audiolaNotes, setAudiolaNotes] = useState<readonly string[]>([]);
+  // A scan of a long card takes seconds, and the entry that started it has to say so rather than
+  // looking like a menu that did nothing.
+  const [scanning, setScanning] = useState(false);
+  // How many cuts the last scan found, so the banner can say it in the reader's language. Undefined
+  // means no scan has reported yet; zero is a result and says so.
+  const [cutsFound, setCutsFound] = useState<number>();
   const [audiolaLeftOut, setAudiolaLeftOut] = useState<number>();
   useEffect(() => {
     watchForWebUpdate((take) => setTakeUpdate(() => take));
@@ -722,6 +732,54 @@ export function App(): ReactElement {
   // Where the markers become an edit. Every clip a marker passes through is cut, on every track
   // that is not locked, in one step of the history -- which is what makes cutting to a beat one
   // press rather than one press per bar.
+  /**
+   * Find the cuts inside one clip and split it at them.
+   *
+   * The scan reads the clip's own range frame by frame off the proxy and reports source times; the
+   * mapping back to the timeline happens here, because only the clip knows how its speed relates the
+   * two -- a ramp makes that a question with a different answer at every instant.
+   *
+   * One coalesce key for every split, so a card that turns out to have forty takes in it is one press
+   * of undo and not forty.
+   */
+  const detectCuts = useCallback(
+    (clipId: ClipId) => {
+      if (doc === undefined) return;
+      const clip = doc.state.timeline.tracks
+        .flatMap((track) => track.clips)
+        .find((candidate) => candidate.id === clipId);
+      if (clip === undefined || clip.source.kind !== "media") return;
+      const hash = clipHashes(doc.state).get(clip.id);
+      if (hash === undefined) return;
+      setScanning(true);
+      void scanForCuts({
+        hash,
+        from: clip.inPoint,
+        to: clip.inPoint + consumedSource(clip),
+        fps: doc.state.settings.fps,
+      })
+        .then((cuts) => {
+          // Source times back to timeline instants, through the core's own map rather than through
+          // arithmetic here. A cut the clip does not reach -- one the scan found in material the clip
+          // trims away -- simply has no instant and is dropped.
+          const times = cuts
+            .map((at) => timelineTimeAt(clip, at))
+            .filter((at): at is Time => at !== undefined);
+          if (times.length > 0) {
+            splitAtTimes(doc, times, `detect-cuts-${(actionSequence += 1)}`);
+          }
+          // The number, not a sentence: this side of the app is outside the catalogue's provider, and
+          // the banner that shows it is inside. Same reason the top bar carries the words for the
+          // insert menu.
+          setCutsFound(times.length);
+          setError(undefined);
+        })
+        .catch((err: unknown) => reportError("error.actionFailed", err))
+        .finally(() => setScanning(false));
+    },
+    [doc, reportError],
+  );
+
   const splitAtMarkers = useCallback(() => {
     if (doc === undefined) return;
     try {
@@ -1587,6 +1645,9 @@ export function App(): ReactElement {
               />
             )}
             {takeUpdate !== undefined && <UpdateBanner onReload={takeUpdate} />}
+            {cutsFound !== undefined && (
+              <CutsBanner count={cutsFound} onDismiss={() => setCutsFound(undefined)} />
+            )}
             {(audiolaNotes.length > 0 || audiolaLeftOut !== undefined) && (
               <NotesBanner
                 notes={audiolaNotes}
@@ -1724,6 +1785,8 @@ export function App(): ReactElement {
                   dispatch={edit}
                   onSeek={seek}
                   onSplitAtMarkers={splitAtMarkers}
+                  onDetectCuts={detectCuts}
+                  detecting={scanning}
                   onFreeze={freeze}
                   onSelectionChange={setSelection}
                   grab={grab}
@@ -1973,6 +2036,19 @@ function NotesBanner({
   return (
     <p role="status" className="v-banner v-banner--offer" data-testid="import-notes">
       <span>{said.join(" · ")}</span>
+      <button type="button" className="v-button v-button--quiet" onClick={onDismiss}>
+        {t("session.discard")}
+      </button>
+    </p>
+  );
+}
+
+/** What a scan found, in the reader's own language: a count on this side, a sentence on that one. */
+function CutsBanner({ count, onDismiss }: { count: number; onDismiss: () => void }): ReactElement {
+  const { t } = useI18n();
+  return (
+    <p role="status" className="v-banner v-banner--offer" data-testid="cuts-found">
+      <span>{count === 0 ? t("detect.none") : t("detect.found", { count })}</span>
       <button type="button" className="v-button v-button--quiet" onClick={onDismiss}>
         {t("session.discard")}
       </button>

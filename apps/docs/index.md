@@ -99,6 +99,8 @@ features:
 - **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
   computed from the very matrix the compositor hands the GPU, and the motion path a series of
   position keys traces, sampled from the core rather than drawn corner to corner.
+- **Cuts found by looking** — a card off a camera is one file with a dozen takes in it; the scan reads
+  every frame and splits where the picture changes far more than it did around it, in one undo step.
 - **Surround** — stereo or 5.1, a position per track rather than a knob between two speakers, pairwise
   constant-power placement, and an LFE send that is a band.
 - **Noise reduction** — spectral, learned from the pauses in the clip itself: the noise inside a voice's
