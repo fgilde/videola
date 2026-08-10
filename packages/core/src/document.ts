@@ -59,6 +59,11 @@ export class VideolaDocument {
   curveShape: CurveShape = (left, right, samples) =>
     this.#backend.curveShape(left, right, samples);
 
+  /** The cut as another editor reads it. Neither format carries an effect; both carry the assembly. */
+  toEdl = (): string => this.#backend.toEdl();
+
+  toFcpxml = (): string => this.#backend.toFcpxml();
+
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);

@@ -1231,7 +1231,8 @@ async function announce() {
     check("the menu holds every action the bar gave up",
       [...menu.querySelectorAll("button")].map((node) => node.getAttribute("aria-label") ?? node.textContent),
       ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren",
-       "Untertitel importieren", "Untertitel exportieren", "Spur hinzufügen", "Tastenkürzel",
+       "Untertitel importieren", "Untertitel exportieren", "EDL exportieren",
+       "FCPXML exportieren (Resolve, Premiere)", "Spur hinzufügen", "Tastenkürzel",
        "Über Videola", "Exportieren", "Deutsch / English", "Hell", "Speichern"]);
     // The one entry in the menu that is a link and not a button, because it navigates: this session
     // is a browser one, so there is a desktop build to fetch and it says where from.

@@ -11,6 +11,8 @@ import wordmark from "./videola-wordmark.png";
 
 export interface TopBarActions {
   onAbout?: () => void;
+  /** Write the cut out for another editor: an EDL or FCPXML. */
+  onHandOff?: (kind: "edl" | "fcpxml") => void;
   onKeys?: () => void;
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
@@ -57,6 +59,11 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
           not fit a phone at 44 px each. */}
       <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
       <Action label={t("action.exportCaptions")} onClick={actions.onExportCaptions} />
+      {/* Beside the subtitles, because both are "write something out that is not a video". Two
+          entries rather than a select: they are two file formats and not two answers to one
+          question -- an EDL is what an old system conforms from, FCPXML is what a new one opens. */}
+      <Action label={t("action.exportEdl")} onClick={() => actions.onHandOff?.("edl")} />
+      <Action label={t("action.exportFcpxml")} onClick={() => actions.onHandOff?.("fcpxml")} />
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
       {/* A select and not four entries: they are four answers to one question, and a menu with
           "Hochkant 9:16" three rows under "Querformat 16:9" reads as four unrelated actions. */}

@@ -103,6 +103,8 @@ features:
 - **Audio** — mixer with volume, pan, mute and solo, fades as automation, waveforms, EBU R128
   loudness checked against the Tech 3341 cases.
 - **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.
+- **Hand the cut on** — an EDL or FCPXML for DaVinci Resolve, Premiere or Final Cut. The assembly
+  travels; the grade is done there.
 - **Another shape in one press** — portrait, square or 4:5, with every clip scaled to cover the new
   frame in the same undo step.
 - **Templates** — a gallery, a wizard, and a bake that leaves you with an ordinary project.

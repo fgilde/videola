@@ -378,6 +378,56 @@ describe("every command tool reaches the core", () => {
   });
 });
 
+describe("handing a cut to another editor", () => {
+  // What travels is the assembly: an agent that has built a cut here can conform it somewhere else.
+  // Neither format carries an effect, so what is asked of these two is that they are the files they
+  // claim to be and that they describe this timeline.
+  async function withAClip(): Promise<string> {
+    const created = parse((await call("project_create")).text);
+    await call("track_add", { project: created.id, kind: "video", name: "V1" });
+    const track = parse((await call("project_get", { project: created.id })).text).timeline.tracks[0]
+      .id as string;
+    await call("clip_add", {
+      project: created.id,
+      track,
+      source: { kind: "generator", generator: { type: "solid", color: "#ff0000" } },
+      start: 0,
+      duration: 705_600_000,
+    });
+    return created.id as string;
+  }
+
+  it("writes an EDL that names the project and its frame counting", async () => {
+    const project = await withAClip();
+    const edl = (await call("project_handOff", { project, format: "edl" })).text;
+
+    expect(edl).toContain("FCM: NON-DROP FRAME");
+    expect(edl).toContain("* FROM CLIP NAME: GENERATED");
+  });
+
+  it("writes FCPXML the other editors read", async () => {
+    const project = await withAClip();
+    const xml = (await call("project_handOff", { project, format: "fcpxml" })).text;
+
+    expect(xml).toContain("<!DOCTYPE fcpxml>");
+    expect(xml).toContain("<fcpxml version=\"1.9\">");
+    // A generator has nothing to relink, so it travels as a gap of the right length rather than as
+    // an asset-clip pointing at nothing.
+    expect(xml).toContain("<gap name=\"GENERATED\"");
+  });
+
+  // Refused rather than defaulted: an agent asking for AAF and receiving FCPXML would hold a file
+  // that opens somewhere and is not the one it asked for.
+  it("refuses a format it does not write, and says which it has", async () => {
+    const project = await withAClip();
+    const answer = await call("project_handOff", { project, format: "aaf" });
+
+    expect(answer.text).not.toContain("<fcpxml");
+    expect(answer.text).toContain("no such interchange format");
+    expect(answer.text).toContain("edl, fcpxml");
+  });
+});
+
 describe("the project tools", () => {
   it("creates, describes, validates, saves, reopens and closes", async () => {
     const created = parse((await call("project_create")).text);

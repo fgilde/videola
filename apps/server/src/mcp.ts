@@ -149,6 +149,28 @@ function extraEntries(api: Api): Entry[] {
     },
     {
       tool: {
+        name: "project_handOff",
+        description:
+          "Write the cut out for another editor. `edl` is a CMX3600 edit decision list -- one video " +
+          "and one audio channel, which is all the format has -- and `fcpxml` carries every track " +
+          "and is what DaVinci Resolve, Premiere Pro and Final Cut open. Neither carries an effect, " +
+          "a keyframe or a grade: those are every system's own. What travels is the assembly.",
+        inputSchema: object(
+          {
+            project: handleField(),
+            format: {
+              type: "string",
+              enum: ["edl", "fcpxml"],
+              description: "Which file to write.",
+            },
+          },
+          ["project", "format"],
+        ),
+      },
+      run: (args) => api.handOff(handle(args["project"]), stringArg(args, "format")),
+    },
+    {
+      tool: {
         name: "project_getFrame",
         description:
           "Render the project at up to eight instants and hand back the pictures as PNG. " +

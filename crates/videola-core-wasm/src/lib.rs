@@ -113,6 +113,23 @@ impl WasmDocument {
         to_js_value(self.host.project())
     }
 
+    /// The cut as another editor reads it: a CMX3600 edit decision list.
+    ///
+    /// Here rather than in TypeScript for the reason the reader and the writer are here: a timecode
+    /// is integer arithmetic over a rational rate, and a second implementation is a second answer to
+    /// the same question.
+    #[wasm_bindgen(js_name = toEdl)]
+    pub fn to_edl(&self) -> String {
+        videola_core::interchange::to_edl(self.host.project())
+    }
+
+    /// The same cut as FCPXML, which Resolve, Premiere and Final Cut all read -- and which, unlike an
+    /// EDL, carries every track rather than one of each.
+    #[wasm_bindgen(js_name = toFcpxml)]
+    pub fn to_fcpxml(&self) -> String {
+        videola_core::interchange::to_fcpxml(self.host.project())
+    }
+
     pub fn warnings(&self) -> std::result::Result<JsValue, JsError> {
         to_js_value(self.host.warnings())
     }

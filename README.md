@@ -74,6 +74,11 @@ carries on from the frame the hold began on. In and out points, insert and overw
 whose effects run over everything below them, markers with colours and notes, speed ramps where the
 map from project time to source time is an integral rather than a multiplication.
 
+**Handing the cut on.** An EDL and FCPXML 1.9 leave here for DaVinci Resolve, Premiere Pro or Final
+Cut: the assembly travels, the grade and the effects are done there. Neither carries an effect, and
+there is no honest way to write a Videola blur as a Resolve one. FCPXML rounds nothing — a flick
+divides evenly by every rate anyone uses, so every instant is a whole number of ticks.
+
 **Export.** MP4 with H.264 and AAC, or WebM with VP9 and Opus where the browser cannot encode
 H.264. It runs in a worker through the same compositor as the preview, with progress and a cancel
 that really stops it.

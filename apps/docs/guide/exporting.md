@@ -86,6 +86,39 @@ therefore drives the real thing in headless Chrome:
   length, the audio stream, and that every frame decodes,
 - decodes the audio back and measures that the tone that went in is the tone that came out.
 
+## Handing the cut to another editor
+
+Two files leave here that are not video: an **EDL** and **FCPXML**, both in the overflow menu beside
+the subtitles. A cut assembled in Videola can be finished in DaVinci Resolve, Premiere Pro or Final
+Cut — the assembly travels, and the grade and the effects are done there.
+
+Neither carries an effect, a keyframe or a grade, and that is not a gap to be closed later: there is
+no honest way to write a Videola blur as a Resolve one. What both carry is where every piece of
+material sits, which is what a conform needs.
+
+| | EDL (CMX3600) | FCPXML 1.9 |
+|---|---|---|
+| Tracks | one video, one audio | every track, on lanes |
+| Names | relink by clip name | relink by asset, keyed by content hash |
+| Read by | practically everything | Resolve, Premiere, Final Cut |
+| Times | timecode, `HH:MM:SS:FF` | exact rationals |
+
+The EDL says which tracks it could not carry, in a comment, rather than dropping two layers quietly.
+Its timecode is always non-drop, and where the project runs at a fractional rate — 30000/1001 — a
+comment says so, because a duration read off that clock by hand comes out a little short.
+
+FCPXML rounds nothing. A time is written as `value/timescale s` with the frame rate's numerator as the
+timescale, and because a flick is 705,600,000 to the second and divides evenly by every rate anyone
+uses, every instant in a project is a whole number of ticks. A clip with no medium behind it — a
+title, a colour, a compound — travels as a gap of the right length rather than as an asset pointing at
+nothing, which would open in the other system as an offline clip somebody has to hunt for.
+
+Both are written in the Rust core, next to the reader and the writer, and for the same reason: a
+timecode is integer arithmetic over a rational rate, and a second implementation in TypeScript would
+be a second answer to the same question. `project_handOff` offers both to an agent, and refuses a
+format it does not write rather than defaulting to one — being handed FCPXML after asking for AAF is
+the worst of the three possible answers.
+
 ## What is not there yet
 
 - **No FFmpeg, native or server rendering.** Export is WebCodecs only; the Tauri shell hosts the

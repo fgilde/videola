@@ -10,6 +10,8 @@
   "about.licence": "Licence: GPL-3.0-or-later",
   "about.getApp": "Get the desktop app",
   "about.close": "Close",
+  "action.exportEdl": "Export an EDL",
+  "action.exportFcpxml": "Export FCPXML (Resolve, Premiere)",
   "action.getApp": "Get the app",
   "action.new": "New project",
   "action.open": "Open",

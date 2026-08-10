@@ -64,6 +64,10 @@ export type CurveShape = (
 export interface DocumentBackend {
   state(): Project;
   curveShape: CurveShape;
+  /** The cut as a CMX3600 edit decision list, for a conform in another system. */
+  toEdl(): string;
+  /** The same cut as FCPXML, which Resolve, Premiere and Final Cut all read. */
+  toFcpxml(): string;
   sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
   effectParamsAt(at: Time): EffectParamSnapshot;
   transformsAt(at: Time): TransformSnapshot;

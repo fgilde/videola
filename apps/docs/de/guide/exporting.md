@@ -88,6 +88,42 @@ Ein grüner Unit-Test beweist nichts über eine Videodatei.
   Tonspur — und dass jedes Bild dekodiert,
 - dekodiert den Ton zurück und misst, dass der Ton herauskommt, der hineinging.
 
+## Den Schnitt an einen anderen Editor geben
+
+Zwei Dateien verlassen Videola, die kein Video sind: eine **EDL** und **FCPXML**, beide im
+Überlaufmenü neben den Untertiteln. Ein hier gebauter Schnitt kann in DaVinci Resolve, Premiere Pro
+oder Final Cut fertiggestellt werden — die Montage reist, die Farbe und die Effekte entstehen dort.
+
+Keine der beiden trägt einen Effekt, einen Keyframe oder eine Farbkorrektur, und das ist keine Lücke,
+die später geschlossen wird: es gibt keinen ehrlichen Weg, eine Videola-Weichzeichnung als eine von
+Resolve zu schreiben. Was beide tragen, ist, wo jedes Stück Material sitzt — und das ist, was ein
+Conform braucht.
+
+| | EDL (CMX3600) | FCPXML 1.9 |
+|---|---|---|
+| Spuren | eine Bild-, eine Tonspur | jede Spur, auf Lanes |
+| Namen | Relink über den Clipnamen | Relink über das Asset, nach Inhalts-Hash benannt |
+| Gelesen von | praktisch allem | Resolve, Premiere, Final Cut |
+| Zeiten | Timecode, `HH:MM:SS:FF` | exakte Brüche |
+
+Die EDL sagt in einem Kommentar, welche Spuren sie nicht mitnehmen konnte, statt zwei Ebenen
+stillschweigend fallen zu lassen. Ihr Timecode ist immer Non-Drop, und wo das Projekt auf einer
+gebrochenen Rate läuft — 30000/1001 — sagt ein Kommentar das, denn eine von Hand an dieser Uhr
+abgelesene Dauer fällt etwas zu kurz aus.
+
+FCPXML rundet nichts. Eine Zeit steht als `Wert/Zeitskala s` mit dem Zähler der Bildrate als
+Zeitskala, und weil ein Flick 705.600.000 pro Sekunde ist und sich ohne Rest durch jede gebräuchliche
+Rate teilt, ist jeder Zeitpunkt eines Projekts eine ganze Zahl von Ticks. Ein Clip ohne Medium
+dahinter — ein Titel, eine Farbe, ein verschachtelter Clip — reist als Lücke der richtigen Länge und
+nicht als Asset, das auf nichts zeigt; letzteres öffnet im anderen System als Offline-Clip, den jemand
+suchen muss.
+
+Beide entstehen im Rust-Kern, neben dem Leser und dem Schreiber und aus demselben Grund: ein Timecode
+ist Ganzzahl-Arithmetik über eine gebrochene Rate, und eine zweite Umsetzung in TypeScript wäre eine
+zweite Antwort auf dieselbe Frage. `project_handOff` bietet beide einem Agenten an — und lehnt ein
+Format ab, das es nicht schreibt, statt auf eines auszuweichen: nach AAF zu fragen und FCPXML zu
+bekommen ist die schlechteste der drei möglichen Antworten.
+
 ## Was noch fehlt
 
 - **Kein FFmpeg, kein natives und kein serverseitiges Rendern.** Der Export läuft ausschließlich über

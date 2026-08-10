@@ -31,6 +31,10 @@ function fakeBackend(): DocumentBackend {
     // re-serializes the project on each state() invocation.
     state: () => ({ ...project }),
     curveShape: () => [],
+    // The two interchange writers take no argument and read the project the backend holds; a stand-in
+    // has nothing to say about them beyond being asked.
+    toEdl: () => "",
+    toFcpxml: () => "",
     sourceTimesAt: () => new Map(),
     effectParamsAt: () => new Map(),
     transformsAt: () => new Map(),

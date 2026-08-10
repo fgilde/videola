@@ -89,6 +89,8 @@ function wrap(handle: WasmDocument): DocumentBackend {
     // same way it reaches its resolved transforms and parameters -- one object, one seam.
     curveShape: (left: Keyframe, right: Keyframe, samples: number) =>
       Array.from(WasmDocument.curveShape(left, right, samples)),
+    toEdl: () => handle.toEdl(),
+    toFcpxml: () => handle.toFcpxml(),
     sourceTimesAt: (at: Time) => handle.sourceTimesAt(at) as ReadonlyMap<string, Time>,
     effectParamsAt: (at: Time) => handle.effectParamsAt(at) as EffectParamSnapshot,
     transformsAt: (at: Time) => handle.transformsAt(at) as TransformSnapshot,

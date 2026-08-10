@@ -1317,6 +1317,23 @@ export function App(): ReactElement {
     setError(undefined);
   }, [project, reportError]);
 
+  // The cut, for finishing somewhere else. Neither format carries an effect or a keyframe -- those
+  // are every system's own -- so what leaves here is the assembly, which is what a conform needs.
+  const handOff = useCallback(
+    (kind: "edl" | "fcpxml") => {
+      if (doc === undefined || project === undefined) return;
+      const name = project.meta.title || project.meta.id;
+      const written = kind === "edl" ? doc.toEdl() : doc.toFcpxml();
+      downloadBlob(
+        new TextEncoder().encode(written),
+        `${name}.${kind === "edl" ? "edl" : "fcpxml"}`,
+        kind === "edl" ? "text/plain" : "application/xml",
+      );
+      setError(undefined);
+    },
+    [doc, project],
+  );
+
   const playPause = useCallback(() => {
     if (playback === undefined) return;
     if (playback.isPlaying) playback.pause();
@@ -1395,6 +1412,7 @@ export function App(): ReactElement {
           : () => void pickFiles(CAPTION_ACCEPT).then(importCaptions)
       }
       onExportCaptions={doc === undefined ? undefined : exportCaptions}
+      onHandOff={doc === undefined ? undefined : handOff}
       onExport={
         doc === undefined
           ? undefined
