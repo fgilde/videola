@@ -121,8 +121,9 @@ features:
 ## What is not there yet
 
 No motion blur. No noise reduction: the low and high cut take away a band, which is not the same as
-separating a voice from noise sharing its band. A curve is copied across one parameter's own track
-and no further — two tracks' keys need not line up. The magnetic timeline is deliberately absent, and
+separating a voice from noise sharing its band. Motion blur means more than one decoded frame per
+output frame, which is a change to the gather rather than a shader — the directional blur beside it is
+the one a person aims by hand, and it says so in its name. The magnetic timeline is deliberately absent, and
 the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
 browser's own encoders.
 

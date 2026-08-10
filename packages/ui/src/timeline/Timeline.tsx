@@ -643,6 +643,7 @@ export function Timeline({
               <KeyframeCurve
                 clip={laneClip.id}
                 row={picked.row}
+                rows={laneRowList}
                 left={picked.entry}
                 right={curveNeighbour(picked) as Keyframe}
                 curveShape={curveShape}

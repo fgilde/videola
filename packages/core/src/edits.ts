@@ -98,6 +98,42 @@ export function spreadEasing(
     ]);
 }
 
+/** One keyframe track of a clip: what a lane row shows and what an easing can be spread over. */
+export interface EasingTrack {
+  effectType: string | null;
+  key: string;
+  track: readonly Keyframe[];
+}
+
+/**
+ * The same easing on every key of every track this clip carries — the "and everywhere else" a person
+ * means once they have shaped one move and want the rest to match.
+ *
+ * An easing is a property of a key, not of a moment, so the tracks do **not** have to line up in
+ * time: each key is set to the picked interpolation and its handle pair, whatever its own segment is
+ * as long as. What matching times would buy is an identical curve *over time*, and that is a
+ * different thing than a move that eases the same way — the shorter segment simply runs the same
+ * shape in less time, which is what somebody asking for this wants.
+ *
+ * The key it was picked from is written too, with what it already carries. Leaving it out would be a
+ * filter for nothing: `json_patch::diff` produces no patch for a field that did not change, so the
+ * history step is the same either way and the whole list stays one press of undo.
+ */
+export function spreadEasingEverywhere(
+  tracks: readonly EasingTrack[],
+  target: EffectTarget,
+  from: Keyframe,
+): Command[] {
+  const handleIn = from.handleIn ?? null;
+  const handleOut = from.handleOut ?? null;
+  return tracks.flatMap((row) =>
+    row.track.flatMap((keyframe) => [
+      cmd.keyframeSetInterp(target, row.effectType, row.key, keyframe.time, from.interp),
+      cmd.keyframeSetHandles(target, row.effectType, row.key, keyframe.time, handleIn, handleOut),
+    ]),
+  );
+}
+
 /** Which of a clip's attributes to carry over. Each is a group somebody would ask for by name. */
 export interface Attributes {
   /** Position, scale, rotation, anchor, opacity and crop — and the keys that animate any of them. */

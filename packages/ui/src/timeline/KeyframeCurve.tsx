@@ -4,6 +4,7 @@ import {
   cmd,
   on,
   spreadEasing,
+  spreadEasingEverywhere,
   type ClipId,
   type Command,
   type CurveShape,
@@ -31,6 +32,12 @@ let gesture = 0;
 export interface KeyframeCurveProps {
   clip: ClipId;
   row: LaneRow;
+  /**
+   * Every keyframe track this clip carries, so the shape can be handed to all of them at once. Absent
+   * where the caller has only the one row — the button for it is then not drawn rather than drawn
+   * doing what the button beside it already does.
+   */
+  rows?: readonly LaneRow[];
   /** The picked key. Its `handleOut` shapes the segment that starts here. */
   left: Keyframe;
   /** The key after it. Its `handleIn` shapes the same segment from the other end. */
@@ -61,14 +68,8 @@ export interface KeyframeCurveProps {
  * check ever written and be wrong in the middle, which is the one fault a curve editor must not
  * have.
  */
-export function KeyframeCurve({
-  clip,
-  row,
-  left,
-  right,
-  curveShape,
-  dispatch,
-}: KeyframeCurveProps): ReactElement {
+export function KeyframeCurve(props: KeyframeCurveProps): ReactElement {
+  const { clip, row, left, right, curveShape, dispatch } = props;
   const { t } = useI18n();
   const field = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{ end: End; key: string } | null>(null);
@@ -249,6 +250,24 @@ export function KeyframeCurve({
           }}
         >
           {t("keyframe.curveEverywhere")}
+        </button>
+      )}
+      {/* The same shape on every parameter of the clip. An easing belongs to a key rather than to a
+          moment, so the tracks need not line up in time: each key runs the shape over its own
+          segment, which is what "make the rest match" means. Offered only where there is a second
+          track to reach. */}
+      {(props.rows ?? []).some((other) => other.id !== row.id) && (
+        <button
+          type="button"
+          className="v-keycurve__spread"
+          onClick={() => {
+            const key = `keyframe-spread-all-${(gesture += 1)}`;
+            for (const command of spreadEasingEverywhere(props.rows ?? [], on.clip(clip), left)) {
+              dispatch(command, key);
+            }
+          }}
+        >
+          {t("keyframe.curveEveryParameter")}
         </button>
       )}
       {/* A field with no handles says why rather than looking broken. The presets are still a

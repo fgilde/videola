@@ -259,6 +259,7 @@
   "keyframe.curve": "Curve",
   "keyframe.curveField": "Curve field between this keyframe and the next",
   "keyframe.curveEverywhere": "Use this easing on every key",
+  "keyframe.curveEveryParameter": "This shape on every parameter",
   "keyframe.handle.out": "Handle leaving this keyframe",
   "keyframe.handle.in": "Handle arriving at the next keyframe",
   "keyframe.curveNeedsBezier": "The curve shows the interpolation that is set. Choose “Bezier” to drag handles.",

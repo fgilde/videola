@@ -671,8 +671,17 @@ wieder. Der Verlauf reist mit dem Anfasserpaar mit, denn Anfasser an einem Key a
 gespeichert und ignoriert — eine Kopie nur des Paares wäre ein Tastendruck, der nichts ändert. Ein
 Druck ist ein Schritt in der Historie.
 
-Es gilt für die Spur eines Parameters und endet dort. Über zwei Parameter hinweg müssten die Keys der
-zweiten Spur zu denen der ersten passen, und nichts im Modell sagt, dass sie das tun.
+Daneben steht, wo der Clip mehr als einen Parameter animiert, dieselbe Form **auf jedem Parameter des
+Clips**. Das war einmal abgeschrieben mit dem Argument, die Keys der zweiten Spur müssten zu denen der
+ersten passen — sie müssen es nicht: eine Beschleunigung gehört zu einem *Key* und nicht zu einem
+Zeitpunkt, jeder Key fährt die Form also über seinen eigenen Abschnitt, so lang der ist. Was passende
+Zeiten brächten, wäre eine identische Kurve über die *Zeit*, und das ist etwas anderes als eine
+Bewegung, die gleich beschleunigt — gemeint ist mit „der Rest soll dazu passen" das Zweite. Ein Druck,
+ein Schritt in der Historie, ganz gleich wie viel er berührt hat.
+
+Der Key, von dem die Form kommt, wird mitgeschrieben, mit dem, was er schon trägt. Ihn auszulassen
+wäre ein Filter für nichts: `json_patch::diff` erzeugt für ein Feld, das sich nicht geändert hat,
+keinen Patch.
 
 Ein Zug wird an dem gehalten, was das Feld zeigt, und dahinter endet er: ein Anfasser, der oben
 hinausgezogen wird, wäre eine Form, die kein Zug zurückholt. `x` bleibt auf 0..1 geklemmt, und diese

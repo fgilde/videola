@@ -629,8 +629,15 @@ it again key by key is that minute over and over. The interpolation travels with
 handles on a key set to `linear` are stored and ignored — a copy of the pair alone would be a press
 that changes nothing. One press is one step in the history.
 
-It is scoped to one parameter's own track and stops there. Across two parameters it would need the
-second track's keys to line up with the first's, and nothing in the model says they do.
+Beside it, where the clip animates more than one parameter, is the same shape **on every parameter of
+the clip**. That was written off once as needing the two tracks' keys to line up, and it does not: an
+easing belongs to a *key*, not to a moment, so each key runs the shape over its own segment however
+long that segment is. What matching times would buy is an identical curve over *time*, which is a
+different thing from a move that eases the same way — and the second one is what somebody means by
+"make the rest match". One press, one step in the history, whatever it touched.
+
+The key it was picked from is written too, with what it already carries. Leaving it out would be a
+filter for nothing: `json_patch::diff` produces no patch for a field that did not change.
 
 A drag is held at what the field shows rather than at the unit square, and past that it stops: a
 handle dragged clean off the top would be a shape no drag could bring back. `x` is still clamped to

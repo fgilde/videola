@@ -8,10 +8,11 @@ export {
   pasteAttributes,
   reframe,
   spreadEasing,
+  spreadEasingEverywhere,
   splitAtTimes,
   transitionEveryCut,
 } from "./edits";
-export type { Attributes, EditTarget, Reframe } from "./edits";
+export type { Attributes, EasingTrack, EditTarget, Reframe } from "./edits";
 export * from "./commands";
 export * from "./curve";
 export * from "./document";

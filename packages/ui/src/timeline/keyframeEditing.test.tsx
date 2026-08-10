@@ -834,6 +834,47 @@ describe("the curve field", () => {
     }
   });
 
+  // The other half of "make the rest match": a second parameter, whose keys sit at other instants.
+  // An easing belongs to a key and not to a moment, so nothing has to line up for this to be honest.
+  it("puts the shape on every parameter of the clip, whatever times those keys sit at", async () => {
+    const { doc, clip } = await sceneWithKeyframes([1, 3, 5]);
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", SECOND, "bezier"));
+    doc.dispatch(
+      cmd.keyframeSetHandles(on.clip(clip), null, "opacity", SECOND, [0.3, 1.2], [0.85, 0.1]),
+    );
+    for (const at of [2, 4.5]) {
+      doc.dispatch(
+        cmd.keyframeAdd(on.clip(clip), null, "scaleX", at * SECOND, { kind: "float", value: at }),
+      );
+    }
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    fireEvent.click(screen.getByRole("button", { name: "Diese Form auf jedem Parameter" }));
+
+    const scale = onlyClip(doc).keyframes.scaleX ?? [];
+    expect(scale.length).toBe(2);
+    for (const key of scale) {
+      expect(key.interp).toBe("bezier");
+      expect(key.handleOut?.[0]).toBeCloseTo(0.85, 4);
+      expect(key.handleIn?.[1]).toBeCloseTo(1.2, 4);
+    }
+    // And the track it came from is carried too, so "everywhere" means everywhere.
+    expect(trackOf(doc).every((key) => key.interp === "bezier")).toBe(true);
+  });
+
+  // One parameter is what the button beside it already does.
+  it("is not offered where the clip animates one parameter only", async () => {
+    const { doc, clip } = await sceneWithKeyframes([1, 3, 5]);
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", SECOND, "bezier"));
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    expect(screen.queryByRole("button", { name: "Diese Form auf jedem Parameter" })).toBeNull();
+  });
+
   it("is one step to undo, whatever it touched", async () => {
     const { doc, clip } = await sceneWithKeyframes([1, 3, 5]);
     doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", SECOND, "bezier"));

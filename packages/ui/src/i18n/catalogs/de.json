@@ -259,6 +259,7 @@
   "keyframe.curve": "Kurve",
   "keyframe.curveField": "Kurvenfeld zwischen diesem und dem nächsten Keyframe",
   "keyframe.curveEverywhere": "Diesen Verlauf auf alle Keys",
+  "keyframe.curveEveryParameter": "Diese Form auf jedem Parameter",
   "keyframe.handle.out": "Anfasser ab diesem Keyframe",
   "keyframe.handle.in": "Anfasser vor dem nächsten Keyframe",
   "keyframe.curveNeedsBezier": "Die Kurve zeigt den gewählten Verlauf. Wähle „Bezier“, um Anfasser zu ziehen.",
