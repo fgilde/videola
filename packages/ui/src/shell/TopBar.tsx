@@ -11,6 +11,7 @@ import wordmark from "./videola-wordmark.png";
 
 export interface TopBarActions {
   onAbout?: () => void;
+  onKeys?: () => void;
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
   onNew?: () => void;
@@ -78,6 +79,7 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
       )}
       {/* Last in the menu, where an "about" belongs, and above the offer to fetch a build -- which
           is only here at all in a browser, where there is something to fetch. */}
+      <Action label={t("action.keys")} onClick={actions.onKeys} />
       <Action label={t("about.label")} onClick={actions.onAbout} />
       {actions.getAppHref !== undefined && (
         <a className="v-button" href={actions.getAppHref} target="_blank" rel="noreferrer">

@@ -1,0 +1,91 @@
+.v-keys {
+  width: min(560px, calc(100vw - 2 * var(--v-space-4)));
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: var(--v-space-5);
+  background: var(--v-bg-elevated);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-lg);
+  box-shadow: var(--v-shadow-raised);
+}
+
+.v-keys::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.v-keys__title {
+  margin: 0;
+  font-size: var(--v-text-lg);
+  font-weight: var(--v-weight-strong);
+}
+
+.v-keys__group {
+  margin-top: var(--v-space-4);
+}
+
+.v-keys__heading {
+  margin: 0 0 var(--v-space-2);
+  font-size: var(--v-text-xs);
+  font-weight: var(--v-weight-strong);
+  letter-spacing: var(--v-tracking-wide);
+  text-transform: uppercase;
+  color: var(--v-text-muted);
+}
+
+.v-keys__list {
+  display: grid;
+  gap: var(--v-space-1);
+  margin: 0;
+}
+
+/* The key on the left at a width of its own, so the descriptions line up into a column somebody can
+   read down rather than a ragged edge that follows the length of each combination. */
+.v-keys__row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: var(--v-space-3);
+  align-items: baseline;
+}
+
+.v-keys__row dt {
+  margin: 0;
+}
+
+.v-keys__row dd {
+  margin: 0;
+  font-size: var(--v-text-sm);
+  color: var(--v-text);
+}
+
+.v-keys kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-bottom-width: 2px;
+  border-radius: var(--v-radius-sm);
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-xs);
+  color: var(--v-text);
+  white-space: nowrap;
+}
+
+.v-keys__note {
+  margin: var(--v-space-4) 0 0;
+  font-size: var(--v-text-xs);
+  line-height: var(--v-leading);
+  color: var(--v-text-muted);
+}
+
+.v-keys__close {
+  width: 100%;
+  margin-top: var(--v-space-4);
+}
+
+@media (max-width: 520px) {
+  .v-keys__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

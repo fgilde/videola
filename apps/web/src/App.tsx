@@ -90,6 +90,7 @@ import {
   EffectBrowser,
   ExportDialog,
   Inspector,
+  Shortcuts,
   MediaLibrary,
   Mixer,
   markerAfter,
@@ -242,6 +243,7 @@ export function App(): ReactElement {
   const [scopesOpen, setScopesOpen] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [about, setAbout] = useState(false);
+  const [keys, setKeys] = useState(false);
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -1349,6 +1351,7 @@ export function App(): ReactElement {
   return (
     <AppShell
       onAbout={() => setAbout(true)}
+      onKeys={() => setKeys(true)}
       // Only in a browser: in the desktop build this would offer to install what is already
       // running. `insideTauri` is the same question the updater asks, and asked the same way.
       getAppHref={insideTauri() ? undefined : `${SITE}download`}
@@ -1609,6 +1612,7 @@ export function App(): ReactElement {
       {about && (
         <About version={APP_VERSION} desktop={insideTauri()} onClose={() => setAbout(false)} />
       )}
+      {keys && <Shortcuts onClose={() => setKeys(false)} />}
     </AppShell>
   );
 }

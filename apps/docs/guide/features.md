@@ -260,6 +260,33 @@ could show a look the renderer would never produce, and nobody would find out un
 chosen. Costs one small picture per template, drawn one at a time while the gallery is already open;
 a preview project holds nothing but generators, so there is no decoding and no storage to read.
 
+## Keys
+
+The overflow menu has a sheet of them, and every row on it is a key the editor really answers —
+`shortcut` in `Timeline.tsx` and `useTransportKeys` in `Transport.tsx` are the whole roster, and a
+sheet listing a key nobody handles would send somebody looking for a fault in their keyboard.
+
+| Key | What it does |
+|---|---|
+| <kbd>Space</kbd> | play or pause, from anywhere outside a text field |
+| <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> | shuttle back, halt, shuttle forward |
+| <kbd>←</kbd> <kbd>→</kbd> | one frame back or forward |
+| <kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> | to the previous or next marker |
+| <kbd>Del</kbd> | delete the selection, leaving a gap |
+| <kbd>Shift</kbd> + <kbd>Del</kbd> | delete it and close the gap |
+| <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd> | copy, cut, paste at the playhead |
+| <kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd> | group; with <kbd>Shift</kbd>, ungroup |
+| <kbd>N</kbd> | fold the selection into one clip |
+| <kbd>M</kbd> | drop a marker at the playhead |
+
+The modifier is written as Ctrl/Cmd rather than resolved per platform, because a browser cannot ask
+which one this keyboard has: `navigator.platform` guesses from the operating system, which is wrong
+on a Mac with a PC keyboard and on Linux either way.
+
+The editing keys need the timeline to have the focus. <kbd>N</kbd> and <kbd>M</kbd> carry no modifier
+for a reason worth knowing: every Ctrl/Cmd combination near them is taken by the browser itself, and
+a shortcut the browser eats is a shortcut that does not exist.
+
 ## Which layout, and who decides
 
 Under 768 px is a phone, under 1280 a tablet, and wider than that a desktop — but only if the browser

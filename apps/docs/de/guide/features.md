@@ -284,6 +284,34 @@ fände es heraus, bevor er gewählt hat. Kostet ein kleines Bild pro Vorlage, ei
 gezeichnet, während die Galerie schon offen ist; ein Vorschauprojekt enthält nur Generatoren, es gibt
 also nichts zu dekodieren und nichts aus dem Speicher zu lesen.
 
+## Tasten
+
+Im Überlaufmenü liegt eine Übersicht, und jede Zeile darauf ist eine Taste, die der Editor wirklich
+beantwortet — `shortcut` in `Timeline.tsx` und `useTransportKeys` in `Transport.tsx` sind die ganze
+Liste. Eine Übersicht, die eine Taste nennt, die niemand behandelt, schickt jemanden auf die Suche
+nach einem Fehler in seiner Tastatur.
+
+| Taste | Wirkung |
+|---|---|
+| <kbd>Leertaste</kbd> | abspielen oder anhalten, von überall außer einem Textfeld |
+| <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> | rückwärts spulen, halten, vorwärts spulen |
+| <kbd>←</kbd> <kbd>→</kbd> | ein Bild zurück oder vor |
+| <kbd>Umschalt</kbd> + <kbd>←</kbd> <kbd>→</kbd> | zum vorigen oder nächsten Marker |
+| <kbd>Entf</kbd> | Auswahl löschen, Lücke bleibt |
+| <kbd>Umschalt</kbd> + <kbd>Entf</kbd> | löschen und Lücke schließen |
+| <kbd>Strg/Cmd</kbd> + <kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd> | kopieren, ausschneiden, am Playhead einfügen |
+| <kbd>Strg/Cmd</kbd> + <kbd>G</kbd> | gruppieren; mit <kbd>Umschalt</kbd> aufheben |
+| <kbd>N</kbd> | Auswahl zu einem Clip zusammenfassen |
+| <kbd>M</kbd> | Marker am Playhead setzen |
+
+Der Modifikator steht als Strg/Cmd da, statt je System aufgelöst zu werden: ein Browser kann nicht
+fragen, welchen diese Tastatur hat — `navigator.platform` rät vom Betriebssystem, und das ist auf
+einem Mac mit PC-Tastatur falsch und unter Linux ohnehin.
+
+Die Schnitt-Tasten brauchen den Fokus in der Zeitleiste. <kbd>N</kbd> und <kbd>M</kbd> tragen aus
+einem Grund keinen Modifikator: jede Strg/Cmd-Kombination in ihrer Nähe hat der Browser selbst
+belegt, und ein Kürzel, das der Browser frisst, ist kein Kürzel.
+
 ## Welches Layout, und wer entscheidet
 
 Unter 768 px ist ein Telefon, unter 1280 ein Tablet, breiter ein Schreibtisch — aber nur, wenn der
