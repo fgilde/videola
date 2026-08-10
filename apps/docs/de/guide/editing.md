@@ -136,6 +136,22 @@ die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter 
 wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
 Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
 
+## Ein Übergang auf jeden Schnitt
+
+Eine Diashow sind fünfzig Bilder und neunundvierzig Überblendungen, und sie einzeln zu setzen ist
+derselbe Klick neunundvierzig Mal. Das Auswahlfeld in der Werkzeugleiste der Zeitleiste nennt den
+Übergang, und der Durchgang findet die Schnitte; sein erster Eintrag nimmt alle wieder weg.
+
+Nur dort, wo zwei Clips wirklich aneinanderstoßen. `clip.setTransition` schreibt den **eingehenden**
+Übergang eines Clips, jeder Clip wird also eine Frage gefragt: endet etwas genau da, wo ich anfange?
+Ein Übergang über eine Lücke wäre eine Blende aus dem Hintergrund, und einer am ersten Clip einer
+Spur ist eine Mischung mit nichts.
+
+Ein Schnitt, dessen kürzerer Nachbar dem Übergang seine Länge nicht geben kann, wird ebenfalls
+übersprungen — eine halbe Blende, die über den Anfang des Clips davor hinausreicht, mischt mit etwas,
+das noch nicht da ist. Gesperrte Spuren werden übergangen, und der ganze Durchgang ist ein Schritt in
+der Historie.
+
 ## Ein Bild halten
 
 **Bild hier einfrieren** im Menü eines Clips hält das Bild unter dem Playhead zwei Sekunden lang und

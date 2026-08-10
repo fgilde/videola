@@ -131,6 +131,20 @@ insert opens the gap on **every** track, so skipping the locked one would move t
 under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
 unlock the track and edit, or leave it alone.
 
+## A transition on every cut
+
+A slideshow is fifty pictures and forty-nine dissolves, and setting them one at a time is the same
+click forty-nine times. The select on the timeline's toolbar names the transition and the walk finds
+the cuts; its first entry takes them all away again.
+
+Only where two clips actually meet. `clip.setTransition` writes a clip's **incoming** transition, so
+each clip is asked one question: does something end exactly where I begin? A transition over a gap
+would be a dissolve out of the background, and one on the first clip of a track is a mix with nothing.
+
+A cut whose shorter neighbour cannot give the transition its length is skipped too — half a dissolve
+reaching past the start of the clip before it is a mix with something that is not there yet. Locked
+tracks are passed over, and the whole sweep is one step in the history.
+
 ## Holding one frame
 
 **Freeze the frame here** on a clip's own menu holds the frame under the playhead for two seconds and

@@ -17,6 +17,7 @@ import {
   mergeCaptions,
   on,
   pasteAttributes,
+  transitionEveryCut,
   splitScreen,
   stageFor,
   type Clip as ClipModel,
@@ -36,6 +37,7 @@ import type { Peaks } from "@videola/media";
 import { useI18n } from "../i18n/useI18n";
 import type { EffectDescriptor } from "../inspector/Inspector";
 import { Icon, IconButton } from "../primitives/Icon";
+import { chosenTransition } from "../inspector/Inspector";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { KeyframeCurve } from "./KeyframeCurve";
@@ -382,6 +384,36 @@ export function Timeline({
             onSeek={onSeek}
             onSplitAtMarkers={onSplitAtMarkers}
           />
+          {/* A slideshow is fifty pictures and forty-nine dissolves. The select names the transition
+              and the walk finds the cuts, so what would be forty-nine trips through the properties
+              panel is one choice -- and its first entry takes them all away again. */}
+          {effects.length > 0 && (
+            <select
+              className="v-timeline__everyCut"
+              aria-label={t("timeline.everyCut")}
+              value=""
+              onChange={(event) => {
+                const picked = event.target.value;
+                if (picked === "") return;
+                const key = `timeline-transitions-${(actionSequence += 1)}`;
+                // "none" and the empty heading are different answers: the heading is "I have not
+                // chosen", and one that cleared every transition would do it the moment the select
+                // was reset after a choice.
+                const chosen = picked === "none" ? null : chosenTransition(picked, undefined);
+                for (const command of transitionEveryCut(project, chosen)) dispatch(command, key);
+              }}
+            >
+              <option value="">{t("timeline.everyCut")}</option>
+              <option value="none">{t("timeline.everyCutNone")}</option>
+              {effects
+                .filter((effect) => effect.inputs === 2)
+                .map((effect) => (
+                  <option key={effect.id} value={effect.id}>
+                    {effect.name[locale]}
+                  </option>
+                ))}
+            </select>
+          )}
         </div>
         {/* Two plain selects rather than modifier keys: a finger has no modifiers, and the mode a
             drag is in has to be readable before the drag, not guessed from what it just did.

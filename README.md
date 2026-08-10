@@ -31,7 +31,8 @@ never had one, and **Use originals** switches the preview back. That the export 
 checked on a written file by ffprobe and ffmpeg, with a deliberately wrong proxy on disk at the time.
 
 **Effects and transitions.** Brightness, contrast, saturation, colour temperature, vignette, blur,
-sharpen and chroma key; cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour;
+sharpen and chroma key; cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour, any of them
+put on every cut of the timeline in one choice;
 rectangular and elliptical masks with feather and invert. A text generator with styling and
 in/out/loop animation. They are picked from a browser grouped by category in which **every tile is
 that effect's own shader over the frame at the playhead** — a tile that fails to change the picture

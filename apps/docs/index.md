@@ -85,7 +85,8 @@ features:
 - **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
   computed from the very matrix the compositor hands the GPU, and the motion path a series of
   position keys traces, sampled from the core rather than drawn corner to corner.
-- **Effects and transitions** — eight effects, seven transitions, masks, a text generator, colour
+- **Effects and transitions** — eight effects, seven transitions (any of them on every cut in one
+  choice), masks, a text generator, colour
   curves and lift/gamma/gain wheels, chosen from a browser whose every tile is that effect's own
   shader over the current frame. Every parameter keyframable, including a clip's position, scale and
   rotation, all resolved in the Rust core so the preview and the export read the same values.

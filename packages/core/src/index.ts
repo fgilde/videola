@@ -9,6 +9,7 @@ export {
   reframe,
   spreadEasing,
   splitAtTimes,
+  transitionEveryCut,
 } from "./edits";
 export type { Attributes, EditTarget, Reframe } from "./edits";
 export * from "./commands";

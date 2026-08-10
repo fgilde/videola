@@ -6,6 +6,7 @@ import type { Command } from "./generated/Command";
 import type { EffectTarget } from "./generated/EffectTarget";
 import type { Keyframe } from "./generated/Keyframe";
 import type { Project } from "./generated/Project";
+import type { Transition } from "./generated/Transition";
 import type { Time } from "./generated/Time";
 
 /**
@@ -338,6 +339,45 @@ function clipAt(project: Project, start: Time): Clip | undefined {
   return project.timeline.tracks
     .flatMap((track) => track.clips)
     .find((clip) => clip.start === start);
+}
+
+/**
+ * The same transition on every cut where two clips actually meet.
+ *
+ * A slideshow is fifty pictures and forty-nine dissolves, and setting them one at a time is the same
+ * click forty-nine times. `clip.setTransition` writes a clip's **incoming** transition, so what is
+ * asked of each clip is only whether something ends exactly where it begins: a transition needs two
+ * pictures, and one over a gap would be a dissolve out of the background.
+ *
+ * The first clip of a track is never given one for the same reason, and neither is a clip whose
+ * neighbour is shorter than the transition — half a dissolve reaching past the start of the clip
+ * before it is a mix with something that is not there yet.
+ *
+ * `null` clears them, which is the same walk with nothing to write.
+ */
+export function transitionEveryCut(
+  project: Project,
+  transition: Transition | null,
+): Command[] {
+  const commands: Command[] = [];
+  for (const track of project.timeline.tracks) {
+    if (track.locked) continue;
+    const ordered = [...track.clips].sort((left, right) => left.start - right.start);
+    for (let index = 1; index < ordered.length; index += 1) {
+      const clip = ordered[index];
+      const before = ordered[index - 1];
+      if (clip === undefined || before === undefined) continue;
+      if (before.start + before.duration !== clip.start) continue;
+      if (transition !== null) {
+        // Both sides have to be able to give the transition its length. The shorter of the two is
+        // what decides, because a mix reaches into each of them by the same amount.
+        const shortest = Math.min(before.duration, clip.duration);
+        if (transition.duration > shortest) continue;
+      }
+      commands.push(cmd.clipSetTransition(clip.id, transition));
+    }
+  }
+  return commands;
 }
 
 /** Every marker's instant, which is what "cut on the beat" is asking for. */

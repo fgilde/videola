@@ -289,6 +289,23 @@ async function announce() {
     return sum / (pixels.length / 4) / 3;
   }
 
+  // A right click, and the entry it brings up. The menu is a real one -- role="menu" with buttons in
+  // it -- so an entry is found by its words like every other control here.
+  function contextMenu(target) {
+    const box = target.getBoundingClientRect();
+    target.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: Math.round(box.left + box.width / 2),
+        clientY: Math.round(box.top + box.height / 2),
+      }),
+    );
+  }
+
+  const menuItem = (text) =>
+    all('[role="menuitem"]').find((node) => node.textContent.trim() === text);
+
   function pointer(type, target, extra) {
     target.dispatchEvent(
       new PointerEvent(type, Object.assign({
@@ -696,6 +713,49 @@ async function announce() {
       Number(rowSlider("Position X").value) !== held, true);
     check("without minting a key of its own", all("[data-path-key]").length, 2);
 
+    // A dissolve on every cut, which is the one edit a slideshow is made of. The fixture is one clip,
+    // so a cut is made first -- and the sweep has to find it without being told where it is.
+    const sweep = q('[aria-label="Übergang auf jeden Schnitt"]');
+    check("the sweep is offered on the timeline's own toolbar", sweep !== null, true);
+    toStart();
+    forward(30);
+    contextMenu(q("[data-clip-id]"));
+    // React opens the menu on a state update, so it is there on the next task and not on this one.
+    const split = await until("the clip menu", () => menuItem("Am Playhead teilen"));
+    check("and the cut it needs is on offer", split.disabled, false);
+    split.click();
+    await until("two clips", () => (all("[data-clip-id]").length === 2 ? true : null));
+
+    setValue(sweep, "crossfade");
+    await sleep(400);
+    check("dressing every cut raised nothing", banner(), "");
+
+    // Read on the second clip, which is the one whose incoming transition a cut belongs to.
+    pointer("pointerdown", all("[data-clip-id]")[1]);
+    pointer("pointerup", all("[data-clip-id]")[1]);
+    const chosen = await until("the transition row", () => q('[aria-label="Übergang"]'));
+    check("and the cut now carries the transition it was given", chosen.value, "crossfade");
+
+    setValue(sweep, "none");
+    await sleep(400);
+    // The clip is picked again: the select above took the focus, and which clip the properties panel
+    // is showing is a question about the selection and not about what was clicked last.
+    pointer("pointerdown", all("[data-clip-id]")[1]);
+    pointer("pointerup", all("[data-clip-id]")[1]);
+    const cleared = await until("the transition row again", () => q('[aria-label="Übergang"]'));
+    check("and the first entry takes them all away again", cleared.value, "");
+    // Three steps: the sweep that cleared them, the sweep that set them, and the cut itself.
+    for (let step = 0; step < 3; step += 1) {
+      button("Rückgängig").click();
+      await sleep(200);
+    }
+    check("and the timeline is one clip again", all("[data-clip-id]").length, 1);
+    // Picked again, because what follows reads the properties panel and an undone cut takes the
+    // selection with it.
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    await until("the properties panel", () => rowSlider("Breite (Faktor)"));
+
     // The same edit in a frame of another shape, end to end. Read on the canvas rather than on the
     // settings: what a reframe has to change is the picture, and the element the compositor draws
     // into is the one thing that cannot agree with a number nobody looked at.
@@ -720,6 +780,11 @@ async function announce() {
     checkNear("undone in one step, frame and clips together",
       q(".v-preview__canvas").getBoundingClientRect().width / q(".v-preview__canvas").getBoundingClientRect().height,
       wide.width / wide.height, 0.05);
+    // The overflow menu is closed and the focus given up. Left open with the focus in a select, the
+    // space bar later in this run opens that select instead of starting playback -- which is correct
+    // of the transport and would look like a transport that stopped answering.
+    q(".v-topbar__more").open = false;
+    document.activeElement?.blur();
 
     // Put the timeline back the way the rest of the run expects to find it: no keys, no path, and
     // the playhead at the start. A check that leaves its own state behind is a check that breaks

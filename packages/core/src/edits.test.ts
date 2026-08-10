@@ -16,6 +16,7 @@ import {
   reframe,
   spreadEasing,
   splitAtTimes,
+  transitionEveryCut,
 } from "./edits";
 import type { Clip } from "./generated/Clip";
 import type { Command } from "./generated/Command";
@@ -520,5 +521,76 @@ describe("holding one frame", () => {
     doc.undo();
     expect(pieces(doc)).toHaveLength(1);
     expect(pieces(doc)[0]!.keyframes.speed).toBeUndefined();
+  });
+});
+
+describe("a transition on every cut", () => {
+  const dissolve = (seconds: number) => ({
+    transitionType: "crossDissolve",
+    duration: seconds * SECOND,
+    alignment: "center" as const,
+    params: {},
+  });
+  const clips = (doc: VideolaDocument) => doc.state.timeline.tracks[0]?.clips ?? [];
+  const transitions = (doc: VideolaDocument) =>
+    clips(doc).map((clip) => clip.transitionIn?.transitionType ?? null);
+
+  function apply(doc: VideolaDocument, commands: readonly Command[]): void {
+    for (const command of commands) doc.dispatch(command, "transitions-1");
+  }
+
+  it("puts one on every cut and none on the first clip", async () => {
+    const doc = await timeline(3);
+    apply(doc, transitionEveryCut(doc.state, dissolve(0.5)));
+
+    expect(transitions(doc)).toEqual([null, "crossDissolve", "crossDissolve"]);
+  });
+
+  // A transition needs two pictures. Over a gap it would be a dissolve out of the background, which
+  // is not what anybody means by "dissolve every cut".
+  it("skips a cut that is really a gap", async () => {
+    const doc = await timeline(2);
+    const second = clips(doc)[1]!;
+    doc.dispatch(cmd.clipMove(second.id, doc.state.timeline.tracks[0]!.id, 6 * SECOND));
+
+    apply(doc, transitionEveryCut(doc.state, dissolve(0.5)));
+    expect(transitions(doc)).toEqual([null, null]);
+  });
+
+  // Half a dissolve reaching past the start of the clip before it is a mix with something that is
+  // not there yet, so the shorter of the two neighbours decides.
+  it("skips a cut where a neighbour is shorter than the transition", async () => {
+    const doc = await timeline(2);
+    apply(doc, transitionEveryCut(doc.state, dissolve(6)));
+
+    expect(transitions(doc)).toEqual([null, null]);
+  });
+
+  it("clears them all again", async () => {
+    const doc = await timeline(3);
+    apply(doc, transitionEveryCut(doc.state, dissolve(0.5)));
+    apply(doc, transitionEveryCut(doc.state, null));
+
+    expect(transitions(doc)).toEqual([null, null, null]);
+  });
+
+  it("passes over a locked track", async () => {
+    const doc = await timeline(2, 2);
+    const locked = doc.state.timeline.tracks[0]?.id ?? "";
+    doc.dispatch(cmd.trackSetFlags(locked, null, null, true, null));
+
+    apply(doc, transitionEveryCut(doc.state, dissolve(0.5)));
+
+    expect(doc.state.timeline.tracks[0]?.clips[1]?.transitionIn ?? null).toBeNull();
+    expect(doc.state.timeline.tracks[1]?.clips[1]?.transitionIn).not.toBeNull();
+  });
+
+  it("is one step to undo, however many cuts it dressed", async () => {
+    const doc = await timeline(3);
+    apply(doc, transitionEveryCut(doc.state, dissolve(0.5)));
+    expect(transitions(doc)).not.toEqual([null, null, null]);
+
+    doc.undo();
+    expect(transitions(doc)).toEqual([null, null, null]);
   });
 });

@@ -164,6 +164,8 @@
   "timeline.ungroup": "Gruppierung aufheben",
   "timeline.nest": "Verschachteln",
   "timeline.addMarker": "Marker setzen",
+  "timeline.everyCut": "Übergang auf jeden Schnitt",
+  "timeline.everyCutNone": "Alle entfernen",
   "timeline.deleteMarker": "Marker löschen",
   "timeline.marker": "Marker: {label}",
   "timeline.markerUnnamed": "Marker",
