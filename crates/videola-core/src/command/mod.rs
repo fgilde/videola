@@ -57,11 +57,7 @@ pub enum Command {
     /// silent in a stereo project and both stay in the file, so a 5.1 mix delivered in stereo keeps
     /// its placement for the next delivery.
     #[serde(rename = "track.setSurround")]
-    TrackSetSurround {
-        track: TrackId,
-        rear: f32,
-        lfe: f32,
-    },
+    TrackSetSurround { track: TrackId, rear: f32, lfe: f32 },
     /// Change any subset of a track's flags; a field left null keeps its current value.
     #[serde(rename = "track.setFlags")]
     TrackSetFlags {

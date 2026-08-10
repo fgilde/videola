@@ -710,7 +710,11 @@ pub(super) fn add_effect(target: &mut Project, at: &EffectTarget, effect_type: &
 
 // Refuses a chain that has no such effect rather than doing nothing. An effect somebody removed twice
 // is a surface that thinks it is still there, and telling it so is how it finds out.
-pub(super) fn remove_effect(target: &mut Project, at: &EffectTarget, effect_type: &str) -> Result<()> {
+pub(super) fn remove_effect(
+    target: &mut Project,
+    at: &EffectTarget,
+    effect_type: &str,
+) -> Result<()> {
     let effects = chain_mut(target, at)?;
     let index = effects
         .iter()
