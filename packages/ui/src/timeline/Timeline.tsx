@@ -16,6 +16,7 @@ import {
   FLICKS_PER_SECOND,
   mergeCaptions,
   on,
+  pasteAttributes,
   splitScreen,
   stageFor,
   type Clip as ClipModel,
@@ -278,6 +279,16 @@ export function Timeline({
     copy();
     remove(false);
   }, [copy, remove]);
+
+  // The model is the clip on the clipboard, which is what a copy already put there. A second store
+  // for "the clip whose look I want" would be a second thing to keep in step with the first, and
+  // the question "which clip is the model" has one honest answer: the one you copied.
+  const pasteLook = useCallback(() => {
+    const model = clipboard.current[0]?.clip;
+    if (model === undefined || selected.size === 0) return;
+    const key = `timeline-attributes-${(actionSequence += 1)}`;
+    for (const command of pasteAttributes(model, [...selected])) dispatch(command, key);
+  }, [dispatch, selected]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
@@ -583,6 +594,7 @@ export function Timeline({
           onCopy={copy}
           onCut={cut}
           onPaste={paste}
+          onPasteLook={pasteLook}
         />
       )}
     </section>
@@ -601,6 +613,7 @@ interface MenuProps {
   onCopy: () => void;
   onCut: () => void;
   onPaste: () => void;
+  onPasteLook: () => void;
 }
 
 // Every entry either does something or is disabled. What decides that is read at render time and
@@ -671,6 +684,11 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
     { label: t("timeline.copy"), onSelect: close(props.onCopy) },
     { label: t("timeline.cut"), onSelect: close(props.onCut) },
     { label: t("timeline.paste"), disabled: !props.hasClipboard, onSelect: close(props.onPaste) },
+    {
+      label: t("timeline.pasteAttributes"),
+      disabled: !props.hasClipboard || props.selected.size === 0,
+      onSelect: close(props.onPasteLook),
+    },
     {
       label: t("timeline.group"),
       disabled: selected.size < 2,

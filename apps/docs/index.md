@@ -75,7 +75,8 @@ features:
 ## What works today
 
 - **Editing** — ripple delete and trim, roll, slip, slide, multi-selection, groups, clipboard,
-  markers, snapping and zoom, with one pointer path for mouse, pen and finger. Lockable tracks,
+  markers, snapping and zoom, paste attributes, with one pointer path for mouse, pen and finger.
+  Lockable tracks,
   enforced by a single gate in front of the whole command dispatch.
 - **Compound clips** — fold a selection into one clip; the picture is proven not to change. Fade,
   blend, grade, crop or dissolve the compound and it is isolated on a surface of its own first, so

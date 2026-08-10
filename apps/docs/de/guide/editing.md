@@ -136,6 +136,29 @@ die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter 
 wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
 Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
 
+## Attribute einfügen
+
+Einen Clip kopieren, andere auswählen, **Attribute einfügen**: der Blick des ersten liegt auf allen
+anderen — Geometrie (Position, Skalierung, Drehung, Anker, Deckkraft und Zuschnitt, mit den Keys, die
+davon etwas animieren), die Effektkette mit ihren Parametern und Keys, sowie Lautstärke und
+Geschwindigkeitsrampe.
+
+Vorbild ist der Clip in der Zwischenablage, den das Kopieren dort schon abgelegt hat. Ein zweiter
+Speicher für „der Clip, dessen Blick ich will" wäre eine zweite Sache, die mit der ersten Schritt
+halten muss, und die Frage „welcher Clip ist das Vorbild" hat eine ehrliche Antwort: der kopierte.
+
+Effekte werden nach Typ hinzugefügt und dann Parameter für Parameter gesetzt, denn mehr bietet der
+Command-Bus nicht — es gibt kein „ersetze diese Kette", und eines zu erfinden setzte neben
+`effect.add` eine zweite Autorität darüber, was in einer Kette stehen darf. Ein Typ, den das Ziel
+schon trägt, bleibt, wo er ist, und seine Parameter werden erneut darüber geschrieben: `effect.add`
+behandelt einen wiederholten Typ als Nichtstun, zweimal einfügen kann also keine zweite Helligkeit
+erzeugen.
+
+Keys reisen mit dem mit, was sie animieren, samt Verlauf und Anfassern — ein Einfügen, das den
+Verlauf fallen ließe, gäbe eine Bewegung zurück, die an der richtigen Stelle ankommt und falsch
+dorthin gelangt. Der ganze Tastendruck ist ein Schritt in der Historie, gleich wie viele Clips er
+berührt hat.
+
 ## An den Markern schneiden
 
 Die Markerliste hat eine eigene Aktion: jeden Clip schneiden, durch den ein Marker läuft. Mit den

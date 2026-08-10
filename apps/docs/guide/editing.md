@@ -131,6 +131,26 @@ insert opens the gap on **every** track, so skipping the locked one would move t
 under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
 unlock the track and edit, or leave it alone.
 
+## Pasting attributes
+
+Copy a clip, select others, and **Paste attributes** puts the first one's look on all of them:
+geometry (position, scale, rotation, anchor, opacity and crop, with the keys that animate any of
+them), the effect chain with its parameters and keys, and the gain and speed ramp.
+
+The model is the clip on the clipboard, which is what the copy already put there. A second store for
+"the clip whose look I want" would be a second thing to keep in step with the first, and the question
+"which clip is the model" has one honest answer: the one you copied.
+
+Effects are added by type and then set parameter by parameter, because that is the whole of what the
+command bus offers — there is no "replace this chain" command, and inventing one would put a second
+authority on what a chain may contain next to `effect.add`. A type the target already carries is left
+where it is and its parameters are written again on top: `effect.add` treats a repeated type as a
+no-op, so pasting twice cannot grow a second brightness.
+
+Keys travel with whatever they animate, and with their interpolation and handles — a paste that
+dropped the easing would hand back a move that lands in the right place and gets there wrongly. The
+whole press is one step in the history, however many clips it touched.
+
 ## Cutting at the markers
 
 The marker list carries one action of its own: cut every clip the markers pass through. With beats

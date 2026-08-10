@@ -1,5 +1,7 @@
 import { cmd } from "./commands";
 
+import type { Clip } from "./generated/Clip";
+import type { ClipId } from "./generated/ClipId";
 import type { Command } from "./generated/Command";
 import type { EffectTarget } from "./generated/EffectTarget";
 import type { Keyframe } from "./generated/Keyframe";
@@ -89,6 +91,112 @@ export function spreadEasing(
       cmd.keyframeSetInterp(target, effectType, key, keyframe.time, from.interp),
       cmd.keyframeSetHandles(target, effectType, key, keyframe.time, handleIn, handleOut),
     ]);
+}
+
+/** Which of a clip's attributes to carry over. Each is a group somebody would ask for by name. */
+export interface Attributes {
+  /** Position, scale, rotation, anchor, opacity and crop — and the keys that animate any of them. */
+  geometry: boolean;
+  /** The effect chain, its parameters, and the keys on those. */
+  effects: boolean;
+  /** Gain and the speed ramp. */
+  sound: boolean;
+}
+
+export const ALL_ATTRIBUTES: Attributes = { geometry: true, effects: true, sound: true };
+
+/**
+ * One clip's look on other clips — what every editor calls pasting attributes.
+ *
+ * The model is the clip on the clipboard, which is what `Ctrl`+`C` already put there. A second
+ * store for "the clip whose attributes I want" would be a second thing to keep in step with the
+ * first, and the question "which clip is the model" has one honest answer: the one you copied.
+ *
+ * Effects are added by type and then set parameter by parameter, because that is the whole of what
+ * the command bus offers — there is no "replace this chain" command, and inventing one would put a
+ * second authority on what an effect chain may contain next to `effect.add`. A type the target
+ * already carries is left where it is and its parameters are overwritten: `effect.add` treats a
+ * repeated type as a no-op, so the chain cannot grow a second brightness.
+ *
+ * Keyframes travel with whatever they animate. A geometry key is `null`-targeted, an effect key
+ * names its type, and both go out with their interpolation and their handles — a paste that dropped
+ * the easing would hand back a move that lands in the right place and gets there wrongly.
+ */
+export function pasteAttributes(
+  from: Clip,
+  onto: readonly ClipId[],
+  what: Attributes = ALL_ATTRIBUTES,
+): Command[] {
+  const commands: Command[] = [];
+  for (const clip of onto) {
+    if (clip === from.id) continue;
+    const target = { kind: "clip" as const, clip };
+    if (what.geometry) {
+      commands.push(cmd.clipSetTransform(clip, from.transform));
+      for (const [key, track] of Object.entries(from.keyframes)) {
+        // The speed ramp is a keyframe track like any other and belongs to the sound group, not to
+        // the geometry: it is the one track the picture reads by area rather than by value.
+        if (key === SPEED_TRACK) continue;
+        commands.push(...keysOnto(target, null, key, track));
+      }
+    }
+    if (what.sound) {
+      commands.push(
+        cmd.clipSetVolume(clip, from.volume),
+        cmd.clipSetSpeed(clip, from.speed.rate, from.speed.reverse, from.speed.preservePitch),
+      );
+      const ramp = from.keyframes[SPEED_TRACK];
+      if (ramp !== undefined) commands.push(...keysOnto(target, null, SPEED_TRACK, ramp));
+    }
+    if (what.effects) {
+      for (const effect of from.effects) {
+        commands.push(cmd.effectAdd(target, effect.effectType));
+        for (const [key, value] of Object.entries(effect.params)) {
+          commands.push(cmd.effectSetParam(target, effect.effectType, key, value));
+        }
+        for (const [key, track] of Object.entries(effect.keyframes)) {
+          commands.push(...keysOnto(target, effect.effectType, key, track));
+        }
+      }
+    }
+  }
+  return commands;
+}
+
+// The rate track's own name, spelled the way the core spells it.
+const SPEED_TRACK = "speed";
+
+// A whole keyframe track onto another clip: the key, its interpolation, and its handles. `add`
+// carries the interpolation already, so the pair is the only thing left to say -- and only where
+// there is one, because sending `null` twice would clear a default that was never set.
+function keysOnto(
+  target: EffectTarget,
+  effectType: string | null,
+  key: string,
+  track: readonly Keyframe[],
+): Command[] {
+  return track.flatMap((keyframe) => {
+    const add = cmd.keyframeAdd(
+      target,
+      effectType,
+      key,
+      keyframe.time,
+      keyframe.value,
+      keyframe.interp,
+    );
+    if (keyframe.handleIn == null && keyframe.handleOut == null) return [add];
+    return [
+      add,
+      cmd.keyframeSetHandles(
+        target,
+        effectType,
+        key,
+        keyframe.time,
+        keyframe.handleIn ?? null,
+        keyframe.handleOut ?? null,
+      ),
+    ];
+  });
 }
 
 /** Every marker's instant, which is what "cut on the beat" is asking for. */

@@ -77,7 +77,8 @@ features:
 ## Was heute funktioniert
 
 - **Schneiden** — Ripple-Löschen und -Trimmen, Roll, Slip, Slide, Mehrfachauswahl, Gruppen,
-  Zwischenablage, Marker, Einrasten und Zoom, mit einem Zeigerpfad für Maus, Stift und Finger.
+  Zwischenablage, Attribute einfügen, Marker, Einrasten und Zoom, mit einem Zeigerpfad für Maus,
+  Stift und Finger.
   Sperrbare Spuren, durchgesetzt von einer einzigen Schranke vor der ganzen Kommandoverteilung.
 - **Verschachtelte Clips** — eine Auswahl zu einem Clip zusammenfassen; dass das Bild sich dabei
   nicht ändert, ist nachgewiesen. Blenden, überlagern, graden, zuschneiden oder überblenden isoliert

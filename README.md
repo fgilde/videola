@@ -13,7 +13,7 @@ into ordinary editable projects.
 
 **Editing.** Import by drag-and-drop, file picker, or straight from a phone camera. Move and trim
 clips across tracks, ripple delete and ripple trim, roll, slip and slide, multi-select, group, cut,
-copy and paste, split, markers, snapping to clip edges and the playhead, zoom from a single frame to
+copy and paste, paste attributes, split, markers, snapping to clip edges and the playhead, zoom from a single frame to
 a whole project. One Pointer Events path serves mouse, pen and touch; hit areas grow to 44 px when
 the pointer is not a mouse, and a whole drag is one undo step. A padlock beside a track's name
 freezes it: enforced in the core by one gate in front of the whole command dispatch, so no handler

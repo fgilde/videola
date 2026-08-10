@@ -7,7 +7,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { cmd, on } from "./commands";
 import { createWasmBackend } from "./wasm-backend";
 import { VideolaDocument } from "./document";
-import { markerTimes, spreadEasing, splitAtTimes } from "./edits";
+import { ALL_ATTRIBUTES, markerTimes, pasteAttributes, spreadEasing, splitAtTimes } from "./edits";
+import type { Clip } from "./generated/Clip";
+import type { Command } from "./generated/Command";
 import type { Keyframe } from "./generated/Keyframe";
 import { initSync } from "./wasm/videola_core.js";
 
@@ -195,5 +197,132 @@ describe("one key's easing on the whole track", () => {
   it("has nothing to say about a track of one key", async () => {
     const { doc, clip } = await eased();
     expect(spreadEasing([keys(doc)[0]!], on.clip(clip), null, "opacity", keys(doc)[0]!)).toEqual([]);
+  });
+});
+
+describe("one clip's look on another", () => {
+  async function pair(): Promise<{ doc: VideolaDocument; model: Clip; other: string }> {
+    const doc = await timeline(2);
+    const clips = doc.state.timeline.tracks[0]?.clips ?? [];
+    const model = clips[0]?.id ?? "";
+    const other = clips[1]?.id ?? "";
+
+    doc.dispatch(
+      cmd.clipSetTransform(model, {
+        x: 120,
+        y: -40,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        rotation: 12,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        opacity: 0.8,
+        crop: { left: 0.1, top: 0, right: 0, bottom: 0.2 },
+      }),
+    );
+    doc.dispatch(cmd.clipSetVolume(model, 0.4));
+    doc.dispatch(cmd.clipSetSpeed(model, 2, false, true));
+    doc.dispatch(cmd.effectAdd(on.clip(model), "brightness"));
+    doc.dispatch(
+      cmd.effectSetParam(on.clip(model), "brightness", "amount", { kind: "float", value: 0.3 }),
+    );
+    doc.dispatch(
+      cmd.keyframeAdd(on.clip(model), null, "opacity", 0, { kind: "float", value: 0 }, "bezier"),
+    );
+    doc.dispatch(
+      cmd.keyframeSetHandles(on.clip(model), null, "opacity", 0, [0.4, 1.2], [0.9, 0.05]),
+    );
+    doc.dispatch(
+      cmd.keyframeAdd(on.clip(model), null, "opacity", SECOND, { kind: "float", value: 1 }),
+    );
+
+    return { doc, model: clipOf(doc, model), other };
+  }
+
+  const clipOf = (doc: VideolaDocument, id: string): Clip => {
+    const found = doc.state.timeline.tracks.flatMap((track) => track.clips).find((c) => c.id === id);
+    if (found === undefined) throw new Error(`no clip ${id}`);
+    return found;
+  };
+
+  function apply(doc: VideolaDocument, commands: readonly Command[]): void {
+    for (const command of commands) doc.dispatch(command, "attributes-1");
+  }
+
+  it("carries the geometry over", async () => {
+    const { doc, model, other } = await pair();
+    apply(doc, pasteAttributes(model, [other]));
+
+    const got = clipOf(doc, other).transform;
+    expect(got.x).toBeCloseTo(120, 4);
+    expect(got.scaleX).toBeCloseTo(1.5, 4);
+    expect(got.rotation).toBeCloseTo(12, 4);
+    expect(got.crop.bottom).toBeCloseTo(0.2, 4);
+  });
+
+  it("carries the effect chain and its parameters", async () => {
+    const { doc, model, other } = await pair();
+    apply(doc, pasteAttributes(model, [other]));
+
+    const chain = clipOf(doc, other).effects;
+    expect(chain.map((effect) => effect.effectType)).toEqual(["brightness"]);
+    // To the precision an f32 keeps it in: the value made the trip through the core and back.
+    const amount = chain[0]?.params.amount;
+    expect(amount?.kind).toBe("float");
+    expect(amount?.kind === "float" ? amount.value : NaN).toBeCloseTo(0.3, 6);
+  });
+
+  it("carries the gain and the speed", async () => {
+    const { doc, model, other } = await pair();
+    apply(doc, pasteAttributes(model, [other]));
+
+    expect(clipOf(doc, other).volume).toBeCloseTo(0.4, 4);
+    expect(clipOf(doc, other).speed.rate).toBeCloseTo(2, 4);
+  });
+
+  // A paste that dropped the easing would hand back a move that lands in the right place and gets
+  // there wrongly.
+  it("carries the keys, their interpolation and their handles", async () => {
+    const { doc, model, other } = await pair();
+    apply(doc, pasteAttributes(model, [other]));
+
+    const track = clipOf(doc, other).keyframes.opacity ?? [];
+    expect(track).toHaveLength(2);
+    expect(track[0]?.interp).toBe("bezier");
+    expect(track[0]?.handleIn?.[1]).toBeCloseTo(1.2, 4);
+  });
+
+  it("takes only the groups it was asked for", async () => {
+    const { doc, model, other } = await pair();
+    apply(doc, pasteAttributes(model, [other], { ...ALL_ATTRIBUTES, effects: false }));
+
+    expect(clipOf(doc, other).effects).toEqual([]);
+    expect(clipOf(doc, other).transform.x).toBeCloseTo(120, 4);
+  });
+
+  // Twice over is the same clip, not two brightnesses: `effect.add` treats a repeated type as a
+  // no-op, and the parameters are written again on top.
+  it("does not grow a second effect of the same type", async () => {
+    const { doc, model, other } = await pair();
+    apply(doc, pasteAttributes(model, [other]));
+    apply(doc, pasteAttributes(model, [other]));
+
+    expect(clipOf(doc, other).effects).toHaveLength(1);
+  });
+
+  it("says nothing about the clip it was read from", async () => {
+    const { doc, model } = await pair();
+    expect(pasteAttributes(model, [model.id])).toEqual([]);
+    void doc;
+  });
+
+  it("is one step to undo, however many clips it touched", async () => {
+    const { doc, model, other } = await pair();
+    const before = clipOf(doc, other).transform.x;
+    apply(doc, pasteAttributes(model, [other]));
+    expect(clipOf(doc, other).transform.x).not.toBeCloseTo(before, 4);
+
+    doc.undo();
+    expect(clipOf(doc, other).transform.x).toBeCloseTo(before, 4);
   });
 });

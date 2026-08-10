@@ -109,6 +109,7 @@
   "timeline.copy": "Copy",
   "timeline.cut": "Cut",
   "timeline.paste": "Paste at playhead",
+  "timeline.pasteAttributes": "Paste attributes",
   "timeline.group": "Group",
   "timeline.ungroup": "Ungroup",
   "timeline.nest": "Nest",

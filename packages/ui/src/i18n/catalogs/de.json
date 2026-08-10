@@ -109,6 +109,7 @@
   "timeline.copy": "Kopieren",
   "timeline.cut": "Ausschneiden",
   "timeline.paste": "Am Playhead einfügen",
+  "timeline.pasteAttributes": "Attribute einfügen",
   "timeline.group": "Gruppieren",
   "timeline.ungroup": "Gruppierung aufheben",
   "timeline.nest": "Verschachteln",

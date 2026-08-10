@@ -11,6 +11,7 @@ import {
   captionCues,
   cmd,
   createWasmBackend,
+  on,
   parseCaptions,
   FLICKS_PER_SECOND,
   VideolaDocument,
@@ -783,5 +784,85 @@ describe("a locked track", () => {
     await locked();
     const row = document.querySelector('[data-track-id][data-locked]');
     expect(row).not.toBeNull();
+  });
+});
+
+// One clip's look on another, from the entry every editor calls pasting attributes. The model is
+// the clip the copy already put on the clipboard: a second store for "the clip whose look I want"
+// would be a second thing to keep in step with the first.
+describe("pasting attributes", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  async function twoClips(): Promise<VideolaDocument> {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+    return doc;
+  }
+
+  function look(doc: VideolaDocument, index: number) {
+    const clip = clips(doc.state)[index];
+    if (clip === undefined) throw new Error(`no clip at ${index}`);
+    return clip;
+  }
+
+  function menuOn(index: number): void {
+    fireEvent.contextMenu(clipAt(index), { clientX: 20 + index * 200, clientY: 40 });
+  }
+
+  it("puts the copied clip's geometry and chain onto the selection", async () => {
+    const doc = await twoClips();
+    // A look worth copying: turned, scaled, and carrying an effect.
+    doc.dispatch(
+      cmd.clipSetTransform(look(doc, 0).id, { ...look(doc, 0).transform, rotation: 20, scaleX: 1.4 }),
+    );
+    doc.dispatch(cmd.effectAdd(on.clip(look(doc, 0).id), "brightness"));
+
+    down(clipAt(0), 20);
+    up(20);
+    menuOn(0);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Kopieren" }));
+
+    down(clipAt(1), 220);
+    up(220);
+    menuOn(1);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attribute einfügen" }));
+
+    expect(look(doc, 1).transform.rotation).toBeCloseTo(20, 4);
+    expect(look(doc, 1).transform.scaleX).toBeCloseTo(1.4, 4);
+    expect(look(doc, 1).effects.map((effect) => effect.effectType)).toEqual(["brightness"]);
+  });
+
+  it("is one step to undo", async () => {
+    const doc = await twoClips();
+    doc.dispatch(
+      cmd.clipSetTransform(look(doc, 0).id, { ...look(doc, 0).transform, rotation: 20 }),
+    );
+    doc.dispatch(cmd.effectAdd(on.clip(look(doc, 0).id), "brightness"));
+
+    down(clipAt(0), 20);
+    up(20);
+    menuOn(0);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Kopieren" }));
+    down(clipAt(1), 220);
+    up(220);
+    menuOn(1);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Attribute einfügen" }));
+
+    act(() => void doc.undo());
+    expect(look(doc, 1).transform.rotation).toBeCloseTo(0, 4);
+    expect(look(doc, 1).effects).toEqual([]);
+  });
+
+  // Nothing copied is nothing to paste, and it says so rather than dispatching commands the core
+  // would refuse -- the same rule the paste beside it already follows.
+  it("is greyed out with an empty clipboard", async () => {
+    await twoClips();
+    down(clipAt(0), 20);
+    up(20);
+    menuOn(0);
+
+    const entry = screen.getByRole("menuitem", { name: "Attribute einfügen" });
+    expect((entry as HTMLButtonElement).disabled).toBe(true);
   });
 });
