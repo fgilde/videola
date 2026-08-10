@@ -188,7 +188,7 @@ export async function gatherPictures(
   frame: ExportFrame,
 ): Promise<Map<string, VideoFrame>> {
   const clips = drawnClips(drawList(project, frame.at, frame.params, frame.transforms));
-  const pictures = pass.generated.pictures(project, new Set(clips));
+  const pictures = pass.generated.pictures(project, new Set(clips), frame.sources);
   for (const clip of clips) {
     const hash = hashes.get(clip);
     const at = frame.sources.get(clip);

@@ -1,6 +1,6 @@
 # Vorlagen
 
-**Gebaut.** Eine Galerie mit zwölf Vorlagen in fünf Kategorien, jede Karte ein Bild, das aus der
+**Gebaut.** Eine Galerie mit dreizehn Vorlagen in fünf Kategorien, jede Karte ein Bild, das aus der
 Vorlage selbst gerendert wurde; ein Assistent, der zeigt, was er baut, während man ihn ausfüllt; und
 eine `.videolat`-Datei, die man weitergeben kann. Was am Ende herauskommt, ist ein gewöhnliches
 Projekt: derselbe Editor, dieselben Commands, derselbe Undo-Stapel. Es gibt keinen Vorlagen-Modus,
@@ -36,17 +36,19 @@ Typografie, Farbe und Bewegung — und genau daran erkennt man, ob sie etwas tau
 | Zitat | Titel und Abspann | jemandes Worte über seinem Bild, 6 s | eine Aufnahme, die von einer Keyframe-Helligkeit abgedunkelt wird, damit Schrift darauf lesbar ist — statt eines schwarzen Rechtecks darüber |
 | Vorher / Nachher | Produkte | eine Kante wandert über das Bild, 6 s | eine Maske, deren *Position* gekeyframt ist: beide Bilder sind die ganze Zeit da, und die Kante dazwischen ist die Geschichte |
 | Gespräch | Titel und Abspann | zwei Einstellungen, ein harter Schnitt, Name und Funktion, 8 s | das Einfachste hier und das, was die meisten Schnitte wirklich sind: gar kein Übergang, und eine Leiste, die einmal kommt und geht |
+| Vorlauf | Auftakt | drei, zwei, eins, dann das Material, 3,4 s | der `countdown`-Generator: eine Zahl, die der Renderer selbst herunterzählt, statt drei Textclips, die jemand in Schritt halten muss |
 
 Zusammen benutzen sie **jeden Übergang, den der Renderer hat**. Das ist ein Test und kein Zufall:
 eine Galerie lohnt sich nur, wenn die Karten nicht dieselbe Karte sind.
 
-Eines fehlt mit Absicht. Das Modell trägt einen `countdown`-Generator — eine Zahl, die der Renderer
-aus einem Feld zeichnen würde statt aus drei Textclips — und **nichts zeichnet ihn**:
-`paintsGenerator` listet Text, Solid und Gradient, und ein Clip, dessen Generator nicht darauf steht,
-fällt ganz aus der Draw-List. Eine Countdown-Vorlage war geschrieben und wurde zurückgezogen, denn
-eine Karte, die ein leeres Rechteck zeigt, ist schlimmer als eine Kategorie mit einem Eintrag
-weniger. Gefunden hat es der Test, der jede ausgelieferte Vorlage backt und einen Clip ablehnt, für
-den dieser Stand nichts zeichnet.
+Der Vorlauf war einmal zurückgezogen und ist wieder da. Geschrieben war er zuerst gegen einen
+Generator, den **nichts zeichnete** — `paintsGenerator` listete Text, Solid und Gradient, und ein
+Clip, dessen Generator nicht darauf steht, fällt ganz aus der Draw-List — die Karte wäre also ein
+leeres Rechteck geworden. Gefunden hat es der Test, der jede ausgelieferte Vorlage backt und einen
+Clip ablehnt, für den dieser Stand nichts zeichnet. Statt die Karte auszuliefern, hat der Renderer
+gelernt, den Generator zu zeichnen: ein Vorlauf ist jetzt eine Zahl pro ganzer Sekunde des eigenen
+Materials des Clips, und die Formen werden ebenfalls gezeichnet. Die Vorlage kam nach dem Renderer,
+und in dieser Reihenfolge gehören die zwei.
 
 ## Die Karte ist ein gerendertes Bild
 
@@ -235,9 +237,10 @@ Sie führt zuerst `Project::normalize` aus und prüft dann das Manifest:
   entweder aus einem Slot, oder die Vorlage hat es selbst mitgebracht; ein Generatorclip muss einer
   sein, den der Renderer zeichnet. Das ist die Regel gegen den leeren Galerieeintrag.
 
-`paintsGenerator` in der Engine zeichnet **Text, Fläche und Verlauf**. Eine `shape` oder ein
-`countdown` fällt wortlos aus der Zeichenliste, eine Vorlage darauf sähe in der Zeitleiste vollständig
-aus und wäre auf dem Schirm leer — diese beiden werden verweigert. Compound-Clips ebenfalls: einer
+`paintsGenerator` in der Engine zeichnet **Text, Fläche, Verlauf, Vorlauf und die fünf benannten
+Formen** — Rechteck, Quadrat, Ellipse, Kreis, Dreieck. Ein Formname ist im Modell ein freier String,
+eine unbekannte Form fällt also wortlos aus der Zeichenliste: eine Vorlage auf `hexagon` sähe in der
+Zeitleiste vollständig aus und wäre auf dem Schirm leer und wird verweigert. Compound-Clips ebenfalls: einer
 trägt eine ganze zweite Zeitleiste, und jeder Clip darin bräuchte denselben Nachweis wie die oberste
 Ebene; die ehrliche Antwort ist deshalb nein statt einer Prüfung, die nur so aussieht, als stiege sie
 hinab.

@@ -753,9 +753,12 @@ project actually carries an effect.
   will not try, so the picker carries no keyframe switches — a row that could only ever produce a
   hold would promise an animation nothing draws. The loader does read a keyframe track, so a
   hand-authored project that swaps table halfway through a clip still gets both tables loaded.
-- **Shape and countdown generators paint nothing.** They are in the model, they are not in the menu,
-  and a clip whose generator this renderer cannot paint is dropped from the draw list rather than
-  drawn as an empty rectangle.
+- **A shape the renderer has no path for paints nothing.** `paintsGenerator` draws text, solid,
+  gradient, countdown and five named shapes — rectangle, square, ellipse, circle, triangle. A shape
+  name is a free string in the model, so a clip asking for anything else is dropped from the draw list
+  rather than drawn as an empty rectangle. A countdown is the one generator whose picture depends on
+  *when* it is asked for, and it repaints once a second rather than once a frame: the cache is keyed
+  on the number standing on screen, not on the instant.
 - **A centred or trailing transition is half invisible.** Its window reaches back before the clip
   starts, where the clip is not drawn at all. Playing it out needs handles — material past the cut —
   and nothing creates them.

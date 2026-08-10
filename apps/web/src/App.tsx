@@ -16,6 +16,7 @@ import {
   toSrt,
   ASPECTS,
   freezeFrame,
+  insert,
   markerTimes,
   reframe,
   splitAtTimes,
@@ -24,6 +25,7 @@ import {
   type ClipId,
   type Command,
   type Frame,
+  type InsertKind,
   type LoadWarning,
   type MediaAsset,
   type MediaId,
@@ -775,6 +777,26 @@ export function App(): ReactElement {
       reportError("error.actionFailed", err);
     }
   }, [doc, reportError]);
+
+  // A title, a shape or a countdown at the playhead. Two dispatches under one key where a track has
+  // to be made first, so the whole insert is one press of undo and a project with an empty track in
+  // it is never a state anybody can land on.
+  const insertGenerator = useCallback(
+    (kind: InsertKind, text: string) => {
+      if (doc === undefined) return;
+      try {
+        const laid = insert(kind, text);
+        const key = `insert-${kind}-${(actionSequence += 1)}`;
+        const track = freeTrack(doc, laid.track, playhead, laid.duration, key);
+        if (track === undefined) return;
+        doc.dispatch(cmd.clipAdd(track, laid.source, playhead, laid.duration), key);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, playhead, reportError],
+  );
 
   const undo = useCallback(() => {
     if (doc === undefined) return;
@@ -1528,6 +1550,7 @@ export function App(): ReactElement {
         doc === undefined ? undefined : () => void pickFiles(MEDIA_ACCEPT).then(importMedia)
       }
       onAddTrack={doc === undefined ? undefined : addTrack}
+      onInsert={doc === undefined ? undefined : insertGenerator}
       onImportCaptions={
         doc === undefined
           ? undefined
@@ -1855,6 +1878,28 @@ function adoptFormat(doc: VideolaDocument, asset: MediaAsset): void {
 function added(doc: VideolaDocument, kind: TrackKind, name: string): Track | undefined {
   doc.dispatch(cmd.trackAdd(kind, name));
   return doc.state.timeline.tracks.find((candidate) => candidate.kind === kind);
+}
+
+// A track of this kind with nothing standing in the window an insert would occupy, or a new one.
+// `clip.add` overwrites what it covers, so putting a second title at the playhead of the track the
+// first one is on would delete the first -- which is why room is looked for rather than assumed.
+function freeTrack(
+  doc: VideolaDocument,
+  kind: TrackKind,
+  at: Time,
+  duration: Time,
+  key: string,
+): string | undefined {
+  const free = doc.state.timeline.tracks.find(
+    (track) =>
+      track.kind === kind &&
+      !track.locked &&
+      track.clips.every((clip) => clip.start + clip.duration <= at || clip.start >= at + duration),
+  );
+  if (free !== undefined) return free.id;
+  const name = `${kind === "text" ? "T" : "O"}${doc.state.timeline.tracks.length + 1}`;
+  doc.dispatch(cmd.trackAdd(kind, name), key);
+  return doc.state.timeline.tracks.at(-1)?.id;
 }
 
 // The desktop updater, asked once. The ref is what keeps a change of locale from asking again -- the

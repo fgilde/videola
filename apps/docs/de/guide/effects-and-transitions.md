@@ -788,9 +788,12 @@ Projekt wirklich einen Effekt trägt.
   die nur ein Halten erzeugen kann, verspräche eine Animation, die nichts zeichnet. Der Lader liest
   eine Keyframe-Spur trotzdem, damit ein handgeschriebenes Projekt, das mitten im Clip die Tabelle
   wechselt, beide geladen bekommt.
-- **Form- und Countdown-Generatoren malen nichts.** Sie stehen im Modell, sie stehen nicht im Menü,
-  und ein Clip, dessen Generator dieser Renderer nicht malen kann, fällt aus der Zeichenliste, statt
-  als leeres Rechteck gezeichnet zu werden.
+- **Eine Form, für die der Renderer keinen Weg hat, malt nichts.** `paintsGenerator` zeichnet Text,
+  Fläche, Verlauf, Vorlauf und fünf benannte Formen — Rechteck, Quadrat, Ellipse, Kreis, Dreieck. Ein
+  Formname ist im Modell ein freier String, ein Clip, der etwas anderes verlangt, fällt deshalb aus
+  der Zeichenliste statt als leeres Rechteck gezeichnet zu werden. Der Vorlauf ist der einzige
+  Generator, dessen Bild davon abhängt, *wann* danach gefragt wird, und er malt einmal pro Sekunde
+  neu statt einmal pro Bild: der Cache-Schlüssel ist die Zahl auf dem Schirm, nicht der Zeitpunkt.
 - **Ein zentrierter oder nachlaufender Übergang ist zur Hälfte unsichtbar.** Sein Fenster reicht vor
   den Anfang des Clips zurück, wo der Clip gar nicht gezeichnet wird. Ihn auszuspielen braucht
   Handles — Material über den Schnitt hinaus — und nichts erzeugt sie.

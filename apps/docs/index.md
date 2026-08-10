@@ -109,7 +109,7 @@ features:
   travels; the grade is done there.
 - **Another shape in one press** — portrait, square or 4:5, with every clip scaled to cover the new
   frame in the same undo step.
-- **Templates** — twelve of them across five categories: a gallery, a wizard, and a bake that
+- **Templates** — thirteen of them across five categories: a gallery, a wizard, and a bake that
   leaves you with an ordinary project.
 - **An API, an MCP server and a CLI** — the whole command catalogue, generated from the Rust enum,
   plus stills and audio peaks so an agent can look at what it just did.

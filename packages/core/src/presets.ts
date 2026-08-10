@@ -1,6 +1,16 @@
-import { cmd, on, speedRateAt } from "./commands";
+import { cmd, on, secondsToTime, speedRateAt } from "./commands";
 
-import type { Clip, Command, MediaAsset, Project, Time } from "./generated";
+import type { JsonValue } from "./generated/serde_json/JsonValue";
+
+import type {
+  Clip,
+  ClipSource,
+  Command,
+  MediaAsset,
+  Project,
+  Time,
+  TrackKind,
+} from "./generated";
 
 // A preset is a list of commands and nothing else. It gets no place in the model, and giving it one
 // would cost it everything it gets for free: `Dispatch.coalesceKey` already collapses a list into a
@@ -244,7 +254,7 @@ export type TitleKind = "lowerThird" | "banner" | "credits";
 // packages/engine/src/generate/text.ts). Nothing new is being built here: the generator can already
 // set a face, a box, a stroke and an in/out animation, and what was missing was the combinations.
 // Every value below is inside the range that file clamps to, so what is authored is what is drawn.
-const TITLE_STYLES: Record<TitleKind, Record<string, unknown>> = {
+const TITLE_STYLES: Record<TitleKind, Record<string, JsonValue>> = {
   lowerThird: {
     fontSize: 0.055,
     fontWeight: 700,
@@ -308,9 +318,60 @@ export function title(
       {
         kind: "generator",
         generator: { type: "text", content: text, style: TITLE_STYLES[kind] },
-      } as Parameters<typeof cmd.clipAdd>[1],
+      },
       start,
       duration,
     ),
   ];
+}
+
+/** Everything a person can put on the timeline that is not a medium. */
+export type InsertKind = TitleKind | "shape" | "countdown";
+
+export const INSERT_KINDS: readonly InsertKind[] = [
+  "lowerThird",
+  "banner",
+  "credits",
+  "shape",
+  "countdown",
+];
+
+/**
+ * What an insert lays down: the clip's source, how long it stands by default, and the kind of track
+ * it belongs on.
+ *
+ * The track kind is decided here rather than by the caller for the same reason the styles are: it is
+ * knowledge about the model, and two callers deciding it separately is two answers to where a title
+ * goes. A title goes on a text track, which is what the mixer skips and the caption tools look for;
+ * a shape and a countdown are pictures over the picture, and belong on an overlay.
+ */
+export function insert(kind: InsertKind, text: string): {
+  source: ClipSource;
+  duration: Time;
+  track: TrackKind;
+} {
+  if (kind === "countdown") {
+    // Three seconds, and the clip is exactly as long as it counts: a countdown standing on a fourth
+    // second is a clip showing nothing, which reads as a bug rather than as a pause.
+    return {
+      source: { kind: "generator", generator: { type: "countdown", fromSeconds: 3 } },
+      duration: secondsToTime(3),
+      track: "overlay",
+    };
+  }
+  if (kind === "shape") {
+    return {
+      source: { kind: "generator", generator: { type: "shape", shape: "rectangle", color: "#ffffff" } },
+      duration: secondsToTime(3),
+      track: "overlay",
+    };
+  }
+  return {
+    source: {
+      kind: "generator",
+      generator: { type: "text", content: text, style: TITLE_STYLES[kind] },
+    },
+    duration: secondsToTime(kind === "credits" ? 8 : 4),
+    track: "text",
+  };
 }

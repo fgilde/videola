@@ -34,6 +34,7 @@ pub fn templates() -> Vec<Template> {
         end_card(),
         product_reveal(),
         quote_card(),
+        countdown_open(),
         before_after(),
         interview(),
     ]
@@ -1012,6 +1013,97 @@ fn product_reveal() -> Template {
 // The material a slot has yet to be given. The id names nothing that exists, which is exactly what
 // `check_every_clip_has_a_source` demands a slot for.
 
+/// Three, two, one. What it shows: the `countdown` generator, which nothing else in this set uses --
+/// the number is drawn by the renderer from one field rather than typed as three text clips -- over a
+/// colour field, handing off to the material on a dip.
+fn countdown_open() -> Template {
+    let mut lane = video_track("trk_main", "V1");
+
+    let mut field = gradient_clip("clp_field", 0.0, 3.4, "#101625", "#05070c", 160.0);
+    field.effects.push(vignette("eff_vignette", 0.45, 0.8));
+    lane.clips.push(field);
+
+    let mut shot = placeholder("clp_shot", 3.0, 4.0);
+    shot.transition_in = Some(dip(0.4));
+    lane.clips.push(shot);
+
+    // The generator counts down on its own: one clip, one number, and the renderer does the rest.
+    // Three text clips would be three clips to keep in step and a count that could disagree with its
+    // own length.
+    let mut numbers = overlay_track("trk_count", "O1");
+    numbers.clips.push(generator_clip(
+        "clp_count",
+        0.2,
+        3.0,
+        Generator::Countdown { from_seconds: 3 },
+    ));
+
+    let mut label = text_track("trk_label", "T1");
+    label.clips.push(text_clip(
+        "clp_label",
+        0.4,
+        2.4,
+        "Es geht los",
+        &[
+            ("fontSize", json!(0.042)),
+            ("fontWeight", json!(600)),
+            ("letterSpacing", json!(0.3)),
+            ("y", json!(0.74)),
+            ("color", json!("#9fb2d8")),
+            ("animateIn", json!("fade")),
+            ("animateInSeconds", json!(0.5)),
+            ("animateOut", json!("fade")),
+        ],
+    ));
+
+    let slots = vec![
+        media_slot_named(
+            "shot",
+            Localized::new("Erste Aufnahme", "Opening shot"),
+            Localized::new(
+                "Uebernimmt, sobald die Null erreicht ist.",
+                "Takes over the moment the count reaches zero.",
+            ),
+            "clp_shot",
+        ),
+        text_slot(
+            "label",
+            Localized::new("Zeile unter der Zahl", "Line under the number"),
+            Localized::new(
+                "Klein und gesperrt, unter dem Zaehler.",
+                "Small and tracked, under the counter.",
+            ),
+            vec![generator_text("clp_label")],
+        ),
+        color_slot_named(
+            "field",
+            Localized::new("Farbe des Vorlaufs", "Countdown colour"),
+            Localized::new(
+                "Faerbt die Flaeche, ueber der gezaehlt wird.",
+                "Colours the field the count runs over.",
+            ),
+            vec![generator_color("clp_field"), SlotBinding::Background],
+        ),
+    ];
+
+    template(
+        "countdown-open",
+        Localized::new("Vorlauf", "Countdown"),
+        Localized::new(
+            "Drei Sekunden Vorlauf ueber einer Flaeche, dann uebernimmt die Aufnahme. Der Zaehler \
+             ist ein Generator: eine Zahl, keine drei Textclips.",
+            "Three seconds of countdown over a colour field, then the footage takes over. The \
+             counter is a generator: one number rather than three text clips.",
+        ),
+        INTRO,
+        vec!["vorlauf", "countdown", "start"],
+        vec![LANDSCAPE, PORTRAIT, SQUARE],
+        1.2,
+        slots,
+        project_with(LANDSCAPE, "#05070c", vec![lane, numbers, label]),
+    )
+}
+
 /// Somebody's words, over their picture. What it shows: a shot dimmed by a brightness ramp so type
 /// can be read off it, a large quotation that rises in, and a source line that follows -- the
 /// commonest single card in the trade and the one this set was missing.
@@ -1794,13 +1886,13 @@ mod tests {
                         );
                         assert_ne!(media.as_str(), PLACEHOLDER, "{id} kept a placeholder");
                     }
-                    ClipSource::Generator {
-                        generator:
-                            Generator::Text { .. }
-                            | Generator::Solid { .. }
-                            | Generator::Gradient { .. },
-                    } => {}
-                    _ => panic!("{id} baked a clip this version draws nothing for"),
+                    ClipSource::Generator { generator } => assert!(
+                        super::super::paints(generator),
+                        "{id} baked a clip this version draws nothing for"
+                    ),
+                    ClipSource::Compound { .. } => {
+                        panic!("{id} baked a compound clip, which a template may not carry")
+                    }
                 }
             }
         }

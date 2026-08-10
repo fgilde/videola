@@ -662,6 +662,34 @@ onto the background at either end of the move.
 **Split screen** crops each clip to the half it stands in rather than squashing it, so both keep their
 proportions.
 
+## Putting something down that is not a medium
+
+**Insert** in the project menu lays down a title, a shape or a countdown at the playhead. Five entries,
+one question: a lower third, a full-frame title, a credits card, a shape, or a three-second countdown.
+
+| Entry | What it lays down | Where it goes |
+|---|---|---|
+| Lower third | a text generator, styled left and low, over a box | a text track |
+| Full-frame title | a text generator across the middle of the frame | a text track |
+| Credits | a centred card with room for several lines | a text track |
+| Shape | a white rectangle, which the transform then places | an overlay track |
+| Countdown | three, two, one — one number per second, drawn by the renderer | an overlay track |
+
+The track is chosen and not asked for: the topmost unlocked track of the right kind with **nothing
+standing in the window the clip would occupy**, or a new one. `clip.add` overwrites what it covers, so
+a second title dropped at the playhead of the track the first one is on would delete the first. Where a
+track has to be made, both commands go under one coalesce key — one press of undo takes the whole
+insert back, and a project with an empty track nobody asked for is never a state to land on.
+
+A title starts with placeholder words and the inspector's text field changes them. Its **style** is
+written when the clip is added and no command edits it afterwards, which is a real limit: to restyle a
+title, insert the shape you wanted.
+
+The countdown is the one generator whose picture depends on when it is asked for. It is painted once
+per whole second of the clip's own material — so a trimmed head skips the front of the count and a
+speed ramp stretches it — and the cache is keyed on the number standing on screen rather than on the
+instant, which is what keeps a text layout off every frame.
+
 ## Subtitles
 
 Videola reads and writes **SRT** and **WebVTT**. Drop an `.srt` or a `.vtt` on the editor, or reach
@@ -782,7 +810,7 @@ The same Pointer Events path carries mouse, pen and finger, and the touch target
 ### The header
 
 The topbar carries ten controls, which do not fit 390 px at 44 px each. The project actions — new,
-template, open, import, add track — live behind the **☰** disclosure at the left, and on a phone
+template, open, import, add track, insert — live behind the **☰** disclosure at the left, and on a phone
 export, save and the language and theme switches join them. What stays on the bar is undo and redo,
 the two a thumb reaches for constantly.
 

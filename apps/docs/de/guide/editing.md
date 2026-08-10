@@ -705,6 +705,37 @@ oeffnen sich an keinem Ende der Fahrt die Ecken auf den Hintergrund.
 **Geteilter Bildschirm** beschneidet jeden Clip auf die Haelfte, in der er steht, statt ihn zu
 stauchen; beide behalten damit ihre Proportionen.
 
+## Etwas hinlegen, das kein Medium ist
+
+**Einfügen** im Projektmenü legt einen Titel, eine Form oder einen Vorlauf am Abspielkopf ab. Fünf
+Einträge, eine Frage: Bauchbinde, Titel über das ganze Bild, Abspann, Form oder ein Vorlauf über drei
+Sekunden.
+
+| Eintrag | Was abgelegt wird | Wohin |
+|---|---|---|
+| Bauchbinde | ein Textgenerator, links und unten, auf einem Kasten | eine Textspur |
+| Titel über das ganze Bild | ein Textgenerator quer durch die Bildmitte | eine Textspur |
+| Abspann | eine zentrierte Karte mit Platz für mehrere Zeilen | eine Textspur |
+| Form | ein weißes Rechteck, das die Transformation dann platziert | eine Overlay-Spur |
+| Vorlauf | drei, zwei, eins — eine Zahl pro Sekunde, vom Renderer gezeichnet | eine Overlay-Spur |
+
+Die Spur wird gewählt und nicht erfragt: die oberste nicht gesperrte Spur der passenden Art, in deren
+Fenster **nichts steht**, wo der Clip landen würde — sonst eine neue. `clip.add` überschreibt, was es
+überdeckt; ein zweiter Titel am Abspielkopf derselben Spur würde den ersten löschen. Muss eine Spur
+angelegt werden, gehen beide Befehle unter einem Coalesce-Key: ein Druck auf Rückgängig nimmt das
+ganze Einfügen zurück, und ein Projekt mit einer leeren Spur, die niemand wollte, ist kein Zustand,
+in dem man landen kann.
+
+Ein Titel beginnt mit Platzhalterworten, das Textfeld im Inspektor ändert sie. Sein **Aussehen** wird
+beim Anlegen geschrieben, und kein Befehl ändert es danach — eine echte Grenze: um einen Titel
+umzustylen, legt man die Form hin, die man wollte.
+
+Der Vorlauf ist der einzige Generator, dessen Bild davon abhängt, wann danach gefragt wird. Gezeichnet
+wird er einmal pro ganzer Sekunde des eigenen Materials des Clips — ein beschnittener Anfang
+überspringt also den Beginn des Zählens, eine Geschwindigkeitsrampe streckt es — und der
+Cache-Schlüssel ist die Zahl auf dem Schirm, nicht der Zeitpunkt. Genau das hält ein Textlayout von
+jedem Bild fern.
+
 ## Untertitel
 
 Videola liest und schreibt **SRT** und **WebVTT**. Lass eine `.srt` oder `.vtt` auf den Editor
@@ -834,7 +865,7 @@ Derselbe Pointer-Events-Pfad trägt Maus, Stift und Finger, die Trefferflächen 
 ### Die Kopfzeile
 
 Die Kopfzeile trägt zehn Bedienelemente, und die passen bei 44 px nicht auf 390 px. Die
-Projektaktionen — neu, Vorlage, öffnen, importieren, Spur hinzufügen — liegen hinter dem **☰** links,
+Projektaktionen — neu, Vorlage, öffnen, importieren, Spur hinzufügen, Einfügen — liegen hinter dem **☰** links,
 auf dem Telefon zusätzlich Export, Speichern sowie Sprach- und Themenumschalter. Auf der Leiste
 bleiben Rückgängig und Wiederholen, die beiden, nach denen ein Daumen ständig greift.
 

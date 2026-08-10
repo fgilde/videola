@@ -824,21 +824,30 @@ fn generator_of_mut<'p>(project: &'p mut Project, id: &ClipId) -> Option<&'p mut
     }
 }
 
-// Which generators the renderer actually puts on a screen (`paintsGenerator` in generator.ts). A
-// shape or a countdown is dropped from the draw list without a word, so a template built on one
-// would look complete in the timeline and be blank on the screen — the same rule that used to
-// refuse every generator, now applied to the two that are still true of.
-fn paints(generator: &Generator) -> bool {
-    matches!(
-        generator,
-        Generator::Text { .. } | Generator::Solid { .. } | Generator::Gradient { .. }
-    )
+// The shapes the renderer draws, which is the same list `paintsGenerator` in generator.ts carries. A
+// shape name is a free string in the model, so an unknown one is a clip nothing draws and has to be
+// refused here rather than found on a blank screen.
+const DRAWN_SHAPES: [&str; 5] = ["rectangle", "square", "ellipse", "circle", "triangle"];
+
+// Which generators the renderer actually puts on a screen. A clip whose generator is not on that
+// list is dropped from the draw list without a word, so a template built on one would look complete
+// in the timeline and be blank on the screen.
+pub(crate) fn paints(generator: &Generator) -> bool {
+    match generator {
+        Generator::Text { .. }
+        | Generator::Solid { .. }
+        | Generator::Gradient { .. }
+        | Generator::Countdown { .. } => true,
+        Generator::Shape { shape, .. } => DRAWN_SHAPES.contains(&shape.as_str()),
+    }
 }
 
-// Every generator that paints has exactly one colour a person would call *its* colour: a solid's
-// fill, the stop a gradient starts from, the ink of a title.
+// Not every generator that paints has a colour a person would call *its* colour. A solid's fill, the
+// stop a gradient starts from, the ink of a title and a shape's fill are one each; a countdown's
+// number is drawn in the one colour the renderer gives it, and offering a colour slot for it would
+// be a control that does nothing.
 fn recolourable(generator: &Generator) -> bool {
-    paints(generator)
+    !matches!(generator, Generator::Countdown { .. }) && paints(generator)
 }
 
 fn recolour(generator: &mut Generator, color: &str) {
@@ -848,7 +857,8 @@ fn recolour(generator: &mut Generator, color: &str) {
         Generator::Text { style, .. } => {
             style.insert("color".into(), json!(color));
         }
-        _ => {}
+        Generator::Shape { color: fill, .. } => *fill = color.to_string(),
+        Generator::Countdown { .. } => {}
     }
 }
 
@@ -1644,11 +1654,21 @@ mod tests {
         assert!(template.normalize().is_ok());
     }
 
-    // The half of that rule that has not moved: `paintsGenerator` in generator.ts draws neither a
-    // shape nor a countdown, and `sourceSize` drops the clip out of the draw list without a word.
-    // A template built on one would look complete in the timeline and be blank on the screen.
+    // The half of that rule that has not moved. A shape name is a free string, and one the renderer
+    // has no path for is dropped from the draw list without a word -- so a template built on it would
+    // look complete in the timeline and be blank on the screen. The named shapes and the countdown
+    // are drawn now and are accepted here for that reason and no other.
     #[test]
     fn a_generator_clip_the_renderer_draws_nothing_for_is_still_refused() {
+        let refused = Generator::Shape {
+            shape: "hexagon".into(),
+            color: "#ff0000".into(),
+        };
+        assert!(matches!(
+            with_generator(refused).normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+
         for generator in [
             Generator::Shape {
                 shape: "circle".into(),
@@ -1656,17 +1676,16 @@ mod tests {
             },
             Generator::Countdown { from_seconds: 5 },
         ] {
-            let mut template = one_slot_template();
-            template.manifest.slots.clear();
-            template.manifest.steps[0].slots.clear();
-            template.project.timeline.tracks[0].clips[0].source =
-                ClipSource::Generator { generator };
-
-            assert!(matches!(
-                template.normalize(),
-                Err(CoreError::InvalidArgument(_))
-            ));
+            assert!(with_generator(generator).normalize().is_ok());
         }
+    }
+
+    fn with_generator(generator: Generator) -> Template {
+        let mut template = one_slot_template();
+        template.manifest.slots.clear();
+        template.manifest.steps[0].slots.clear();
+        template.project.timeline.tracks[0].clips[0].source = ClipSource::Generator { generator };
+        template
     }
 
     #[test]

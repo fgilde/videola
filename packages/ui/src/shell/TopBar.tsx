@@ -3,7 +3,9 @@ import { useRef, type ReactElement, type ReactNode } from "react";
 import { useI18n } from "../i18n/useI18n";
 import { Icon, IconButton } from "../primitives/Icon";
 import { useDismiss } from "../useDismiss";
-import { ASPECTS } from "@videola/core";
+import { ASPECTS, INSERT_KINDS } from "@videola/core";
+
+import type { InsertKind } from "@videola/core";
 
 import type { LayoutPreference } from "../layout/detectLayoutMode";
 import { SettingsMenu } from "./SettingsMenu";
@@ -28,6 +30,12 @@ export interface TopBarActions {
   onImportCaptions?: () => void;
   onExportCaptions?: () => void;
   onAddTrack?: () => void;
+  /**
+   * Put a title, a shape or a countdown on the timeline at the playhead. The text a fresh title
+   * starts with comes from here rather than from the caller: this side of the app is the side that
+   * has the catalogue, and a host outside the provider has no locale to write it in.
+   */
+  onInsert?: (kind: InsertKind, text: string) => void;
   onExport?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -70,6 +78,28 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
           `.audiola` is opened by dropping it on the window, so there is no entry for that. */}
       <Action label={t("action.exportAudiola")} onClick={actions.onExportAudiola} />
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
+      {/* A select for the same reason the reframe below is one: five answers to "what shall I put
+          down", and five buttons in a row would read as five unrelated actions. It resets to its
+          label after every pick, because it names a thing to do and not a state the project is in. */}
+      {actions.onInsert !== undefined && (
+        <select
+          className="v-topbar__reframe"
+          aria-label={t("insert.label")}
+          value=""
+          onChange={(event) => {
+            if (event.target.value !== "") {
+              actions.onInsert?.(event.target.value as InsertKind, t("insert.newTitle"));
+            }
+          }}
+        >
+          <option value="">{t("insert.label")}</option>
+          {INSERT_KINDS.map((kind) => (
+            <option key={kind} value={kind}>
+              {t(`insert.${kind}`)}
+            </option>
+          ))}
+        </select>
+      )}
       {/* A select and not four entries: they are four answers to one question, and a menu with
           "Hochkant 9:16" three rows under "Querformat 16:9" reads as four unrelated actions. */}
       {actions.onReframe !== undefined && (

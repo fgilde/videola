@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Clip, JsonValue, Transform } from "@videola/core";
 
+import { countdownNumber, paintsGenerator } from "./generator";
 import { generatorMotion } from "./motion";
 import { textStyle } from "./text";
 
@@ -168,5 +169,42 @@ describe("a title's motion", () => {
     const clip = title({ animateIn: "fade", animateInSeconds: 0 });
 
     expect(generatorMotion(clip, 0, FRAME).opacity).toBe(1);
+  });
+});
+
+// The whole reason a countdown is different from every other generator: its picture depends on when
+// it is asked for, and the number is what the cache is keyed on.
+describe("a countdown", () => {
+  it("holds each number for a whole second and stops at zero", () => {
+    expect(countdownNumber(3, 0)).toBe(3);
+    expect(countdownNumber(3, 0.99)).toBe(3);
+    expect(countdownNumber(3, 1)).toBe(2);
+    expect(countdownNumber(3, 2.5)).toBe(1);
+    expect(countdownNumber(3, 3)).toBe(0);
+    expect(countdownNumber(3, 40)).toBe(0);
+  });
+
+  // Every number here comes off a project file, and a NaN would reach `String()` and paint "NaN"
+  // across the frame.
+  it("paints nothing rather than nonsense for a value from outside", () => {
+    expect(countdownNumber(Number.NaN, 1)).toBe(0);
+    expect(countdownNumber(3, Number.NaN)).toBe(0);
+    expect(countdownNumber(-5, 0)).toBe(0);
+    expect(countdownNumber(3.7, 0)).toBe(3);
+    expect(countdownNumber(3, -2)).toBe(3);
+  });
+});
+
+// A shape name is a free string in the model. What must not happen is a clip drawn as a white
+// rectangle because the name was not understood: the draw list reads this and leaves it out.
+describe("which generators have pixels", () => {
+  it("takes the shapes it can draw and refuses the rest", () => {
+    expect(paintsGenerator({ type: "shape", shape: "circle", color: "#fff" })).toBe(true);
+    expect(paintsGenerator({ type: "shape", shape: "hexagon", color: "#fff" })).toBe(false);
+    expect(paintsGenerator({ type: "shape", shape: "", color: "#fff" })).toBe(false);
+  });
+
+  it("draws a countdown, which the model has always carried", () => {
+    expect(paintsGenerator({ type: "countdown", fromSeconds: 3 })).toBe(true);
   });
 });

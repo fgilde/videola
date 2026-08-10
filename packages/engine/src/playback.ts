@@ -357,7 +357,7 @@ export class Playback {
     const frames = new Map(found.filter((entry) => entry !== undefined));
     // Painted rather than decoded, and painted last: nothing is awaited after this, so a generator's
     // picture cannot go stale between here and the upload the way a decoded one can.
-    for (const [clip, picture] of this.#generated.pictures(project, new Set(clips))) {
+    for (const [clip, picture] of this.#generated.pictures(project, new Set(clips), sourceTimes)) {
       frames.set(clip, picture);
     }
     return frames;

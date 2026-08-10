@@ -242,17 +242,17 @@ the decoded result is compared frame by frame against what went in.
 
 ## Templates
 
-![The template gallery: nine cards in five categories, each one a still rendered from the template itself](/editor-templates.webp)
+![The template gallery: thirteen cards in five categories, each one a still rendered from the template itself](/editor-templates.webp)
 
 A template is the same container as a project with one extra entry, so the same bytes still open as
 a project. Pick one, answer the wizard, and what you get is an ordinary editable project — there is
 no template mode to leave.
 
-**Twelve ship, in five categories, and not one of them carries a frame of video.** A template is a
+**Thirteen ship, in five categories, and not one of them carries a frame of video.** A template is a
 recipe, so each is built out of what the renderer can draw from a project file alone: the text
-generator with its entry, exit and loop moves, solids and gradients, the ten effects, the five
-transitions, masks, and keyframed transforms including a motion path. Your own material arrives
-through the placeholders. Between them the nine use every transition the renderer implements.
+generator with its entry, exit and loop moves, solids and gradients, the countdown, the ten effects,
+the five transitions, masks, and keyframed transforms including a motion path. Your own material
+arrives through the placeholders. Between them they use every transition the renderer implements.
 
 The card is not a painting of a result — it is **rendered from the template**, through the same bake a
 real answer goes through, with a grey stand-in exactly where your footage will land. A painted card

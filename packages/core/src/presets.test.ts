@@ -8,6 +8,8 @@ import { cmd, FLICKS_PER_SECOND, readableSourceTimeAt } from "./commands";
 import { VideolaDocument } from "./document";
 import {
   frameHold,
+  insert,
+  INSERT_KINDS,
   kenBurns,
   pictureInPicture,
   speedRamp,
@@ -373,5 +375,40 @@ describe("titles", () => {
       looks.add(JSON.stringify(generator.style));
     }
     expect(looks.size).toBe(3);
+  });
+});
+
+// What an insert lays down has to be something the renderer draws, on a track that accepts it. Both
+// halves are checked against the real command layer: a shape the engine has no path for, or a clip on
+// the wrong kind of track, would be a menu entry that produces an empty rectangle.
+describe("inserting something that is not a medium", () => {
+  it("offers only kinds it can lay down, and each on a track that takes it", () => {
+    for (const kind of INSERT_KINDS) {
+      const laid = insert(kind, "Words");
+      expect(laid.duration).toBeGreaterThan(0);
+      expect(laid.source.kind).toBe("generator");
+      const type = (laid.source as { generator: { type: string } }).generator.type;
+      expect(laid.track).toBe(type === "text" ? "text" : "overlay");
+    }
+  });
+
+  it("counts for exactly as long as the clip stands", () => {
+    const laid = insert("countdown", "");
+    const generator = (laid.source as { generator: { fromSeconds: number } }).generator;
+    expect(laid.duration).toBe(generator.fromSeconds * SECOND);
+  });
+
+  it("goes onto a text track through the ordinary command", async () => {
+    const doc = await timeline();
+    const laid = insert("lowerThird", "Ada Lovelace");
+    doc.dispatch(cmd.trackAdd("text", "T1"));
+    const added = doc.state.timeline.tracks.at(-1)!;
+    doc.dispatch(cmd.clipAdd(added.id, laid.source, SECOND, laid.duration));
+
+    const clip = doc.state.timeline.tracks.at(-1)!.clips[0]!;
+    expect((clip.source as { generator: { content: string } }).generator.content).toBe(
+      "Ada Lovelace",
+    );
+    expect(clip.duration).toBe(laid.duration);
   });
 });

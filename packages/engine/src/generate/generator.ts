@@ -1,24 +1,39 @@
+import { timeToSeconds } from "@videola/core";
+
 import { leafClips } from "../nesting";
 import { paintText } from "./text";
 
-import type { Clip, Generator, Project } from "@videola/core";
+import type { Clip, Generator, JsonValue, Project, Time } from "@videola/core";
 
 interface Size {
   width: number;
   height: number;
 }
 
+// The shapes this draws. A shape name is a free string in the model, so an unknown one is a clip with
+// nothing to draw and is treated as such rather than filled with a guess.
+const SHAPES: readonly string[] = ["rectangle", "square", "ellipse", "circle", "triangle"];
+
 // Which generators have pixels. The rest are in the model and not in the menu, so nothing promises
 // them: a clip whose generator is not on this list is left out of the draw list entirely rather than
 // drawn as an empty rectangle.
 export function paintsGenerator(generator: Generator): boolean {
-  return generator.type === "text" || generator.type === "solid" || generator.type === "gradient";
+  if (generator.type === "shape") return SHAPES.includes(generator.shape);
+  return (
+    generator.type === "text" ||
+    generator.type === "solid" ||
+    generator.type === "gradient" ||
+    generator.type === "countdown"
+  );
 }
 
+// `atSeconds` is how far into the clip's own material this picture stands, and only a countdown reads
+// it. Everything else here is the same picture at every moment it is on screen.
 export function paintGenerator(
   ctx: OffscreenCanvasRenderingContext2D,
   generator: Generator,
   size: Size,
+  atSeconds = 0,
 ): void {
   ctx.clearRect(0, 0, size.width, size.height);
   if (generator.type === "solid") {
@@ -31,7 +46,70 @@ export function paintGenerator(
     ctx.fillRect(0, 0, size.width, size.height);
     return;
   }
+  if (generator.type === "shape") {
+    paintShape(ctx, generator.shape, hex(generator.color, "#ffffff"), size);
+    return;
+  }
+  if (generator.type === "countdown") {
+    const number = countdownNumber(generator.fromSeconds, atSeconds);
+    // Past zero there is no number, and a lingering "0" over the shot that took over is worse than
+    // nothing. The clip keeps its frame; the frame is simply clear.
+    if (number > 0) paintText(ctx, String(number), COUNTDOWN_STYLE, size);
+    return;
+  }
   if (generator.type === "text") paintText(ctx, generator.content, generator.style, size);
+}
+
+// One number per whole second of the clip's own material, so a trimmed head skips the front of the
+// count and a speed ramp stretches it -- both because the instant handed in came through the same
+// source-time map every decoded clip is read at.
+export function countdownNumber(fromSeconds: number, atSeconds: number): number {
+  if (!Number.isFinite(fromSeconds) || !Number.isFinite(atSeconds)) return 0;
+  const from = Math.min(Math.max(Math.floor(fromSeconds), 0), 3600);
+  return Math.max(from - Math.floor(Math.max(atSeconds, 0)), 0);
+}
+
+// Big, centred, and heavy enough to read over anything. Not configurable: the model carries one field
+// for a countdown, and a style on top of it would be a second way to write a title.
+const COUNTDOWN_STYLE: Readonly<Record<string, JsonValue>> = {
+  fontSize: 0.34,
+  fontWeight: 800,
+  shadowBlur: 0.12,
+  shadowY: 0,
+};
+
+// Centred and inscribed in the frame, which is what makes a shape usable as a mask target or a plate:
+// the transform moves and scales it, and the generator itself has one job.
+function paintShape(
+  ctx: OffscreenCanvasRenderingContext2D,
+  shape: string,
+  color: string,
+  size: Size,
+): void {
+  const cx = size.width / 2;
+  const cy = size.height / 2;
+  ctx.fillStyle = color;
+  if (shape === "rectangle") {
+    ctx.fillRect(0, 0, size.width, size.height);
+    return;
+  }
+  const side = Math.min(size.width, size.height);
+  if (shape === "square") {
+    ctx.fillRect(cx - side / 2, cy - side / 2, side, side);
+    return;
+  }
+  ctx.beginPath();
+  if (shape === "triangle") {
+    ctx.moveTo(cx, cy - side / 2);
+    ctx.lineTo(cx + side / 2, cy + side / 2);
+    ctx.lineTo(cx - side / 2, cy + side / 2);
+    ctx.closePath();
+  } else if (shape === "circle") {
+    ctx.arc(cx, cy, side / 2, 0, 2 * Math.PI);
+  } else {
+    ctx.ellipse(cx, cy, size.width / 2, size.height / 2, 0, 0, 2 * Math.PI);
+  }
+  ctx.fill();
 }
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -74,9 +152,11 @@ interface Painted {
 // like everything else the compositor draws. One type of picture through the whole renderer is worth
 // more than saving a copy: `uploadable`, the liveness probe and the texture path all stay one path.
 //
-// The pixels do not move. A title is the same picture at every moment it is on screen, because what
-// animates it is its transform and not its glyphs -- which is what makes one frame per clip enough
-// and re-rendering per tick a full text layout per tick.
+// The pixels do not move -- with one exception. A title is the same picture at every moment it is on
+// screen, because what animates it is its transform and not its glyphs, which is what makes one frame
+// per clip enough and re-rendering per tick a full text layout per tick. A countdown is the exception
+// and pays for itself: its picture changes once a second and not once a frame, because the key below
+// is the number and not the instant.
 export class GeneratorFrames {
   #painted = new Map<string, Painted>();
   #canvas: OffscreenCanvas | undefined;
@@ -84,11 +164,19 @@ export class GeneratorFrames {
   // Takes the whole visible set rather than one clip at a time, so dropping what left the screen
   // happens here instead of at every call site. Without it a scrub through a timeline of titles
   // leaves a full-frame picture behind for each of them.
-  pictures(project: Project, visible: ReadonlySet<string>): Map<string, VideoFrame> {
+  //
+  // `sourceTimes` is the map every decoded clip is read at, handed in rather than recomputed: a
+  // countdown inside a compound clip, or under a speed ramp, then counts at the rate its material
+  // actually runs at instead of at the rate the outer timeline does.
+  pictures(
+    project: Project,
+    visible: ReadonlySet<string>,
+    sourceTimes?: ReadonlyMap<string, Time>,
+  ): Map<string, VideoFrame> {
     const size = { width: project.settings.width, height: project.settings.height };
     const wanted = new Map<string, VideoFrame>();
     for (const clip of generatorClips(project, visible)) {
-      const frame = this.#frame(clip, size);
+      const frame = this.#frame(clip, size, timeToSeconds(sourceTimes?.get(clip.id) ?? 0));
       if (frame !== undefined) wanted.set(clip.id, frame);
     }
     for (const [id, held] of this.#painted) {
@@ -105,15 +193,19 @@ export class GeneratorFrames {
     this.#canvas = undefined;
   }
 
-  #frame(clip: Clip, size: Size): VideoFrame | undefined {
+  #frame(clip: Clip, size: Size, atSeconds: number): VideoFrame | undefined {
     if (clip.source.kind !== "generator") return undefined;
-    // What was painted, not when: the key is the whole generator and the size, so an edit to the
-    // content or a change of output resolution repaints and nothing else does.
-    const key = `${size.width}x${size.height}|${JSON.stringify(clip.source.generator)}`;
+    // What was painted, not when: the key is the whole generator, the size and -- for a countdown --
+    // the number standing on screen, so an edit to the content, a change of output resolution or a
+    // second going by repaints, and nothing else does.
+    const generator = clip.source.generator;
+    const shown =
+      generator.type === "countdown" ? countdownNumber(generator.fromSeconds, atSeconds) : 0;
+    const key = `${size.width}x${size.height}|${shown}|${JSON.stringify(generator)}`;
     const held = this.#painted.get(clip.id);
     if (held?.key === key) return held.frame;
     held?.frame.close();
-    const frame = this.#paint(clip.source.generator, size);
+    const frame = this.#paint(generator, size, atSeconds);
     if (frame === undefined) {
       this.#painted.delete(clip.id);
       return undefined;
@@ -129,14 +221,14 @@ export class GeneratorFrames {
   // A runtime without `OffscreenCanvas` or `VideoFrame` is a capability rather than a fault, so it is
   // silent: jsdom has neither, and a test driving playback there should see a project without titles
   // rather than a console full of errors.
-  #paint(generator: Generator, size: Size): VideoFrame | undefined {
+  #paint(generator: Generator, size: Size, atSeconds: number): VideoFrame | undefined {
     if (!paintsGenerator(generator)) return undefined;
     if (typeof OffscreenCanvas === "undefined" || typeof VideoFrame === "undefined") return undefined;
     try {
       const canvas = this.#surface(size);
       const ctx = canvas.getContext("2d");
       if (ctx === null) return undefined;
-      paintGenerator(ctx, generator, size);
+      paintGenerator(ctx, generator, size, atSeconds);
       return new VideoFrame(canvas, { timestamp: 0 });
     } catch (error) {
       console.error(error);

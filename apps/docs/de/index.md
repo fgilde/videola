@@ -112,7 +112,7 @@ features:
   Montage reist; die Farbe entsteht dort.
 - **Anderes Format in einem Druck** — hochkant, quadratisch oder 4:5, jeder Clip im selben
   Undo-Schritt auf den neuen Rahmen skaliert.
-- **Vorlagen** — zwölf in fünf Kategorien: Galerie, Assistent, und ein Backen, das ein ganz
+- **Vorlagen** — dreizehn in fünf Kategorien: Galerie, Assistent, und ein Backen, das ein ganz
   normales Projekt hinterlässt.
 - **Schnittstelle, MCP-Server und CLI** — der ganze Command-Katalog, aus dem Rust-Enum generiert,
   dazu Standbilder und Tonspitzen, damit ein Agent sehen kann, was er gerade getan hat.

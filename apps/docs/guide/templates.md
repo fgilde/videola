@@ -1,6 +1,6 @@
 # Templates
 
-**Built.** A gallery with twelve templates in five categories, each card a picture rendered from the
+**Built.** A gallery with thirteen templates in five categories, each card a picture rendered from the
 template itself; a wizard that shows what it is building while you fill it in; and a `.videolat` file
 you can hand to someone else. What comes out at the end is an ordinary project: the same editor, the
 same commands, the same undo stack. There is no template mode to leave.
@@ -35,16 +35,18 @@ typography, colour and movement — and that is exactly what tells you whether i
 | Quotation | Titles and credits | somebody's words over their picture, 6 s | a shot dimmed by a keyframed brightness so type reads off it, rather than a black rectangle laid over it |
 | Before and After | Products | an edge travels across the frame, 6 s | a mask whose *position* is keyframed, so both pictures are on screen the whole time and the edge between them is the story |
 | Interview | Titles and credits | two angles, one hard cut, a name and a role, 8 s | the plainest thing here and the one most edits actually are: no transition at all, and a plate that arrives once and leaves |
+| Countdown | Opening | three, two, one, then the footage, 3.4 s | the `countdown` generator: one number the renderer counts down itself, rather than three text clips somebody has to keep in step |
 
 Between them they use **every transition the renderer implements**. That is a test, not a
 coincidence: a gallery is only worth having if the cards are not the same card.
 
-One thing is deliberately absent. The model carries a `countdown` generator — a number the renderer
-would draw from one field rather than three text clips — and **nothing draws it**: `paintsGenerator`
-lists text, solid and gradient, and a clip whose generator is not on that list is left out of the draw
-list entirely. A countdown template was written and then withdrawn, because a card showing an empty
-rectangle is worse than a category with one fewer entry. The test that caught it is the one that bakes
-every shipped template and refuses a clip this version draws nothing for.
+The countdown was withdrawn once and is back. It was written first against a generator **nothing
+drew** — `paintsGenerator` listed text, solid and gradient, and a clip whose generator is not on that
+list is left out of the draw list entirely — so the card would have been an empty rectangle. The test
+that caught it is the one that bakes every shipped template and refuses a clip this version draws
+nothing for. Rather than ship the card, the renderer learned to draw the generator: a countdown is now
+one number per whole second of the clip's own material, and the shapes are drawn too. The template
+followed the renderer, which is the order those two belong in.
 
 ## The card is a rendered picture
 
@@ -223,9 +225,10 @@ file, or back across the WebAssembly boundary from JavaScript that may have edit
   from a slot or the template brought that material itself; a generator clip has to be one the
   renderer paints. This is the rule against the empty gallery entry.
 
-`paintsGenerator` in the engine draws **text, solid and gradient**. A `shape` or a `countdown` is
-dropped from the draw list without a word, so a template built on one would look complete in the
-timeline and be blank on the screen — those two are refused. So are compound clips: one carries a
+`paintsGenerator` in the engine draws **text, solid, gradient, countdown, and the five named
+shapes** — rectangle, square, ellipse, circle, triangle. A shape name is a free string in the model,
+so an unknown one is dropped from the draw list without a word: a template built on `hexagon` would
+look complete in the timeline and be blank on the screen, and is refused. So are compound clips: one carries a
 whole second timeline, and every clip inside it would need the same proof the top level gets, so the
 honest answer is no rather than a check that only looks like it recurses.
 

@@ -1053,6 +1053,7 @@ async function announce() {
     if (virtual) await keyframeLane(await keyframes());
 
     await captions();
+    await inserted();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
@@ -1245,7 +1246,7 @@ async function announce() {
     // The two questions in the menu that are answered by choosing rather than by pressing.
     check("the shape of the edit is one of them",
       [...menu.querySelectorAll("select")].map((node) => node.getAttribute("aria-label")),
-      ["Format ändern", "Layout"]);
+      ["Einfügen", "Format ändern", "Layout"]);
     check("and the open menu stays inside the window",
       menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
       true);
@@ -1581,7 +1582,7 @@ async function announce() {
     const gallery = await until("the gallery", () => q('[data-testid="template-gallery"]'));
 
     const cards = [...gallery.querySelectorAll("[data-template-id]")];
-    check("the gallery shows every template that ships", cards.length, 12);
+    check("the gallery shows every template that ships", cards.length, 13);
     check(
       "and each one under its own name",
       cards.map((entry) => entry.querySelector(".v-template__name").textContent),
@@ -1596,6 +1597,7 @@ async function announce() {
         "Abspann",
         "Produkt im Blick",
         "Zitat",
+        "Vorlauf",
         "Vorher / Nachher",
         "Gespräch",
       ],
@@ -1606,7 +1608,7 @@ async function announce() {
     // WASM bake, the generators and WebGL all working, which is exactly the claim a card makes.
     await until(
       "every card to have its picture",
-      () => all(".v-template__still").length === 12,
+      () => all(".v-template__still").length === 13,
       120000,
     );
     const stills = all(".v-template__still");
@@ -1635,7 +1637,7 @@ async function announce() {
       ["lower-third", "end-card", "quote-card", "interview"]);
     chip("all").click();
     await sleep(100);
-    check("and going back brings the rest with it", all("[data-template-id]").length, 12);
+    check("and going back brings the rest with it", all("[data-template-id]").length, 13);
 
     check("an untouched project is not worth saving as a template",
       labelled("Projekt als Vorlage speichern"), undefined);
@@ -1768,7 +1770,7 @@ async function announce() {
     openMenu();
     inMenu("Aus Vorlage").click();
     await until("the gallery once more", () => q('[data-testid="template-gallery"]'));
-    await until("its pictures still there", () => all(".v-template__still").length === 12, 30000);
+    await until("its pictures still there", () => all(".v-template__still").length === 13, 30000);
     check("nothing was reported by the end", banner(), "");
   }
 
@@ -1993,6 +1995,55 @@ async function announce() {
     for (let round = 0; round < 6 && all("[data-clip-id]").length > before; round += 1) {
       button("Rückgängig").click();
       await sleep(50);
+    }
+    check("and it leaves the project as it found it", all("[data-clip-id]").length, before);
+  }
+
+  // A title and a countdown, put down from the menu. Only the built application can show this:
+  // the entry is a select in the overflow, the track it lands on is chosen by reading the project,
+  // and a countdown is the one generator whose picture depends on when it is asked for.
+  //
+  // It undoes itself, so what follows works on the project it was handed.
+  async function inserted() {
+    const before = all("[data-clip-id]").length;
+    const insertSelect = () => {
+      openMenu();
+      return [...q(".v-topbar__menu").querySelectorAll("select")]
+        .find((node) => node.getAttribute("aria-label") === "Einfügen");
+    };
+    const lay = async (value) => {
+      setValue(insertSelect(), value);
+      q(".v-topbar__more").open = false;
+      document.activeElement?.blur();
+      await sleep(200);
+    };
+
+    check("the menu offers something to put down that is not a medium", insertSelect() !== undefined, true);
+    q(".v-topbar__more").open = false;
+    await lay("lowerThird");
+    check("a title lands on the timeline", all("[data-clip-id]").length, before + 1);
+    check("on a track named for what it carries",
+      all(".v-timeline__headerKind").map((node) => node.textContent.trim()).includes("Text"), true);
+    check("and putting one down raises nothing", banner(), "");
+
+    // The second one may not overwrite the first. `clip.add` replaces what it covers, so the track
+    // is chosen by looking for room -- which here means a second text track rather than a lost title.
+    await lay("banner");
+    check("a second title at the same instant does not eat the first",
+      all("[data-clip-id]").length, before + 2);
+
+    await lay("countdown");
+    check("a countdown lands as well", all("[data-clip-id]").length, before + 3);
+    // On an overlay and not on the text track the titles took: a countdown is a picture over the
+    // picture, and the kind of track is decided in the core rather than by whoever pressed the entry.
+    // That it is *drawn* is the templates run's claim, where its own card may not come out flat.
+    check("a countdown goes over the picture rather than among the titles",
+      all(".v-timeline__headerKind").map((node) => node.textContent.trim()).includes("Überlagerung"),
+      true);
+
+    for (let round = 0; round < 8 && all("[data-clip-id]").length > before; round += 1) {
+      button("Rückgängig").click();
+      await sleep(60);
     }
     check("and it leaves the project as it found it", all("[data-clip-id]").length, before);
   }

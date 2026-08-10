@@ -264,18 +264,18 @@ teilen, und das dekodierte Ergebnis Bild für Bild mit dem verglichen, was hinei
 
 ## Vorlagen
 
-![Die Vorlagengalerie: neun Karten in fünf Kategorien, jede ein aus der Vorlage selbst gerendertes Standbild](/editor-templates.webp)
+![Die Vorlagengalerie: dreizehn Karten in fünf Kategorien, jede ein aus der Vorlage selbst gerendertes Standbild](/editor-templates.webp)
 
 Eine Vorlage ist derselbe Behälter wie ein Projekt mit einem Eintrag mehr — dieselben Bytes öffnen
 sich also weiterhin als Projekt. Auswählen, den Assistenten beantworten, und heraus kommt ein ganz
 normales bearbeitbares Projekt; es gibt keinen Vorlagenmodus, den man verlassen müsste.
 
-**Neun werden mitgeliefert, in fünf Kategorien, und keine einzige bringt ein Bild Video mit.** Eine
+**Dreizehn werden mitgeliefert, in fünf Kategorien, und keine einzige bringt ein Bild Video mit.** Eine
 Vorlage ist ein Rezept, jede ist deshalb aus dem gebaut, was der Renderer allein aus einer Projektdatei
-zeichnen kann: der Textgenerator mit Ein-, Aus- und Schleifenbewegung, Farbflächen und Verläufe, die
-zehn Effekte, die fünf Übergänge, Masken und keyframebare Transformationen samt Bewegungspfad. Das
-eigene Material kommt über die Platzhalter dazu. Zusammen benutzen die neun jeden Übergang, den der
-Renderer hat.
+zeichnen kann: der Textgenerator mit Ein-, Aus- und Schleifenbewegung, Farbflächen und Verläufe, der
+Vorlauf, die zehn Effekte, die fünf Übergänge, Masken und keyframebare Transformationen samt
+Bewegungspfad. Das eigene Material kommt über die Platzhalter dazu. Zusammen benutzen sie jeden
+Übergang, den der Renderer hat.
 
 Die Karte ist kein gemaltes Ergebnis — sie wird **aus der Vorlage gerendert**, über dasselbe Backen,
 das auch eine echte Antwort nimmt, mit einem grauen Platzhalter genau dort, wo Ihr Material landen
