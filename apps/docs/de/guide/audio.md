@@ -191,8 +191,9 @@ Mastering-Kette. Alles links davon läuft dort hinein.
 
 Zwei Filter mit je einem Regler, auf derselben Insert-Kette wie der Equalizer.
 
-Keiner von beiden ist eine Rauschunterdrückung, und einen so zu nennen wäre gelogen: nichts hier
-trennt eine Stimme von einem Geräusch, das ihr Band teilt. Sie nehmen ein Band weg, in dem nichts
+Keiner von beiden ist eine Rauschunterdrückung, und einen so zu nennen wäre gelogen: kein Filter trennt
+eine Stimme von einem Geräusch, das ihr Band teilt — dafür ist die
+[Rauschunterdrückung](#rauschunterdruckung) weiter unten da. Sie nehmen ein Band weg, in dem nichts
 steht, was jemand will — Rumpeln, Wind und Netzbrumm unter einer Stimme, Bandrauschen oder ein
 Lüfter darüber — und bei einer Außenaufnahme ist das das meiste, was daran nicht stimmt.
 
@@ -205,6 +206,57 @@ Beide sind durch den echten Renderer an zwei Tönen in einem Signal gemessen, ke
 bestehen, indem er still wird: bei 1 kHz Grenzfrequenz lässt die Tiefensperre den 200-Hz-Ton unter
 einem Zehntel seiner Stärke und den 6-kHz-Ton über sieben Zehnteln, und die Höhensperre dasselbe
 andersherum.
+
+## Rauschunterdrückung
+
+**Gebaut.** Ein Schalter in den Eigenschaften des Clips, neben seiner Lautstärke, und die Stärke
+daneben. Es ist eine spektrale Rauschunterdrückung: das, was die zwei Sperrfilter nicht können.
+
+**Warum das überhaupt geht.** Rauschen ist *stetig*, Sprache nicht. Zwischen Wörtern, zwischen Tönen,
+zwischen Takes bleibt in einer Aufnahme nur ihr Rauschen übrig — diese Fenster sind also eine Messung
+davon. Das leiseste Fünftel des Clips, nach Gesamtenergie, wird Bin für Bin zu einem Rauschboden
+gemittelt, und jedes Fenster des Clips wird dann pro Bin um so viel abgesenkt, wie davon Boden ist.
+Spektrale Subtraktion mit Restpegel — das, was Audacitys Rauschunterdrückung ist und wovon jeder
+Broadcast-Denoiser ausgeht.
+
+| Einstellung | Wirkung |
+|---|---|
+| Stärke | wie oft der gemessene Boden abgezogen wird. Einmal lässt einen hörbaren Rest; über drei sind die Artefakte das Lauteste, was bleibt |
+| Restpegel | wie weit ein Bin heruntergedrückt werden darf, in Dezibel. Nie bis zur Stille: ein Bin, der zwischen zwei Fenstern aus- und wieder eingeschaltet wird, ist das Wabern, an dem man billige Rauschunterdrückung erkennt |
+
+**Wo es läuft.** Über dem dekodierten Puffer, im Tongraphen, dort wo die Samples eines Clips geladen
+werden — nicht als Insert auf einem Bus. Zwei Gründe, beide struktureller Art. Die Analyse braucht die
+*ganze* Aufnahme, ein lebender Knoten sieht 128 Samples auf einmal; und Rauschen gehört zu einer
+Aufnahme und nicht zu einer Mischung — einen Boden für einen Bus mit zwei Mikrofonen zu lernen würde
+keines von beiden säubern. Es ist deshalb ein **Clip**-Effekt, und derselbe Puffer speist Vorschau,
+Export und den Wellenform-Streifen. Genau darum ändert sich der Streifen sichtbar, wenn man es
+einschaltet, und genau das misst die Browser-Prüfung.
+
+Das Ergebnis wird nach den Einstellungen *und* nach dem Bereich des Clips zwischengespeichert: die
+Stärke hochzudrehen analysiert neu, den Clip über die Zeitleiste zu ziehen nicht.
+
+**Die Rechnung, und warum sie hier steht.** 2048er-Fenster im Viertelschritt, ein periodisches
+Hann-Fenster in der Analyse und in der Synthese, und die Overlap-Add-Summe geteilt durch die
+Fensterenergie, die auf jedem Sample wirklich gelandet ist. Vier periodische Hann-Fenster in diesem
+Schritt summieren sich zu einer Konstanten — das ist es, was einen Durchgang mit Verstärkung eins die
+Aufnahme zurückgeben lässt statt einer Fassung davon mit einer Welle darin. Der Verstärkungsfaktor wird
+über die zwei Nachbarn jedes Bins geglättet, bevor er angewandt wird, denn ein Faktor, der von Bin zu
+Bin springt, klingelt — und das Klingeln hört man als metallische Kante an jedem Konsonanten.
+
+Der Clip wird an jedem Ende mit einem Fenster Stille aufgefüllt. Ohne das sind das erste und das letzte
+Sample von einem einzigen Fenster gedeckt, dessen Flanke dort fast Null ist, und durch diese
+Fenstersumme zu teilen machte die Enden jedes Clips **achtzehnmal zu laut** — ein Fehler, den jedes
+Verhältnis innerhalb der Datei übersah und den eine Spitzenwertmessung sofort fand. Beide Prüfungen
+stehen jetzt in der Suite.
+
+**Was es nicht kann.** Ein stetiges Signal von stetigem Rauschen unterscheiden. Eine Aufnahme ohne jede
+Pause — ein gehaltener Ton, ein durchgehender Drone — hat kein Fenster, in dem das Rauschen allein ist,
+und dort ist nichts messbar, was nicht auch das Signal ist. Das ist die Bedeutung von Stationarität und
+kein Mangel dieser Schätzung, und deshalb ist die Stärke ein Regler und kein Schalter.
+
+Gemessen und nicht behauptet: gegen einen Ton in Stößen mit Rauschen darüber fällt das Rauschen **im
+eigenen Band des Tons** um mehr als 9 dB, während der Ton innerhalb von 2 dB bleibt, wo er war. Kein
+Filter kann das behaupten — und genau darum steht das hier neben ihnen.
 
 ## Beats
 
@@ -362,7 +414,7 @@ Benannt statt angedeutet, denn ein Bedienelement, das nichts tut, ist schlimmer 
   eine solche bearbeiten kann.
 - **Anzeige der Pegelreduktion.** Die Streifen zeigen, was ein Bus sendet; wie stark sein Kompressor
   arbeitet, ist eine zweite Anzeige, und `DynamicsCompressorNode.reduction` wäre ihre Quelle.
-- **Rauschreduktion, Beat-Erkennung, Panorama über Stereo hinaus.**
+- **Panorama über Stereo hinaus.** Der Panner ist ein Stereo-Panner; ein Surround-Bus ist ein anderer Knoten und ein anderer Satz Anzeigen.
 - **Bus-Automation in der Keyframe-Spur der Zeitleiste.** Die Ecken eines Duckings lassen sich auf
   dem Streifen bearbeiten, der sie geschrieben hat, mit denselben Bedienelementen wie im Inspektor;
   die Spur unter einem Clip zeichnet nur Clip-Keyframes, und die einer Spur zu zeichnen hieße, einer

@@ -88,6 +88,8 @@ features:
 - **Geometrie auf dem Bild** — ein Rahmen mit Ecken- und Drehgriffen, dessen Ecken aus genau der
   Matrix stammen, die der Compositor der GPU übergibt, und die Bahn, die Positions-Keys beschreiben:
   aus dem Kern abgetastet statt von Ecke zu Ecke gezeichnet.
+- **Rauschunterdrückung** — spektral, aus den Pausen des Clips selbst gelernt: das Rauschen im eigenen
+  Band einer Stimme fällt um mehr als 9 dB, die Stimme bleibt innerhalb von 2 dB.
 - **Bewegungsunschärfe** — eine Belichtung je Clip, gemittelt über acht echte Zeitpunkte: die eigene
   Bahn der Ebene und was das Material dazwischen tat, in der Vorschau und in der Datei.
 - **Effekte und Übergänge** — sechzehn Effekte, sieben Übergänge (jeder davon mit einer Auswahl auf
@@ -125,8 +127,7 @@ features:
 
 ## Was noch fehlt
 
-Noch keine Rauschunterdrückung: Tiefen- und Höhensperre nehmen ein Band weg, was nicht dasselbe ist,
-wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Die Magnetic-Timeline fehlt bewusst, und das
+Die Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

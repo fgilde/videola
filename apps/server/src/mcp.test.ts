@@ -228,6 +228,14 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   // Pointed at the project rather than at a clip, so the address itself is exercised: a target
   // the handler ignored would put this on a clip and the assertion on `master` would fail.
   "effect.add": () => ({ target: { kind: "project" }, effectType: "limiter" }),
+  // Against the effect the fixture already carries, because every tool runs on a fresh one: aimed at
+  // the limiter above, these two would be asking a chain that has none.
+  "effect.remove": (f) => ({ target: { kind: "clip", clip: f.clip }, effectType: "brightness" }),
+  "effect.setEnabled": (f) => ({
+    target: { kind: "clip", clip: f.clip },
+    effectType: "brightness",
+    enabled: false,
+  }),
   "effect.setParam": (f) => ({
     target: { kind: "clip", clip: f.clip },
     effectType: "brightness",

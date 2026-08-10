@@ -32,6 +32,8 @@ export const COMMAND_LABELS = [
   "cmd.clip.setGenerator",
   "cmd.clip.setTransition",
   "cmd.effect.add",
+  "cmd.effect.remove",
+  "cmd.effect.setEnabled",
   "cmd.effect.setParam",
   "cmd.keyframe.add",
   "cmd.keyframe.remove",

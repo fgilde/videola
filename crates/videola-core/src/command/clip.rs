@@ -700,6 +700,32 @@ pub(super) fn add_effect(target: &mut Project, at: &EffectTarget, effect_type: &
     Ok(())
 }
 
+// Refuses a chain that has no such effect rather than doing nothing. An effect somebody removed twice
+// is a surface that thinks it is still there, and telling it so is how it finds out.
+pub(super) fn remove_effect(target: &mut Project, at: &EffectTarget, effect_type: &str) -> Result<()> {
+    let effects = chain_mut(target, at)?;
+    let index = effects
+        .iter()
+        .position(|effect| effect.effect_type == effect_type)
+        .ok_or_else(|| CoreError::InvalidArgument(format!("no {effect_type} in that chain")))?;
+    effects.remove(index);
+    Ok(())
+}
+
+// Bypass, which is not the same as removing: the parameters and every keyframe on them stay, so
+// switching an effect off to hear what it was doing and back on again costs nothing and loses nothing.
+// The renderer and the audio graph both skip a disabled effect; the inspector still shows it, which is
+// what makes the state visible rather than mysterious.
+pub(super) fn set_effect_enabled(
+    target: &mut Project,
+    at: &EffectTarget,
+    effect_type: &str,
+    enabled: bool,
+) -> Result<()> {
+    find_effect_mut(target, at, effect_type)?.enabled = enabled;
+    Ok(())
+}
+
 pub(super) fn set_effect_param(
     target: &mut Project,
     at: &EffectTarget,

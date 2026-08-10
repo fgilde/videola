@@ -449,6 +449,18 @@ fn every_command_undoes_to_the_exact_prior_state() {
             target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "contrast".into(),
         },
+        // Against the effect the fixture brings, not the one `effect.add` above puts there: every
+        // command in this table runs against a fresh fixture, so one aimed at contrast would be
+        // asking a chain that has none.
+        |Fixture { clip, .. }| Command::EffectSetEnabled {
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: "brightness".into(),
+            enabled: false,
+        },
+        |Fixture { clip, .. }| Command::EffectRemove {
+            target: EffectTarget::Clip { clip: clip.clone() },
+            effect_type: "brightness".into(),
+        },
         |Fixture { clip, .. }| Command::EffectSetParam {
             target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "brightness".into(),

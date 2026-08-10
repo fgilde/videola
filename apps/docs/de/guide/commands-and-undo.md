@@ -16,11 +16,16 @@ Die beiden nach außen gerichteten stehen in [Die API und der MCP-Server](/de/gu
 |---|---|
 | `project.*` | `setSettings`, `setTitle`, `setMasterVolume` |
 | `track.*` | `add`, `remove`, `reorder`, `rename`, `setVolume`, `setPan`, `setFlags` |
-| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `setSpeed`, `setVolume`, `setTransform`, `setTransition` |
-| `effect.*` | `add`, `setParam` |
+| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `nest`, `setSpeed`, `setVolume`, `setMotionBlur`, `setTransform`, `setGenerator`, `setTransition` |
+| `effect.*` | `add`, `remove`, `setEnabled`, `setParam` |
 | `keyframe.*` | `add`, `remove`, `move`, `setInterp`, `setHandles` |
 | `marker.*` | `add`, `remove`, `rename` |
 | `media.*` | `import`, `remove` |
+
+`effect.remove` nimmt den Effekt mit seinen Parametern und Keyframes heraus; `effect.setEnabled` ist
+Überbrücken und lässt all das stehen. Bis beide da waren, ließ sich ein Effekt hinzufügen und nie mehr
+entfernen, und `Effect.enabled` stand im Modell, ohne dass irgendetwas es setzen konnte — Renderer und
+Tongraph haben die Marke seit dem ersten Schema beachtet.
 
 `track.setFlags` nimmt jede Marke als nullbaren Wert, damit ein Command eine beliebige Teilmenge
 ändern kann; `null` heißt „unverändert lassen“. Rückwärtslauf ist `clip.setSpeed` mit

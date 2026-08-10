@@ -27,6 +27,7 @@ import {
 } from "@videola/core";
 
 import { useI18n, type Locale } from "../i18n/useI18n";
+import { IconButton } from "../primitives/Icon";
 import { POSITION_TRACK } from "../timeline/keyframes";
 import { findClip } from "../timeline/useTimelineGestures";
 import { CurveRow, shownCurve } from "./CurveRow";
@@ -341,6 +342,7 @@ function sourceSize(clip: Clip, library: readonly MediaAsset[]): Size | undefine
 
 function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
   const { t } = useI18n();
+  const denoising = clip.effects.find((effect) => effect.effectType === DENOISE);
   // `preservePitch` is carried through rather than shown: sending the default would silently
   // undo a project that set it, and there is no second control worth a row for it yet.
   const speed = (rate: number, reverse: boolean): Command =>
@@ -362,6 +364,44 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
         max={4}
         onChange={(value, coalesceKey) => send(speed(value, clip.speed.reverse), coalesceKey)}
       />
+      {/* Not in the effect chain below, and deliberately: that chain is the video one, and a person
+          looking for the noise in a recording looks at the recording. Add and remove rather than a
+          flag on the clip -- it *is* an effect on the clip, and the strength is its parameter. */}
+      <div className="v-param">
+        <span className="v-param__label">{t("inspector.denoise")}</span>
+        <button
+          type="button"
+          className="v-button v-param__toggle"
+          aria-pressed={denoising !== undefined}
+          title={t("inspector.denoiseHint")}
+          onClick={() =>
+            send(
+              denoising === undefined
+                ? cmd.effectAdd(on.clip(clip.id), DENOISE)
+                : cmd.effectRemove(on.clip(clip.id), DENOISE),
+            )
+          }
+        >
+          {t("inspector.denoise")}
+        </button>
+      </div>
+      {denoising !== undefined && (
+        <ParamRow
+          label={t("inspector.denoiseAmount")}
+          value={amountOf(denoising)}
+          min={0}
+          max={4}
+          onChange={(value, coalesceKey) =>
+            send(
+              cmd.effectSetParam(on.clip(clip.id), DENOISE, "amount", {
+                kind: "float",
+                value,
+              }),
+              coalesceKey,
+            )
+          }
+        />
+      )}
       {/* Beside the rate, because it is the same subject: how long the clip was exposed for decides how
           far it smears, and the rate decides how far it travels while the shutter is open. Zero is off
           and is the default -- a smear nobody asked for is a renderer deciding how an edit looks. */}
@@ -385,6 +425,22 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
       </div>
     </Group>
   );
+}
+
+/**
+ * The noise reduction on a clip, if it carries one.
+ *
+ * Spelled out here rather than taken from the audio registry, so the inspector keeps its one
+ * dependency on the core: the type is a string in the model, and the engine is what knows how to run
+ * it. A clip that carries one on a build without the engine still shows the switch as on, which is the
+ * honest answer -- the effect is in the project either way.
+ */
+const DENOISE = "denoise";
+const DENOISE_AMOUNT_DEFAULT = 1.5;
+
+function amountOf(effect: Effect): number {
+  const written = effect.params.amount;
+  return written?.kind === "float" ? written.value : DENOISE_AMOUNT_DEFAULT;
 }
 
 // Every entry is a list of commands sent under one key, which is the whole of what a preset is here
@@ -586,8 +642,29 @@ function Effects({
         // worse than the honest absence of one.
         if (manifest === undefined) return null;
         return (
-          <div key={authored.id} className="v-inspector__effect">
-            <h4 className="v-inspector__effectName">{manifest.name[locale]}</h4>
+          <div key={authored.id} className="v-inspector__effect" data-enabled={authored.enabled}>
+            {/* The name, a bypass and a way out. Until now an effect could be added and never taken
+                off again, and its `enabled` flag was in the model with no command to set it -- both
+                halves of an effect chain nobody could operate. */}
+            <div className="v-inspector__effectHead">
+              <h4 className="v-inspector__effectName">{manifest.name[locale]}</h4>
+              <button
+                type="button"
+                className="v-button v-inspector__effectBypass"
+                aria-pressed={!authored.enabled}
+                aria-label={t("inspector.effectBypass", { name: manifest.name[locale] })}
+                onClick={() =>
+                  send(cmd.effectSetEnabled(on.clip(clip.id), authored.effectType, !authored.enabled))
+                }
+              >
+                {t("inspector.bypass")}
+              </button>
+              <IconButton
+                icon="trash"
+                label={t("inspector.effectRemove", { name: manifest.name[locale] })}
+                onClick={() => send(cmd.effectRemove(on.clip(clip.id), authored.effectType))}
+              />
+            </div>
             {manifest.params.map((param) => {
               const held = resolved.get(authored.id)?.get(param.key)?.value;
               if (param.kind === "curve") {

@@ -177,10 +177,10 @@ mastering chain. Everything to its left feeds it.
 
 Two filters, one knob each, on the same insert chain as the equaliser.
 
-Neither is a denoiser, and calling one that would be a lie: nothing here separates a voice from
-noise sharing its band. What they do is take away a band that carries nothing anyone wants — rumble,
-wind and mains hum under a voice, tape hiss or a fan over it — and on a location recording that is
-most of what is wrong with it.
+Neither is a denoiser, and calling one that would be a lie: nothing in a filter separates a voice from
+noise sharing its band — that is what the [noise reduction](#noise-reduction) below is for. What these
+do is take away a band that carries nothing anyone wants — rumble, wind and mains hum under a voice,
+tape hiss or a fan over it — and on a location recording that is most of what is wrong with it.
 
 The low cut sits at 80 Hz by default, under the lowest note of a speaking voice; the high cut at
 12 kHz, above the consonants and inside the hiss. There is no Q knob: a biquad's Q at its corner is
@@ -189,6 +189,54 @@ a resonance, and a resonant high-pass on a voice is a howl at the frequency it w
 Both are measured through the real renderer against two tones in one signal, so neither can pass by
 going quiet: at a cutoff of 1 kHz the low cut leaves the 200 Hz tone at under a tenth of its strength
 and the 6 kHz one at over seven tenths, and the high cut does the same the other way round.
+
+## Noise reduction
+
+**Built.** A switch on the clip's own properties, beside its volume, and a strength beside that. It is
+spectral noise reduction: the thing the two cut filters cannot do.
+
+**How it can work at all.** Noise is *steady* and speech is not. Between words, between notes, between
+takes, the only thing left in a recording is its noise — so those windows are a measurement of it. The
+quietest fifth of the clip, by total energy, is averaged bin by bin into a noise floor, and every
+window of the clip is then turned down per bin by however much of it is floor. Spectral subtraction
+with a gain floor, which is what Audacity's noise reduction is and what every broadcast denoiser
+starts from.
+
+| Setting | What it does |
+|---|---|
+| Amount | how many times the measured floor is taken away. One leaves an audible remainder; past three the artefacts are the loudest thing left |
+| Floor | how far down a bin may be pushed, in decibels. Never to silence: a bin gated off and on again between windows is the warble that gives cheap noise reduction away |
+
+**Where it runs.** Over the decoded buffer, in the audio graph, where a clip's samples are loaded —
+not as an insert on a bus. Two reasons, both structural. The analysis needs the *whole* recording and a
+live node sees 128 samples at a time; and noise belongs to a recording rather than to a mix, so
+learning one floor for a bus carrying two microphones would clean neither. It is therefore a **clip**
+effect, and the same buffer feeds the preview, the export and the waveform strip — which is why the
+strip visibly changes when it is switched on, and why that is what the browser check measures.
+
+The result is cached by the settings as well as by the clip's range, so turning the amount up analyses
+again and dragging the clip across the timeline does not.
+
+**The arithmetic, and why it is written out here.** 2048-point windows at a quarter hop, a periodic
+Hann window analysing and synthesising, and the overlap-add divided by the window energy that actually
+landed on each sample. Four periodic Hann windows at that hop sum to a constant, which is what makes a
+pass with the gain left at one return the recording rather than a version of it with a ripple through
+it. The gain is smoothed across each bin's two neighbours before it is applied, because a gain that
+jumps from bin to bin rings, and the ringing is heard as a metallic edge on every consonant.
+
+The clip is padded with a window of silence at each end. Without that the first and last samples are
+covered by one window whose taper is nearly zero there, and dividing by that window sum made the ends
+of every clip **eighteen times too loud** — a fault every ratio measured inside the file missed and a
+peak reading found at once. Both checks are in the suite now.
+
+**What it cannot do.** Tell a steady signal from steady noise. A recording with no pause anywhere — a
+sustained tone, an unbroken drone — has no window where the noise is alone, and nothing can be measured
+there that is not also the signal. That is what stationarity means rather than a shortcoming of this
+estimate, and it is why the strength is a knob rather than a switch.
+
+Measured, not asserted: against a tone in bursts with hiss over it, the noise **inside the tone's own
+band** drops by more than 9 dB while the tone stays within 2 dB of where it was. No filter can make
+that claim, which is the whole reason this exists beside them.
 
 ## Beats
 
@@ -335,7 +383,7 @@ Named rather than hinted at, because a control that does nothing is worse than n
   `choice` kind; the shelves arrive with the widget that can edit one.
 - **Gain-reduction metering.** The strips show what a bus is sending; how hard its compressor is
   working is a second reading, and `DynamicsCompressorNode.reduction` is where it would come from.
-- **Noise reduction, beat detection, spatial panning beyond stereo.**
+- **Spatial panning beyond stereo.** The panner is a stereo one; a surround bus is a different node and a different set of meters.
 - **Bus automation in the timeline's keyframe lane.** A duck's corners are editable on the strip
   that wrote them, with the same controls the inspector uses; the lane below a clip draws clip
   keyframes only, and drawing a track's would mean giving a lane an identity that is not a clip.

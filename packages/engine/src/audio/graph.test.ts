@@ -2,7 +2,7 @@ import { consumedBetween, consumedSource, timeToSeconds } from "@videola/core";
 import { OfflineAudioContext } from "node-web-audio-api";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Clip, Interp, MediaAsset, Project, Time, Track } from "@videola/core";
+import type { Clip, Effect, Interp, MediaAsset, Project, Time, Track } from "@videola/core";
 
 import { AudioGraph, hasAudibleClips, MASTER_METER, measureLoudness } from "./graph";
 import { integratedLufs, SILENT_LEVEL } from "./loudness";
@@ -1141,5 +1141,93 @@ describe("AudioGraph, speed ramps", () => {
 
     expect(consumedSource(subject)).toBe(4 * SECOND);
     expect(at(out, 1.98)).toBeCloseTo(1, 2);
+  });
+});
+
+// Noise reduction is not a node: it rewrites the samples where the graph loads them. What the graph
+// can be asked about those samples is `waveforms`, and it is drawn from the very buffers playback uses
+// -- so the strips the timeline shows are the measurement, and a picture that disagreed with what is
+// heard would be this check failing rather than something nobody notices.
+describe("an offline effect on a clip", () => {
+  // Hiss, deterministic, so there is something to take away and something to measure.
+  const hiss: AudioBufferSource = {
+    async bufferFor(_hash: string, from: Time, to: Time): Promise<AudioBuffer> {
+      const frames = Math.round(timeToSeconds(to - from) * SAMPLE_RATE);
+      const buffer = context(1).createBuffer(1, frames, SAMPLE_RATE);
+      const data = new Float32Array(frames);
+      let seed = 5;
+      for (let i = 0; i < frames; i += 1) {
+        seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
+        data[i] = (seed / 0xffffffff) * 0.2 - 0.1;
+      }
+      buffer.copyToChannel(data, 0);
+      return buffer;
+    },
+  };
+
+  const denoise = (over: Record<string, unknown> = {}): Effect[] =>
+    [{ id: "eff_1", effectType: "denoise", enabled: true, params: {}, keyframes: {}, ...over }] as
+      unknown as Effect[];
+
+  // The loudest bucket of the strip: hiss is even, so this is how much of it is left.
+  const loudest = (graph: AudioGraph): number => {
+    const strip = graph.waveforms(64).get("clp_1");
+    return Math.max(...(strip?.max ?? [0]));
+  };
+
+  async function prepared(effects: Effect[]): Promise<AudioGraph> {
+    const graph = new AudioGraph(context(3), hiss);
+    await graph.prepare(project([track("trk_0", [clip({ duration: 2 * SECOND, effects })])]));
+    return graph;
+  }
+
+  it("takes the noise out of the samples the graph plays", async () => {
+    const untouched = loudest(await prepared([]));
+
+    const cleaned = loudest(await prepared(denoise()));
+
+    expect(untouched).toBeGreaterThan(0.05);
+    expect(cleaned).toBeGreaterThan(0);
+    expect(cleaned).toBeLessThan(untouched * 0.7);
+  });
+
+  it("leaves the samples alone when it is switched off", async () => {
+    const plain = loudest(await prepared([]));
+
+    const bypassed = loudest(await prepared(denoise({ enabled: false })));
+
+    expect(bypassed).toBeCloseTo(plain, 6);
+  });
+
+  // An effect type the offline roster does not know is not an offline effect: the video registry and
+  // the node-based audio one both carry types this has to leave to them.
+  it("ignores an effect that is not one of its own", async () => {
+    const plain = loudest(await prepared([]));
+
+    const graded = loudest(
+      await prepared([
+        { id: "eff_1", effectType: "brightness", enabled: true, params: {}, keyframes: {} },
+      ] as unknown as Effect[]),
+    );
+
+    expect(graded).toBeCloseTo(plain, 6);
+  });
+
+  // The analysis is the expensive half, so preparing the same project twice must not do it twice --
+  // and a change of setting must, because the samples are then different samples.
+  it("analyses once per setting rather than once per prepare", async () => {
+    const graph = new AudioGraph(context(3), hiss);
+    const withAmount = (amount: number): Effect[] =>
+      denoise({ params: { amount: { kind: "float", value: amount } } });
+    const build = (effects: Effect[]): Project =>
+      project([track("trk_0", [clip({ duration: 2 * SECOND, effects })])]);
+
+    await graph.prepare(build(withAmount(1.5)));
+    const first = loudest(graph);
+    await graph.prepare(build(withAmount(1.5)));
+    expect(loudest(graph)).toBe(first);
+
+    await graph.prepare(build(withAmount(4)));
+    expect(loudest(graph)).toBeLessThan(first);
   });
 });

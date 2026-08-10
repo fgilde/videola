@@ -50,6 +50,7 @@ same `0 .. 4` a track's fader is, so a slider can send whatever it produces.
 | `clip.split` | `clip`, `at` |
 | `clip.setSpeed` | `clip`, `rate`, `reverse`, `preservePitch` |
 | `clip.setVolume` | `clip`, `volume` |
+| `clip.setMotionBlur` | `clip`, `amount` |
 | `clip.setTransform` | `clip`, `transform` |
 | `clip.setTransition` | `clip`, `transition` |
 | `clip.rippleDelete` | `clip` |
@@ -117,7 +118,14 @@ Markers are kept in time order, whatever order they were placed in.
 | Command | Fields |
 |---|---|
 | `effect.add` | `target`, `effectType` |
+| `effect.remove` | `target`, `effectType` |
+| `effect.setEnabled` | `target`, `effectType`, `enabled` |
 | `effect.setParam` | `target`, `effectType`, `key`, `value` |
+
+`effect.remove` takes the effect out with its parameters and its keyframes; `effect.setEnabled` is
+bypass, which leaves all of that in place. Until both existed an effect could be added and never taken
+off again, and `Effect.enabled` sat in the model with nothing able to set it — the renderer and the
+audio graph had honoured the flag since the first schema.
 
 `target` names the chain, not the clip: `{ kind: "clip", clip }`, `{ kind: "track", track }` or
 `{ kind: "project" }`. A blur on a clip, an equaliser on a bus and a limiter on the mastering chain

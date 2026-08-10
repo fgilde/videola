@@ -1055,6 +1055,7 @@ async function announce() {
     await captions();
     await inserted();
     await keysAndView();
+    await soundAndChain();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
@@ -2159,6 +2160,50 @@ async function announce() {
     check("a band over nothing selects nothing",
       all('[data-clip-id][data-selected="true"]').length, 0);
     check("the band raised nothing", banner(), "");
+  }
+
+  // Noise reduction and the two things an effect chain was missing until now: a bypass and a way out.
+  // Only the built application can show these -- the denoise runs over the decoded buffer in the audio
+  // graph, and what proves it ran is the waveform strip, which is drawn from those very samples.
+  //
+  // It undoes itself, so what follows works on the project it was handed.
+  async function soundAndChain() {
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    await until("the properties panel", () => labelled("Rauschunterdrückung"));
+
+    const strip = () => q('[data-testid="clip-waveform"] path').getAttribute("d");
+    const before = strip();
+    check("the clip has a strip drawn from real peaks", before.split("L").length > 100, true);
+
+    labelled("Rauschunterdrückung").click();
+    // The analysis is a second of work per minute of audio and the strip is redrawn from the result.
+    await until("the strip to change", () => (strip() !== before ? true : null), 30000);
+    check("switching the noise reduction on changes the samples the strip is drawn from",
+      strip() !== before, true);
+    check("and raises nothing", banner(), "");
+    check("its strength is a slider once it is on",
+      rowSlider("Stärke der Rauschunterdrückung") !== undefined, true);
+
+    button("Rückgängig").click();
+    await until("the strip to come back", () => (strip() === before ? true : null), 30000);
+    check("and switching it off puts them back", strip(), before);
+
+    // The chain: an effect used to be addable and never removable, and its `enabled` flag had no
+    // command at all. Both are operated here rather than asserted about the model.
+    await addEffect("brightness");
+    await until("the effect row", () => labelled("Überbrücken"));
+    check("an effect on a clip can be bypassed",
+      labelled("Überbrücken").getAttribute("aria-pressed"), "false");
+    labelled("Überbrücken").click();
+    await sleep(150);
+    check("and says so once it is", labelled("Überbrücken").getAttribute("aria-pressed"), "true");
+    check("while keeping its settings on screen", rowSlider("Stärke") !== undefined, true);
+
+    button("Helligkeit entfernen").click();
+    await sleep(200);
+    check("and it can be taken off the chain", labelled("Überbrücken"), undefined);
+    check("operating the chain raised nothing", banner(), "");
   }
 
   async function dropFixture() {

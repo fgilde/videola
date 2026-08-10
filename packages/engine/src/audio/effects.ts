@@ -1,4 +1,5 @@
 import type { EffectParam } from "../effects/registry";
+import { denoiseChannel, DENOISE_DEFAULTS } from "./denoise";
 
 /**
  * A built effect: the node the signal passes through, and the knobs the graph may automate. One
@@ -185,6 +186,69 @@ const limiter: AudioEffectManifest = {
 };
 
 const MANIFESTS: readonly AudioEffectManifest[] = [gain, eq, lowCut, highCut, compressor, limiter];
+
+/**
+ * An effect that is not a node: it rewrites the samples once, before anything is scheduled.
+ *
+ * Spectral noise reduction cannot be an insert. It needs the *whole* recording to find the noise
+ * floor -- the level each bin sits at in the pauses -- and a live node sees 128 samples at a time. So
+ * it runs over the decoded buffer where the graph loads it, which is also why it costs nothing while
+ * nothing asks for it: no clip carries it, no buffer is touched.
+ *
+ * A clip's chain only. Noise belongs to a recording, and a track carries a mix of them -- learning one
+ * floor for two microphones would clean neither.
+ */
+export interface OfflineAudioEffect {
+  id: string;
+  name: { de: string; en: string };
+  params: readonly EffectParam[];
+  /** One channel in, one channel out, at the same length. */
+  apply(
+    channel: Float32Array<ArrayBuffer>,
+    values: Readonly<Record<string, number>>,
+  ): Float32Array<ArrayBuffer>;
+}
+
+const denoise: OfflineAudioEffect = {
+  id: "denoise",
+  name: { de: "Rauschunterdrückung", en: "Noise reduction" },
+  params: [
+    {
+      key: "amount",
+      name: { de: "Stärke", en: "Amount" },
+      // How many times the measured floor is taken away. One leaves an audible remainder, three is
+      // where the artefacts start being the loudest thing left.
+      default: DENOISE_DEFAULTS.amount,
+      min: 0,
+      max: 4,
+    },
+    {
+      key: "floorDb",
+      name: { de: "Restpegel (dB)", en: "Floor (dB)" },
+      // How far down a bin may be pushed. Never to silence: a bin gated off and on between windows is
+      // the warble that gives cheap noise reduction away.
+      default: DENOISE_DEFAULTS.floorDb,
+      min: -60,
+      max: 0,
+    },
+  ],
+  apply(channel, values) {
+    return denoiseChannel(channel, {
+      amount: values.amount ?? DENOISE_DEFAULTS.amount,
+      floorDb: values.floorDb ?? DENOISE_DEFAULTS.floorDb,
+    });
+  },
+};
+
+const OFFLINE: readonly OfflineAudioEffect[] = [denoise];
+
+export function offlineAudioEffect(type: string): OfflineAudioEffect | undefined {
+  return OFFLINE.find((manifest) => manifest.id === type);
+}
+
+export function offlineAudioEffects(): readonly OfflineAudioEffect[] {
+  return OFFLINE;
+}
 
 export function audioEffect(type: string): AudioEffectManifest | undefined {
   return MANIFESTS.find((manifest) => manifest.id === type);

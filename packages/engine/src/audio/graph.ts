@@ -21,7 +21,8 @@ import type { Peaks } from "@videola/media";
 
 import { audibleClips } from "../nesting";
 import { clampParam } from "../effects/registry";
-import { audioEffect } from "./effects";
+import { audioEffect, offlineAudioEffect } from "./effects";
+import type { OfflineAudioEffect } from "./effects";
 import type { EffectParam } from "./effects";
 import { integratedLufs, levelFrom, SILENT_LEVEL } from "./loudness";
 import type { Level } from "./loudness";
@@ -204,18 +205,47 @@ export class AudioGraph {
   // differ. The map is the same session-long hold the note above already describes.
   async #load(hash: string, clip: Clip): Promise<AudioBuffer | undefined> {
     const reverse = clip.speed.reverse;
-    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}|${reverse}`;
+    // The offline effects are part of what the samples *are*, so they are part of what the cache is
+    // keyed by: turning the noise reduction up has to decode nothing again and analyse everything
+    // again, and dragging the clip must do neither.
+    const offline = offlineChain(clip);
+    const key = `${hash}|${clip.inPoint}|${outPoint(clip)}|${reverse}|${offlineKey(offline)}`;
     const cached = this.#buffers.get(key);
     if (cached !== undefined) return cached;
     try {
       const decoded = await this.#source.bufferFor(hash, clip.inPoint, outPoint(clip));
-      const buffer = reverse ? this.#reversed(decoded) : decoded;
+      const turned = reverse ? this.#reversed(decoded) : decoded;
+      const buffer = this.#offline(turned, offline);
       this.#buffers.set(key, buffer);
       return buffer;
     } catch (error) {
       console.error(error);
       return undefined;
     }
+  }
+
+  /**
+   * The offline effects, applied to the samples themselves.
+   *
+   * After the reverse rather than before it, because that is the order the chain reads in: a clip
+   * plays reversed and then its noise is taken out, and the noise floor of a reversed recording is the
+   * same floor either way. Channel by channel, because a floor is a property of one microphone.
+   *
+   * ponytail: 2048-point windows at a quarter hop over the whole clip, on this thread. A minute of
+   * stereo is about a second of work, paid once per change of setting and never during playback. A
+   * worker would hide it -- worth doing the day somebody drags the amount slider rather than sets it.
+   */
+  #offline(buffer: AudioBuffer, chain: readonly OfflinePass[]): AudioBuffer {
+    if (chain.length === 0) return buffer;
+    const out = this.#ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+    const plane = new Float32Array(buffer.length);
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      buffer.copyFromChannel(plane, channel);
+      let samples: Float32Array<ArrayBuffer> = plane;
+      for (const pass of chain) samples = pass.effect.apply(samples, pass.values);
+      out.copyToChannel(samples, channel);
+    }
+    return out;
   }
 
   // An AudioBufferSourceNode has no negative playback rate, so a reversed clip plays a reversed
@@ -510,4 +540,40 @@ export function hasAudibleClips(project: Project): boolean {
 // decodes a new buffer rather than reusing one cut for a different speed.
 function outPoint(clip: Clip): Time {
   return clip.inPoint + consumedSource(clip);
+}
+
+/** One offline pass and the settings it runs at. */
+interface OfflinePass {
+  effect: OfflineAudioEffect;
+  values: Record<string, number>;
+}
+
+/**
+ * The offline effects on a clip, in chain order, with their static values.
+ *
+ * Static and not resolved at an instant, deliberately: this rewrites the samples once for the whole
+ * clip, and a keyframed amount would be a promise that the sweep is heard. The inspector therefore
+ * offers no keyframe switch for one, and a hand-authored track is read at the value it starts from.
+ */
+function offlineChain(clip: Clip): OfflinePass[] {
+  const passes: OfflinePass[] = [];
+  for (const authored of clip.effects) {
+    if (!authored.enabled) continue;
+    const effect = offlineAudioEffect(authored.effectType);
+    if (effect === undefined) continue;
+    const values: Record<string, number> = {};
+    for (const param of effect.params) {
+      const written = authored.params[param.key];
+      const value = written?.kind === "float" ? written.value : param.default;
+      values[param.key] = clampParam(param, value);
+    }
+    passes.push({ effect, values });
+  }
+  return passes;
+}
+
+function offlineKey(chain: readonly OfflinePass[]): string {
+  return chain
+    .map((pass) => `${pass.effect.id}:${Object.entries(pass.values).sort().flat().join(",")}`)
+    .join("|");
 }

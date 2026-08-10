@@ -279,6 +279,7 @@ function audibleProject(): Project {
               volume: 1,
               pan: 0,
               fades: { inDuration: SECOND, outDuration: 0 },
+              effects: [],
             },
           ],
         },

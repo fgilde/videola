@@ -85,6 +85,8 @@ features:
 - **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
   computed from the very matrix the compositor hands the GPU, and the motion path a series of
   position keys traces, sampled from the core rather than drawn corner to corner.
+- **Noise reduction** — spectral, learned from the pauses in the clip itself: the noise inside a voice's
+  own band drops by more than 9 dB while the voice stays within 2 dB.
 - **Motion blur** — a shutter per clip, averaged over eight real instants of the exposure: the layer's
   own path and whatever the material did between them, in the preview and in the file.
 - **Effects and transitions** — sixteen effects, seven transitions (any of them on every cut in one
@@ -122,8 +124,7 @@ features:
 
 ## What is not there yet
 
-No noise reduction yet: the low and high cut take away a band, which is not the same as separating a
-voice from noise sharing its band. The magnetic timeline is deliberately absent, and
+The magnetic timeline is deliberately absent, and
 the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
 browser's own encoders.
 

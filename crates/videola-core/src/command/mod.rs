@@ -202,6 +202,19 @@ pub enum Command {
         target: EffectTarget,
         effect_type: String,
     },
+    /// Take an effect out of a chain. Its parameters and keyframes go with it.
+    #[serde(rename = "effect.remove")]
+    EffectRemove {
+        target: EffectTarget,
+        effect_type: String,
+    },
+    /// Switch an effect off without taking it out: the parameters and the keyframes stay.
+    #[serde(rename = "effect.setEnabled")]
+    EffectSetEnabled {
+        target: EffectTarget,
+        effect_type: String,
+        enabled: bool,
+    },
     /// Set one static parameter of an effect already in that chain.
     #[serde(rename = "effect.setParam")]
     EffectSetParam {
@@ -394,6 +407,8 @@ impl Command {
             | Self::ClipSetTransition { clip, .. } => holding(clip),
             Self::ClipGroup { clips } | Self::ClipNest { clips } => clips.iter().find_map(holding),
             Self::EffectAdd { target: at, .. }
+            | Self::EffectRemove { target: at, .. }
+            | Self::EffectSetEnabled { target: at, .. }
             | Self::EffectSetParam { target: at, .. }
             | Self::KeyframeAdd { target: at, .. }
             | Self::KeyframeRemove { target: at, .. }
@@ -487,6 +502,15 @@ impl Command {
                 target: at,
                 effect_type,
             } => clip::add_effect(target, at, effect_type),
+            Self::EffectRemove {
+                target: at,
+                effect_type,
+            } => clip::remove_effect(target, at, effect_type),
+            Self::EffectSetEnabled {
+                target: at,
+                effect_type,
+                enabled,
+            } => clip::set_effect_enabled(target, at, effect_type, *enabled),
             Self::EffectSetParam {
                 target: at,
                 effect_type,
@@ -592,6 +616,8 @@ impl Command {
             Self::ClipSetGenerator { .. } => LABEL_CLIP_SET_GENERATOR,
             Self::ClipSetTransition { .. } => LABEL_CLIP_SET_TRANSITION,
             Self::EffectAdd { .. } => LABEL_EFFECT_ADD,
+            Self::EffectRemove { .. } => LABEL_EFFECT_REMOVE,
+            Self::EffectSetEnabled { .. } => LABEL_EFFECT_SET_ENABLED,
             Self::EffectSetParam { .. } => LABEL_EFFECT_SET_PARAM,
             Self::KeyframeAdd { .. } => LABEL_KEYFRAME_ADD,
             Self::KeyframeRemove { .. } => LABEL_KEYFRAME_REMOVE,
@@ -642,6 +668,8 @@ pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
 pub const LABEL_CLIP_SET_GENERATOR: &str = "cmd.clip.setGenerator";
 pub const LABEL_CLIP_SET_TRANSITION: &str = "cmd.clip.setTransition";
 pub const LABEL_EFFECT_ADD: &str = "cmd.effect.add";
+pub const LABEL_EFFECT_REMOVE: &str = "cmd.effect.remove";
+pub const LABEL_EFFECT_SET_ENABLED: &str = "cmd.effect.setEnabled";
 pub const LABEL_EFFECT_SET_PARAM: &str = "cmd.effect.setParam";
 pub const LABEL_KEYFRAME_ADD: &str = "cmd.keyframe.add";
 pub const LABEL_KEYFRAME_REMOVE: &str = "cmd.keyframe.remove";
@@ -690,6 +718,8 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_CLIP_SET_GENERATOR,
     LABEL_CLIP_SET_TRANSITION,
     LABEL_EFFECT_ADD,
+    LABEL_EFFECT_REMOVE,
+    LABEL_EFFECT_SET_ENABLED,
     LABEL_EFFECT_SET_PARAM,
     LABEL_KEYFRAME_ADD,
     LABEL_KEYFRAME_REMOVE,

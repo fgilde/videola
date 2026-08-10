@@ -359,6 +359,23 @@ export const cmd = {
     target,
     effectType,
   }),
+  // Takes the effect out, with its parameters and its keyframes. The counterpart of `effectAdd`, and
+  // the reason a switch in the interface can be a switch rather than a one-way door.
+  effectRemove: (target: EffectTarget, effectType: string) => ({
+    type: "effect.remove" as const,
+    target,
+    effectType,
+  }),
+
+  // Bypass. Everything the effect carries stays where it is, which is what makes hearing what it does
+  // and putting it back cost nothing.
+  effectSetEnabled: (target: EffectTarget, effectType: string, enabled: boolean) => ({
+    type: "effect.setEnabled" as const,
+    target,
+    effectType,
+    enabled,
+  }),
+
   effectSetParam: (target: EffectTarget, effectType: string, key: string, value: ParamValue) => ({
     type: "effect.setParam",
     target,

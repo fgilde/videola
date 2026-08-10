@@ -60,10 +60,29 @@
   border-radius: var(--v-radius-md);
 }
 
+.v-inspector__effectHead {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
+}
+
 .v-inspector__effectName {
   margin: 0;
+  margin-right: auto;
   font-size: var(--v-text-sm);
   font-weight: var(--v-weight-strong);
+}
+
+.v-inspector__effectBypass {
+  padding-inline: var(--v-space-2);
+  font-size: var(--v-text-xs);
+}
+
+/* A bypassed effect still shows every setting -- that is the point of bypass rather than removal --
+   and says at a glance that it is not doing anything. */
+.v-inspector__effect[data-enabled="false"] .v-inspector__effectName,
+.v-inspector__effect[data-enabled="false"] .v-param {
+  opacity: 0.55;
 }
 
 /* Three lines, not three columns. The keyframe controls are four targets wide, and beside the
