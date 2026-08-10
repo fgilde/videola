@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Videola",
   "version": "0.6.0",
-  "identifier": "com.cargonerds.videola",
+  "identifier": "org.gilde.videola",
   "build": {
     "frontendDist": "../../web/dist",
     "beforeBuildCommand": "pnpm --filter videola-web build",
@@ -40,6 +40,10 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "gilde.org",
+    "homepage": "https://www.gilde.org",
+    "copyright": "© 2026 Florian Gilde",
+    "shortDescription": "Video editor",
     "targets": [
       "nsis",
       "deb",

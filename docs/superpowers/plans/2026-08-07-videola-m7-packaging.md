@@ -175,7 +175,7 @@ resolver = "2"
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Videola",
   "version": "0.0.0",
-  "identifier": "com.cargonerds.videola",
+  "identifier": "org.gilde.videola",
   "build": {
     "frontendDist": "../../web/dist",
     "beforeBuildCommand": "pnpm --filter videola-web build",

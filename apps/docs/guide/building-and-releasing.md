@@ -100,6 +100,21 @@ Windows and Linux installers with it.
 dependency — it keeps the expensive mobile jobs from running before installers exist, and it keeps two
 jobs from racing to create the same draft release.
 
+### Who the installer says it is from
+
+Windows shows a **publisher** in the installer, in the uninstall list and in the file's own
+properties, and it takes that from the bundle identifier when nothing says otherwise —
+`com.cargonerds.videola` therefore had Windows reporting a company that has nothing to do with this
+program. The identifier is `org.gilde.videola` and `bundle.publisher` says **gilde.org** outright
+rather than leaving it to be derived.
+
+Changing an identifier is not cosmetic: it is the name the operating system files the application
+under, so the config directory, the data directory and the updater's notion of "the same application"
+all move with it. That is a thing to do before a release and not after one.
+
+`bundle.copyright` and `bundle.homepage` sit beside it, because the same properties dialogue shows
+those two and an empty field there reads as an unfinished build.
+
 ### Why there is a `gate` job
 
 The `secrets` context is not available in a job-level `if:` — only `github`, `needs`, `vars` and

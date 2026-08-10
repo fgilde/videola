@@ -68,6 +68,21 @@ Plattform mit: der `nsis`-Bundler ist nicht auf Windows beschränkt, aus der Kon
 würden Linux und macOS je einen Windows-Installer bauen. `fail-fast: false` verhindert, dass ein
 gescheiterter macOS-Build die fertigen Installer für Windows und Linux mitnimmt.
 
+### Von wem der Installer sagt, dass er kommt
+
+Windows zeigt einen **Hersteller** im Installer, in der Liste der installierten Programme und in den
+Eigenschaften der Datei, und nimmt ihn aus dem Bundle-Identifier, wenn nichts anderes dasteht —
+`com.cargonerds.videola` hat Windows deshalb eine Firma nennen lassen, die mit diesem Programm nichts
+zu tun hat. Der Identifier ist `org.gilde.videola`, und `bundle.publisher` sagt **gilde.org**
+ausdrücklich, statt es herleiten zu lassen.
+
+Einen Identifier zu ändern ist nicht kosmetisch: unter diesem Namen führt das Betriebssystem die
+Anwendung, es wandern also das Konfigurationsverzeichnis, das Datenverzeichnis und die Vorstellung des
+Updaters von „derselben Anwendung" mit. Das macht man vor einer Veröffentlichung und nicht danach.
+
+`bundle.copyright` und `bundle.homepage` stehen daneben, denn derselbe Eigenschaften-Dialog zeigt
+beide, und ein leeres Feld dort liest sich wie ein unfertiger Build.
+
 ### Warum es einen `gate`-Job gibt
 
 Der `secrets`-Kontext steht in einem Job-`if:` nicht zur Verfügung — nur `github`, `needs`, `vars` und
