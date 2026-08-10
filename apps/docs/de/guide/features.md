@@ -273,7 +273,7 @@ normales bearbeitbares Projekt; es gibt keinen Vorlagenmodus, den man verlassen 
 **Dreizehn werden mitgeliefert, in fünf Kategorien, und keine einzige bringt ein Bild Video mit.** Eine
 Vorlage ist ein Rezept, jede ist deshalb aus dem gebaut, was der Renderer allein aus einer Projektdatei
 zeichnen kann: der Textgenerator mit Ein-, Aus- und Schleifenbewegung, Farbflächen und Verläufe, der
-Vorlauf, die zehn Effekte, die fünf Übergänge, Masken und keyframebare Transformationen samt
+Vorlauf, die dreizehn Effekte, die fünf Übergänge, Masken und keyframebare Transformationen samt
 Bewegungspfad. Das eigene Material kommt über die Platzhalter dazu. Zusammen benutzen sie jeden
 Übergang, den der Renderer hat.
 

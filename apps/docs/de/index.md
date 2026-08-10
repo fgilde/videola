@@ -88,7 +88,7 @@ features:
 - **Geometrie auf dem Bild** — ein Rahmen mit Ecken- und Drehgriffen, dessen Ecken aus genau der
   Matrix stammen, die der Compositor der GPU übergibt, und die Bahn, die Positions-Keys beschreiben:
   aus dem Kern abgetastet statt von Ecke zu Ecke gezeichnet.
-- **Effekte und Übergänge** — acht Effekte, sieben Übergänge (jeder davon mit einer Auswahl auf
+- **Effekte und Übergänge** — sechzehn Effekte, sieben Übergänge (jeder davon mit einer Auswahl auf
   jeden Schnitt), Masken, ein Textgenerator,
   Farbkurven und Lift/Gamma/Gain-Räder, ausgewählt in einem Browser, dessen jede Kachel der Shader
   des Effekts über dem aktuellen Bild ist. Jeder Parameter keyframebar, auch Position, Skalierung

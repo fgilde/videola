@@ -2202,6 +2202,93 @@ test("every tile in the browser shows its own effect at work", () => {
   preview.dispose();
 });
 
+
+// The three that answer a job, checked against the job rather than against "the picture changed".
+// A generic sweep above already proves every tile differs from its source; what it cannot tell is a
+// mosaic from a blur, or a smear along one axis from a smear along the other.
+
+// A manifest with the settings this check wants. `render` draws with what the manifest nominates, so
+// the way to ask for a particular length is to hand it a manifest that names one.
+function withPreview(id, preview) {
+  return { ...R.effect(id), preview };
+}
+
+test("a mosaic makes flat cells, and cells rather than one flat picture", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const drawn = tile(preview, withPreview("mosaic", { size: 16 }), R.referencePicture(TILE, TILE));
+
+  // Sixteen pixels of a sixty-four pixel tile is four cells across. Every reading inside one cell is
+  // the same colour, and that is the whole claim: a blur at any strength varies within sixteen pixels.
+  check("two corners of one cell read the same", drawn(1, 1), drawn(14, 14), 2);
+  check("and so does its middle", drawn(8, 4), drawn(14, 14), 2);
+  // Not one flat tile: the reference picture has vertical bars every five pixels, so neighbouring
+  // cells cannot agree unless the effect swallowed the picture whole.
+  check("neighbouring cells differ",
+    apart(drawn, (x, y) => drawn((x + 16) % TILE, y)) > 8, true);
+  preview.dispose();
+});
+
+// The fine structure of a row, not its span: the reference picture also carries a broad hue ramp
+// across x, and no blur of any direction flattens a ramp. What a horizontal smear does flatten is the
+// bar pattern, and step-to-step change is what measures that.
+function acrossRow(read, y) {
+  let sum = 0;
+  for (let x = 9; x < TILE - 8; x += 1) sum += Math.abs(read(x, y)[1] - read(x - 1, y)[1]);
+  return sum;
+}
+
+test("a directional blur smears along the axis it is given and not across it", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  const picture = R.referencePicture(TILE, TILE);
+  const along = tile(preview, withPreview("directional-blur", { length: 30, angle: 0 }), picture);
+  const acrossIt = tile(preview, withPreview("directional-blur", { length: 30, angle: 90 }), picture);
+  const source = flat(picture);
+
+  const bars = acrossRow(source, 32);
+  check("the reference picture really has bars to smear", bars > 100, true);
+  check("a horizontal smear flattens them", acrossRow(along, 32) < bars / 2, true);
+  // The same length turned ninety degrees leaves them: a blur that ignored its angle would flatten
+  // both, and one that ignored its length would flatten neither.
+  check("a vertical smear leaves them standing", acrossRow(acrossIt, 32) > bars * 0.7, true);
+  preview.dispose();
+});
+
+test("a glow spreads what is bright and leaves what is not", () => {
+  const preview = new R.EffectPreview(TILE, TILE);
+  // Black with one small white square, because that is the picture the claim is about: light has to
+  // arrive next to the square and nowhere near the corners.
+  const lamp = canvasOf(TILE, TILE);
+  const two = lamp.getContext("2d");
+  two.fillStyle = "#000000";
+  two.fillRect(0, 0, TILE, TILE);
+  two.fillStyle = "#ffffff";
+  two.fillRect(28, 28, 8, 8);
+
+  const glowed = tile(preview, withPreview("glow", { amount: 2, threshold: 0.4, radius: 10 }), lamp);
+  const blurred = tile(preview, withPreview("blur", { amount: 10 }), lamp);
+
+  check("light arrives beside the bright square", glowed(24, 32)[1] > 10, true);
+  check("the square itself stays bright", glowed(32, 32)[1] > 200, true);
+  // Which is what makes it a glow and not a blur: the same radius of blur takes the square's own
+  // brightness away to spread it.
+  check("where a blur of the same width would have dimmed it", blurred(32, 32)[1] < 200, true);
+  check("and the far corner is untouched", glowed(2, 2), [0, 0, 0, 255], 3);
+
+  // The threshold itself, which is the difference between a glow and an additive blur: a mid grey is
+  // below it and must not bleed at all. Its own picture, so no light from the square above can reach
+  // the reading and answer for it.
+  const dim = canvasOf(TILE, TILE);
+  const grey = dim.getContext("2d");
+  grey.fillStyle = "#000000";
+  grey.fillRect(0, 0, TILE, TILE);
+  grey.fillStyle = "#4d4d4d";
+  grey.fillRect(24, 24, 16, 16);
+  const held = tile(preview, withPreview("glow", { amount: 2, threshold: 0.4, radius: 10 }), dim);
+  check("nothing below the threshold spreads", held(18, 32), [0, 0, 0, 255], 3);
+  check("and it keeps its own value", held(32, 32), flat(dim)(32, 32), 3);
+  preview.dispose();
+});
+
 // One table, evaluated on the CPU: trilinear between the eight surrounding grid points, which is
 // what the hardware filter does with a `sampler3D`.
 function lookup(table, rgb) {

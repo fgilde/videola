@@ -1,8 +1,8 @@
 # Effekte und Übergänge
 
-**Dreizehn Effekte, sieben Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
+**Sechzehn Effekte, sieben Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
 in einer Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an
-einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 384
+einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 429
 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
 
 ## Ein Effekt ist ein Manifest und ein Fragment-Shader
@@ -357,11 +357,39 @@ Eigenschaft der Aufnahme ist und nicht der Ebene — und genau das ist eine Vign
 | Vignettierung | Farbe | `amount` 0–1, `size` 0–1,4 | dunkelt zu den Ecken hin ab |
 | Weichzeichnen | Detail | `amount` 0–16 | separabler Gauß, Abstand in Bildpixeln |
 | Schärfen | Detail | `amount` 0–4 | Unschärfemaske gegen die vier Nachbarn |
+| Verpixeln | Detail | `size` 1–128 | eine Farbe pro Kachel; für Gesicht, Kennzeichen, Bildschirm |
+| Richtungsunschärfe | Detail | `length` 0–200, `angle` −180–180 | ein Zug entlang einer Achse, wie ein schneller Schwenk |
+| Leuchten | Detail | `amount` 0–3, `threshold` 0–1, `radius` 0–32 | verteilt das Helle und behält das Übrige |
 | Chroma-Keying | Stanze | `hue` 0–360, `tolerance`, `softness` | stanzt einen Farbton aus; 120 ist Greenscreen |
 | Maske (Rechteck) | Stanze | `centerX`, `centerY`, `width`, `height`, `feather`, `invert` | behält ein Rechteck, lässt den Rest fallen |
 | Maske (Ellipse) | Stanze | dieselben sechs | behält die einbeschriebene Ellipse |
 
 Es gibt keinen eigenen Schwarzweiß-Effekt: er wäre der Sättigungs-Shader mit festgenageltem Regler.
+
+**Verpixeln, nicht eine starke Unschärfe.** Eine Unschärfe, die breit genug ist, um ein Gesicht zu
+verbergen, lässt dessen Form lesbar; eine Kachelung nicht — deshalb hat jeder Editor sie. Eine
+Abtastung pro Kachel, in deren Mitte: die ganze Kachel zu mitteln wollte so viele Abtastungen wie die
+Kachel breit ist, und der Sinn des Effekts ist ja, dass die Zeichnung weg ist. Das Gitter hängt am
+Bildrahmen und nicht am Bild, ein Clip, der sich unter der Kachelung bewegt, zieht deren Kanten also
+nicht mit.
+
+**Eine Richtungsunschärfe ist keine Bewegungsunschärfe**, und sie heißt nach dem, was sie ist.
+Bewegungsunschärfe entsteht daraus, wohin das Bild zwischen zwei Zeitpunkten wirklich gegangen ist,
+und das braucht mehr als ein dekodiertes Bild je Ausgabebild (siehe *Was noch nicht da ist*). Diese
+hier richtet ein Mensch mit der Hand aus. Dreizehn Abtastungen in einem Durchgang statt der zwei der
+Unschärfe: die Achse ist nicht das Texelraster, ein zweiter Durchgang würde also *quer* zur Richtung
+ziehen statt entlang. Die Abtastungen umspannen das Pixel, von −0,5 bis 0,5 der Länge, denn ein Zug,
+der das Motiv verschiebt, liest sich als Fehler in der Transformation.
+
+**Ein Leuchten ist keine Weichzeichnung.** Verteilt wird nur, was über der Schwelle liegt, und das
+Verteilte wird *addiert* — die Zeichnung bleibt also, und die Lichter blühen aus, was jemand meint, der
+nach einem Leuchten fragt. Es fährt dieselben zwei Durchgänge wie die Unschärfe, und jeder Durchgang
+addiert sein Licht auf das Bild, das er bekommen hat, statt es zu ersetzen: das hält das unberührte
+Bild durch beide hindurch am Leben, ohne eine zweite Textur dafür. Die Ecke eines hellen Quadrats
+bekommt dadurch etwas mehr Licht als ein echter zweidimensionaler Kern dort hinlegen würde — ein
+Leuchten, das genau dort großzügig ist, wo niemand nachmisst. Die Schwelle ist eine Rampe und kein
+Schnitt, sonst bekäme jede helle Fläche in dem Moment eine sichtbare Umrisslinie, in dem die Schwelle
+sie überschreitet.
 
 Ein Chroma-Keying übergeht Graustufen mit Absicht. Ein Grau hat keinen sinnvollen Farbton und die
 Rechnung liefert dafür Null zurück — ohne eine Untergrenze für die Sättigung würde eine auf Rot

@@ -1,8 +1,8 @@
 # Effects and transitions
 
-**Thirteen effects, seven transitions, two masks, three measuring instruments and a text engine —
+**Sixteen effects, seven transitions, two masks, three measuring instruments and a text engine —
 chosen from a browser that shows you each one at work.** Every colour on this page was measured
-against a real driver rather than asserted: `pnpm --filter @videola/engine test:gpu` runs 384 pixel
+against a real driver rather than asserted: `pnpm --filter @videola/engine test:gpu` runs 429 pixel
 checks through headless Chrome, and each claim below is one of them.
 
 ## An effect is a manifest and a fragment shader
@@ -339,12 +339,37 @@ layer, which is what a vignette is.
 | Vignette | colour | `amount` 0–1, `size` 0–1.4 | darkens towards the corners |
 | Blur | detail | `amount` 0–16 | separable Gaussian, spacing in frame pixels |
 | Sharpen | detail | `amount` 0–4 | unsharp mask against the four neighbours |
+| Mosaic | detail | `size` 1–128 | one colour per cell; for a face, a plate, a screen |
+| Directional blur | detail | `length` 0–200, `angle` −180–180 | a smear along one axis, the way a fast pan looks |
+| Glow | detail | `amount` 0–3, `threshold` 0–1, `radius` 0–32 | spreads what is bright and keeps what is not |
 | Chroma key | key | `hue` 0–360, `tolerance`, `softness` | cuts a hue out; 120 is a green screen |
 | Mask (rectangle) | key | `centerX`, `centerY`, `width`, `height`, `feather`, `invert` | keeps a rectangle, drops the rest |
 | Mask (ellipse) | key | the same six | keeps an inscribed ellipse |
 
 There is no separate monochrome effect: it would be the saturation shader with the slider nailed to
 zero.
+
+**Mosaic, not a strong blur.** A blur wide enough to hide a face leaves the shape of the face
+readable; a mosaic does not, which is why every editor carries one. One tap per cell, at the cell's
+centre: averaging the whole cell would want as many samples as the cell is wide, and the point of the
+effect is that the detail is gone. The grid is anchored to the frame rather than to the picture, so a
+clip that moves under a mosaic does not drag the mosaic's own edges around with it.
+
+**A directional blur is not motion blur**, and it is named for what it is. Motion blur is derived from
+where the picture actually went between two instants, which needs more than one decoded frame per
+output frame (see *What is not there yet*). This is the one a person aims by hand. Thirteen taps in a
+single pass rather than the blur's two: the axis is not the texel grid, so a second sweep would smear
+*across* the direction instead of along it. The taps straddle the pixel, from −0.5 to 0.5 of the
+length, because a smear that moved the subject would read as a mistake in the transform.
+
+**A glow is not a soft-focus blur.** Only what is above the threshold is spread, and the spread is
+*added* back — so the detail stays and the highlights bleed, which is what somebody asking for a glow
+means. It runs the same two sweeps a blur does, and each pass adds its light to the picture it was
+given rather than replacing it: that is what keeps the untouched picture alive through both without a
+second texture to hold it. The corner of a bright square therefore receives a little more light than a
+true two-dimensional kernel would put there — a glow being generous in the one place nobody measures.
+The threshold is a ramp rather than a cut, or every bright area would grow a visible outline at the
+moment the threshold crossed it.
 
 A chroma key ignores greys on purpose. A grey has no meaningful hue and the arithmetic hands back
 zero for it, so without a floor on saturation a key set to red would erase every grey in the picture.

@@ -250,7 +250,7 @@ no template mode to leave.
 
 **Thirteen ship, in five categories, and not one of them carries a frame of video.** A template is a
 recipe, so each is built out of what the renderer can draw from a project file alone: the text
-generator with its entry, exit and loop moves, solids and gradients, the countdown, the ten effects,
+generator with its entry, exit and loop moves, solids and gradients, the countdown, the thirteen effects
 the five transitions, masks, and keyframed transforms including a motion path. Your own material
 arrives through the placeholders. Between them they use every transition the renderer implements.
 

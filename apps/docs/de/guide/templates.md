@@ -13,7 +13,7 @@ Rezept; Video mitzuliefern würde jeden Eintrag so schwer machen wie das Projekt
 fremdes Material in die Galerie stellen statt der Idee der Vorlage.
 
 Eine Vorlage ist deshalb aus dem gebaut, was der Renderer allein aus einer Projektdatei zeichnen
-kann: der Textgenerator mit Ein-, Aus- und Schleifenbewegung, Farbflächen und Verläufe, die zehn
+kann: der Textgenerator mit Ein-, Aus- und Schleifenbewegung, Farbflächen und Verläufe, die dreizehn
 Effekte, die fünf Übergänge, Masken und keyframebare Transformationen samt Bewegungspfad. Das eigene
 Material kommt über die Platzhalter dazu.
 

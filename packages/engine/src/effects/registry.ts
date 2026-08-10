@@ -11,10 +11,13 @@ import { contrast } from "./contrast";
 import { crossfade } from "./crossfade";
 import { curves } from "./curves";
 import { dip } from "./dip";
+import { directionalBlur } from "./directional-blur";
+import { glow } from "./glow";
 import { iris } from "./iris";
 import { lut } from "./lut";
 import { maskEllipse } from "./mask-ellipse";
 import { maskRect } from "./mask-rect";
+import { mosaic } from "./mosaic";
 import { saturation } from "./saturation";
 import { sharpen } from "./sharpen";
 import { slide } from "./slide";
@@ -167,6 +170,13 @@ const MANIFESTS: readonly EffectManifest[] = [
   vignette,
   blur,
   sharpen,
+  // The three that answer a job rather than a taste. A blur strong enough to hide a face leaves the
+  // shape of it readable and a mosaic does not; a directional smear is what a fast pan looks like and
+  // no amount of the blur above will lean; a glow spreads what is bright and keeps what is not, which
+  // is the one thing a blur cannot do at any setting.
+  mosaic,
+  directionalBlur,
+  glow,
   chromaKey,
   // Two masks rather than one with a shape parameter: the manifest has no notion of a choice, and
   // a rectangle and an ellipse share four of six parameters but not a line of their falloff. In a

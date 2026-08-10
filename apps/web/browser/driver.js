@@ -1550,7 +1550,7 @@ async function announce() {
 
     await openShelf("Effekte durchsuchen");
     const tiles = all(".v-fx__tile img");
-    check("every effect this build can draw has a tile", tiles.length, 13);
+    check("every effect this build can draw has a tile", tiles.length, 16);
     check("and each one is a picture at the size the grid asks for",
       [...new Set(tiles.map((img) => `${img.naturalWidth}x${img.naturalHeight}`))], ["192x108"]);
 

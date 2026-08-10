@@ -648,7 +648,7 @@ function Effects({
           </div>
         );
       })}
-      {/* Not a picker of names: a video effect is a thing you look at, and the list of thirteen
+      {/* Not a picker of names: a video effect is a thing you look at, and the list of sixteen
           words this replaced could not tell a vignette from a mask. The mixer keeps the picker,
           because a compressor has no picture. */}
       <button

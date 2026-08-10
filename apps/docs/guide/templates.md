@@ -12,7 +12,7 @@ shipping video with it would make every entry as heavy as the project it came fr
 someone else's material in the gallery instead of the template's own idea.
 
 So a template is built out of what the renderer can draw from a project file alone: the text
-generator with its entry, exit and loop moves, solids and gradients, the ten effects, the five
+generator with its entry, exit and loop moves, solids and gradients, the thirteen effects, the five
 transitions, masks, and keyframed transforms including a motion path. Your own material arrives
 through the placeholders.
 
