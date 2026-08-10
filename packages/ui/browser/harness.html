@@ -315,10 +315,13 @@ test("context menu", function () {
   T.flushSync(function () { q("[data-clip-id]").dispatchEvent(menuEvent); });
   const items = all('[role="menuitem"]');
   check("every entry the clip menu promises is there", items.map(function (item) { return item.textContent; }),
-    ["Am Playhead teilen", "Clip löschen", "Löschen und Lücke schließen",
+    ["Am Playhead teilen", "Bild hier einfrieren", "Clip löschen", "Löschen und Lücke schließen",
      "Kopieren", "Ausschneiden", "Am Playhead einfügen", "Attribute einfügen", "Gruppieren",
      "Gruppierung aufheben", "Verschachteln", "Mit naechstem Untertitel verbinden",
      "Geteilter Bildschirm"]);
+  // The freeze needs two seconds of material after the playhead and a host that can run it. This
+  // harness renders the timeline without one, so the entry says so rather than doing nothing.
+  check("a freeze with no host to run it is disabled", items[1].disabled, true);
   const short = items.filter(function (item) {
     return Math.round(item.getBoundingClientRect().height) < 44;
   });
@@ -326,11 +329,11 @@ test("context menu", function () {
   // Nothing has been copied, nothing else is selected: an entry that cannot act says so rather
   // than sending a command the core would refuse.
   check("paste and group are disabled until they can do something",
-    [items[5].disabled, items[6].disabled, items[7].disabled, items[3].disabled],
+    [items[6].disabled, items[7].disabled, items[8].disabled, items[4].disabled],
     [true, true, true, false]);
   // The split screen is the one entry that needs a second clip, and with one selected it says so
   // rather than offering a half a screen can be split into.
-  check("a split screen is disabled until two clips are selected", items[10].disabled, true);
+  check("a split screen is disabled until two clips are selected", items[11].disabled, true);
   const menuBox = q('[role="menu"]').getBoundingClientRect();
   check("the menu lands on the pointer",
     [Math.round(menuBox.left), Math.round(menuBox.top)], [at.clientX, at.clientY]);

@@ -153,6 +153,7 @@
   "timeline.clipMenu": "Clip menu",
   "timeline.markerMenu": "Marker menu",
   "timeline.split": "Split at playhead",
+  "timeline.freeze": "Freeze the frame here",
   "timeline.deleteClip": "Delete clip",
   "timeline.rippleDelete": "Delete and close gap",
   "timeline.copy": "Copy",

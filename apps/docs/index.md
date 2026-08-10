@@ -94,7 +94,8 @@ features:
   EQ, low cut, high cut, compressor and limiter, loudness normalisation, ducking, silence detection and a marker on
   every beat.
 - **Subtitles** — SRT and WebVTT in and out, on a caption track of their own.
-- **Classical editing** — in and out points, insert and overwrite, J/K/L, adjustment tracks, speed
+- **Classical editing** — freeze frames, in and out points, insert and overwrite, J/K/L, adjustment
+  tracks, speed
   ramps whose time mapping is an integral rather than a multiplication.
 - **Proxies** — anything taller than 720 pixels is transcoded once into a 720p copy the preview
   decodes; the export always reads the original, proven on the written file by ffprobe and ffmpeg.

@@ -131,6 +131,25 @@ insert opens the gap on **every** track, so skipping the locked one would move t
 under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
 unlock the track and edit, or leave it alone.
 
+## Holding one frame
+
+**Freeze the frame here** on a clip's own menu holds the frame under the playhead for two seconds and
+lets the clip go on afterwards where it left off.
+
+It is not a new command and not a new kind of clip: a freeze is two cuts and a rate of zero. The
+middle piece gets a `speed` track reading zero for its whole length, and a rate of zero consumes no
+source — so the piece shows the one frame it starts on for as long as it lasts. That is already what
+the core means by a frame hold, and the reason zero is legal on the track and not on `Speed::rate`,
+where it would be a clip that consumes nothing at all.
+
+The piece after it is **slipped back** by the held duration. Splitting sets each half's in point from
+where the cut fell, which is right for a cut and wrong here: the held piece consumed nothing, so the
+tail has to carry on from the frame the freeze started on. Without that slip a freeze puts a jump at
+the end of itself — measured, along with the timeline staying exactly as long as it was.
+
+The entry is greyed out where the clip has no room: a hold needs material on both sides of it, and a
+freeze at an edge is a cut with nothing between its two halves.
+
 ## The same edit in another shape
 
 **Change shape** in the overflow menu turns a widescreen cut into a portrait, square or 4:5 one. The

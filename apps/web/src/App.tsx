@@ -14,6 +14,7 @@ import {
   readTemplateFile,
   toSrt,
   ASPECTS,
+  freezeFrame,
   markerTimes,
   reframe,
   splitAtTimes,
@@ -680,6 +681,22 @@ export function App(): ReactElement {
       try {
         const key = `reframe-${id}-${(actionSequence += 1)}`;
         for (const command of reframe(doc.state, into)) doc.dispatch(command, key);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
+
+  // Two cuts and a rate of zero, composed in the core out of commands that already exist. It runs
+  // here rather than in the timeline because it needs the project as it stands between those edits,
+  // and a component's prop is the project as it stood before the first of them.
+  const freeze = useCallback(
+    (clip: ClipId, at: Time, hold: Time) => {
+      if (doc === undefined) return;
+      try {
+        freezeFrame(doc, clip, at, hold);
         setError(undefined);
       } catch (err) {
         reportError("error.actionFailed", err);
@@ -1532,6 +1549,7 @@ export function App(): ReactElement {
                   dispatch={edit}
                   onSeek={seek}
                   onSplitAtMarkers={splitAtMarkers}
+                  onFreeze={freeze}
                   onSelectionChange={setSelection}
                   grab={grab}
                   onDropMedia={dropMedia}

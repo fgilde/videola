@@ -10,6 +10,7 @@ import { VideolaDocument } from "./document";
 import {
   ALL_ATTRIBUTES,
   ASPECTS,
+  freezeFrame,
   markerTimes,
   pasteAttributes,
   reframe,
@@ -440,5 +441,84 @@ describe("the same edit in a frame of another shape", () => {
       "1080x1080",
       "1080x1350",
     ]);
+  });
+});
+
+describe("holding one frame", () => {
+  const pieces = (doc: VideolaDocument) => doc.state.timeline.tracks[0]?.clips ?? [];
+  const spans = (doc: VideolaDocument) =>
+    pieces(doc).map((clip) => [clip.start / SECOND, clip.duration / SECOND]);
+
+  it("cuts the clip into three and holds the middle one", async () => {
+    const doc = await timeline(1);
+    expect(freezeFrame(doc, pieces(doc)[0]!.id, SECOND, SECOND)).toBe(true);
+
+    expect(spans(doc)).toEqual([
+      [0, 1],
+      [1, 1],
+      [2, 2],
+    ]);
+    const frozen = pieces(doc)[1]!;
+    expect(frozen.keyframes.speed?.map((key) => key.value)).toEqual([
+      { kind: "float", value: 0 },
+      { kind: "float", value: 0 },
+    ]);
+  });
+
+  // What makes it a freeze rather than a gap: a rate of zero consumes no source, so the held piece
+  // shows the frame it starts on for its whole length.
+  it("consumes no source while it holds", async () => {
+    const doc = await timeline(1);
+    freezeFrame(doc, pieces(doc)[0]!.id, SECOND, SECOND);
+
+    const frozen = pieces(doc)[1]!;
+    expect(frozen.inPoint / SECOND).toBeCloseTo(1, 4);
+  });
+
+  // The tail carries on from the frame the freeze started on. Splitting set its in point from where
+  // the cut fell, which is right for a cut and would put a jump at the end of a freeze.
+  it("lets the clip go on where it left off", async () => {
+    const doc = await timeline(1);
+    freezeFrame(doc, pieces(doc)[0]!.id, SECOND, SECOND);
+
+    expect(pieces(doc)[2]!.inPoint / SECOND).toBeCloseTo(1, 4);
+  });
+
+  it("leaves the timeline as long as it was", async () => {
+    const doc = await timeline(1);
+    const before = pieces(doc)[0]!.duration;
+    freezeFrame(doc, pieces(doc)[0]!.id, SECOND, SECOND);
+
+    const total = pieces(doc).reduce((sum, clip) => sum + clip.duration, 0);
+    expect(total).toBe(before);
+  });
+
+  it("refuses an instant on the clip's own edge", async () => {
+    const doc = await timeline(1);
+    const clip = pieces(doc)[0]!;
+    expect(freezeFrame(doc, clip.id, clip.start, SECOND)).toBe(false);
+    expect(pieces(doc)).toHaveLength(1);
+  });
+
+  it("refuses a hold that would reach past the end", async () => {
+    const doc = await timeline(1);
+    const clip = pieces(doc)[0]!;
+    expect(freezeFrame(doc, clip.id, 3 * SECOND, 2 * SECOND)).toBe(false);
+    expect(pieces(doc)).toHaveLength(1);
+  });
+
+  it("refuses a hold of nothing", async () => {
+    const doc = await timeline(1);
+    expect(freezeFrame(doc, pieces(doc)[0]!.id, SECOND, 0)).toBe(false);
+  });
+
+  it("is one step to undo, both cuts and the hold together", async () => {
+    const doc = await timeline(1);
+    freezeFrame(doc, pieces(doc)[0]!.id, SECOND, SECOND);
+    expect(pieces(doc)).toHaveLength(3);
+
+    doc.undo();
+    expect(pieces(doc)).toHaveLength(1);
+    expect(pieces(doc)[0]!.keyframes.speed).toBeUndefined();
   });
 });

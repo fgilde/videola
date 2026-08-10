@@ -14,6 +14,10 @@ import type { Time } from "./generated/Time";
  * that keeps a project and applies a command — which is what makes this testable against the real
  * core rather than against a stand-in that splits clips by its own arithmetic.
  */
+// The rate track's own name, spelled the way the core spells it: a freeze writes to it and pasting
+// attributes has to keep it out of the geometry group.
+const SPEED_TRACK = "speed";
+
 export interface EditTarget {
   readonly state: Project;
   dispatch(command: Command, coalesceKey?: string): void;
@@ -163,8 +167,7 @@ export function pasteAttributes(
   return commands;
 }
 
-// The rate track's own name, spelled the way the core spells it.
-const SPEED_TRACK = "speed";
+
 
 // A whole keyframe track onto another clip: the key, its interpolation, and its handles. `add`
 // carries the interpolation already, so the pair is the only thing left to say -- and only where
@@ -268,6 +271,73 @@ export function reframe(project: Project, into: Reframe): Command[] {
     }
   }
   return commands;
+}
+
+/**
+ * Hold one frame of a clip for a while, and let the clip go on afterwards where it left off.
+ *
+ * Not a new command and not a new kind of clip: a freeze is two cuts and a rate of zero. The middle
+ * piece is given a `speed` track that reads zero for its whole length, and a rate of zero consumes no
+ * source — so the piece shows the one frame it starts on, for as long as it lasts. That is what the
+ * core already means by a frame hold, and the reason zero is legal on the track and not on
+ * `Speed::rate`, where it would be a clip that consumes nothing at all.
+ *
+ * The piece after it is slipped back by the held duration. Splitting sets each half's in point from
+ * where the cut fell, which is right for a cut and wrong here: the held piece consumed nothing, so
+ * the tail has to carry on from the frame the freeze started on rather than from the one that would
+ * have played if time had kept running. Without the slip a freeze puts a jump at the end of itself.
+ *
+ * Applied against a live document because both cuts mint clips the next step names.
+ */
+export function freezeFrame(
+  target: EditTarget,
+  clip: ClipId,
+  at: Time,
+  hold: Time,
+): boolean {
+  const found = clipOf(target.state, clip);
+  if (found === undefined || hold <= 0) return false;
+  // Strictly inside, both of them: a freeze at an edge is a cut with nothing between the two, and
+  // one reaching past the end would ask the core for a piece longer than the clip.
+  if (at <= found.start || at >= found.start + found.duration) return false;
+  if (at + hold >= found.start + found.duration) return false;
+
+  const key = `freeze-${clip}-${at}`;
+  target.dispatch(cmd.clipSplit(clip, at), key);
+
+  const held = clipAt(target.state, at);
+  if (held === undefined) return false;
+  target.dispatch(cmd.clipSplit(held.id, at + hold), key);
+
+  const frozen = clipAt(target.state, at);
+  const tail = clipAt(target.state, at + hold);
+  if (frozen === undefined || tail === undefined) return false;
+
+  // Two keys, both zero: one key alone would hold its value across the whole clip, which is the same
+  // answer — but a ramp is read as an area between keys, and a track of one key is a shape nobody can
+  // see the ends of on the lane.
+  const on = { kind: "clip" as const, clip: frozen.id };
+  const zero = { kind: "float" as const, value: 0 };
+  target.dispatch(cmd.keyframeAdd(on, null, SPEED_TRACK, frozen.start, zero), key);
+  target.dispatch(
+    cmd.keyframeAdd(on, null, SPEED_TRACK, frozen.start + frozen.duration, zero),
+    key,
+  );
+  target.dispatch(cmd.clipSlip(tail.id, -hold), key);
+  return true;
+}
+
+function clipOf(project: Project, id: ClipId): Clip | undefined {
+  return project.timeline.tracks.flatMap((track) => track.clips).find((clip) => clip.id === id);
+}
+
+// The clip that begins at this instant. A cut has just been made there, so the piece being addressed
+// is the one whose start *is* the cut -- found by where it sits rather than by an id, because the id
+// is one the split minted a moment ago.
+function clipAt(project: Project, start: Time): Clip | undefined {
+  return project.timeline.tracks
+    .flatMap((track) => track.clips)
+    .find((clip) => clip.start === start);
 }
 
 /** Every marker's instant, which is what "cut on the beat" is asking for. */

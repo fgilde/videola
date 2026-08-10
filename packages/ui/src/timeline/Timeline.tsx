@@ -90,6 +90,9 @@ interface Copied {
 
 let actionSequence = 0;
 
+// How long a freeze holds by default: two seconds, which is what a beat on a face is.
+const FREEZE_HOLD = 2 * FLICKS_PER_SECOND;
+
 export interface TimelineProps {
   project: Project;
   playhead: Time;
@@ -119,6 +122,12 @@ export interface TimelineProps {
   onSeek: (time: Time) => void;
   /** Cut every clip the markers pass through. Absent where the host offers no such edit. */
   onSplitAtMarkers?: () => void;
+  /**
+   * Hold one frame of this clip for a while. Composed of two cuts and a rate of zero, which needs the
+   * project as it stands *between* those edits — so it is the host's to run, not this component's: a
+   * prop is a snapshot, and the second cut would name a clip the first one had already retired.
+   */
+  onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
   onSelectionChange?: (clips: readonly ClipId[]) => void;
   /**
    * A medium the media library has under a pointer. The timeline judges the whole gesture from
@@ -141,6 +150,7 @@ export function Timeline({
   dispatch,
   onSeek,
   onSplitAtMarkers,
+  onFreeze,
   onSelectionChange,
   grab,
   onDropMedia,
@@ -595,6 +605,7 @@ export function Timeline({
           onCut={cut}
           onPaste={paste}
           onPasteLook={pasteLook}
+          onFreeze={onFreeze}
         />
       )}
     </section>
@@ -614,6 +625,7 @@ interface MenuProps {
   onCut: () => void;
   onPaste: () => void;
   onPasteLook: () => void;
+  onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
 }
 
 // Every entry either does something or is disabled. What decides that is read at render time and
@@ -678,6 +690,15 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
       label: t("timeline.split"),
       disabled: !(playhead > clip.start && playhead < clip.start + clip.duration),
       onSelect: close(() => dispatch(cmd.clipSplit(clip.id, playhead))),
+    },
+    {
+      // Two seconds, which is what a beat on a face is. It has to fit inside the clip with material
+      // left over on both sides: a freeze at an edge is a cut with nothing between its two halves.
+      label: t("timeline.freeze"),
+      disabled:
+        props.onFreeze === undefined ||
+        !(playhead > clip.start && playhead + FREEZE_HOLD < clip.start + clip.duration),
+      onSelect: close(() => props.onFreeze?.(clip.id, playhead, FREEZE_HOLD)),
     },
     { label: t("timeline.deleteClip"), onSelect: close(() => props.onDelete(false)) },
     { label: t("timeline.rippleDelete"), onSelect: close(() => props.onDelete(true)) },

@@ -68,7 +68,8 @@ that travel inside the .videola.
 705,600 flicks, so the round trip is lossless by arithmetic — and checked byte for byte through the
 real core.
 
-**Classical editing.** In and out points, insert and overwrite, J/K/L shuttle, adjustment tracks
+**Classical editing.** Freeze frames — two cuts and a rate of zero, with the tail slipped back so it
+carries on from the frame the hold began on. In and out points, insert and overwrite, J/K/L shuttle, adjustment tracks
 whose effects run over everything below them, markers with colours and notes, speed ramps where the
 map from project time to source time is an integral rather than a multiplication.
 

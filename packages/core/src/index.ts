@@ -3,6 +3,7 @@ export * from "./captions";
 export {
   ALL_ATTRIBUTES,
   ASPECTS,
+  freezeFrame,
   markerTimes,
   pasteAttributes,
   reframe,

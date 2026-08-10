@@ -97,7 +97,7 @@ features:
   Pegelanzeige, EQ, Tiefen- und Höhensperre, Kompressor und Limiter, Lautheits-Normalisierung, Ducking, Stille-Erkennung und
   einen Marker auf jedem Schlag.
 - **Untertitel** — SRT und WebVTT hinein und heraus, auf einer eigenen Untertitelspur.
-- **Klassischer Schnitt** — In- und Out-Punkte, Einfügen und Überschreiben, J/K/L,
+- **Klassischer Schnitt** — Standbilder, In- und Out-Punkte, Einfügen und Überschreiben, J/K/L,
   Anpassungsebenen, Geschwindigkeitsrampen mit Integral statt Multiplikation.
 - **Proxies** — alles, was höher als 720 Pixel ist, wird einmal in eine 720p-Kopie umgewandelt, die
   die Vorschau dekodiert; der Export nimmt immer das Original, an der geschriebenen Datei mit

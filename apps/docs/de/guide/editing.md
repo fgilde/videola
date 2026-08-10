@@ -136,6 +136,26 @@ die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter 
 wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
 Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
 
+## Ein Bild halten
+
+**Bild hier einfrieren** im Menü eines Clips hält das Bild unter dem Playhead zwei Sekunden lang und
+lässt den Clip danach weiterlaufen, wo er stehen geblieben ist.
+
+Kein neues Kommando und keine neue Art von Clip: ein Standbild sind zwei Schnitte und eine Rate von
+null. Das mittlere Stück bekommt eine `speed`-Spur, die über seine ganze Länge null liest, und eine
+Rate von null verbraucht keine Quelle — das Stück zeigt also das eine Bild, auf dem es beginnt, so
+lange es dauert. Genau das meint der Kern schon mit einem Frame-Hold, und darum ist null auf der Spur
+erlaubt und auf `Speed::rate` nicht, wo es ein Clip wäre, der überhaupt nichts verbraucht.
+
+Das Stück danach wird um die gehaltene Dauer **zurückgeschoben**. Ein Schnitt setzt den In-Punkt
+jeder Hälfte danach, wo er fiel — richtig für einen Schnitt und falsch hier: das gehaltene Stück hat
+nichts verbraucht, der Rest muss also bei dem Bild weitermachen, auf dem das Standbild begann. Ohne
+dieses Verschieben setzt ein Standbild einen Sprung an sein eigenes Ende — gemessen, zusammen damit,
+dass die Zeitleiste genau so lang bleibt, wie sie war.
+
+Der Eintrag ist ausgegraut, wo der Clip keinen Platz hat: ein Halten braucht Material auf beiden
+Seiten, und ein Standbild an einer Kante ist ein Schnitt mit nichts dazwischen.
+
 ## Derselbe Schnitt in anderem Format
 
 **Format ändern** im Überlaufmenü macht aus einem Querformat-Schnitt einen hochkanten, quadratischen

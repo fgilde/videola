@@ -153,6 +153,7 @@
   "timeline.clipMenu": "Clip-Menü",
   "timeline.markerMenu": "Marker-Menü",
   "timeline.split": "Am Playhead teilen",
+  "timeline.freeze": "Bild hier einfrieren",
   "timeline.deleteClip": "Clip löschen",
   "timeline.rippleDelete": "Löschen und Lücke schließen",
   "timeline.copy": "Kopieren",

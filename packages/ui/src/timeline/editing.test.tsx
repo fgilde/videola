@@ -11,6 +11,7 @@ import {
   captionCues,
   cmd,
   createWasmBackend,
+  freezeFrame,
   on,
   parseCaptions,
   FLICKS_PER_SECOND,
@@ -49,9 +50,12 @@ async function documentWithClips(count: number): Promise<VideolaDocument> {
   return doc;
 }
 
-function Harness({ doc }: { doc: VideolaDocument }): ReactElement {
+// `startAt` because jsdom lays nothing out, so the ruler cannot be scrubbed: an event at a client
+// x lands nowhere. Where a check is about what happens *at* an instant, the instant is given rather
+// than aimed at -- the pointer path over the ruler is measured in the browser run.
+function Harness({ doc, startAt = 0 }: { doc: VideolaDocument; startAt?: number }): ReactElement {
   const [project, setProject] = useState(doc.state);
-  const [playhead, setPlayhead] = useState(0);
+  const [playhead, setPlayhead] = useState(startAt);
   useEffect(() => doc.subscribe(setProject), [doc]);
   return (
     <I18nProvider>
@@ -60,6 +64,9 @@ function Harness({ doc }: { doc: VideolaDocument }): ReactElement {
         playhead={playhead}
         dispatch={(command, key) => doc.dispatch(command, key)}
         onSeek={setPlayhead}
+        // Against the live document, the way the application runs it: a freeze is two cuts and the
+        // second one names a clip the first minted.
+        onFreeze={(clip, at, hold) => freezeFrame(doc, clip, at, hold)}
       />
     </I18nProvider>
   );
@@ -864,5 +871,75 @@ describe("pasting attributes", () => {
 
     const entry = screen.getByRole("menuitem", { name: "Attribute einfügen" });
     expect((entry as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+// A freeze is two cuts and a rate of zero, composed in the core. What the timeline owes is the entry,
+// the instant it acts on, and saying so when the clip has no room for one.
+describe("freezing a frame", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  function pieces(doc: VideolaDocument): Clip[] {
+    return doc.state.timeline.tracks[0]?.clips ?? [];
+  }
+
+  // One long clip, not the row of two-second ones the other suites use: a two-second hold needs
+  // material either side of it, which a two-second clip does not have.
+  async function longClip(): Promise<VideolaDocument> {
+    const doc = new VideolaDocument(await createWasmBackend());
+    doc.dispatch(cmd.trackAdd("video", "V1"));
+    doc.dispatch(
+      cmd.clipAdd(
+        doc.state.timeline.tracks[0]?.id ?? "",
+        { kind: "generator", generator: { type: "solid", color: "#ff0000" } },
+        0,
+        8 * SECOND,
+      ),
+    );
+    return doc;
+  }
+
+  it("holds two seconds at the playhead and lets the clip go on", async () => {
+    const doc = await longClip();
+    render(<Harness doc={doc} startAt={3 * SECOND} />);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 100, clientY: 40 });
+    const entry = screen.getByRole("menuitem", { name: "Bild hier einfrieren" });
+    expect((entry as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(entry);
+
+    // One clip became three, and the middle one holds.
+    const held = pieces(doc).find((clip) => clip.keyframes.speed !== undefined);
+    expect(held).toBeDefined();
+    expect(held?.duration).toBe(2 * SECOND);
+    expect(held?.keyframes.speed?.every((key) => key.value.kind === "float" && key.value.value === 0)).toBe(
+      true,
+    );
+  });
+
+  it("is one step to undo", async () => {
+    const doc = await longClip();
+    render(<Harness doc={doc} startAt={3 * SECOND} />);
+    const before = pieces(doc).length;
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 100, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Bild hier einfrieren" }));
+    expect(pieces(doc).length).toBeGreaterThan(before);
+
+    act(() => void doc.undo());
+    expect(pieces(doc).length).toBe(before);
+  });
+
+  // A two-second clip has no room for a two-second hold with material either side, and the entry
+  // says so rather than sending an edit the core would refuse.
+  it("is greyed out where the clip has no room for it", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} startAt={SECOND} />);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 100, clientY: 40 });
+    expect(
+      (screen.getByRole("menuitem", { name: "Bild hier einfrieren" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });
