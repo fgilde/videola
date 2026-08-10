@@ -11,6 +11,7 @@ import {
   on,
   FLICKS_PER_SECOND,
   parseCaptions,
+  readAudiolaFile,
   readTemplateFile,
   toSrt,
   ASPECTS,
@@ -73,6 +74,7 @@ import {
   mediaForProject,
   mediaHash,
   missingMedia,
+  putMedia,
   readSession,
   proxiesInUse,
   relinkMedia,
@@ -144,7 +146,7 @@ interface ShellError {
   id: number;
 }
 
-const MEDIA_ACCEPT = "video/*,audio/*,.cube";
+const MEDIA_ACCEPT = "video/*,audio/*,.cube,.audiola";
 
 // Both extensions and both media types: a browser that knows neither still offers the file, and a
 // browser that knows one of them stops offering everything else.
@@ -160,6 +162,12 @@ function isCaptionFile(file: File): boolean {
 // `.cube` and hands it over with an empty type.
 function isLutFile(file: File): boolean {
   return /\.cube$/i.test(file.name);
+}
+
+// Audiola's own project file: a ZIP that a browser reports as application/zip or as nothing at all,
+// so the name is the only thing that says what it is.
+function isAudiolaFile(file: File): boolean {
+  return /\.audiola$/i.test(file.name);
 }
 
 // Often enough that a crash costs a minute of work at most, rarely enough that it never competes
@@ -251,6 +259,10 @@ export function App(): ReactElement {
   // worker notices a new build and waits; nothing is swapped under a session with work in it, so
   // this is an offer and the reload is the answer to it.
   const [takeUpdate, setTakeUpdate] = useState<(() => void) | undefined>(undefined);
+  // What an Audiola mix left behind. Said rather than swallowed: a mastering chain has no counterpart
+  // in a video editor, and somebody should hear that from here rather than notice it there.
+  const [audiolaNotes, setAudiolaNotes] = useState<readonly string[]>([]);
+  const [audiolaLeftOut, setAudiolaLeftOut] = useState<number>();
   useEffect(() => {
     watchForWebUpdate((take) => setTakeUpdate(() => take));
   }, []);
@@ -1293,16 +1305,94 @@ export function App(): ReactElement {
   // A file that is dropped is a file someone meant to bring in, whatever it is. Sorting the caption
   // and table files out here rather than at each call site is what stops a dropped .srt or .cube
   // from reaching the media importer, which would have refused both as an unsupported medium.
+  /**
+   * A mix built in Audiola, brought onto this timeline.
+   *
+   * One track per Audiola track and one clip per clip, through the same commands a person would use,
+   * under one coalescing key -- so a mix of forty clips is one entry in the history and there is no
+   * second way for material to reach a timeline. The media go into the same store under the same
+   * content hash every other medium uses, so a file that is already here is not stored twice.
+   *
+   * What the file held and could not come over is reported as a banner rather than swallowed:
+   * somebody who mastered a mix there should learn here that the mastering stayed there.
+   */
+  const importAudiola = useCallback(
+    async (files: File[]) => {
+      if (doc === undefined) return;
+      for (const file of files) {
+        try {
+          const read = await readAudiolaFile(new Uint8Array(await file.arrayBuffer()));
+          // The store keys by the hash alone; the `med_` prefix is the model's way of writing an id.
+          // A `Blob` rather than the view itself, because the view may sit on a shared buffer the
+          // store has no business holding a reference into.
+          for (const [id, bytes] of read.media) {
+            await putMedia(id.replace(/^med_/, ""), new Blob([bytes as BlobPart]));
+          }
+          const key = `audiola-${(actionSequence += 1)}`;
+          for (const track of read.tracks) {
+            doc.dispatch(cmd.trackAdd("audio", track.name), key);
+            const added = doc.state.timeline.tracks.at(-1);
+            if (added === undefined) continue;
+            doc.dispatch(cmd.trackSetVolume(added.id, track.volume), key);
+            doc.dispatch(cmd.trackSetPan(added.id, track.pan), key);
+            if (track.muted || track.solo) {
+              doc.dispatch(cmd.trackSetFlags(added.id, track.muted, track.solo, null, null), key);
+            }
+            for (const clip of track.clips) {
+              // The medium has to be in the library before a clip may name it, and the library entry
+              // is what the mixer strip and the waveform read a name off.
+              if (!doc.state.library.some((entry) => entry.id === clip.media)) {
+                doc.dispatch(
+                  cmd.mediaImport({
+                    id: clip.media,
+                    originalName: clip.name,
+                    mime: "audio/*",
+                    kind: "audio",
+                    sizeBytes: BigInt(read.media.get(clip.media)?.byteLength ?? 0),
+                    duration: clip.inPoint + clip.duration,
+                    sampleRate: null,
+                    channels: null,
+                    width: null,
+                    height: null,
+                    fps: null,
+                  }),
+                  key,
+                );
+              }
+              doc.dispatch(
+                cmd.clipAdd(added.id, { kind: "media", media: clip.media }, clip.start, clip.duration),
+                key,
+              );
+              const placed = doc.state.timeline.tracks.at(-1)?.clips.at(-1);
+              if (placed === undefined) continue;
+              if (clip.inPoint > 0) doc.dispatch(cmd.clipSlip(placed.id, clip.inPoint), key);
+              if (clip.volume !== 1) doc.dispatch(cmd.clipSetVolume(placed.id, clip.volume), key);
+            }
+          }
+          if (read.notes.length > 0) setAudiolaNotes(read.notes);
+          setError(undefined);
+        } catch (err) {
+          reportError("error.importFailed", err);
+        }
+      }
+    },
+    [doc, reportError],
+  );
+
   const importFiles = useCallback(
     async (files: File[]) => {
       const captions = files.filter(isCaptionFile);
       const tables = files.filter(isLutFile);
-      const media = files.filter((file) => !isCaptionFile(file) && !isLutFile(file));
+      const mixes = files.filter(isAudiolaFile);
+      const media = files.filter(
+        (file) => !isCaptionFile(file) && !isLutFile(file) && !isAudiolaFile(file),
+      );
       if (captions.length > 0) await importCaptions(captions);
       if (tables.length > 0) await importLuts(tables);
+      if (mixes.length > 0) await importAudiola(mixes);
       if (media.length > 0) await importMedia(media);
     },
-    [importCaptions, importLuts, importMedia],
+    [importAudiola, importCaptions, importLuts, importMedia],
   );
 
   const exportCaptions = useCallback(() => {
@@ -1316,6 +1406,38 @@ export function App(): ReactElement {
     downloadBlob(new TextEncoder().encode(toSrt(cues)), `${name}.srt`, "application/x-subrip");
     setError(undefined);
   }, [project, reportError]);
+
+  /**
+   * The sounding part of this edit as an `.audiola`, so the mix can be finished in Audiola.
+   *
+   * Every clip with sound behind it goes, with its place, its gain and its fades. What has none --
+   * a title, a compound, silent footage -- is counted rather than written as a placeholder the mixer
+   * could not play, and the count is said.
+   */
+  const exportAudiola = useCallback(async () => {
+    if (doc === undefined || project === undefined) return;
+    try {
+      const media = await mediaForProject(project);
+      const written = doc.toAudiola(media);
+      if (written.bytes.byteLength === 0) {
+        reportError("error.actionFailed", new Error("nothing with sound to write"));
+        return;
+      }
+      // A copy over a plain ArrayBuffer: what comes back across the wasm boundary may sit on the
+      // module's own memory, and a download must not hold a view into that.
+      downloadBlob(
+        new Uint8Array(written.bytes),
+        `${project.meta.title || project.meta.id}.audiola`,
+        "application/zip",
+      );
+      // The count, not a sentence: `t` lives inside the provider this component renders, so the
+      // wording belongs to the banner and the number to here.
+      setAudiolaLeftOut(written.leftOut === 0 ? undefined : written.leftOut);
+      setError(undefined);
+    } catch (err) {
+      reportError("error.saveFailed", err);
+    }
+  }, [doc, project, reportError]);
 
   // The cut, for finishing somewhere else. Neither format carries an effect or a keyframe -- those
   // are every system's own -- so what leaves here is the assembly, which is what a conform needs.
@@ -1413,6 +1535,7 @@ export function App(): ReactElement {
       }
       onExportCaptions={doc === undefined ? undefined : exportCaptions}
       onHandOff={doc === undefined ? undefined : handOff}
+      onExportAudiola={doc === undefined ? undefined : () => void exportAudiola()}
       onExport={
         doc === undefined
           ? undefined
@@ -1441,6 +1564,16 @@ export function App(): ReactElement {
               />
             )}
             {takeUpdate !== undefined && <UpdateBanner onReload={takeUpdate} />}
+            {(audiolaNotes.length > 0 || audiolaLeftOut !== undefined) && (
+              <NotesBanner
+                notes={audiolaNotes}
+                leftOut={audiolaLeftOut}
+                onDismiss={() => {
+                  setAudiolaNotes([]);
+                  setAudiolaLeftOut(undefined);
+                }}
+              />
+            )}
           </div>
           <UpdateCheck />
           {project === undefined || doc === undefined ? (
@@ -1770,6 +1903,33 @@ function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement 
   return (
     <p role="alert" className="v-banner v-banner--alert">
       {t("warning.missingMedia", { count: missingMedia })}
+    </p>
+  );
+}
+
+// What an imported mix left behind, said once and dismissible. A list rather than one line, because
+// "the mastering stayed in Audiola" and "one clip named a file that was not in the archive" are two
+// different things to know.
+function NotesBanner({
+  notes,
+  leftOut,
+  onDismiss,
+}: {
+  notes: readonly string[];
+  leftOut?: number;
+  onDismiss: () => void;
+}): ReactElement {
+  const { t } = useI18n();
+  const said = [
+    ...(leftOut === undefined ? [] : [t("audiola.leftOut", { count: leftOut })]),
+    ...notes,
+  ];
+  return (
+    <p role="status" className="v-banner v-banner--offer" data-testid="import-notes">
+      <span>{said.join(" · ")}</span>
+      <button type="button" className="v-button v-button--quiet" onClick={onDismiss}>
+        {t("session.discard")}
+      </button>
     </p>
   );
 }

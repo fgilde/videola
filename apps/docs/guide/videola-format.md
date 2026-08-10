@@ -180,3 +180,41 @@ and save" would be a lossy operation against any file newer than the application
 A practical consequence for anyone extending the format: adding a field to one of those four types is
 backwards-compatible in both directions. Adding one elsewhere is not, because there is nowhere for an
 older reader to keep it.
+
+## `.audiola`: the tool next door
+
+[Audiola](https://www.audiola.de) is the audio tool from the same workshop, and its project file is
+the same shape as this one: a ZIP with a manifest beside a `media/` directory. Videola reads one and
+writes one, so a mix built there arrives on this timeline and a cut built here can be finished there.
+
+**Reading.** Drop an `.audiola` on the window. Each of its tracks becomes an audio track with its
+name, colour, gain, pan, mute and solo; each clip becomes a clip with its place on the timeline, its
+place in the file, its length, its gain and its two fades. The media go into the same store under the
+same content hash every other medium uses, so a file already here is not stored twice. It is added
+rather than opened — a mix is brought into an edit that exists — and the whole import is one entry in
+the history.
+
+**Writing.** Every clip with sound behind it goes: an audio track, and a video track whose material
+has an audio stream, which is exactly what somebody would take to a mixer. Media are stored the way
+Audiola stores them, `media/<index>_<name>`, and each clip's path is rewritten to match — that is what
+Audiola's own reader looks for.
+
+**What does not travel, either way.** Audiola's mastering chain, its EQ and its spatial layout have no
+counterpart in a video editor's model; Videola's effects, transitions and keyframes have none in a
+mixer's. Writing either as the other would be inventing a meaning neither tool agreed to. The reader
+*names* what it left behind — "Mastering stays in Audiola" — and the writer counts it, because a
+silent loss is the one outcome worth ruling out. And every field the manifest carried that this side
+has no use for is passed through untouched, so a file that goes there, comes here and goes back keeps
+its mix.
+
+**Two conversions, and where they can lose something.** Audiola counts in `double` seconds and Videola
+in integer flicks: a second becomes an exact number of flicks because a flick is 705,600,000 to the
+second, and the trip back only loses what a `double` cannot hold anyway. And a gain in decibels is a
+multiplier here — −6 dB is half the amplitude — clamped to the same 0..4 the core clamps a volume to,
+so a file claiming +40 dB arrives as the loudest thing Videola allows rather than as a number the
+command layer would refuse. A closed fader is written as −120 dB, because silence has no decibel value
+and a zero there would read back as unity gain.
+
+**The field names are Audiola's.** Its C# writes with `System.Text.Json` and no naming policy, so the
+manifest is PascalCase and it reads its own file case-sensitively: `Media`, not `media`. A test holds
+that, because a camelCase manifest would be a file Audiola opens and finds empty.

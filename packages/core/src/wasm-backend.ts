@@ -1,4 +1,4 @@
-import init, { WasmDocument } from "./wasm/videola_core.js";
+import init, { readAudiola, WasmDocument } from "./wasm/videola_core.js";
 
 import type {
   DocumentBackend,
@@ -56,6 +56,52 @@ export async function builtinTemplates(): Promise<Template[]> {
   return WasmDocument.builtinTemplates() as Template[];
 }
 
+/** One Audiola track as this side turns it into commands. Times are flicks, like every other time. */
+export interface AudiolaTrackImport {
+  name: string;
+  colorHex: string;
+  volume: number;
+  pan: number;
+  muted: boolean;
+  solo: boolean;
+  clips: readonly {
+    media: string;
+    name: string;
+    start: number;
+    duration: number;
+    inPoint: number;
+    volume: number;
+    fadeIn: number;
+    fadeOut: number;
+  }[];
+}
+
+export interface AudiolaFile {
+  tracks: readonly AudiolaTrackImport[];
+  /** What the file held and this could not use, in words, so a silent loss is never silent. */
+  notes: readonly string[];
+  /** The bytes behind the clips, keyed by content hash — ready for the host's own media store. */
+  media: ReadonlyMap<string, Uint8Array>;
+}
+
+/**
+ * Read an `.audiola`, Audiola's own project file.
+ *
+ * Not a project: what comes back is something to append to the edit that is already open, because
+ * that is what opening a mix is for. The caller adds a track and its clips through the same commands
+ * a person would, which keeps one undo step and no second way for material to reach a timeline.
+ */
+export async function readAudiolaFile(bytes: Uint8Array): Promise<AudiolaFile> {
+  await ensureReady();
+  const imported = readAudiola(bytes);
+  const described = imported.described as { tracks: AudiolaTrackImport[]; notes: string[] };
+  const media = new Map<string, Uint8Array>();
+  for (const [id, held] of imported.media as unknown as Map<string, Uint8Array>) {
+    media.set(id, held);
+  }
+  return { tracks: described.tracks, notes: described.notes, media };
+}
+
 export async function readTemplateFile(bytes: Uint8Array): Promise<Template> {
   await ensureReady();
   return WasmDocument.readTemplate(bytes) as Template;
@@ -91,6 +137,10 @@ function wrap(handle: WasmDocument): DocumentBackend {
       Array.from(WasmDocument.curveShape(left, right, samples)),
     toEdl: () => handle.toEdl(),
     toFcpxml: () => handle.toFcpxml(),
+    toAudiola: (media) => {
+      const written = handle.toAudiola(media);
+      return { bytes: written.bytes, leftOut: written.leftOut };
+    },
     sourceTimesAt: (at: Time) => handle.sourceTimesAt(at) as ReadonlyMap<string, Time>,
     effectParamsAt: (at: Time) => handle.effectParamsAt(at) as EffectParamSnapshot,
     transformsAt: (at: Time) => handle.transformsAt(at) as TransformSnapshot,

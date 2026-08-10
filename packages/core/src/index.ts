@@ -22,6 +22,8 @@ export {
   createProjectBackend,
   createTemplateBackend,
   createWasmBackend,
+  readAudiolaFile,
   readTemplateFile,
   templatePreview,
 } from "./wasm-backend";
+export type { AudiolaFile, AudiolaTrackImport } from "./wasm-backend";

@@ -113,6 +113,27 @@ impl WasmDocument {
         to_js_value(self.host.project())
     }
 
+    /// The sounding part of this project as an `.audiola`, so it opens in Audiola.
+    ///
+    /// Returns the archive and how many clips stayed behind — a title has no sound and a Videola
+    /// compressor is not an Audiola one, so what does not travel is counted rather than written as
+    /// something the other tool would misread.
+    #[wasm_bindgen(js_name = toAudiola)]
+    pub fn to_audiola(&self, media: js_sys::Map) -> std::result::Result<AudiolaExport, JsError> {
+        let supplied = supplied_media(&media)?;
+        let mut store = videola_core::format::MemoryMediaStore::default();
+        for (id, bytes) in supplied {
+            store.insert(id, bytes);
+        }
+        let mut sink = std::io::Cursor::new(Vec::new());
+        let left_out = videola_core::audiola::write_audiola(&mut sink, self.host.project(), &store)
+            .map_err(to_js)?;
+        Ok(AudiolaExport {
+            bytes: sink.into_inner(),
+            left_out,
+        })
+    }
+
     /// The cut as another editor reads it: a CMX3600 edit decision list.
     ///
     /// Here rather than in TypeScript for the reason the reader and the writer are here: a timecode
@@ -272,6 +293,133 @@ impl WasmDocument {
 // Uint8Array element by element and allocates a JsValue for every byte. `to_vec` is one bulk
 // copy, which is the difference between a save that takes a moment and one that stalls the tab
 // on real video.
+/// An `.audiola` and the count of what could not go into it.
+#[wasm_bindgen]
+pub struct AudiolaExport {
+    bytes: Vec<u8>,
+    left_out: usize,
+}
+
+#[wasm_bindgen]
+impl AudiolaExport {
+    #[wasm_bindgen(getter)]
+    pub fn bytes(&self) -> Vec<u8> {
+        self.bytes.clone()
+    }
+
+    /// How many clips have no sound to hand a mixer: generators, compounds, and silent material.
+    #[wasm_bindgen(getter, js_name = leftOut)]
+    pub fn left_out(&self) -> usize {
+        self.left_out
+    }
+}
+
+/// One Audiola track, in the shape the editor turns into commands. Flicks, because that is what every
+/// time on this side of the boundary is.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DescribedTrack {
+    name: String,
+    color_hex: String,
+    volume: f32,
+    pan: f32,
+    muted: bool,
+    solo: bool,
+    clips: Vec<DescribedClip>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DescribedClip {
+    media: String,
+    name: String,
+    start: i64,
+    duration: i64,
+    in_point: i64,
+    volume: f32,
+    fade_in: i64,
+    fade_out: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Described {
+    tracks: Vec<DescribedTrack>,
+    notes: Vec<String>,
+}
+
+/// What an `.audiola` holds: tracks to add, and the bytes behind them.
+///
+/// Deliberately not a `Project`. Opening one brings a mix into an edit that already exists, so the
+/// editor adds a track and its clips through the same commands a person would -- one undo step, and
+/// no second way for material to reach a timeline.
+#[wasm_bindgen]
+pub struct AudiolaImport {
+    described: JsValue,
+    media: js_sys::Map,
+}
+
+#[wasm_bindgen]
+impl AudiolaImport {
+    /// The tracks and the notes about what stayed in Audiola.
+    #[wasm_bindgen(getter)]
+    pub fn described(&self) -> JsValue {
+        self.described.clone()
+    }
+
+    /// The media, keyed by content hash -- the same shape `save` takes, because whatever puts them in
+    /// the host's storage wants bytes and not numbers in an array.
+    #[wasm_bindgen(getter)]
+    pub fn media(&self) -> js_sys::Map {
+        self.media.clone()
+    }
+}
+
+#[wasm_bindgen(js_name = readAudiola)]
+pub fn read_audiola(bytes: &[u8]) -> std::result::Result<AudiolaImport, JsError> {
+    let read = videola_core::audiola::read_audiola(std::io::Cursor::new(bytes)).map_err(to_js)?;
+    let described = Described {
+        tracks: read
+            .tracks
+            .iter()
+            .map(|track| DescribedTrack {
+                name: track.name.clone(),
+                color_hex: track.color_hex.clone(),
+                volume: track.volume,
+                pan: track.pan,
+                muted: track.muted,
+                solo: track.solo,
+                clips: track
+                    .clips
+                    .iter()
+                    .map(|clip| DescribedClip {
+                        media: clip.media.as_str().to_string(),
+                        name: clip.name.clone(),
+                        start: clip.start.as_flicks(),
+                        duration: clip.duration.as_flicks(),
+                        in_point: clip.in_point.as_flicks(),
+                        volume: clip.volume,
+                        fade_in: clip.fade_in.as_flicks(),
+                        fade_out: clip.fade_out.as_flicks(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        notes: read.notes.clone(),
+    };
+    let media = js_sys::Map::new();
+    for (id, bytes) in read.media {
+        media.set(
+            &JsValue::from_str(id.as_str()),
+            &js_sys::Uint8Array::from(bytes.as_slice()).into(),
+        );
+    }
+    Ok(AudiolaImport {
+        described: serde_wasm_bindgen::to_value(&described)?,
+        media,
+    })
+}
+
 fn supplied_media(media: &js_sys::Map) -> std::result::Result<BTreeMap<MediaId, Vec<u8>>, JsError> {
     let mut supplied = BTreeMap::new();
     for key in media.keys() {

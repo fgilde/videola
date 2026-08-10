@@ -12,6 +12,8 @@
   "about.close": "Close",
   "action.exportEdl": "Export an EDL",
   "action.exportFcpxml": "Export FCPXML (Resolve, Premiere)",
+  "action.exportAudiola": "Export the sound as .audiola",
+  "audiola.leftOut": "{count} clip(s) had no sound to hand a mixer and stayed behind.",
   "action.getApp": "Get the app",
   "action.new": "New project",
   "action.open": "Open",

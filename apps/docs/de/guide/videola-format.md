@@ -88,3 +88,45 @@ Struktur-Definition aufbewahrt zu werden.
 `Project`, `Timeline`, `Clip` und `Effect` haben je eine `#[serde(flatten)]`-Sammelkarte. Was der
 Leser nicht kennt, wird beim Laden aufgefangen und beim Speichern zurückgeschrieben. Das ist, was
 eine ältere Videola-Version davon abhält, eine neuere Datei zu beschädigen.
+
+## `.audiola`: das Werkzeug nebenan
+
+[Audiola](https://www.audiola.de) ist das Audio-Werkzeug aus derselben Werkstatt, und seine
+Projektdatei hat dieselbe Form wie diese: ein ZIP mit einem Manifest neben einem `media/`-Ordner.
+Videola liest eine und schreibt eine — eine dort gebaute Mischung landet auf dieser Zeitleiste, und
+ein hier gebauter Schnitt kann dort fertiggemischt werden.
+
+**Lesen.** Eine `.audiola` auf das Fenster ziehen. Jede ihrer Spuren wird eine Tonspur mit Namen,
+Farbe, Pegel, Panorama, Stumm und Solo; jeder Clip wird ein Clip mit seiner Lage auf der Zeitleiste,
+seiner Lage in der Datei, seiner Länge, seinem Pegel und seinen zwei Blenden. Die Medien landen in
+derselben Ablage unter demselben Inhalts-Hash wie jedes andere Medium, eine Datei, die schon hier ist,
+wird also nicht zweimal gespeichert. Sie wird hinzugefügt und nicht geöffnet — eine Mischung kommt in
+einen bestehenden Schnitt — und der ganze Import ist ein Schritt in der Historie.
+
+**Schreiben.** Jeder Clip mit Ton dahinter geht mit: eine Tonspur, und eine Bildspur, deren Material
+eine Tonspur hat — genau das, was jemand zu einem Mischpult mitnehmen würde. Die Medien werden so
+abgelegt, wie Audiola sie ablegt, `media/<Index>_<Name>`, und der Pfad jedes Clips wird darauf
+umgeschrieben: genau das sucht Audiolas eigener Leser.
+
+**Was in keine Richtung mitreist.** Audiolas Mastering-Kette, sein EQ und sein Spatial-Layout haben im
+Modell eines Video-Editors kein Gegenstück; Videolas Effekte, Übergänge und Keyframes haben in dem
+eines Mischpults keines. Eines als das andere zu schreiben hieße, eine Bedeutung zu erfinden, der
+keines der beiden Werkzeuge zugestimmt hat. Der Leser **benennt**, was er zurückgelassen hat —
+„Mastering stays in Audiola" — und der Schreiber zählt es, denn ein stiller Verlust ist das eine
+Ergebnis, das es auszuschließen lohnt. Und jedes Feld des Manifests, für das diese Seite keine
+Verwendung hat, wird unangetastet durchgereicht: eine Datei, die dorthin geht, hierher kommt und
+zurückgeht, behält ihre Mischung.
+
+**Zwei Umrechnungen und wo sie etwas verlieren können.** Audiola zählt in `double`-Sekunden, Videola
+in ganzzahligen Flicks: eine Sekunde wird eine genaue Anzahl Flicks, weil ein Flick 705.600.000 pro
+Sekunde ist, und der Weg zurück verliert nur, was ein `double` ohnehin nicht hält. Und ein Pegel in
+Dezibel ist hier ein Faktor — −6 dB sind die halbe Amplitude — geklemmt auf dieselben 0..4, auf die der
+Kern eine Lautstärke klemmt: eine Datei, die +40 dB behauptet, kommt als das Lauteste an, was Videola
+erlaubt, und nicht als Zahl, die die Kommandoschicht ablehnen würde. Ein geschlossener Regler wird als
+−120 dB geschrieben, denn Stille hat keinen Dezibelwert, und eine Null dort läse sich zurück als
+Verstärkung eins.
+
+**Die Feldnamen sind Audiolas.** Sein C# schreibt mit `System.Text.Json` ohne Namensregel, das
+Manifest ist also PascalCase, und es liest seine eigene Datei mit Beachtung der Groß- und
+Kleinschreibung: `Media`, nicht `media`. Ein Test hält das fest, denn ein camelCase-Manifest wäre eine
+Datei, die Audiola öffnet und leer findet.

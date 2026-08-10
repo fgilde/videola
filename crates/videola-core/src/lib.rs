@@ -1,3 +1,4 @@
+pub mod audiola;
 pub mod command;
 pub mod document;
 pub mod error;

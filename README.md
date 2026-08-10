@@ -74,6 +74,12 @@ carries on from the frame the hold began on. In and out points, insert and overw
 whose effects run over everything below them, markers with colours and notes, speed ramps where the
 map from project time to source time is an integral rather than a multiplication.
 
+**The tool next door.** Videola reads and writes `.audiola`, the project file of
+[Audiola](https://www.audiola.de) — same workshop, same container shape. A mix built there arrives as
+audio tracks here; the sound of a cut built here leaves as something that opens there. What has no
+counterpart on the other side — a mastering chain, an effect chain — is named rather than invented,
+and every field the manifest carried comes back untouched.
+
 **Handing the cut on.** An EDL and FCPXML 1.9 leave here for DaVinci Resolve, Premiere Pro or Final
 Cut: the assembly travels, the grade and the effects are done there. Neither carries an effect, and
 there is no honest way to write a Videola blur as a Resolve one. FCPXML rounds nothing — a flick

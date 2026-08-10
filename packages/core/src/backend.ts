@@ -68,6 +68,12 @@ export interface DocumentBackend {
   toEdl(): string;
   /** The same cut as FCPXML, which Resolve, Premiere and Final Cut all read. */
   toFcpxml(): string;
+  /**
+   * The sounding part of this project as an `.audiola`, so it opens in Audiola. `leftOut` counts the
+   * clips with no sound to hand a mixer — a title, a compound, silent material — because a placeholder
+   * would be a clip the other tool cannot play.
+   */
+  toAudiola(media: MediaBytes): { bytes: Uint8Array; leftOut: number };
   sourceTimesAt(at: Time): ReadonlyMap<string, Time>;
   effectParamsAt(at: Time): EffectParamSnapshot;
   transformsAt(at: Time): TransformSnapshot;
