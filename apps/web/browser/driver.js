@@ -140,7 +140,8 @@ async function announce() {
       if (value) return value;
       await sleep(POLL_MS);
     }
-    throw new Error("timed out waiting for " + what);
+    // The name may be a function, so a timeout can say how far the thing it waited for had got.
+    throw new Error("timed out waiting for " + (typeof what === "function" ? what() : what));
   }
 
   // Every zone's height, as a passing note. Three layout checks read differently on a CI runner than
@@ -189,9 +190,16 @@ async function announce() {
     browseFor(label).click();
     await until("the effect browser", () => shelf());
     // The tiles are drawn one after another off a shared context; the last one to arrive is what
-    // says the grid is finished.
-    return until("every tile to be drawn",
-      () => (all(".v-fx__tile").every((node) => node.querySelector("img")) ? shelf() : null), 60000);
+    // says the grid is finished. Three minutes, because every tile is that effect's own shader over
+    // the frame at the playhead and a two-core runner draws all of them through SwiftShader -- at
+    // sixty seconds it timed out with most of the grid already there, which is a slow machine and
+    // not a broken shelf. The count goes into the message so a real failure says how far it got.
+    const drawn = () => all(".v-fx__tile").filter((node) => node.querySelector("img")).length;
+    return until(
+      () => `every tile to be drawn (${drawn()} of ${all(".v-fx__tile").length})`,
+      () => (all(".v-fx__tile").length > 0 && drawn() === all(".v-fx__tile").length ? shelf() : null),
+      180000,
+    );
   }
 
   async function addEffect(id) {

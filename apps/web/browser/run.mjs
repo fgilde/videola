@@ -301,7 +301,10 @@ await new Promise((resolve) => server.listen(PORT, resolve));
 try {
   const desktop = ["--window-size=1440,900", "--virtual-time-budget=300000"];
   // Wall clock: the frame clock runs, so playback can tick and the transport can be watched.
-  const live = await drive(`http://localhost:${PORT}/`, ["--window-size=1440,900"], 120_000);
+  // The same budget the other three get. The effect shelf draws every tile as that effect's own
+  // shader over the current frame, and on a two-core runner through SwiftShader that alone can take
+  // minutes -- a run cut off at two of them would be a machine being slow reported as a fault.
+  const live = await drive(`http://localhost:${PORT}/`, ["--window-size=1440,900"], 300_000);
   // Every desktop run lays the editor out in the same viewport, and the runs that take pictures say
   // what it was. A picture is the window; this is where it becomes the page.
   const viewport = (results) => {
