@@ -315,25 +315,33 @@ test("context menu", function () {
   T.flushSync(function () { q("[data-clip-id]").dispatchEvent(menuEvent); });
   const items = all('[role="menuitem"]');
   check("every entry the clip menu promises is there", items.map(function (item) { return item.textContent; }),
-    ["Am Playhead teilen", "Bild hier einfrieren", "Clip ausschalten", "Clip löschen",
-     "Löschen und Lücke schließen", "Kopieren", "Ausschneiden", "Am Playhead einfügen",
-     "Attribute einfügen", "Gruppieren", "Gruppierung aufheben", "Verschachteln",
-     "Mit naechstem Untertitel verbinden", "Geteilter Bildschirm"]);
+    ["Am Playhead teilen", "Schnitte in diesem Clip finden", "Bild hier einfrieren",
+     "Clip ausschalten", "Clip löschen", "Löschen und Lücke schließen", "Kopieren", "Ausschneiden",
+     "Am Playhead einfügen", "Attribute einfügen", "Gruppieren", "Gruppierung aufheben",
+     "Verschachteln", "Mit naechstem Untertitel verbinden", "Geteilter Bildschirm"]);
   // The freeze needs two seconds of material after the playhead and a host that can run it. This
   // harness renders the timeline without one, so the entry says so rather than doing nothing.
-  check("a freeze with no host to run it is disabled", items[1].disabled, true);
+  check("a freeze with no host to run it is disabled",
+    items.find(function (item) { return item.textContent === "Bild hier einfrieren"; }).disabled, true);
   const short = items.filter(function (item) {
     return Math.round(item.getBoundingClientRect().height) < 44;
   });
   check("no entry is smaller than a touch target", short.length, 0);
   // Nothing has been copied, nothing else is selected: an entry that cannot act says so rather
   // than sending a command the core would refuse.
+  // By name rather than by index. Twice in two commits a new entry shifted these, and an index is not
+  // what the check is about: "paste with an empty clipboard is disabled" says nothing about position.
+  const entry = function (text) {
+    return items.find(function (item) { return item.textContent === text; });
+  };
   check("paste and group are disabled until they can do something",
-    [items[7].disabled, items[8].disabled, items[9].disabled, items[5].disabled],
+    [entry("Am Playhead einfügen").disabled, entry("Attribute einfügen").disabled,
+     entry("Gruppieren").disabled, entry("Kopieren").disabled],
     [true, true, true, false]);
   // The split screen is the one entry that needs a second clip, and with one selected it says so
   // rather than offering a half a screen can be split into.
-  check("a split screen is disabled until two clips are selected", items[12].disabled, true);
+  check("a split screen is disabled until two clips are selected",
+    entry("Geteilter Bildschirm").disabled, true);
   const menuBox = q('[role="menu"]').getBoundingClientRect();
   check("the menu lands on the pointer",
     [Math.round(menuBox.left), Math.round(menuBox.top)], [at.clientX, at.clientY]);
