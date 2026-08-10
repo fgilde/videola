@@ -10,6 +10,20 @@ localStorage.setItem("videola.locale", "de");
 // prefers-color-scheme: "Hell" on a dark runner, "Dunkel" on a light one. Pinned for the same
 // reason as the language.
 localStorage.setItem("videola.theme", "dark");
+// And the layout, for a reason that cost three failing checks to find. The shell reads
+// `(any-pointer: fine)`, which is the only honest question a page can ask about what is being
+// pointed with -- and a headless runner with no mouse answers no, so a 1440 px window was being laid
+// out as a tablet. The desktop run then measured a two-column grid and reported that the picture was
+// 216 px tall, which was true and about a layout nobody meant to check. The phone and tablet runs
+// pin their own, so every run measures the grid it names.
+localStorage.setItem(
+  "videola.layout",
+  new URLSearchParams(location.search).get("phone") !== null
+    ? "phone"
+    : new URLSearchParams(location.search).get("tablet") !== null
+      ? "tablet"
+      : "desktop",
+);
 
 // Chrome ships without proprietary codecs on some builds -- the CI runner decodes no H.264 at all
 // -- so the fixture follows what this browser can actually read. Both files hold the same two

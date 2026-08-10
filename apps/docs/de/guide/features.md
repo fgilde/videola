@@ -284,6 +284,20 @@ fände es heraus, bevor er gewählt hat. Kostet ein kleines Bild pro Vorlage, ei
 gezeichnet, während die Galerie schon offen ist; ein Vorschauprojekt enthält nur Generatoren, es gibt
 also nichts zu dekodieren und nichts aus dem Speicher zu lesen.
 
+## Welches Layout, und wer entscheidet
+
+Unter 768 px ist ein Telefon, unter 1280 ein Tablet, breiter ein Schreibtisch — aber nur, wenn der
+Browser einen feinen Zeiger meldet. `(any-pointer: fine)` ist die einzige ehrliche Frage, die eine
+Seite darüber stellen kann, womit gezeigt wird, und sie wird oft genug falsch beantwortet: ein
+breiter Schirm ohne angeschlossene Maus bekommt das Tablet-Layout, was für ein Grafiktablett richtig
+und für einen Schreibtisch, dessen Maus der Browser nicht sieht, falsch ist. Die Einstellung neben
+dem Theme-Schalter sagt, welches Layout gilt, und lässt es festlegen; die Wahl wird gemerkt.
+
+Es hat drei fehlschlagende Prüfungen gekostet, das zu finden. Der Anwendungs-Harness maß auf einem
+1440-Pixel-Fenster ein zweispaltiges Tablet-Raster und meldete zutreffend, das Bild sei 216 Pixel
+hoch — eine wahre Aussage über ein Layout, das niemand prüfen wollte. Jeder Lauf legt jetzt das
+Layout fest, das er benennt.
+
 ## Auf dem Telefon
 
 <div class="shots">

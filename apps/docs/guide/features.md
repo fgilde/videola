@@ -260,6 +260,19 @@ could show a look the renderer would never produce, and nobody would find out un
 chosen. Costs one small picture per template, drawn one at a time while the gallery is already open;
 a preview project holds nothing but generators, so there is no decoding and no storage to read.
 
+## Which layout, and who decides
+
+Under 768 px is a phone, under 1280 a tablet, and wider than that a desktop — but only if the browser
+reports a fine pointer. `(any-pointer: fine)` is the only honest question a page can ask about what is
+being pointed with, and it is answered wrongly often enough to matter: a wide screen with no mouse
+attached gets the tablet layout, which is right for a drawing tablet and wrong for a desktop whose
+mouse the browser cannot see. The setting beside the theme switch says which layout is in force and
+lets it be pinned; the choice is remembered.
+
+It cost three failing checks to find. The application harness was measuring a two-column tablet grid
+on a 1440 px window and reporting, correctly, that the picture was 216 px tall — a true statement
+about a layout nobody meant to check. Every run now pins the layout it names.
+
 ## On a phone
 
 <div class="shots">

@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { I18nProvider } from "../i18n/I18nProvider";
-import { useLayoutMode } from "../layout/useLayoutMode";
+import { useLayoutMode, useLayoutPreference } from "../layout/useLayoutMode";
 import type { LayoutPreference } from "../layout/detectLayoutMode";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { TopBar, type TopBarActions } from "./TopBar";
@@ -9,6 +9,11 @@ import "./AppShell.css";
 
 export interface AppShellProps extends TopBarActions {
   children: ReactNode;
+  /**
+   * Forces a layout. Absent, the shell detects one and lets whoever disagrees say so — the choice is
+   * remembered. A host that pins this takes both away, which is what a test harness wants and what
+   * an application should not do.
+   */
   layoutPreference?: LayoutPreference;
 }
 
@@ -33,11 +38,18 @@ function Frame({
   layoutPreference?: LayoutPreference;
   actions: TopBarActions;
 }): ReactElement {
-  const layout = useLayoutMode(layoutPreference ?? "auto");
+  const chosen = useLayoutPreference();
+  const preference = layoutPreference ?? chosen.preference;
+  const layout = useLayoutMode(preference);
 
   return (
     <div className="v-shell" data-layout={layout} data-testid="app-shell">
-      <TopBar {...actions} compact={layout === "phone"} />
+      <TopBar
+        {...actions}
+        compact={layout === "phone"}
+        layout={preference}
+        onLayout={layoutPreference === undefined ? chosen.setPreference : undefined}
+      />
       <main className="v-shell__content">{children}</main>
     </div>
   );

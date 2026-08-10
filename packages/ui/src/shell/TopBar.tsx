@@ -3,6 +3,7 @@ import { useRef, type ReactElement, type ReactNode } from "react";
 import { useI18n } from "../i18n/useI18n";
 import { Icon, IconButton } from "../primitives/Icon";
 import { useDismiss } from "../useDismiss";
+import type { LayoutPreference } from "../layout/detectLayoutMode";
 import { SettingsMenu } from "./SettingsMenu";
 import wordmark from "./videola-wordmark.png";
 
@@ -29,9 +30,12 @@ export interface TopBarProps extends TopBarActions {
    * 44 px each and a bar that scrolls sideways hides half of itself in its resting state.
    */
   compact?: boolean;
+  /** Which layout is in force, and somewhere to change it. Absent where a host pinned one. */
+  layout?: LayoutPreference;
+  onLayout?: (next: LayoutPreference) => void;
 }
 
-export function TopBar({ compact = false, ...actions }: TopBarProps): ReactElement {
+export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBarProps): ReactElement {
   const { t } = useI18n();
 
   const project = (
@@ -53,7 +57,7 @@ export function TopBar({ compact = false, ...actions }: TopBarProps): ReactEleme
   const output = (
     <>
       <Action label={t("action.export")} onClick={actions.onExport} />
-      <SettingsMenu labelled={compact} />
+      <SettingsMenu labelled={compact} layout={layout} onLayout={onLayout} />
       <Action label={t("action.save")} onClick={actions.onSave} primary />
     </>
   );
