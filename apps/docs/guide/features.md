@@ -263,8 +263,9 @@ a preview project holds nothing but generators, so there is no decoding and no s
 ## Keys
 
 The overflow menu has a sheet of them, and every row on it is a key the editor really answers —
-`shortcut` in `Timeline.tsx` and `useTransportKeys` in `Transport.tsx` are the whole roster, and a
-sheet listing a key nobody handles would send somebody looking for a fault in their keyboard.
+`shortcut` in `Timeline.tsx`, `useTransportKeys` in `Transport.tsx` and `commandKey` in
+`useCommandKeys.ts` are the whole roster, and a sheet listing a key nobody handles would send somebody
+looking for a fault in their keyboard.
 
 | Key | What it does |
 |---|---|
@@ -278,12 +279,19 @@ sheet listing a key nobody handles would send somebody looking for a fault in th
 | <kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd> | group; with <kbd>Shift</kbd>, ungroup |
 | <kbd>N</kbd> | fold the selection into one clip |
 | <kbd>M</kbd> | drop a marker at the playhead |
+| <kbd>S</kbd> | cut at the playhead |
+| <kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> <kbd>D</kbd> | select every clip; duplicate the selection |
+| <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> <kbd>S</kbd> <kbd>O</kbd> <kbd>E</kbd> | undo, save, open, export — with <kbd>Shift</kbd> on Z, redo |
+| <kbd>+</kbd> <kbd>-</kbd> <kbd>0</kbd> | zoom in, zoom out, fit the whole edit in the window |
+| <kbd>Home</kbd> <kbd>End</kbd> | to the start or the end of the edit |
 
 The modifier is written as Ctrl/Cmd rather than resolved per platform, because a browser cannot ask
 which one this keyboard has: `navigator.platform` guesses from the operating system, which is wrong
 on a Mac with a PC keyboard and on Linux either way.
 
-The editing keys need the timeline to have the focus. <kbd>N</kbd> and <kbd>M</kbd> carry no modifier
+The project keys — undo, redo, save, open, export — listen on the window and answer wherever the focus
+is, except in a field, whose own <kbd>Ctrl/Cmd</kbd>+<kbd>Z</kbd> is left alone. The editing and view
+keys need the timeline to have the focus. <kbd>N</kbd> and <kbd>M</kbd> carry no modifier
 for a reason worth knowing: every Ctrl/Cmd combination near them is taken by the browser itself, and
 a shortcut the browser eats is a shortcut that does not exist.
 

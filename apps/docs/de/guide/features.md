@@ -287,8 +287,8 @@ also nichts zu dekodieren und nichts aus dem Speicher zu lesen.
 ## Tasten
 
 Im Überlaufmenü liegt eine Übersicht, und jede Zeile darauf ist eine Taste, die der Editor wirklich
-beantwortet — `shortcut` in `Timeline.tsx` und `useTransportKeys` in `Transport.tsx` sind die ganze
-Liste. Eine Übersicht, die eine Taste nennt, die niemand behandelt, schickt jemanden auf die Suche
+beantwortet — `shortcut` in `Timeline.tsx`, `useTransportKeys` in `Transport.tsx` und `commandKey` in
+`useCommandKeys.ts` sind die ganze Liste. Eine Übersicht, die eine Taste nennt, die niemand behandelt, schickt jemanden auf die Suche
 nach einem Fehler in seiner Tastatur.
 
 | Taste | Wirkung |
@@ -303,12 +303,20 @@ nach einem Fehler in seiner Tastatur.
 | <kbd>Strg/Cmd</kbd> + <kbd>G</kbd> | gruppieren; mit <kbd>Umschalt</kbd> aufheben |
 | <kbd>N</kbd> | Auswahl zu einem Clip zusammenfassen |
 | <kbd>M</kbd> | Marker am Playhead setzen |
+| <kbd>S</kbd> | am Playhead schneiden |
+| <kbd>Strg/Cmd</kbd> + <kbd>A</kbd> <kbd>D</kbd> | alle Clips auswählen; Auswahl verdoppeln |
+| <kbd>Strg/Cmd</kbd> + <kbd>Z</kbd> <kbd>S</kbd> <kbd>O</kbd> <kbd>E</kbd> | rückgängig, speichern, öffnen, exportieren — mit <kbd>Umschalt</kbd> auf Z: wiederholen |
+| <kbd>+</kbd> <kbd>-</kbd> <kbd>0</kbd> | näher heran, weiter weg, den ganzen Schnitt ins Fenster |
+| <kbd>Home</kbd> <kbd>Ende</kbd> | an den Anfang oder das Ende des Schnitts |
 
 Der Modifikator steht als Strg/Cmd da, statt je System aufgelöst zu werden: ein Browser kann nicht
 fragen, welchen diese Tastatur hat — `navigator.platform` rät vom Betriebssystem, und das ist auf
 einem Mac mit PC-Tastatur falsch und unter Linux ohnehin.
 
-Die Schnitt-Tasten brauchen den Fokus in der Zeitleiste. <kbd>N</kbd> und <kbd>M</kbd> tragen aus
+Die Projekttasten — rückgängig, wiederholen, speichern, öffnen, exportieren — lauschen am Fenster und
+antworten, wo auch immer der Fokus steht; nur in einem Feld nicht, dessen eigenes
+<kbd>Strg/Cmd</kbd>+<kbd>Z</kbd> unangetastet bleibt. Die Schnitt- und Ansichtstasten brauchen den
+Fokus in der Zeitleiste. <kbd>N</kbd> und <kbd>M</kbd> tragen aus
 einem Grund keinen Modifikator: jede Strg/Cmd-Kombination in ihrer Nähe hat der Browser selbst
 belegt, und ein Kürzel, das der Browser frisst, ist kein Kürzel.
 

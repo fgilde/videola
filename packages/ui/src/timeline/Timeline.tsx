@@ -99,6 +99,12 @@ export interface TimelineProps {
   project: Project;
   playhead: Time;
   /**
+   * True while the transport is running. The view then pages ahead to keep the playhead on screen;
+   * standing still it never scrolls itself, because a view that moves under a hand that is not
+   * asking it to is a view nobody can aim.
+   */
+  playing?: boolean;
+  /**
    * Peaks per clip id, from whoever decoded the audio. Absent means no strip at all rather than an
    * empty one: a flat line promises a signal that has not been read yet.
    */
@@ -146,6 +152,7 @@ export interface TimelineProps {
 export function Timeline({
   project,
   playhead,
+  playing = false,
   waveforms,
   effects = [],
   curveShape,
@@ -302,6 +309,100 @@ export function Timeline({
     for (const command of pasteAttributes(model, [...selected])) dispatch(command, key);
   }, [dispatch, selected]);
 
+  // A selection is a set of ids, and an undo, a ripple delete or a nest can take the clip an id
+  // names away. Pruned here, once, rather than at every use: a set holding a dead id is not merely
+  // untidy -- every action that reads "is there a selection" then says yes and finds nothing to do,
+  // which is exactly how a key that works comes to look broken.
+  useEffect(() => {
+    setSelected((current) => {
+      if (current.size === 0) return current;
+      const live = new Set<ClipId>();
+      for (const track of project.timeline.tracks) {
+        for (const clip of track.clips) if (current.has(clip.id)) live.add(clip.id);
+      }
+      if (live.size === current.size) return current;
+      onSelectionChange?.([...live]);
+      return live;
+    });
+  }, [project, onSelectionChange]);
+
+  // The view pages ahead of a running transport rather than following it pixel by pixel: a scroll
+  // that moves every frame is unreadable, and one that moves every frame under a finger fights the
+  // finger. A tenth of the width of lead-in, so the playhead arrives with the next few seconds
+  // already visible instead of glued to the left edge.
+  //
+  // Only while playing. Standing still, the timeline never scrolls itself -- somebody who scrolled
+  // away to look at something else did that on purpose.
+  useLayoutEffect(() => {
+    if (!playing) return;
+    const element = scrollRef.current;
+    if (element === null || element.clientWidth < 1) return;
+    const x = timeToX(playhead, flicksPerPixel);
+    const width = element.clientWidth;
+    const lead = width / 10;
+    if (x >= element.scrollLeft + width - lead || x < element.scrollLeft) {
+      element.scrollLeft = Math.max(0, x - lead);
+    }
+  }, [playing, playhead, flicksPerPixel]);
+
+  // The whole edit in the window, which is where a person starts and returns to. Set rather than
+  // stepped: a factor from here would need a loop, and the loop would stop on the clamp at a zoom
+  // that is nearly right instead of the one that fits.
+  const fit = useCallback(() => {
+    if (viewport.width < 1) return;
+    setFlicksPerPixel(clampZoom(end / viewport.width, end));
+    if (scrollRef.current !== null) scrollRef.current.scrollLeft = 0;
+  }, [end, viewport.width]);
+
+  // Around the playhead where the playhead is on screen, around the middle of the view otherwise.
+  // Zooming away from what somebody is working on is what a fixed centre does the moment they have
+  // scrolled anywhere.
+  const zoomBy = useCallback(
+    (factor: number) => {
+      const at = timeToX(playhead, flicksPerPixel) - viewport.scrollLeft;
+      const anchor = at >= 0 && at <= viewport.width ? at : viewport.width / 2;
+      zoom(factor, anchor);
+    },
+    [zoom, playhead, flicksPerPixel, viewport.scrollLeft, viewport.width],
+  );
+
+  const selectAll = useCallback(() => {
+    const every = project.timeline.tracks.flatMap((track) => track.clips.map((clip) => clip.id));
+    setSelected(new Set(every));
+    onSelectionChange?.(every);
+  }, [project, onSelectionChange]);
+
+  // A copy laid down directly behind the original, which is what a duplicate is. Through `clip.paste`
+  // and not through a second kind of add: the clipboard path already carries every attribute a clip
+  // has, and a duplicate that carried fewer would be a copy that quietly lost its effects.
+  const duplicate = useCallback(() => {
+    const key = `timeline-duplicate-${(actionSequence += 1)}`;
+    for (const track of project.timeline.tracks) {
+      for (const clip of track.clips) {
+        if (!selected.has(clip.id)) continue;
+        dispatch(cmd.clipPaste(track.id, clip, clip.start + clip.duration), key);
+      }
+    }
+  }, [project, selected, dispatch]);
+
+  // Every selected clip the playhead stands inside, or -- with nothing selected -- every clip it
+  // stands inside at all. A key that did nothing where nothing was selected would be the one people
+  // press first and report as broken.
+  const split = useCallback(() => {
+    const key = `timeline-split-${(actionSequence += 1)}`;
+    let cut = 0;
+    for (const track of project.timeline.tracks) {
+      if (track.locked) continue;
+      for (const clip of track.clips) {
+        if (selected.size > 0 && !selected.has(clip.id)) continue;
+        if (playhead <= clip.start || playhead >= clip.start + clip.duration) continue;
+        dispatch(cmd.clipSplit(clip.id, playhead), key);
+        cut += 1;
+      }
+    }
+    return cut;
+  }, [project, selected, playhead, dispatch]);
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       const action = shortcut(event);
@@ -313,6 +414,22 @@ export function Timeline({
         return removeKeyframe();
       }
       switch (action) {
+        case "split":
+          return void split();
+        case "duplicate":
+          return duplicate();
+        case "selectAll":
+          return selectAll();
+        case "zoomIn":
+          return zoomBy(1 / ZOOM_FACTOR);
+        case "zoomOut":
+          return zoomBy(ZOOM_FACTOR);
+        case "zoomFit":
+          return fit();
+        case "toStart":
+          return onSeek(0);
+        case "toEnd":
+          return onSeek(end);
         case "delete":
           return remove(false);
         case "rippleDelete":
@@ -339,7 +456,25 @@ export function Timeline({
           return dispatch(cmd.markerAdd(playhead, ""));
       }
     },
-    [remove, copy, cut, paste, dispatch, project, selected, playhead, picked, removeKeyframe],
+    [
+      remove,
+      copy,
+      cut,
+      paste,
+      dispatch,
+      project,
+      selected,
+      playhead,
+      picked,
+      removeKeyframe,
+      split,
+      duplicate,
+      selectAll,
+      zoomBy,
+      fit,
+      onSeek,
+      end,
+    ],
   );
 
   return (
@@ -830,6 +965,14 @@ function groupLeaders(project: Project, selected: ReadonlySet<ClipId>): ClipId[]
 }
 
 type Shortcut =
+  | "split"
+  | "duplicate"
+  | "selectAll"
+  | "zoomIn"
+  | "zoomOut"
+  | "zoomFit"
+  | "toStart"
+  | "toEnd"
   | "delete"
   | "rippleDelete"
   | "copy"
@@ -840,13 +983,23 @@ type Shortcut =
   | "nest"
   | "marker";
 
+// Fields inside the timeline keep their own keys. The marker list renames a marker in a text input
+// and picks its colour in another, and both of them sit inside this section -- so without this,
+// typing "m" into a marker's name drops a marker for every letter.
+const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
 // A pure function of the event, so the keys a timeline answers to can be read in one place.
 function shortcut(event: KeyboardEvent<HTMLElement>): Shortcut | undefined {
+  const target = event.target as HTMLElement | null;
+  if (target?.isContentEditable === true) return undefined;
+  if (TYPING.has(target?.tagName ?? "")) return undefined;
   const command = event.ctrlKey || event.metaKey;
   if (event.key === "Delete" || event.key === "Backspace") {
     return event.shiftKey ? "rippleDelete" : "delete";
   }
   if (command && event.key.toLowerCase() === "c") return "copy";
+  if (command && event.key.toLowerCase() === "a") return "selectAll";
+  if (command && event.key.toLowerCase() === "d") return "duplicate";
   if (command && event.key.toLowerCase() === "x") return "cut";
   if (command && event.key.toLowerCase() === "v") return "paste";
   if (command && event.key.toLowerCase() === "g") return event.shiftKey ? "ungroup" : "group";
@@ -854,6 +1007,14 @@ function shortcut(event: KeyboardEvent<HTMLElement>): Shortcut | undefined {
   // browser itself, and a shortcut the browser eats is a shortcut that does not exist.
   if (!command && event.key.toLowerCase() === "n") return "nest";
   if (!command && event.key.toLowerCase() === "m") return "marker";
+  if (!command && event.key.toLowerCase() === "s") return "split";
+  // Both spellings of each, because a keyboard without a numeric pad puts the plus behind a shift
+  // and reports the unshifted key on some layouts either way.
+  if (!command && (event.key === "+" || event.key === "=")) return "zoomIn";
+  if (!command && (event.key === "-" || event.key === "_")) return "zoomOut";
+  if (!command && event.key === "0") return "zoomFit";
+  if (event.key === "Home") return "toStart";
+  if (event.key === "End") return "toEnd";
   return undefined;
 }
 

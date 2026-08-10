@@ -356,6 +356,24 @@ Ein Ripple am **Kopf** sieht befremdlich aus, bis man ihn benutzt: der Clip blei
 Material wandert, denn genau darum geht es beim Ripple — der Clip bleibt an dem kleben, was vor ihm
 liegt. Was der Zeiger dort ändert, ist die Länge, nicht die Position.
 
+### Die Tasten, die dem Projekt gehören
+
+| Taste | Wirkung |
+|---|---|
+| <kbd>Strg</kbd>+<kbd>Z</kbd> / <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>Z</kbd> | rückgängig, wiederholen (<kbd>Strg</kbd>+<kbd>Y</kbd> wiederholt auch) |
+| <kbd>Strg</kbd>+<kbd>S</kbd> | schreibt das Projekt |
+| <kbd>Strg</kbd>+<kbd>O</kbd> | öffnet eines |
+| <kbd>Strg</kbd>+<kbd>E</kbd> | öffnet den Export |
+
+Diese fünf lauschen am Fenster und antworten daher, wo auch immer der Fokus steht — ein Feld mit dem
+Fokus behält sie, denn <kbd>Strg</kbd>+<kbd>Z</kbd> in einem Textfeld ist dessen eigenes Rückgängig,
+und es wegzunehmen, um zwei Bereiche weiter einen Schnitt zurückzunehmen, ist der Weg, auf dem Arbeit
+verloren geht.
+
+<kbd>Strg</kbd>+<kbd>S</kbd> wird genommen, ob dieses Projekt etwas zu schreiben hat oder nicht. Der
+eigene Speichern-Dialog des Browsers über einem Editor ist das Einzige, was diese Taste niemals
+hervorbringen darf.
+
 ### Löschen, ausschneiden, einfügen
 
 | Taste | Wirkung |
@@ -366,6 +384,23 @@ liegt. Was der Zeiger dort ändert, ist die Länge, nicht die Position.
 | <kbd>Strg</kbd>+<kbd>G</kbd> / <kbd>Strg</kbd>+<kbd>Umschalt</kbd>+<kbd>G</kbd> | gruppieren, Gruppierung aufheben |
 | <kbd>N</kbd> | fasst die Auswahl zu einem Compound-Clip zusammen |
 | <kbd>M</kbd> | setzt einen Marker am Playhead |
+| <kbd>S</kbd> | schneidet am Playhead |
+| <kbd>Strg</kbd>+<kbd>A</kbd> | wählt alle Clips aus |
+| <kbd>Strg</kbd>+<kbd>D</kbd> | verdoppelt die Auswahl, jede Kopie direkt hinter ihr Original |
+
+<kbd>S</kbd> schneidet jeden ausgewählten Clip, in dem der Playhead steht — oder, wenn nichts
+ausgewählt ist, jeden Clip, in dem er überhaupt steht. Nicht an einer Kante: ein Schnitt dort ist auf
+einer Seite ein Clip ohne Länge, den der Kern ablehnt, und eine Ablehnung aus einem einzigen
+Tastendruck ist eine Fehlermeldung für etwas, das nichts bedeutet hat. Eine gesperrte Spur bleibt
+unberührt.
+
+Eine Auswahl ist eine Menge von IDs, und ein Rückgängig kann den Clip wegnehmen, den eine ID benennt.
+Die Zeitleiste vergisst so eine ID, sobald sich das Projekt ändert — sonst sagt jede Aktion, die „gibt
+es eine Auswahl" fragt, ja und findet dann nichts zu tun. Genau so sieht eine Taste, die funktioniert,
+kaputt aus.
+
+Jede unmodifizierte Taste gehört der Zeitleiste und braucht ihren Fokus; ein Feld darin behält seine
+eigenen Tasten, ein *m* im Namen eines Markers setzt also nicht pro Buchstabe einen Marker.
 
 Alles steht auch im Kontextmenü des Clips, und ein Eintrag, der nichts bewirken kann — Einfügen
 ohne Zwischenablage, Gruppieren mit einem einzigen Clip — ist deaktiviert, statt ein Kommando zu
@@ -455,7 +490,27 @@ im Bild und eine Blende —, und das zu ändern hieße zu ändern, was jedes bes
 Wenn es je kommt, dann als Modus, den man einschaltet, und nicht als Regel, die unter einem
 aufgetaucht ist.
 
-### Zoom
+### Zoom und die Tasten, die die Ansicht bewegen
+
+`+` und `-` zoomen, `0` legt den ganzen Schnitt ins Fenster. Verankert wird am **Abspielkopf**, wenn
+der auf dem Schirm steht, sonst an der Mitte der Ansicht — eine feste Mitte zoomt von dem weg, wohin
+jemand gescrollt hat. `Home` und `Ende` bringen den Abspielkopf an die Enden des Schnitts.
+
+`0` setzt einen Zoom, statt sich einem zu nähern. Ein Faktor in einer Schleife bliebe an der Klemme
+bei einem Zoom stehen, der fast stimmt, statt bei dem, der passt.
+
+### Die Ansicht folgt einem laufenden Transport
+
+Während der Transport läuft, blättert die Zeitleiste voraus, damit der Abspielkopf auf dem Schirm
+bleibt: sie springt, wenn er auf ein Zehntel der Breite an den rechten Rand herankommt, und landet mit
+diesem Zehntel Vorlauf, damit die nächsten Sekunden schon zu sehen sind. Eine Ansicht, die pro Bild
+einen Pixel scrollt, ist unlesbar; eine, die mitten in einem Zug unter der Hand wegrutscht,
+unbenutzbar.
+
+Im Stand scrollt die Zeitleiste nie von selbst. Wer weggescrollt ist, um etwas anderes anzusehen, hat
+das mit Absicht getan.
+
+### Was ein Zoomschritt ist
 
 Zoom ist Flicks pro Pixel. Die Untergrenze steigt mit der Projektlänge: das Inhaltselement ist so
 breit wie das ganze Projekt, und Browser halten Elementbreiten oberhalb von rund 33 Millionen Pixeln

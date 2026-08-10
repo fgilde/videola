@@ -10,9 +10,10 @@ export interface ShortcutsProps {
 /**
  * Which keys do what. One list, read from the two places that answer a key.
  *
- * Every row here is a key the editor really answers — `shortcut` in Timeline.tsx and
- * `useTransportKeys` in Transport.tsx are the whole roster, and a sheet that listed a key nobody
- * handles would be worse than no sheet: it would send somebody looking for a fault in their keyboard.
+ * Every row here is a key the editor really answers — `shortcut` in Timeline.tsx, `useTransportKeys`
+ * in Transport.tsx and `commandKey` in useCommandKeys.ts are the whole roster, and a sheet that listed
+ * a key nobody handles would be worse than no sheet: it would send somebody looking for a fault in
+ * their keyboard.
  *
  * The modifier is written as `Strg/Cmd` rather than resolved per platform. A browser cannot ask which
  * one this keyboard has — `navigator.platform` guesses from the operating system, which is wrong on
@@ -37,8 +38,29 @@ export function Shortcuts({ onClose }: ShortcutsProps): ReactElement {
       ],
     },
     {
+      title: t("keys.project"),
+      rows: [
+        ["Strg/Cmd + Z", t("keys.undo")],
+        ["Shift + Strg/Cmd + Z", t("keys.redo")],
+        ["Strg/Cmd + S", t("keys.save")],
+        ["Strg/Cmd + O", t("keys.open")],
+        ["Strg/Cmd + E", t("keys.export")],
+      ],
+    },
+    {
+      title: t("keys.view"),
+      rows: [
+        ["+ / -", t("keys.zoom")],
+        ["0", t("keys.zoomFit")],
+        ["Home / End", t("keys.ends")],
+      ],
+    },
+    {
       title: t("keys.editing"),
       rows: [
+        ["S", t("keys.split")],
+        ["Strg/Cmd + A", t("keys.selectAll")],
+        ["Strg/Cmd + D", t("keys.duplicate")],
         ["Del / ⌫", t("keys.delete")],
         ["Shift + Del", t("keys.rippleDelete")],
         ["Strg/Cmd + C", t("keys.copy")],

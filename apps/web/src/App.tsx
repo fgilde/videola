@@ -1717,6 +1717,7 @@ export function App(): ReactElement {
                 <Timeline
                   project={project}
                   playhead={playhead}
+                  playing={playing}
                   waveforms={waveforms}
                   effects={effectManifests()}
                   curveShape={doc?.curveShape}

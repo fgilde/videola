@@ -34,4 +34,5 @@ export * from "./shell/Shortcuts";
 export * from "./shell/UpdateOffer";
 export * from "./shell/PanelTabs";
 export * from "./shell/TopBar";
+export * from "./shell/useCommandKeys";
 export * from "./effects/EffectBrowser";

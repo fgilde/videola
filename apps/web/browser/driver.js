@@ -220,9 +220,9 @@ async function announce() {
   const position = () => q('[aria-label="Position"]').textContent.slice(0, 11);
   const banner = () =>
     [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent).join(" | ");
-  const key = (name, target) =>
+  const key = (name, target, modifiers = {}) =>
     target.dispatchEvent(
-      new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
+      new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true, ...modifiers }),
     );
 
   function drag(type, zone, transfer) {
@@ -1054,6 +1054,7 @@ async function announce() {
 
     await captions();
     await inserted();
+    await keysAndView();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
@@ -1084,7 +1085,19 @@ async function announce() {
     }
 
     const before = position();
+    // Zoomed in far enough that two seconds of edit are several windows wide, which is the only
+    // state in which following the playhead means anything -- at the resting zoom the whole fixture
+    // fits and nothing ever has to scroll.
+    const surface = q(".v-timeline__scroll");
+    surface.focus();
+    for (let step = 0; step < 5; step += 1) key("+", surface);
+    await sleep(200);
+    checkAtLeast("the edit is wider than the window to follow across it",
+      q("[data-clip-id]").getBoundingClientRect().width / surface.clientWidth, 1.5);
+    const stood = surface.scrollLeft;
     await sleep(1200);
+    checkAtLeast("the view pages ahead to keep a running playhead on screen",
+      surface.scrollLeft - stood, 1);
     const after = position();
     check("the playhead moves while playing", before !== after, true);
     checkAtLeast("and it covers about a second in a second",
@@ -1097,6 +1110,14 @@ async function announce() {
     const paused = position();
     await sleep(500);
     check("and the playhead stands still once paused", position(), paused);
+    // And the view with it: a timeline that keeps scrolling after the transport stopped is one
+    // nobody can aim, and scrolling away from a hand is worse than not following at all.
+    const held = surface.scrollLeft;
+    surface.scrollLeft = Math.max(0, held - 60);
+    await sleep(400);
+    checkAtMost("a paused view stays where it was put", surface.scrollLeft, Math.max(0, held - 60));
+    key("0", surface);
+    await sleep(200);
 
     // R128 against a real OfflineAudioContext, over a real decode. Wall clock only: a measurement
     // renders the whole timeline, and under a virtual-time budget the decoder never gets a turn.
@@ -2046,6 +2067,67 @@ async function announce() {
       await sleep(60);
     }
     check("and it leaves the project as it found it", all("[data-clip-id]").length, before);
+  }
+
+  // The keys, in the built application. Only here does a key travel the whole way: the window
+  // listener for the project keys, the timeline's own handler for the editing ones, and the layout
+  // that decides whether a clip is even on screen.
+  //
+  // It undoes itself, so what follows works on the project it was handed.
+  async function keysAndView() {
+    const surface = q(".v-timeline__scroll");
+    const before = all("[data-clip-id]").length;
+    const widthOf = () => q("[data-clip-id]").getBoundingClientRect().width;
+
+    // Zoom, off the width of a clip on the screen rather than off any number inside the app: the
+    // pixel is what a person sees, and a zoom that changed state without changing the picture would
+    // pass a state check and fail everybody.
+    surface.focus();
+    const resting = widthOf();
+    key("+", surface);
+    await sleep(150);
+    checkAtLeast("a plus key zooms in", widthOf() / resting, 1.5);
+    key("-", surface);
+    key("-", surface);
+    await sleep(150);
+    checkAtMost("and a minus key zooms back out and further", widthOf(), resting);
+    key("0", surface);
+    await sleep(150);
+    // Sixteen pixels of slack: a clip is drawn to the width the zoom says and carries its own
+    // border on top, and the claim here is about the edit fitting rather than about a box model.
+    check("nought fits the whole edit in the window",
+      widthOf() <= surface.clientWidth + 16 && widthOf() > surface.clientWidth / 4, true);
+
+    // Home and End move the playhead, which the transport shows.
+    key("End", surface);
+    await sleep(150);
+    check("End lands on the end of the edit", position(), "00:00:02.00");
+    key("Home", surface);
+    await sleep(150);
+    check("Home lands on the start", position(), "00:00:00.00");
+
+    // A cut at the playhead, from the key that every editor spells the same way.
+    for (let i = 0; i < 30; i += 1) button("Ein Bild vor").click();
+    await sleep(200);
+    key("s", surface);
+    await sleep(200);
+    check("S cuts at the playhead", all("[data-clip-id]").length, before + 1);
+    check("cutting with a key raised nothing", banner(), "");
+
+    // Undo from the window and not from the button: the project keys have to answer wherever the
+    // focus is, and the focus here is the timeline.
+    key("z", surface, { ctrlKey: true });
+    await sleep(200);
+    check("Strg+Z takes it back", all("[data-clip-id]").length, before);
+    key("z", surface, { ctrlKey: true, shiftKey: true });
+    await sleep(200);
+    check("and Shift+Strg+Z puts it back", all("[data-clip-id]").length, before + 1);
+    key("z", surface, { ctrlKey: true });
+    await sleep(200);
+    check("and the project is as it was found", all("[data-clip-id]").length, before);
+
+    button("An den Anfang").click();
+    await sleep(100);
   }
 
   async function dropFixture() {

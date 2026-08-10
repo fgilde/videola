@@ -337,6 +337,22 @@ A ripple of the *head* is the one that looks odd until you try it: the clip stay
 its material moves, because leaving the clip glued to what is in front of it is the whole point of a
 ripple. What the pointer changes there is the length, not the position.
 
+### The keys that belong to the project
+
+| Key | Result |
+|---|---|
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | undo, redo (<kbd>Ctrl</kbd>+<kbd>Y</kbd> redoes as well) |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | writes the project |
+| <kbd>Ctrl</kbd>+<kbd>O</kbd> | opens one |
+| <kbd>Ctrl</kbd>+<kbd>E</kbd> | opens the export |
+
+These five listen on the window, so they answer wherever the focus is — a field with the focus keeps
+them, because <kbd>Ctrl</kbd>+<kbd>Z</kbd> in a text field is that field's own undo and taking it away
+to undo an edit two panels over is how work gets lost.
+
+<kbd>Ctrl</kbd>+<kbd>S</kbd> is taken whether or not this project has anything to write. The browser's
+own save dialogue over an editor is the one thing it must never produce.
+
 ### Deleting, cutting and pasting
 
 | Key | Result |
@@ -347,6 +363,21 @@ ripple. What the pointer changes there is the length, not the position.
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> | group, ungroup |
 | <kbd>N</kbd> | folds the selection into one compound clip |
 | <kbd>M</kbd> | sets a marker at the playhead |
+| <kbd>S</kbd> | cuts at the playhead |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | selects every clip |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd> | duplicates the selection, each copy directly behind its original |
+
+<kbd>S</kbd> cuts every selected clip the playhead stands inside, or — with nothing selected — every
+clip it stands inside at all. Not at an edge: a cut there is a clip of no length on one side, which the
+core refuses, and a refusal out of one keystroke is an error message for something that meant nothing.
+A locked track is left alone.
+
+A selection is a set of ids, and an undo can take the clip an id names away. The timeline forgets such
+an id as soon as the project changes, because every action that reads "is there a selection" would
+otherwise say yes and then find nothing to do — which is how a key that works comes to look broken.
+
+Every unmodified key belongs to the timeline and needs its focus; a field inside it keeps its own
+keys, so typing an *m* into a marker's name does not drop a marker per letter.
 
 All of them sit in the clip's context menu as well, and an entry that cannot do anything — paste
 with an empty clipboard, group with one clip selected — is disabled rather than sending a command
@@ -429,7 +460,26 @@ allows overlap on purpose — that is what a transition, a picture-in-picture an
 of — and changing that would change what every existing project means. If it ever arrives it will be
 a mode you turn on, not a rule that appeared underneath you.
 
-### Zoom
+### Zoom, and the keys that move the view
+
+`+` and `-` zoom, and `0` puts the whole edit in the window. The zoom is anchored on the **playhead**
+where the playhead is on screen and on the middle of the view otherwise — a fixed centre zooms away
+from whatever somebody scrolled to. `Home` and `End` take the playhead to either end of the edit.
+
+`0` sets a zoom rather than stepping towards one. A factor applied in a loop would stop on the clamp
+at a zoom that is nearly right instead of the one that fits.
+
+### The view follows a running transport
+
+While the transport runs, the timeline pages ahead to keep the playhead on screen: it jumps when the
+playhead reaches within a tenth of the width of the right edge, and lands with that tenth as lead-in
+so the next few seconds are already visible. A view that scrolled a pixel per frame would be
+unreadable, and one that scrolled under a hand mid-drag would be unusable.
+
+Standing still, the timeline never scrolls itself. Somebody who scrolled away to look at something
+else did that on purpose.
+
+### What a zoom step is
 
 Zoom is flicks per pixel. The lower bound rises with project length: the content element is as wide
 as the whole project, and browsers stop honouring element widths above roughly 33 million pixels —

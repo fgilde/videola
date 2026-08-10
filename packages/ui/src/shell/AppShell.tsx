@@ -5,6 +5,7 @@ import { useLayoutMode, useLayoutPreference } from "../layout/useLayoutMode";
 import type { LayoutPreference } from "../layout/detectLayoutMode";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { TopBar, type TopBarActions } from "./TopBar";
+import { useCommandKeys } from "./useCommandKeys";
 import "./AppShell.css";
 
 export interface AppShellProps extends TopBarActions {
@@ -38,6 +39,10 @@ function Frame({
   layoutPreference?: LayoutPreference;
   actions: TopBarActions;
 }): ReactElement {
+  // Undo, redo, save, open and export answer wherever the focus is, so they are handled here rather
+  // than in the bar that shows them: a key that only worked while the header had the focus would be
+  // a key nobody could reach.
+  useCommandKeys(actions);
   const chosen = useLayoutPreference();
   const preference = layoutPreference ?? chosen.preference;
   const layout = useLayoutMode(preference);
