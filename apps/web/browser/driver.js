@@ -803,6 +803,27 @@ async function announce() {
   async function run() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
     check("nothing is wrong before anything happened", banner(), "");
+
+    // Installable and offline-capable, which is the browser build's own answer to "how does this
+    // update" -- the worker is what notices a new build, and it can only do that if it registered.
+    // Checked in a real browser because neither a manifest nor a worker exists in jsdom at all.
+    const manifest = q('link[rel="manifest"]');
+    check("the application declares a manifest", manifest !== null, true);
+    const declared = await (await fetch(manifest.getAttribute("href"))).json();
+    check("with a name, a scope and a standalone display",
+      [declared.name, declared.display, typeof declared.scope],
+      ["Videola", "standalone", "string"]);
+    checkAtLeast("and an icon big enough to install with",
+      Math.max(...declared.icons.map((icon) => Number(icon.sizes.split("x")[0]))), 256);
+    // `ready` resolves once a worker is active for this page. Raced against a wait rather than
+    // awaited outright: a browser that never registers one would otherwise hang the whole run.
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      sleep(15000).then(() => undefined),
+    ]);
+    check("and it registers a service worker", registration !== undefined, true);
+    check("whose scope is the application's own",
+      registration?.scope.endsWith("/") ?? false, true);
     check("WebGL2 is up behind the preview", q(".v-preview__canvas").getContext("webgl2") !== null, true);
 
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();

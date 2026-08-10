@@ -1,0 +1,17 @@
+{
+  "name": "Videola",
+  "short_name": "Videola",
+  "description": "A video editor that runs in the browser. Projects stay on this device.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#05060a",
+  "theme_color": "#05060a",
+  "orientation": "any",
+  "categories": ["video", "productivity", "graphics"],
+  "icons": [
+    { "src": "icon-256.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

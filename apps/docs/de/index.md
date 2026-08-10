@@ -110,6 +110,8 @@ features:
 - **Vorlagen** — Galerie, Assistent, und ein Backen, das ein ganz normales Projekt hinterlässt.
 - **Schnittstelle, MCP-Server und CLI** — der ganze Command-Katalog, aus dem Rust-Enum generiert,
   dazu Standbilder und Tonspitzen, damit ein Agent sehen kann, was er gerade getan hat.
+- **Installierbar und offline** — Manifest und Service Worker: die Browser-Ausgabe installiert sich
+  als Anwendung, öffnet ohne Netz und bietet ein Neuladen an, sobald ein neuer Stand wartet.
 - **Selbst hosten** — ein Node-Prozess liefert Editor, Schnittstelle, MCP und CLI.
 - **Telefon, Tablet und Schreibtisch** — derselbe Code, die Bereiche wechseln sich ab.
 

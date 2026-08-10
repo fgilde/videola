@@ -106,6 +106,8 @@ features:
 - **Templates** — a gallery, a wizard, and a bake that leaves you with an ordinary project.
 - **An API, an MCP server and a CLI** — the whole command catalogue, generated from the Rust enum,
   plus stills and audio peaks so an agent can look at what it just did.
+- **Installable and offline** — a manifest and a service worker: the browser build installs as an
+  application, opens without a network, and offers a reload when a new build is waiting.
 - **Self-hosting** — one Node process serving the editor, the API, MCP and the CLI.
 - **Phone, tablet and desktop** — the same code, panels taking turns where there is no room.
 

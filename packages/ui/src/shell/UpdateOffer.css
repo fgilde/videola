@@ -1,0 +1,45 @@
+/* Borrows the about dialogue's frame; only what is different lives here. */
+.v-update__title {
+  margin: 0 0 var(--v-space-2);
+  font-size: var(--v-text-lg);
+  font-weight: var(--v-weight-strong);
+}
+
+.v-update__bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: var(--v-space-3);
+  border: none;
+  border-radius: var(--v-radius-pill);
+  background: var(--v-surface);
+  /* Firefox and Chrome name the two halves of a progress bar differently; both are set so the bar
+     is the accent on the surface rather than the platform's own green. */
+  accent-color: var(--v-accent);
+}
+
+.v-update__bar::-webkit-progress-bar {
+  background: var(--v-surface);
+  border-radius: var(--v-radius-pill);
+}
+
+.v-update__bar::-webkit-progress-value {
+  background: var(--v-accent);
+  border-radius: var(--v-radius-pill);
+}
+
+.v-update__failed {
+  margin: var(--v-space-2) 0 0;
+  font-size: var(--v-text-sm);
+  color: var(--v-danger);
+}
+
+.v-update__actions {
+  display: flex;
+  gap: var(--v-space-2);
+  margin-top: var(--v-space-4);
+}
+
+.v-update__actions .v-button {
+  flex: 1;
+}

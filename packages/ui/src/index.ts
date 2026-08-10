@@ -31,6 +31,7 @@ export * from "./templates/outline";
 export * from "./shell/About";
 export * from "./shell/AppShell";
 export * from "./shell/Shortcuts";
+export * from "./shell/UpdateOffer";
 export * from "./shell/PanelTabs";
 export * from "./shell/TopBar";
 export * from "./effects/EffectBrowser";

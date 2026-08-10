@@ -284,6 +284,7 @@ describe("serving the web app", () => {
     await writeFile(join(web, "index.html"), "<title>Videola</title>");
     await writeFile(join(web, "assets", "index-abc123.js"), "export const a = 1;");
     await writeFile(join(web, "assets", "videola_core_bg-abc123.wasm"), Buffer.from([0, 97, 115, 109]));
+    await writeFile(join(web, "sw.js"), "self.addEventListener('fetch', () => {});");
   });
 
   it("answers the root with index.html", async () => {
@@ -315,6 +316,17 @@ describe("serving the web app", () => {
       "immutable",
     );
     expect((await fetch(`${base}/`)).headers.get("cache-control")).toBe("no-cache");
+  });
+
+  // The one file that must never be cached long: a service worker served as immutable pins the
+  // whole application to whatever it was serving on the day it was installed, and the browser has
+  // no way back from that -- the worker it would need to fetch a newer one is the stale one.
+  it("never caches the service worker as immutable", async () => {
+    await start({ webRoot: web });
+
+    const worker = await fetch(`${base}/sw.js`);
+    expect(worker.headers.get("cache-control")).toBe("no-cache");
+    expect(worker.headers.get("content-type")).toContain("javascript");
   });
 
   it("answers a deep application route with the document", async () => {

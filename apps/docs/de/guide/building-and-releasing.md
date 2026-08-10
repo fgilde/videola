@@ -139,6 +139,41 @@ iOS-Export-Methode (`--export-method app-store-connect`, weil das zum Distributi
 Verpackt wird der Anwendungsrahmen, und die Release-Notes sagen das auch. Ohne mobile
 Signaturschlüssel sind vier Artefakte das erwartete Ergebnis, nicht sechs.
 
+## Wie sich welche Ausgabe aktualisiert
+
+**Die Desktop-Ausgaben** fragen beim Start den Endpunkt und bieten an, was sie finden — im eigenen
+Dialog des Editors: welche Ausgabe, ein Knopf, und ein Balken, der sagt, wie weit das Laden ist. Oder
+er wird unbestimmt, wo der Host Bytes ohne Gesamtgröße meldet: ein Balken, der eine Zahl erfindet,
+lügt darüber, wie lange das dauert. Während des Ladens lässt er sich nicht wegklicken — Schließen
+ließe das Laden ohne Anzeige weiterlaufen, und die nächste Prüfung fing von vorn an. Ein
+fehlgeschlagenes Update sagt, dass die vorhandene Ausgabe weiterläuft, und das stimmt.
+
+Nichts davon passiert ohne Signaturschlüssel. Eine ohne Schlüssel gebaute Ausgabe trägt überhaupt
+keinen `plugins.updater`-Block, und ohne Block gibt es nichts zu prüfen — siehe die Tabelle oben.
+
+**Die Browser-Ausgabe** hat einen Service Worker, und dort holt sich ein Editor, der eine Woche in
+einem Tab offen war, seine Aktualisierung. Ein neuer Stand installiert einen neuen Worker neben dem
+laufenden, und dieser wartende Worker *ist* die neue Ausgabe: der Editor erfährt es, bietet ein
+Neuladen an, und der Tausch geschieht beim Neuladen. Unter einer laufenden Sitzung wird nichts
+getauscht — ein Worker, der von allein übernimmt, ändert das Bundle unter ungespeicherter Arbeit, und
+darum fehlt `clients.claim()` in ihm mit Absicht.
+
+Derselbe Worker macht die Browser-Ausgabe offline-fähig. Zwei Regeln, beide folgen daraus, wie Vite
+benennt, was es baut: eine Datei, deren Name einen Inhalts-Hash trägt, kann sich nie ändern und kommt
+aus dem Cache; alles andere, das Dokument voran, geht zuerst ins Netz — denn das ist die Anfrage, die
+dem Browser sagt, dass es einen neuen Stand gibt.
+
+Gecacht werden **Dateien und nichts sonst**. Eine frühere Fassung cachte jedes GET auf denselben
+Ursprung und nahm damit die Steuerungsanfragen des Test-Harness mit — unter einer virtuellen Uhr ist
+jede davon eine Pause, und ein Cache-Schreibvorgang an jeder bedeutete, dass der Editor nie zum
+Zeichnen kam. Die enge Regel ist ohnehin die richtige: eine API-Antwort aus einem Offline-Cache ist
+eine falsche Antwort, überzeugend vorgetragen.
+
+Ein Header entscheidet, ob das alles funktioniert: **`sw.js` darf nicht lange gecacht werden.** Ein
+Service Worker, der als unveränderlich ausgeliefert wird, nagelt die Anwendung auf den Stand jenes
+Tages fest, und es gibt keinen Weg zurück — der Worker, der einen neueren holen würde, ist der alte.
+Der Server sendet `no-cache` für alles außerhalb von `/assets`, und ein Test hält das fest.
+
 ## Das Docker-Image
 
 Drei Stufen: `rust:1-bookworm` baut den WASM-Kern, `node:22-bookworm-slim` installiert den Workspace

@@ -172,6 +172,39 @@ Two things the workflow has to add itself because the Tauri templates do not:
 The installers package the same shell the web app is, and the release notes say so. The expected
 result of a release without mobile signing keys is four assets, not six.
 
+## How each build updates
+
+**The desktop builds** check the endpoint on startup and offer what they find in the editor's own
+dialogue: which version, a button, and a bar that reports how far the download has got — or goes
+indeterminate where the host reports bytes with no total, because a bar that invented a number would
+be a bar lying about how long this takes. It cannot be dismissed mid-download: closing would leave
+the download running with nothing on screen to say so, and the next check would start it over. A
+failed update says the version in hand keeps working, which is true.
+
+None of that happens without a signing key. A release built without one carries no `plugins.updater`
+block at all, and a build with no block finds nothing to check — see the table above.
+
+**The browser build** has a service worker, which is where an editor left open in a tab for a week
+gets its update from. A new build installs a new worker beside the running one, and that waiting
+worker *is* the new version: the editor is told, it offers a reload, and the swap happens on the
+reload. Nothing is exchanged under a running session — a worker taking over on its own would change
+the bundle under unsaved work, which is why `clients.claim()` is deliberately absent from it.
+
+The same worker is what makes the browser build work offline. Two rules, and both follow from how
+Vite names what it builds: a file whose name carries a content hash can never change, so it is served
+from the cache; everything else, the document above all, goes to the network first, because that is
+the request which tells the browser a new build exists.
+
+It caches **files and nothing else**. An earlier version cached every same-origin GET and swept up
+the test harness's own control requests — under a virtual clock each of those is a pause, and a cache
+write hung on every one meant the editor never got a turn to draw. The narrow rule is the correct one
+anyway: an API answer served from an offline cache is a wrong answer served confidently.
+
+One header decides whether any of this works: **`sw.js` must not be cached long.** A service worker
+served as immutable pins the application to whatever it shipped that day, and there is no way back —
+the worker that would fetch a newer one is the stale one. The server sends `no-cache` for everything
+outside `/assets`, and a test holds it there.
+
 ## The Docker image
 
 Three stages. A `rust:1-bookworm` stage builds the WASM core, a `node:22-bookworm-slim` stage

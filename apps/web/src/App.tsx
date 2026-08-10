@@ -106,6 +106,7 @@ import {
   TemplateWizard,
   Timeline,
   Transport,
+  UpdateOffer,
   useI18n,
   useLayoutMode,
   type EditMode,
@@ -123,7 +124,8 @@ import {
 import { effectTiles, revokeTiles } from "./effectTiles";
 import { useTemplatePosters } from "./posters";
 import { useThumbnails } from "./thumbnails";
-import { insideTauri, offerUpdate, revealWindow } from "./updates";
+import { findDesktopUpdate, insideTauri, revealWindow, watchForWebUpdate } from "./updates";
+import type { DesktopUpdate } from "./updates";
 
 // Two of these are not failures of the program but of the file, and they read that way: a subtitle
 // file with nothing legible in it, and a project with no subtitles to write.
@@ -244,6 +246,13 @@ export function App(): ReactElement {
   const [mixerOpen, setMixerOpen] = useState(false);
   const [about, setAbout] = useState(false);
   const [keys, setKeys] = useState(false);
+  // A browser tab left open for a week runs whatever was current when it was opened. The service
+  // worker notices a new build and waits; nothing is swapped under a session with work in it, so
+  // this is an offer and the reload is the answer to it.
+  const [takeUpdate, setTakeUpdate] = useState<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    watchForWebUpdate((take) => setTakeUpdate(() => take));
+  }, []);
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -1396,6 +1405,7 @@ export function App(): ReactElement {
                 onDiscard={discard}
               />
             )}
+            {takeUpdate !== undefined && <UpdateBanner onReload={takeUpdate} />}
           </div>
           <UpdateCheck />
           {project === undefined || doc === undefined ? (
@@ -1678,17 +1688,27 @@ function added(doc: VideolaDocument, kind: TrackKind, name: string): Track | und
   return doc.state.timeline.tracks.find((candidate) => candidate.kind === kind);
 }
 
-// It renders nothing and exists only to sit inside the I18nProvider, which is where `t` lives.
-// The ref is what keeps a change of locale from asking a second time.
-function UpdateCheck(): null {
-  const { t } = useI18n();
+// The desktop updater, asked once. The ref is what keeps a change of locale from asking again -- the
+// dialogue reads the catalogue itself, so nothing here depends on `t`.
+function UpdateCheck(): ReactElement | null {
+  const [found, setFound] = useState<DesktopUpdate>();
+  const [dismissed, setDismissed] = useState(false);
   const asked = useRef(false);
+
   useEffect(() => {
     if (asked.current) return;
     asked.current = true;
-    void offerUpdate(t);
-  }, [t]);
-  return null;
+    void findDesktopUpdate().then(setFound);
+  }, []);
+
+  if (found === undefined || dismissed) return null;
+  return (
+    <UpdateOffer
+      version={found.version}
+      install={found.install}
+      onClose={() => setDismissed(true)}
+    />
+  );
 }
 
 function ErrorBanner({ error }: { error?: ShellError }): ReactElement | null {
@@ -1714,6 +1734,21 @@ function WarningBanner({ warnings }: { warnings: LoadWarning[] }): ReactElement 
   return (
     <p role="alert" className="v-banner v-banner--alert">
       {t("warning.missingMedia", { count: missingMedia })}
+    </p>
+  );
+}
+
+// The same shape as the restore offer below, and for the same reason: nothing has gone wrong, a new
+// version is simply there. It says what the reload is for, because "reload" on its own reads as
+// "something is stuck".
+function UpdateBanner({ onReload }: { onReload: () => void }): ReactElement {
+  const { t } = useI18n();
+  return (
+    <p role="status" className="v-banner v-banner--offer" data-testid="update-banner">
+      <span>{t("update.web")}</span>
+      <button type="button" className="v-button" onClick={onReload}>
+        {t("update.reload")}
+      </button>
     </p>
   );
 }

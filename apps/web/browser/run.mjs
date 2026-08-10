@@ -46,6 +46,9 @@ const CHROME_CANDIDATES = [
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
+  // A worker served as anything but JavaScript is refused by the browser, and a manifest served as
+  // text is ignored: both are the sort of fault only a real browser reports.
+  ".webmanifest": "application/manifest+json",
   // The charset is spelled out because the driver matches German control labels by their text,
   // and a classic script inheriting the wrong encoding turns every umlaut into a miss.
   ".js": "text/javascript; charset=utf-8",
