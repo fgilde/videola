@@ -30,6 +30,13 @@ zone on the screen and neither of them is worth giving that up unasked.
 | Two pointers | zoom by the change in distance |
 | Long press | opens the context menu |
 
+A clip can be **switched off** rather than deleted: it keeps its place and its length, nothing draws it
+and nothing plays it, and it is drawn dimmed and hatched. That is how two takes are compared — deleting
+one and pasting it back is a different operation, and it loses where the clip was.
+
+A drag over empty timeline draws a **rubber band** and selects what it touches; dragged shut it gives
+the selection back.
+
 Ripple delete closes the gap it leaves. Groups move together. Cut, copy and paste work on whole
 clips, markers sit on the ruler, and a selection can be folded into a **compound clip** — that the
 picture does not change when you do is proven against the whole frame buffer, the draw list at
@@ -66,9 +73,17 @@ tile that failed to change the picture it was drawn from fails the build, which 
 effect from advertising itself with its own default value.
 
 Brightness, contrast, saturation, colour temperature, curves, colour wheels, lookup tables,
-vignette, blur, sharpen and chroma key. Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
+vignette, blur, sharpen, mosaic, directional blur, glow and chroma key. Cross dissolve, wipe, slide, iris, zoom, blur dissolve and dip-to-colour. Rectangular and elliptical
 masks with feather and invert; two masks in one chain intersect. A text generator with styling and
 in, out and loop animation.
+
+**Motion blur** is not one of them, deliberately: a clip carries a shutter and the renderer averages it
+over eight real instants of that exposure, each with its own source time and its own placement. No
+shader can produce that from one picture, which is why the directional blur above is named for what it
+is. See [Effects and transitions](./effects-and-transitions.md#motion-blur).
+
+An effect can be **switched off** without being removed, and removed without being switched off: bypass
+keeps every parameter and keyframe in place. Until this version there was no command for either.
 
 
 Every parameter can be keyframed — including a clip's position, scale, rotation and opacity — and a
@@ -198,6 +213,20 @@ Each track and the master can carry **inserts**: a peaking EQ, a compressor, a l
 ahead of the fader, console-style, so the fader rides the levelled signal. Their parameters are
 keyframable like any other, and the same resolver serves the preview, the export, the server and
 the loudness meter.
+
+**Stereo or 5.1**, chosen on the master strip. In a surround project every track has a position in the
+field rather than a place between two speakers: pan left to right, **rear** front to back, and an
+**LFE** send that is a band — a low-pass at the 120 Hz the specification for that channel names — rather
+than a place. Placement is pairwise and constant-power between adjacent speakers, so a sweep keeps its
+loudness; a stereo bed keeps the width it was recorded with, and a bed panned inwards reaches the centre
+speaker. A 5.1 mix the browser cannot encode is delivered in stereo with its placement kept, rather than
+in silence.
+
+**Noise reduction** is spectral, and it is the one thing the low and high cut cannot be: it separates a
+voice from noise sharing its band. The floor is learned from the pauses in the clip itself, and each
+window is turned down per bin by however much of it is floor. It runs over the decoded buffer rather
+than as an insert, because the analysis needs the whole recording — so the waveform strip visibly
+changes when it is switched on, which is the same buffer the preview and the export use.
 
 Loudness is measured to EBU R128 and verified against the Tech 3341 conformance cases. The limiter's
 knob is called **threshold**, not ceiling: the browser's compressor applies its own makeup gain, so

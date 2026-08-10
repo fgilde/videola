@@ -32,6 +32,14 @@ auf dem Schirm, und keines von beidem ist es wert, das ungefragt aufzugeben.
 | Zwei Zeiger | zoomen über die Abstandsänderung |
 | Langes Drücken | öffnet das Kontextmenü |
 
+Ein Clip lässt sich **ausschalten** statt löschen: er behält seinen Platz und seine Länge, nichts
+zeichnet ihn und nichts spielt ihn, und er erscheint abgedunkelt und schraffiert. So vergleicht man zwei
+Takes — einen zu löschen und wieder einzufügen ist eine andere Handlung, und sie verliert, wo der Clip
+war.
+
+Ein Zug über leere Zeitleiste zieht ein **Gummiband** und wählt aus, was es berührt; zugezogen gibt es
+die Auswahl wieder her.
+
 Ripple-Löschen schließt die Lücke, die es hinterlässt. Gruppen bewegen sich gemeinsam. Ausschneiden,
 Kopieren und Einfügen arbeiten auf ganzen Clips, Marker sitzen im Lineal, und eine Auswahl lässt sich
 zu einem **Compound-Clip** zusammenfassen — dass sich das Bild dabei nicht ändert, ist gegen den
@@ -70,10 +78,20 @@ die das Bild nicht verändert, aus dem sie gezeichnet wurde, lässt den Bau sche
 verhindert, dass ein Effekt mit seinem eigenen Standardwert für sich wirbt.
 
 Helligkeit, Kontrast, Sättigung, Farbtemperatur, Kurven, Farbräder, Farbtabellen, Vignette,
-Weichzeichnen, Schärfen und Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
+Weichzeichnen, Schärfen, Verpixeln, Richtungsunschärfe, Leuchten und Chroma-Keying. Überblendung, Wischen, Schieben, Kreisblende, Zoom, Weichzeichnen-Blende und Blende
 über eine frei gewählte Farbe. Rechteckige und elliptische Masken mit weicher Kante und
 Invertierung; zwei Masken in einer Kette schneiden sich. Ein Textgenerator mit Gestaltung sowie
 Ein-, Aus- und Schleifenanimation.
+
+**Bewegungsunschärfe** ist keiner davon, und das mit Absicht: ein Clip trägt eine Belichtung, und der
+Renderer mittelt ihn über acht echte Zeitpunkte dieser Belichtung, jeden mit eigener Quellzeit und
+eigener Platzierung. Kein Shader kann das aus einem Bild herstellen — deshalb heißt die
+Richtungsunschärfe oben nach dem, was sie ist. Siehe
+[Effekte und Übergänge](./effects-and-transitions.md#bewegungsunscharfe).
+
+Ein Effekt lässt sich **ausschalten**, ohne entfernt zu werden, und entfernen, ohne ausgeschaltet zu
+sein: Überbrücken lässt jeden Parameter und jeden Keyframe stehen. Bis zu dieser Fassung gab es für
+beides keinen Befehl.
 
 Ausgewählt werden sie in einer **Bibliothek zum Ansehen**: nach Kategorien geordnet, in beiden
 Sprachen durchsuchbar — und jede Kachel darin ist der Shader dieses Effekts selbst, gerechnet über
@@ -218,7 +236,22 @@ Limiter. Sie sitzen vor dem Fader wie an einem Pult, damit der Fader das gepegel
 Parameter sind keyframebar wie alle anderen, und derselbe Auflöser bedient Vorschau, Export, Server
 und Lautheitsmessung.
 
-Die Lautheit wird nach EBU R128 gemessen und gegen die Tech-3341-Fälle geprüft. Der Regler des
+Die **Stereo oder 5.1**, gewählt am Master-Streifen. In einem Surround-Projekt hat jede Spur eine Position
+im Feld statt eines Platzes zwischen zwei Boxen: Panorama links/rechts, **hinten** von vorne nach
+hinten, und ein **LFE**-Weg, der ein Band ist — ein Tiefpass bei den 120 Hz, die die Spezifikation für
+diesen Kanal nennt — und kein Ort. Platziert wird paarweise zwischen benachbarten Boxen mit konstanter
+Leistung, eine Bewegung behält also ihre Lautheit; ein Stereobett behält die Breite, mit der es
+aufgenommen wurde, und nach innen gezogen erreicht es die Center-Box. Eine 5.1-Mischung, die der
+Browser nicht kodiert, wird in Stereo ausgegeben und behält ihre Platzierung, statt still zu sein.
+
+**Rauschunterdrückung** ist spektral und das Einzige, was Tiefen- und Höhensperre nicht sein können: sie
+trennt eine Stimme von einem Geräusch, das ihr Band teilt. Der Boden wird aus den Pausen des Clips
+selbst gelernt, und jedes Fenster wird pro Bin um so viel abgesenkt, wie davon Boden ist. Es läuft über
+dem dekodierten Puffer und nicht als Insert, weil die Analyse die ganze Aufnahme braucht — deshalb
+ändert sich der Wellenform-Streifen sichtbar, wenn man es einschaltet, und das ist derselbe Puffer, den
+Vorschau und Export benutzen.
+
+Lautheit wird nach EBU R128 gemessen und gegen die Tech-3341-Fälle geprüft. Der Regler des
 Limiters heißt **Schwelle**, nicht Ceiling: der Kompressor des Browsers legt eigenen Ausgleichspegel
 drauf, ist also keine Brickwall — und die Doku sagt das, statt etwas anderes anzudeuten.
 
