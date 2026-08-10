@@ -1490,6 +1490,57 @@ mod tests {
         ));
     }
 
+    // A shape has a fill, so a colour slot may name it. A countdown's number is drawn in the one
+    // colour the renderer gives it, so a colour slot on one would be a question in the wizard whose
+    // answer goes nowhere -- the same failure a text answer written into a solid would be.
+    #[test]
+    fn a_colour_slot_may_name_a_shape_and_may_not_name_a_countdown() {
+        let mut shape = with_slot(
+            generator_template(Generator::Shape {
+                shape: "circle".into(),
+                color: "#ff0000".into(),
+            }),
+            SlotKind::Color,
+            SlotBinding::GeneratorColor {
+                clip: ClipId::from("clp_a".to_string()),
+            },
+        );
+        assert!(shape.normalize().is_ok());
+
+        let baked = shape
+            .bake(
+                &answers(&[(
+                    "answer",
+                    SlotAnswer::Color {
+                        color: "#00ff00".into(),
+                    },
+                )]),
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            baked.timeline.tracks[0].clips[0].source,
+            ClipSource::Generator {
+                generator: Generator::Shape {
+                    shape: "circle".into(),
+                    color: "#00ff00".into()
+                }
+            }
+        );
+
+        let mut counting = with_slot(
+            generator_template(Generator::Countdown { from_seconds: 3 }),
+            SlotKind::Color,
+            SlotBinding::GeneratorColor {
+                clip: ClipId::from("clp_a".to_string()),
+            },
+        );
+        assert!(matches!(
+            counting.normalize(),
+            Err(CoreError::InvalidArgument(_))
+        ));
+    }
+
     #[test]
     fn a_colour_answer_reaches_a_solid_and_meets_the_same_gate_a_background_does() {
         let mut template = with_slot(

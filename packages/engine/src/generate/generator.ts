@@ -69,6 +69,16 @@ export function countdownNumber(fromSeconds: number, atSeconds: number): number 
   return Math.max(from - Math.floor(Math.max(atSeconds, 0)), 0);
 }
 
+// What was painted, not when. The whole generator and the output size, plus -- for a countdown -- the
+// number standing on screen: an edit to the content, a change of resolution or a second going by
+// repaints, and nothing else does. Two instants inside the same second give the same key, which is
+// what keeps a full text layout off every frame.
+export function generatorKey(generator: Generator, size: Size, atSeconds: number): string {
+  const shown =
+    generator.type === "countdown" ? countdownNumber(generator.fromSeconds, atSeconds) : 0;
+  return `${size.width}x${size.height}|${shown}|${JSON.stringify(generator)}`;
+}
+
 // Big, centred, and heavy enough to read over anything. Not configurable: the model carries one field
 // for a countdown, and a style on top of it would be a second way to write a title.
 const COUNTDOWN_STYLE: Readonly<Record<string, JsonValue>> = {
@@ -98,6 +108,10 @@ function paintShape(
     ctx.fillRect(cx - side / 2, cy - side / 2, side, side);
     return;
   }
+  // Named, never a fallback. A shape this does not know has to leave the frame alone: falling
+  // through to whichever branch came last would draw an ellipse for `hexagon`, which is the picture
+  // promising something nobody authored.
+  if (shape !== "triangle" && shape !== "circle" && shape !== "ellipse") return;
   ctx.beginPath();
   if (shape === "triangle") {
     ctx.moveTo(cx, cy - side / 2);
@@ -195,13 +209,8 @@ export class GeneratorFrames {
 
   #frame(clip: Clip, size: Size, atSeconds: number): VideoFrame | undefined {
     if (clip.source.kind !== "generator") return undefined;
-    // What was painted, not when: the key is the whole generator, the size and -- for a countdown --
-    // the number standing on screen, so an edit to the content, a change of output resolution or a
-    // second going by repaints, and nothing else does.
     const generator = clip.source.generator;
-    const shown =
-      generator.type === "countdown" ? countdownNumber(generator.fromSeconds, atSeconds) : 0;
-    const key = `${size.width}x${size.height}|${shown}|${JSON.stringify(generator)}`;
+    const key = generatorKey(generator, size, atSeconds);
     const held = this.#painted.get(clip.id);
     if (held?.key === key) return held.frame;
     held?.frame.close();

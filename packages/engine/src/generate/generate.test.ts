@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Clip, JsonValue, Transform } from "@videola/core";
 
-import { countdownNumber, paintsGenerator } from "./generator";
+import { countdownNumber, generatorKey, paintGenerator, paintsGenerator } from "./generator";
 import { generatorMotion } from "./motion";
 import { textStyle } from "./text";
 
@@ -206,5 +206,118 @@ describe("which generators have pixels", () => {
 
   it("draws a countdown, which the model has always carried", () => {
     expect(paintsGenerator({ type: "countdown", fromSeconds: 3 })).toBe(true);
+  });
+});
+
+// A fake canvas, because what matters here is which glyphs were asked for and jsdom has no 2D
+// context. Only the handful of members `paintText` touches: a missing one would throw rather than
+// pass quietly, which is the failure mode a stub has to have.
+function recorder(): { ctx: OffscreenCanvasRenderingContext2D; drawn: string[]; fills: number } {
+  const drawn: string[] = [];
+  const state = { fills: 0 };
+  const ctx = {
+    font: "",
+    letterSpacing: "",
+    textAlign: "center",
+    textBaseline: "middle",
+    lineWidth: 0,
+    lineJoin: "round",
+    fillStyle: "",
+    strokeStyle: "",
+    shadowColor: "",
+    shadowBlur: 0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    clearRect: () => {},
+    fillRect: () => {
+      state.fills += 1;
+    },
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    closePath: () => {},
+    arc: () => {},
+    ellipse: () => {},
+    fill: () => {
+      state.fills += 1;
+    },
+    measureText: (text: string) => ({ width: text.length * 10 }),
+    fillText: (text: string) => drawn.push(text),
+    strokeText: () => {},
+  };
+  return {
+    ctx: ctx as unknown as OffscreenCanvasRenderingContext2D,
+    drawn,
+    get fills() {
+      return state.fills;
+    },
+  };
+}
+
+// The instant reaches the paint. Everything else in this renderer paints the same picture whenever it
+// is asked; a countdown is the exception, and a picture that ignored the time it was handed would
+// stand on its first number for the whole clip.
+describe("painting a countdown", () => {
+  it("draws the number the moment stands on", () => {
+    const first = recorder();
+    paintGenerator(first.ctx, { type: "countdown", fromSeconds: 3 }, FRAME, 0);
+    expect(first.drawn).toEqual(["3"]);
+
+    const later = recorder();
+    paintGenerator(later.ctx, { type: "countdown", fromSeconds: 3 }, FRAME, 1.4);
+    expect(later.drawn).toEqual(["2"]);
+  });
+
+  it("draws nothing once the count is out", () => {
+    const spent = recorder();
+    paintGenerator(spent.ctx, { type: "countdown", fromSeconds: 3 }, FRAME, 3);
+    expect(spent.drawn).toEqual([]);
+  });
+});
+
+describe("painting a shape", () => {
+  it("fills for a shape it knows and leaves the frame alone for one it does not", () => {
+    for (const shape of ["rectangle", "square", "ellipse", "circle", "triangle"]) {
+      const drawn = recorder();
+      paintGenerator(drawn.ctx, { type: "shape", shape, color: "#ff0000" }, FRAME);
+      expect(drawn.fills).toBe(1);
+      expect(drawn.ctx.fillStyle).toBe("#ff0000");
+    }
+    const unknown = recorder();
+    paintGenerator(unknown.ctx, { type: "shape", shape: "hexagon", color: "#ff0000" }, FRAME);
+    expect(unknown.fills).toBe(0);
+  });
+
+  // A colour off a project file reaches `fillStyle`, where an unparseable one leaves it at whatever
+  // it was -- which is why it falls back here instead.
+  it("keeps a colour that is not a colour off the canvas", () => {
+    const drawn = recorder();
+    paintGenerator(drawn.ctx, { type: "shape", shape: "circle", color: "rebeccapurple" }, FRAME);
+    expect(drawn.ctx.fillStyle).toBe("#ffffff");
+  });
+});
+
+// A generator's picture is painted once and held, which is what keeps a text layout off every frame.
+// A countdown is the one that has to be repainted anyway, and the key is where that is decided: a key
+// that ignored the instant would leave the first number standing for the whole clip.
+describe("when a generator's picture has to be painted again", () => {
+  const countdown = { type: "countdown", fromSeconds: 3 } as const;
+
+  it("repaints a countdown once a second and not once a frame", () => {
+    expect(generatorKey(countdown, FRAME, 0)).toBe(generatorKey(countdown, FRAME, 0.9));
+    expect(generatorKey(countdown, FRAME, 0)).not.toBe(generatorKey(countdown, FRAME, 1));
+  });
+
+  it("holds every other generator whatever the instant", () => {
+    const title = { type: "text", content: "Hello", style: {} } as const;
+    expect(generatorKey(title, FRAME, 0)).toBe(generatorKey(title, FRAME, 12));
+  });
+
+  it("repaints on an edit and on a change of output size", () => {
+    const other = { type: "countdown", fromSeconds: 5 } as const;
+    expect(generatorKey(countdown, FRAME, 0)).not.toBe(generatorKey(other, FRAME, 0));
+    expect(generatorKey(countdown, FRAME, 0)).not.toBe(
+      generatorKey(countdown, { width: 3840, height: 2160 }, 0),
+    );
   });
 });
