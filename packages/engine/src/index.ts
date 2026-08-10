@@ -72,6 +72,8 @@ export type {
   EffectPass,
 } from "./render/draw-list";
 export { EffectPreview, referencePicture } from "./render/preview";
+export { blurAmounts, exposure, itemFor, placementAt, SHUTTER_SAMPLES } from "./render/motion-blur";
+export type { Smear } from "./render/motion-blur";
 export { compileProgram, setUniforms } from "./render/program";
 export { measure, SCOPE_LEVELS, VECTOR_SIZE, VECTOR_TARGETS } from "./render/scopes";
 export type { Histogram, ScopeReading } from "./render/scopes";

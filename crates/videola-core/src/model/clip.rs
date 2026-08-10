@@ -9,6 +9,10 @@ use super::effect::{Effect, Transition};
 use super::keyframe::{evaluate, evaluate_path, integrate, Keyframe};
 use super::{ClipId, GroupId, MediaId, ParamValue, Time};
 
+fn is_zero(value: &f32) -> bool {
+    *value == 0.0
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Clip {
@@ -27,6 +31,12 @@ pub struct Clip {
     pub fades: Fades,
     pub volume: f32,
     pub pan: f32,
+    /// How much of a frame this clip was exposed for, as a fraction: 0 is off, 0.5 is a 180-degree
+    /// shutter, 1 is the whole frame. Named for the camera setting it stands in for, because that is
+    /// what decides how long a smear is -- and defaulted to off, because a smear nobody asked for is
+    /// a renderer deciding how somebody's edit looks.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub motion_blur: f32,
     #[serde(default)]
     pub effects: Vec<Effect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -63,6 +73,7 @@ impl Clip {
             fades: Fades::default(),
             volume: 1.0,
             pan: 0.0,
+            motion_blur: 0.0,
             effects: Vec::new(),
             transition_in: None,
             transition_out: None,

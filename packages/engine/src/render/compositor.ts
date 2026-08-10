@@ -9,6 +9,7 @@ import type { LutTable } from "@videola/media";
 import type { Uniform } from "../effects/registry";
 import type { GlContext } from "./context";
 import type { DrawGroup, DrawItem, DrawNode } from "./draw-list";
+import type { Smear } from "./motion-blur";
 
 const VERTEX_SOURCE = `#version 300 es
 in vec2 a_quad;
@@ -135,6 +136,8 @@ interface Resources {
 // Nothing here keeps a frame past the call. texImage2D copies the pixels, so the texture outlives
 // the frame it came from -- and a closed frame reports zero for its size, which is why the size
 // is only ever read after `format` has confirmed the frame is alive.
+const NO_SMEAR: ReadonlyMap<string, readonly Smear[]> = new Map();
+
 export class Compositor {
   #gl: WebGL2RenderingContext;
   #maxTextureSize: number;
@@ -174,13 +177,14 @@ export class Compositor {
     params: EffectParamSnapshot,
     transforms: TransformSnapshot,
     luts: ReadonlyMap<string, LutTable> = NO_LUTS,
+    smear: ReadonlyMap<string, readonly Smear[]> = NO_SMEAR,
   ): void {
     if (this.#disposed || this.#gl.isContextLost()) return;
     const list = drawList(project, at, params, transforms);
     const resources = this.#resources ?? this.#build();
     this.#lutSlots(luts);
     this.#begin(list.background);
-    this.#paint(resources, list.items, frames, undefined, 0);
+    this.#paint(resources, list.items, frames, undefined, 0, smear);
     this.#release(new Set(drawnClips(list)));
   }
 
@@ -297,27 +301,37 @@ export class Compositor {
     frames: ReadonlyMap<string, VideoFrame>,
     surface: RenderTarget | undefined,
     level: number,
+    smear: ReadonlyMap<string, readonly Smear[]> = NO_SMEAR,
   ): void {
     for (const node of nodes) {
       if (isGroup(node)) {
-        this.#isolate(resources, node, frames, surface, level);
+        this.#isolate(resources, node, frames, surface, level, smear);
         continue;
       }
       const frame = frames.get(node.clip);
       const fresh = frame !== undefined && uploadable(frame, this.#maxTextureSize);
+      // A smeared clip brings its pictures with its samples rather than in `frames`, so it counts as
+      // having one: without this a clip that is only ever drawn from its exposure would be dropped
+      // here for having no frame of its own.
+      //
+      // A smeared clip always takes the chained path. Its samples are averaged into a target of its
+      // own and composited once: accumulated straight onto the surface, eight copies at an eighth of
+      // the opacity would leave seven eighths of the background showing through an opaque clip.
+      const exposure = smear.get(node.clip);
+      const smeared = exposure !== undefined && exposure.length > 0;
       // A frame that is late must not blank the clip. texImage2D copied the last one into the
       // texture, so redrawing without an upload holds the picture instead of punching a hole for
       // one tick -- and a clip that never had a frame is still left out, because its texture would
       // sample as opaque black.
-      if (!fresh && !this.#textures.has(node.clip)) continue;
+      if (!fresh && !smeared && !this.#textures.has(node.clip)) continue;
       const source = fresh ? frame : undefined;
-      if (node.effects.length === 0 && node.mix === undefined) {
+      if (exposure === undefined && node.effects.length === 0 && node.mix === undefined) {
         this.#surface(surface);
         this.#blend(node);
         this.#drawQuad(resources, node, source, node.opacity);
         continue;
       }
-      this.#chained(resources, node, source, surface, level);
+      this.#chained(resources, node, source, surface, level, exposure);
     }
   }
 
@@ -330,6 +344,7 @@ export class Compositor {
     frame: VideoFrame | undefined,
     surface: RenderTarget | undefined,
     level: number,
+    exposure?: readonly Smear[],
   ): void {
     const gl = this.#gl;
     const width = gl.drawingBufferWidth;
@@ -338,7 +353,11 @@ export class Compositor {
     const second = this.#slot(level * 2 + 1);
     gl.disable(gl.BLEND);
     first.bind(width, height);
-    this.#drawQuad(resources, item, frame, 1);
+    if (exposure === undefined || exposure.length === 0) {
+      this.#drawQuad(resources, item, frame, 1);
+    } else {
+      this.#expose(resources, item, exposure);
+    }
 
     let source = first;
     let spare = second;
@@ -359,13 +378,14 @@ export class Compositor {
     frames: ReadonlyMap<string, VideoFrame>,
     surface: RenderTarget | undefined,
     level: number,
+    smear: ReadonlyMap<string, readonly Smear[]> = NO_SMEAR,
   ): void {
     const gl = this.#gl;
     const width = gl.drawingBufferWidth;
     const height = gl.drawingBufferHeight;
     const content = this.#slot(level * 2);
     content.bind(width, height);
-    this.#paint(resources, group.items, frames, content, level + 1);
+    this.#paint(resources, group.items, frames, content, level + 1, smear);
 
     const matrix = group.matrix;
     // Nothing between the group and the surface but its own placement: one quad, no scratch target
@@ -486,6 +506,45 @@ export class Compositor {
       u_opacity: opacity,
     });
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  /**
+   * One clip, averaged over its exposure: the same quad drawn once per sample, each carrying that
+   * sample's own picture and its own placement, added together at a matching fraction of the opacity.
+   *
+   * Additive rather than a chain of overs, because an average is a sum: `ONE, ONE` on a target the
+   * bind cleared to zero leaves exactly the mean of the samples, and premultiplied values make that
+   * mean a colour rather than an arithmetic accident. A run of `over` operations would instead weigh
+   * the last sample most and the first least, which is a trail rather than a smear.
+   *
+   * One texture, uploaded per sample. The samples are drawn one at a time and each upload replaces
+   * the last, so eight pictures cost one texture and eight uploads -- and the frames themselves are
+   * the caller's, closed by whoever opened them.
+   *
+   * ponytail: the target is 8-bit, so each sample rounds by up to half a level and a full exposure can
+   * be four levels out of 255 from the true mean. Below what anybody sees in a smear; an RGBA16F
+   * target behind `EXT_color_buffer_float` is the fix if a grade ever has to be graded off one.
+   */
+  #expose(resources: Resources, item: DrawItem, exposure: readonly Smear[]): void {
+    const gl = this.#gl;
+    const share = 1 / exposure.length;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    for (const sample of exposure) {
+      // The same liveness check the ordinary path makes: a frame closed between the gather and here
+      // reports zero for its size, and uploading one is a driver error rather than a missing picture.
+      const picture =
+        sample.frame !== undefined && uploadable(sample.frame, this.#maxTextureSize)
+          ? sample.frame
+          : undefined;
+      this.#drawQuad(
+        resources,
+        { ...item, matrix: sample.matrix, uv: sample.uv },
+        picture,
+        share,
+      );
+    }
+    gl.disable(gl.BLEND);
   }
 
   #texture(clip: string): WebGLTexture {

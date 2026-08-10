@@ -675,6 +675,50 @@ canvas that is a transparent hole around the shrunken picture, and a transparent
 showing through. An over-operator only ever adds. The check that catches it reads the corner of the
 frame through a coloured page.
 
+## Motion blur
+
+**Built.** A clip carries a **shutter**: how much of a frame it was exposed for, as a fraction —
+0 is off, 0.5 is a 180-degree shutter, 1 is the whole frame. The renderer draws that clip once per
+instant of the exposure and averages the results.
+
+That is motion blur rather than a blur that points somewhere. Each of the eight instants is a real
+instant: the core is asked where the clip reads from *then* and where it stands *then*, and the
+decoder is asked for that picture. So a clip travelling across the frame smears along its own path,
+including a curved one, and material moving inside the shot smears because the samples land on
+different source frames. No shader can produce either from one picture, which is why the directional
+blur in the effect library is named for what it is instead.
+
+| Where | What it costs |
+|---|---|
+| Preview | eight gathers and eight draws per smeared clip per tick; the transport drops frames on a slow machine, as it does for any other load |
+| Export | the same eight decodes per output frame, at full quality, on the master rather than the proxy |
+
+**What it cannot invent.** Temporal detail the material does not have. Where the shutter covers less
+than one source frame — the ordinary case at matching frame rates — the samples fall on the one or two
+frames it straddles, and what smears is the layer's own movement plus the crossfade between those two.
+A clip running fast, or one whose material is at a higher rate than the project, has more frames inside
+the window and its subject smears as well. That limit belongs to the footage, not to the renderer.
+
+**Centred, not trailing.** A camera's shutter opens before the moment the frame is named after and
+closes after it. A trailing window would drag everything moving half an exposure behind where it is,
+which reads as lag rather than as motion. The samples sit inside the window rather than on its edges,
+because two neighbouring frames sharing an instant would put a seam at every frame boundary of a
+full-frame shutter.
+
+**Averaged, not laid over.** The samples go additively onto a target the bind cleared to zero, each at
+a matching fraction of the opacity, and the average is composited once. A run of `over` operations
+would weigh the last sample most and the first least — a trail rather than a smear — and eight copies
+at an eighth of the opacity drawn straight onto the frame would leave seven eighths of the background
+showing through an opaque clip. A smeared clip therefore always takes the chained path, the same one an
+effect puts it on.
+
+An exposure clipped by a cut contributes fewer samples, each weighing more: the window reaches past the
+clip's own edge, and a sample there would be the neighbour's picture inside this clip's smear.
+
+A generator has no decoder, so its samples take the painted picture and differ only in where the layer
+stood. That is the whole of a title's smear, and it is why a moving title blurs while a still one does
+not cost a thing.
+
 ## Titles
 
 A generator clip has no medium behind it. Its picture is painted rather than decoded, and it fills
@@ -769,8 +813,6 @@ project actually carries an effect.
   once two position keys exist, sampled from the core at forty-eight instants rather than drawn key
   to key, with a handle on each key. What is still missing is a handle for a *bezier* segment's own
   control points on the picture — the curve field on the timeline is where those are dragged.
-- **Motion blur** needs more than one moment per output frame, which means more than one decoded
-  frame per output frame. That is a change to the gather, not to a shader — see below.
 - **A `.cube` with a domain other than 0 to 1 is refused**, and so is a one-dimensional one. Both
   are deliberate (see above); a wider domain would want the domain carried into the shader as two
   more uniforms, which is a small step whenever a real file asks for it.

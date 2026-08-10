@@ -441,6 +441,10 @@ fn every_command_undoes_to_the_exact_prior_state() {
             clip: clip.clone(),
             volume: 0.5,
         },
+        |Fixture { clip, .. }| Command::ClipSetMotionBlur {
+            clip: clip.clone(),
+            amount: 0.5,
+        },
         |Fixture { clip, .. }| Command::EffectAdd {
             target: EffectTarget::Clip { clip: clip.clone() },
             effect_type: "contrast".into(),

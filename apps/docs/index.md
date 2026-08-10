@@ -85,6 +85,8 @@ features:
 - **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
   computed from the very matrix the compositor hands the GPU, and the motion path a series of
   position keys traces, sampled from the core rather than drawn corner to corner.
+- **Motion blur** — a shutter per clip, averaged over eight real instants of the exposure: the layer's
+  own path and whatever the material did between them, in the preview and in the file.
 - **Effects and transitions** — sixteen effects, seven transitions (any of them on every cut in one
   choice), masks, a text generator, colour
   curves and lift/gamma/gain wheels, chosen from a browser whose every tile is that effect's own
@@ -120,10 +122,8 @@ features:
 
 ## What is not there yet
 
-No motion blur. No noise reduction: the low and high cut take away a band, which is not the same as
-separating a voice from noise sharing its band. Motion blur means more than one decoded frame per
-output frame, which is a change to the gather rather than a shader — the directional blur beside it is
-the one a person aims by hand, and it says so in its name. The magnetic timeline is deliberately absent, and
+No noise reduction yet: the low and high cut take away a band, which is not the same as separating a
+voice from noise sharing its band. The magnetic timeline is deliberately absent, and
 the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
 browser's own encoders.
 

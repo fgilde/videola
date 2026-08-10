@@ -710,6 +710,52 @@ Leinwand ist das ein durchsichtiges Loch um das geschrumpfte Bild herum, und ein
 ist die Seite, die durchs Bild scheint. Ein Über-Operator addiert nur. Die Prüfung, die das fängt,
 liest die Ecke des Bildes durch eine farbige Seite.
 
+## Bewegungsunschärfe
+
+**Gebaut.** Ein Clip trägt eine **Belichtung**: wie viel von einem Bild er belichtet wurde, als Anteil
+— 0 ist aus, 0,5 ist eine 180-Grad-Blende, 1 das ganze Bild. Der Renderer zeichnet den Clip einmal pro
+Zeitpunkt dieser Belichtung und mittelt die Ergebnisse.
+
+Das ist Bewegungsunschärfe und nicht eine Unschärfe mit Richtung. Jeder der acht Zeitpunkte ist ein
+echter Zeitpunkt: der Kern wird gefragt, woher der Clip *dann* liest und wo er *dann* steht, und der
+Dekoder nach genau diesem Bild. Ein Clip, der durchs Bild wandert, zieht deshalb entlang seiner eigenen
+Bahn, auch einer gebogenen, und Material, das sich innerhalb der Aufnahme bewegt, zieht mit, weil die
+Abtastungen auf verschiedene Quellbilder fallen. Kein Shader kann eines von beidem aus einem Bild
+herstellen — deshalb heißt die Richtungsunschärfe in der Effektbibliothek nach dem, was sie ist.
+
+| Wo | Was es kostet |
+|---|---|
+| Vorschau | acht Abfragen und acht Zeichnungen je verschmiertem Clip und Tick; auf einer langsamen Maschine lässt der Transport Bilder fallen, wie bei jeder anderen Last |
+| Export | dieselben acht Dekodierungen je Ausgabebild, in voller Qualität, vom Original und nicht vom Proxy |
+
+**Was es nicht erfinden kann.** Zeitliche Auflösung, die das Material nicht hat. Deckt die Belichtung
+weniger als ein Quellbild ab — der übliche Fall bei gleichen Bildraten —, fallen die Abtastungen auf die
+ein oder zwei Bilder, die sie überspannt, und es zieht die Bewegung der Ebene plus die Überblendung
+zwischen diesen zwei. Ein schnell laufender Clip, oder einer, dessen Material höher getaktet ist als
+das Projekt, hat mehr Bilder im Fenster, und dann zieht auch das Motiv. Diese Grenze gehört dem
+Material, nicht dem Renderer.
+
+**Zentriert, nicht nachlaufend.** Die Blende einer Kamera öffnet vor dem Moment, nach dem das Bild
+benannt ist, und schließt danach. Ein nachlaufendes Fenster zöge alles Bewegte um eine halbe Belichtung
+hinter seine eigene Position — das liest sich als Verzögerung und nicht als Bewegung. Die Abtastungen
+sitzen im Fenster und nicht auf seinen Rändern: zwei benachbarte Bilder, die sich einen Zeitpunkt
+teilen, ergäben bei ganzer Blende an jeder Bildgrenze eine Nahtstelle.
+
+**Gemittelt, nicht übereinandergelegt.** Die Abtastungen gehen additiv auf eine Fläche, die das Binden
+auf Null geräumt hat, jede mit dem passenden Anteil der Deckkraft, und der Mittelwert wird einmal
+komponiert. Eine Kette von `over`-Operationen wöge die letzte Abtastung am schwersten und die erste am
+leichtesten — eine Schleppe statt eines Zuges —, und acht Kopien mit einem Achtel Deckkraft direkt aufs
+Bild gezeichnet ließen sieben Achtel des Hintergrunds durch einen deckenden Clip scheinen. Ein
+verschmierter Clip geht deshalb immer den verketteten Weg, denselben, auf den ihn ein Effekt setzt.
+
+Eine von einem Schnitt beschnittene Belichtung liefert weniger Abtastungen, jede mit mehr Gewicht: das
+Fenster reicht über die eigene Kante des Clips hinaus, und eine Abtastung dort wäre das Bild des
+Nachbarn im Zug dieses Clips.
+
+Ein Generator hat keinen Dekoder, seine Abtastungen nehmen also das gemalte Bild und unterscheiden sich
+nur darin, wo die Ebene stand. Das ist der ganze Zug eines Titels — und der Grund, warum ein bewegter
+Titel zieht und ein stehender nichts kostet.
+
 ## Titel
 
 Ein Generator-Clip hat kein Medium hinter sich. Sein Bild wird gemalt statt dekodiert, und es füllt
@@ -806,8 +852,6 @@ Projekt wirklich einen Effekt trägt.
   Zeitpunkten abgetastet statt von Key zu Key gezeichnet — mit einem Griff auf jedem Key. Was fehlt,
   ist ein Griff für die Kontrollpunkte eines *Bezier*-Abschnitts im Bild; die werden im Kurvenfeld
   an der Zeitleiste gezogen.
-- **Bewegungsunschärfe** braucht mehr als einen Zeitpunkt je Ausgabebild, also mehr als ein
-  dekodiertes Bild je Ausgabebild. Das ist eine Änderung am Einsammeln, nicht an einem Shader.
 - **Eine `.cube` mit einem Definitionsbereich außer 0 bis 1 wird abgelehnt**, eine eindimensionale
   ebenso. Beides mit Absicht (siehe oben); ein weiterer Bereich wollte den Bereich als zwei weitere
   Uniforms in den Shader tragen, ein kleiner Schritt, sobald eine echte Datei danach fragt.

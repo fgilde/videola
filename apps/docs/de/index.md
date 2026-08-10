@@ -88,6 +88,8 @@ features:
 - **Geometrie auf dem Bild** — ein Rahmen mit Ecken- und Drehgriffen, dessen Ecken aus genau der
   Matrix stammen, die der Compositor der GPU übergibt, und die Bahn, die Positions-Keys beschreiben:
   aus dem Kern abgetastet statt von Ecke zu Ecke gezeichnet.
+- **Bewegungsunschärfe** — eine Belichtung je Clip, gemittelt über acht echte Zeitpunkte: die eigene
+  Bahn der Ebene und was das Material dazwischen tat, in der Vorschau und in der Datei.
 - **Effekte und Übergänge** — sechzehn Effekte, sieben Übergänge (jeder davon mit einer Auswahl auf
   jeden Schnitt), Masken, ein Textgenerator,
   Farbkurven und Lift/Gamma/Gain-Räder, ausgewählt in einem Browser, dessen jede Kachel der Shader
@@ -123,11 +125,8 @@ features:
 
 ## Was noch fehlt
 
-Kein Motion-Blur. Keine Rauschunterdrückung: Tiefen- und Höhensperre nehmen ein Band weg, was nicht
-dasselbe ist, wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Motion-Blur braucht mehr
-als ein dekodiertes Bild je Ausgabebild, also eine Änderung am Einsammeln und nicht an einem Shader —
-die Richtungsunschärfe daneben ist die, die ein Mensch ausrichtet, und sie heißt danach. Die
-Magnetic-Timeline fehlt bewusst, und das
+Noch keine Rauschunterdrückung: Tiefen- und Höhensperre nehmen ein Band weg, was nicht dasselbe ist,
+wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Die Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

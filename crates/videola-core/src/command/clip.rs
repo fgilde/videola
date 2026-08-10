@@ -631,6 +631,16 @@ pub(super) fn set_volume(target: &mut Project, clip: &ClipId, volume: f32) -> Re
     Ok(())
 }
 
+// Bounded at one frame. Longer than that and consecutive output frames would be averaged over
+// overlapping windows -- every moment of the material drawn into two frames, which is not a shutter
+// any camera has and reads as a dissolve rather than as movement.
+pub(super) fn set_motion_blur(target: &mut Project, clip: &ClipId, amount: f32) -> Result<()> {
+    let amount = finite(amount)?;
+    let (track, index) = find_clip_mut(target, clip)?;
+    track.clips[index].motion_blur = amount.clamp(0.0, 1.0);
+    Ok(())
+}
+
 pub(super) fn set_transform(
     target: &mut Project,
     clip: &ClipId,

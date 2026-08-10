@@ -362,6 +362,16 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
         max={4}
         onChange={(value, coalesceKey) => send(speed(value, clip.speed.reverse), coalesceKey)}
       />
+      {/* Beside the rate, because it is the same subject: how long the clip was exposed for decides how
+          far it smears, and the rate decides how far it travels while the shutter is open. Zero is off
+          and is the default -- a smear nobody asked for is a renderer deciding how an edit looks. */}
+      <ParamRow
+        label={t("inspector.motionBlur")}
+        value={clip.motionBlur ?? 0}
+        min={0}
+        max={1}
+        onChange={(value, coalesceKey) => send(cmd.clipSetMotionBlur(clip.id, value), coalesceKey)}
+      />
       <div className="v-param">
         <span className="v-param__label">{t("inspector.reverse")}</span>
         <button

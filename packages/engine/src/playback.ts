@@ -20,6 +20,7 @@ import { GeneratorFrames } from "./generate/generator";
 import { Compositor } from "./render/compositor";
 import { createContext } from "./render/context";
 import { drawList, drawnClips } from "./render/draw-list";
+import { blurAmounts, exposure, placementAt, type Smear } from "./render/motion-blur";
 import { LutStore } from "./render/lut";
 import type { GlContext } from "./render/context";
 import type { AudioGraph } from "./audio/graph";
@@ -333,7 +334,69 @@ export class Playback {
     const params = this.#effectParams(at);
     const transforms = this.#transforms(at);
     const frames = await this.#frames(project, at, params, transforms);
-    compositor.render(project, at, frames, params, transforms, this.#luts.tables());
+    // Gathered after the ordinary frames and from the same instant: a smeared clip is drawn from its
+    // own samples and from nothing else, so a sample that failed to decode leaves that one instant
+    // holding the picture before it rather than leaving the clip out of the frame.
+    const smear = await this.#smear(project, at, frames);
+    compositor.render(project, at, frames, params, transforms, this.#luts.tables(), smear);
+  }
+
+  /**
+   * The samples one output frame of every smeared clip is averaged over.
+   *
+   * This is where motion blur is *real* rather than a filter: each sample asks the core where the clip
+   * reads from at that instant and where it stands there, and then asks the decoder for that picture.
+   * A clip moving across the frame therefore smears along its own path, and material moving inside the
+   * shot smears because the samples land on different source frames — which is exactly what a shutter
+   * does and what no single-frame shader can produce.
+   *
+   * What it cannot invent is temporal detail the material does not have. Where a shutter covers less
+   * than one source frame, the samples fall on the one or two frames it straddles, and the smear is
+   * the layer's own movement plus the crossfade between those two. A clip running fast, or one whose
+   * material is at a higher rate than the project, has more frames inside the window and smears the
+   * subject as well. That limit is the material's, not the renderer's.
+   */
+  async #smear(
+    project: Project,
+    at: Time,
+    /**
+     * The frames the ordinary gather produced. A generator has no decoder, so its samples take the
+     * painted picture and differ only in where the layer stood -- which is the whole of a title's
+     * smear, and without this a smeared title would be drawn from samples with no picture at all.
+     */
+    painted: ReadonlyMap<string, VideoFrame>,
+  ): Promise<ReadonlyMap<string, readonly Smear[]>> {
+    const amounts = blurAmounts(project);
+    if (amounts.size === 0) return new Map();
+    const frameFlicks = frameDuration(project.settings.fps);
+    const smear = new Map<string, readonly Smear[]>();
+    for (const [clip, amount] of amounts) {
+      const samples: Smear[] = [];
+      for (const instant of exposure(at, amount, frameFlicks)) {
+        const placement = placementAt(
+          project,
+          clip,
+          instant,
+          this.#effectParams(instant),
+          this.#transforms(instant),
+        );
+        // Outside the clip at that instant there is nothing to draw: near a cut the exposure reaches
+        // past the clip's own edge, and a sample there would be the neighbour's picture in this
+        // clip's smear. Fewer samples, each weighing more, which is what a shutter clipped by a cut
+        // really is.
+        if (placement === undefined) continue;
+        const source = this.#sourceTimes(instant).get(clip);
+        const hash = this.#hashes.get(clip);
+        const decoded =
+          source === undefined || hash === undefined
+            ? undefined
+            : await (await this.#source(hash))?.frameAt(source);
+        const frame = decoded ?? painted.get(clip);
+        samples.push({ matrix: placement.matrix, uv: placement.uv, ...(frame === undefined ? {} : { frame }) });
+      }
+      if (samples.length > 0) smear.set(clip, samples);
+    }
+    return smear;
   }
 
   // ponytail: two clips of the same medium share one source, and decoding for the second can

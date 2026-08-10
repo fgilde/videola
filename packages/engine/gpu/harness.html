@@ -2154,6 +2154,83 @@ test("offscreen canvas", () => {
     reader(compositor.readPixels(), 4, 4)(2, 2), [0, 0, 255, 255]);
 });
 
+
+// Motion blur, on a real driver. The claim is not "the picture changed": it is that a clip drawn from
+// eight instants of its own exposure comes out as the *average* of where it was at those instants --
+// which is why the check is arithmetic on known values rather than a look at a smear.
+test("a clip averaged over its exposure is the mean of its samples", () => {
+  const { compositor, scene } = rig(16, 16, "#000000", [{ effects: [] }]);
+  // Two instants, half the exposure each: one white picture and one black one, both filling the frame.
+  // The average has to be mid grey -- eight decoded frames would be eight terms of the same sum.
+  const white = frame(16, 16, () => [255, 255, 255, 255]);
+  const black = frame(16, 16, () => [0, 0, 0, 255]);
+  const place = R.itemFor(R.drawList(scene, 0, new Map(), new Map()), "clp_0");
+  const smear = new Map([["clp_0", [
+    { matrix: place.matrix, uv: place.uv, frame: white },
+    { matrix: place.matrix, uv: place.uv, frame: black },
+  ]]]);
+
+  compositor.render(scene, 0, new Map(), new Map(), new Map(), new Map(), smear);
+  white.close();
+  black.close();
+
+  const read = reader(compositor.readPixels(), 16, 16);
+  check("the two samples average rather than the last one winning", read(8, 8), [128, 128, 128, 255], 2);
+});
+
+test("a clip that moved during its exposure is smeared along the way it went", () => {
+  const { compositor, scene } = rig(32, 16, "#000000", [{ effects: [] }]);
+  // A quarter-width white bar on black, so its edge is somewhere to measure.
+  const bar = frame(32, 16, (x) => (x < 8 ? [255, 255, 255, 255] : [0, 0, 0, 255]));
+  const place = (x) =>
+    R.itemFor(R.drawList(scene, 0, new Map(), new Map([["clp_0", transform({ x })]])), "clp_0");
+  const samples = [];
+  for (let step = 0; step < 8; step += 1) {
+    const at = place(-6 + (12 * step) / 7);
+    samples.push({ matrix: at.matrix, uv: at.uv, frame: bar });
+  }
+
+  compositor.render(scene, 0, new Map(), new Map(), new Map(), new Map(),
+    new Map([["clp_0", samples]]));
+  const smeared = reader(compositor.readPixels(), 32, 16);
+
+  const still = place(0);
+  compositor.render(scene, 0, new Map(), new Map(), new Map(), new Map(),
+    new Map([["clp_0", [{ matrix: still.matrix, uv: still.uv, frame: bar }]]]));
+  const sharp = reader(compositor.readPixels(), 32, 16);
+  bar.close();
+
+  // A still bar has one hard edge: every pixel is black or white. A bar that travelled twelve pixels
+  // has a ramp instead, and the count of part-lit pixels along a row is what a smear *is*.
+  const partial = (read) => {
+    let count = 0;
+    for (let x = 0; x < 32; x += 1) {
+      const lit = read(x, 8)[1];
+      if (lit > 24 && lit < 232) count += 1;
+    }
+    return count;
+  };
+  check("a still clip has an edge and not a ramp", partial(sharp) <= 2, true);
+  check("and a clip that moved has a ramp where the edge was", partial(smeared) >= 6, true);
+  // Along the way it went and not across it: the row through the middle smears, the columns do not
+  // grow taller.
+  check("the smear follows the axis the clip travelled on",
+    smeared(16, 1)[1] === smeared(16, 8)[1], true);
+});
+
+test("an exposure of one sample is the ordinary picture", () => {
+  const { compositor, scene } = rig(8, 8, "#000000", [{ effects: [] }]);
+  const blue = frame(8, 8, () => [0, 0, 255, 255]);
+  const place = R.itemFor(R.drawList(scene, 0, new Map(), new Map()), "clp_0");
+
+  compositor.render(scene, 0, new Map(), new Map(), new Map(), new Map(),
+    new Map([["clp_0", [{ matrix: place.matrix, uv: place.uv, frame: blue }]]]));
+  blue.close();
+
+  check("one sample is drawn at its full weight", reader(compositor.readPixels(), 8, 8)(4, 4),
+    [0, 0, 255, 255], 2);
+});
+
 // The effect browser's tiles. A tile that came back is worth nothing; what has to hold is that it
 // came back *changed*, changed by the effect it is named after, and changed the same way up as the
 // picture in the editor.

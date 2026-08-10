@@ -331,6 +331,14 @@ export const cmd = {
   // The whole generator, for the same reason `clipSetTransform` takes the whole transform: read the
   // clip's current one and spread the field that changed. This is the only way a title's or a
   // subtitle's words change after the clip exists.
+  // How much of a frame the clip was exposed for: 0 off, 0.5 a 180-degree shutter, 1 the whole
+  // frame. What the renderer does with it is average the clip over that window.
+  clipSetMotionBlur: (clip: string, amount: number) => ({
+    type: "clip.setMotionBlur" as const,
+    clip,
+    amount,
+  }),
+
   clipSetGenerator: (clip: string, generator: Generator) => ({
     type: "clip.setGenerator",
     clip,

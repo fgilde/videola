@@ -3,9 +3,10 @@ import { captionCues, frameDuration, timeToSeconds, toVtt } from "@videola/core"
 import type { EffectParams, Project, Rate, SourceTimes, Time, Transforms } from "@videola/core";
 
 import { AudioGraph, hasAudibleClips } from "../audio/graph";
+import { blurAmounts, exposure } from "../render/motion-blur";
 import { AudioSource } from "../decode/audio-source";
 import type { AudioBufferSource } from "../audio/graph";
-import type { ExportAudio, ExportFrame, ExportRequest } from "./encode";
+import type { ExportAudio, ExportFrame, ExportInstant, ExportRequest } from "./encode";
 import { formatSupport } from "./format";
 import type { EncodeProbe, ExportFormat } from "./format";
 
@@ -87,12 +88,26 @@ export function frameTimes(range: ExportRange, fps: Rate): Time[] {
 // wasm boundary, about a second of work before the export starts. The way out is a document handle
 // in the worker, which needs the core to accept a `Project`.
 export function exportFrames(input: ExportInput): ExportFrame[] {
-  return frameTimes(input.options.range, input.options.fps).map((at) => ({
-    at,
-    sources: input.sourceTimes(at),
-    params: input.effectParams(at),
-    transforms: input.transforms(at),
-  }));
+  // Asked once for the whole run: a project either carries a shutter somewhere or it does not, and
+  // walking every clip per frame to find out would be the one part of this that scales with length.
+  const smeared = blurAmounts(input.project);
+  const widest = Math.max(0, ...smeared.values());
+  const frameFlicks = frameDuration(input.options.fps);
+  return frameTimes(input.options.range, input.options.fps).map((at) => {
+    const instant = (moment: Time): ExportInstant => ({
+      at: moment,
+      sources: input.sourceTimes(moment),
+      params: input.effectParams(moment),
+      transforms: input.transforms(moment),
+    });
+    const base = instant(at);
+    if (widest <= 0) return base;
+    // The widest shutter in the project decides the instants, and a clip with a narrower one uses the
+    // subset inside its own window -- resolved in the worker, where the smear is assembled. Asking
+    // the core once per instant rather than once per instant per clip is what keeps an export of a
+    // hundred smeared clips the same number of crossings as an export of one.
+    return { ...base, exposure: exposure(at, widest, frameFlicks).map(instant) };
+  });
 }
 
 async function canEncodeAudio(input: ExportInput): Promise<boolean> {

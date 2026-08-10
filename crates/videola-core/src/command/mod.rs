@@ -171,6 +171,10 @@ pub enum Command {
     /// Set a clip's gain, where 1 is unity and 4 the accepted maximum.
     #[serde(rename = "clip.setVolume")]
     ClipSetVolume { clip: ClipId, volume: f32 },
+    /// How much of a frame the clip was exposed for: 0 off, 0.5 a 180-degree shutter, 1 the whole
+    /// frame. What the renderer does with it is average the clip over that window.
+    #[serde(rename = "clip.setMotionBlur")]
+    ClipSetMotionBlur { clip: ClipId, amount: f32 },
     /// Replace a clip's whole geometry block. Read the current transform and change one field.
     #[serde(rename = "clip.setTransform")]
     ClipSetTransform { clip: ClipId, transform: Transform },
@@ -384,6 +388,7 @@ impl Command {
             | Self::ClipUngroup { clip }
             | Self::ClipSetSpeed { clip, .. }
             | Self::ClipSetVolume { clip, .. }
+            | Self::ClipSetMotionBlur { clip, .. }
             | Self::ClipSetTransform { clip, .. }
             | Self::ClipSetGenerator { clip, .. }
             | Self::ClipSetTransition { clip, .. } => holding(clip),
@@ -466,6 +471,9 @@ impl Command {
                 preserve_pitch,
             } => clip::set_speed(target, clip, *rate, *reverse, *preserve_pitch),
             Self::ClipSetVolume { clip, volume } => clip::set_volume(target, clip, *volume),
+            Self::ClipSetMotionBlur { clip, amount } => {
+                clip::set_motion_blur(target, clip, *amount)
+            }
             Self::ClipSetTransform { clip, transform } => {
                 clip::set_transform(target, clip, transform)
             }
@@ -579,6 +587,7 @@ impl Command {
             Self::ClipNest { .. } => LABEL_CLIP_NEST,
             Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
+            Self::ClipSetMotionBlur { .. } => LABEL_CLIP_SET_MOTION_BLUR,
             Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
             Self::ClipSetGenerator { .. } => LABEL_CLIP_SET_GENERATOR,
             Self::ClipSetTransition { .. } => LABEL_CLIP_SET_TRANSITION,
@@ -628,6 +637,7 @@ pub const LABEL_CLIP_UNGROUP: &str = "cmd.clip.ungroup";
 pub const LABEL_CLIP_NEST: &str = "cmd.clip.nest";
 pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
+pub const LABEL_CLIP_SET_MOTION_BLUR: &str = "cmd.clip.setMotionBlur";
 pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
 pub const LABEL_CLIP_SET_GENERATOR: &str = "cmd.clip.setGenerator";
 pub const LABEL_CLIP_SET_TRANSITION: &str = "cmd.clip.setTransition";
@@ -675,6 +685,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_CLIP_NEST,
     LABEL_CLIP_SET_SPEED,
     LABEL_CLIP_SET_VOLUME,
+    LABEL_CLIP_SET_MOTION_BLUR,
     LABEL_CLIP_SET_TRANSFORM,
     LABEL_CLIP_SET_GENERATOR,
     LABEL_CLIP_SET_TRANSITION,

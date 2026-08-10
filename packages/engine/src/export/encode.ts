@@ -24,6 +24,7 @@ import { clipHashes } from "../playback";
 import { Compositor } from "../render/compositor";
 import { createContext } from "../render/context";
 import { drawList, drawnClips } from "../render/draw-list";
+import { blurAmounts, placementAt, type Smear } from "../render/motion-blur";
 import { LutStore } from "../render/lut";
 import type { FrameSource } from "../playback";
 import { carriesSubtitles, container, SUBTITLE_CODEC } from "./format";
@@ -34,6 +35,19 @@ import type { ExportFormat } from "./format";
 // from a decoder. A packet's microsecond stamp is truncated, and a file whose frames were placed
 // from those stamps drifts by a frame every thirty-three seconds at 30000/1001.
 export interface ExportFrame {
+  at: Time;
+  sources: ReadonlyMap<string, Time>;
+  params: EffectParamSnapshot;
+  transforms: TransformSnapshot;
+  /**
+   * One entry per instant a smeared clip is exposed at, each answered by the core the way the base
+   * instant is. Absent where no clip carries a shutter, which is the ordinary case and costs nothing.
+   */
+  exposure?: readonly ExportInstant[];
+}
+
+/** The core's three answers at one instant inside an exposure. */
+export interface ExportInstant {
   at: Time;
   sources: ReadonlyMap<string, Time>;
   params: EffectParamSnapshot;
@@ -161,6 +175,9 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   let index = 0;
   for (const frame of request.frames) {
     const pictures = await gatherPictures(pass, hashes, request.project, frame);
+    // The smear is gathered after the pictures and from the same request: one decode per sample per
+    // smeared clip, which is what a shutter costs and why it is off unless somebody asked for it.
+    const smear = await gatherSmear(pass, hashes, request.project, frame, pictures);
     // Nothing is awaited between the last frame arriving and the upload, and `CanvasSource.add`
     // captures the canvas before it returns -- so the pictures are alive for the render and the
     // render is on the canvas before anything else can touch it.
@@ -171,6 +188,7 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
       frame.params,
       frame.transforms,
       luts.tables(),
+      smear,
     );
     await pass.video.add(timeToSeconds(frame.at - origin), step);
     index += 1;
@@ -198,6 +216,51 @@ export async function gatherPictures(
     if (picture !== undefined) pictures.set(clip, picture);
   }
   return pictures;
+}
+
+/**
+ * The samples every smeared clip is averaged over, for one output frame.
+ *
+ * The same gather the preview does, and deliberately the same shape: each instant brings its own
+ * source time and its own placement, so the smear carries both the movement of the layer and whatever
+ * the material did between those instants. An instant the clip does not reach — an exposure clipped by
+ * a cut — contributes nothing, and the remaining samples each weigh more.
+ */
+export async function gatherSmear(
+  pass: PictureSources,
+  hashes: ReadonlyMap<string, string>,
+  project: Project,
+  frame: ExportFrame,
+  /**
+   * The pictures the ordinary gather produced, for clips that have no decoder behind them: a
+   * generator paints the same picture at every instant, so its smear is the movement of the layer and
+   * nothing else. Without this a smeared title would be drawn from samples with no picture at all.
+   */
+  painted: ReadonlyMap<string, VideoFrame>,
+): Promise<ReadonlyMap<string, readonly Smear[]>> {
+  const instants = frame.exposure ?? [];
+  const amounts = blurAmounts(project);
+  if (instants.length === 0 || amounts.size === 0) return new Map();
+  const smear = new Map<string, readonly Smear[]>();
+  for (const clip of amounts.keys()) {
+    const hash = hashes.get(clip);
+    const samples: Smear[] = [];
+    for (const instant of instants) {
+      const placement = placementAt(project, clip, instant.at, instant.params, instant.transforms);
+      if (placement === undefined) continue;
+      const at = instant.sources.get(clip);
+      const source = hash === undefined ? undefined : await pass.sources.get(clip, hash);
+      const decoded = at === undefined ? undefined : await source?.frameAt(at);
+      const picture = decoded ?? painted.get(clip);
+      samples.push({
+        matrix: placement.matrix,
+        uv: placement.uv,
+        ...(picture === undefined ? {} : { frame: picture }),
+      });
+    }
+    if (samples.length > 0) smear.set(clip, samples);
+  }
+  return smear;
 }
 
 async function writeAudio(track: AudioSampleSource, audio: ExportAudio): Promise<void> {

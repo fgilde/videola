@@ -12,4 +12,11 @@ import type { Transform } from "./Transform";
 import type { Transition } from "./Transition";
 import type { JsonValue } from "./serde_json/JsonValue";
 
-export type Clip = { id: ClipId, label?: string | null, groupId?: GroupId | null, source: ClipSource, start: Time, duration: Time, inPoint: Time, speed: Speed, transform: Transform, blend: BlendMode, fades: Fades, volume: number, pan: number, effects: Array<Effect>, transitionIn?: Transition | null, transitionOut?: Transition | null, keyframes: { [key in string]: Array<Keyframe> }, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });
+export type Clip = { id: ClipId, label?: string | null, groupId?: GroupId | null, source: ClipSource, start: Time, duration: Time, inPoint: Time, speed: Speed, transform: Transform, blend: BlendMode, fades: Fades, volume: number, pan: number, 
+/**
+ * How much of a frame this clip was exposed for, as a fraction: 0 is off, 0.5 is a 180-degree
+ * shutter, 1 is the whole frame. Named for the camera setting it stands in for, because that is
+ * what decides how long a smear is -- and defaulted to off, because a smear nobody asked for is
+ * a renderer deciding how somebody's edit looks.
+ */
+motionBlur?: number, effects: Array<Effect>, transitionIn?: Transition | null, transitionOut?: Transition | null, keyframes: { [key in string]: Array<Keyframe> }, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });

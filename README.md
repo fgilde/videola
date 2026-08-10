@@ -138,8 +138,8 @@ a list of commands to a project without a browser.
 
 ## What is not there yet
 
-No motion blur. No noise reduction: the low and high cut take away a band, which is not the same
-as separating a voice from noise sharing its band. The magnetic timeline is deliberately absent: the
+No noise reduction yet: the low and high cut take away a band, which is not the same as separating a
+voice from noise sharing its band. The magnetic timeline is deliberately absent: the
 useful half is ripple delete and trim, and the rest would change the model's overlap rule that
 transitions, layering and roll/slide all depend on. FFmpeg is not bundled; the export uses the
 browser's own encoders.

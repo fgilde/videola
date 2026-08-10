@@ -716,6 +716,73 @@ async function main() {
   // The two halves of "the subtitles arrive in the export". Burned in, the words are in the picture
   // and ffmpeg decodes them as pixels; separate, the picture is untouched and the words are a track
   // of their own -- which is what the ffprobe checks on the written file then confirm.
+  // Motion blur, through the encoder and back out of the demuxer. The GPU harness proves the average
+  // is the average; this proves the file carries it -- which is the claim that matters, because a
+  // shutter costs eight decodes a frame and an export that quietly skipped it would look identical
+  // until somebody looked at a still.
+  await test("a shutter reaches the file, and a clip with none does not smear", async () => {
+    const run = async (shutter) => {
+      const doc = new R.VideolaDocument(await R.createWasmBackend());
+      doc.dispatch(R.cmd.trackAdd("video", "V1"));
+      const track = doc.state.timeline.tracks[0];
+      doc.dispatch(
+        R.cmd.clipAdd(track.id, { kind: "generator", generator: { type: "solid", color: "#ffffff" } },
+          0, SECOND),
+      );
+      const clip = doc.state.timeline.tracks[0].clips[0];
+      // A quarter-width white block that crosses the frame during the second: at any instant its two
+      // vertical edges are hard, and a shutter turns them into ramps.
+      doc.dispatch(R.cmd.clipSetTransform(clip.id, { ...clip.transform, scaleX: 0.25 }));
+      for (const [at, x] of [[0, -WIDTH / 2], [SECOND, WIDTH / 2]]) {
+        doc.dispatch(
+          R.cmd.keyframeAdd(R.on.clip(clip.id), null, "x", at, { kind: "float", value: x }, "linear"),
+        );
+      }
+      if (shutter > 0) doc.dispatch(R.cmd.clipSetMotionBlur(clip.id, shutter));
+      const handle = R.startExport({
+        project: doc.state,
+        sourceTimes: doc.sourceTimesAt,
+        effectParams: doc.effectParamsAt,
+        transforms: doc.transformsAt,
+        options: options(),
+        createWorker: worker,
+      });
+      return (await handle.result).bytes;
+    };
+
+    // How much of one row is neither black nor white: with a hard edge that is a pixel or two of
+    // encoder ringing, and with a shutter it is the whole width the block travelled in a frame.
+    const ramp = async (bytes) => {
+      const blob = new Blob([bytes], { type: "video/mp4" });
+      const input = new R.Input({ formats: R.ALL_FORMATS, source: new R.BlobSource(blob) });
+      try {
+        const sink = new R.VideoSampleSink(await input.getPrimaryVideoTrack());
+        const { context } = canvasOf(WIDTH, HEIGHT);
+        let widest = 0;
+        for await (const sample of sink.samples()) {
+          sample.draw(context, 0, 0);
+          const row = context.getImageData(0, Math.round(HEIGHT / 2), WIDTH, 1).data;
+          let partial = 0;
+          for (let x = 0; x < WIDTH; x += 1) {
+            const lit = row[x * 4 + 1];
+            if (lit > 40 && lit < 215) partial += 1;
+          }
+          widest = Math.max(widest, partial);
+          sample.close();
+        }
+        return widest;
+      } finally {
+        input.dispose();
+      }
+    };
+
+    const sharp = await ramp(await run(0));
+    const smeared = await ramp(await run(1));
+
+    checkAtMost("a clip with no shutter keeps its hard edges in the file", sharp, 12);
+    checkAtLeast("and a full shutter writes a ramp instead", smeared, sharp * 2);
+  });
+
   await test("a caption is burned into the picture when the run asks for it", async () => {
     const run = (captions) =>
       R.startExport({
