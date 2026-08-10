@@ -116,6 +116,8 @@ fn normalize_timeline(timeline: &mut Timeline, depth: usize) -> Result<()> {
 fn normalize_track(track: &mut Track, depth: usize) -> Result<()> {
     finite(track.volume)?;
     finite(track.pan)?;
+    finite(track.rear)?;
+    finite(track.lfe)?;
     hex_color(&track.color_hex)?;
     for clip in &mut track.clips {
         normalize_clip(clip, depth)?;
@@ -458,6 +460,12 @@ pub(crate) fn settings_bounded(settings: &ProjectSettings) -> Result<()> {
     dimension_bounded(settings.width)?;
     dimension_bounded(settings.height)?;
     sample_rate_bounded(settings.sample_rate)?;
+    if !AUDIO_LAYOUTS.contains(&settings.audio_channels) {
+        return Err(CoreError::InvalidArgument(format!(
+            "audioChannels must be one of {AUDIO_LAYOUTS:?}, not {}",
+            settings.audio_channels
+        )));
+    }
     hex_color(&settings.background)
 }
 
@@ -501,9 +509,28 @@ pub struct ProjectSettings {
     pub height: u32,
     pub fps: Rate,
     pub sample_rate: u32,
+    /// How many channels the mix is laid out over: 2 for stereo, 6 for 5.1.
+    ///
+    /// A count rather than the name of a layout, because the count is what every consumer needs --
+    /// the offline context, the encoder and the meters all take a number -- and a name would have to
+    /// be mapped back to one at each of them. Which channel is which is a convention this project
+    /// states once and keeps: L, R, C, LFE, Ls, Rs, the WAVE order every codec here writes.
+    ///
+    /// Defaulted so a project written before this field existed loads as stereo, which is what it was.
+    #[serde(default = "stereo_channels")]
+    pub audio_channels: u32,
     pub color_space: String,
     pub background: String,
 }
+
+fn stereo_channels() -> u32 {
+    2
+}
+
+/// The layouts this build can lay a mix out over. Anything else is refused rather than approximated:
+/// a project asking for 7.1 would be silently mixed as something else, and a file that says 8 and
+/// sounds like 6 is worse than one that will not open.
+pub const AUDIO_LAYOUTS: [u32; 2] = [2, 6];
 
 impl Default for ProjectSettings {
     fn default() -> Self {
@@ -512,6 +539,7 @@ impl Default for ProjectSettings {
             height: 1080,
             fps: Rate::from_fps(30),
             sample_rate: 48_000,
+            audio_channels: stereo_channels(),
             color_space: "srgb".to_string(),
             background: "#000000".to_string(),
         }

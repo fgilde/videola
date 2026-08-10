@@ -110,17 +110,32 @@ export function exportFrames(input: ExportInput): ExportFrame[] {
   });
 }
 
-async function canEncodeAudio(input: ExportInput): Promise<boolean> {
+async function canEncodeAudio(input: ExportInput, channels: number): Promise<boolean> {
   const support = await formatSupport(
     {
       width: input.options.width,
       height: input.options.height,
       sampleRate: input.project.settings.sampleRate,
-      channels: 2,
+      channels,
     },
     input.encodeProbe ?? undefined,
   );
   return support.find((entry) => entry.format.id === input.options.format.id)?.audio === true;
+}
+
+/**
+ * How many channels this run can actually write: what the project asks for, or stereo, or nothing.
+ *
+ * A 5.1 mix the machine cannot encode is delivered in stereo rather than in silence, and the placement
+ * is not thrown away doing it -- the graph still puts every track where the mix says, and the
+ * two-channel render folds six down by the standard rules. What is lost is the delivery format, not
+ * the mix, and the file that comes out is one somebody can use.
+ */
+async function encodableChannels(input: ExportInput): Promise<number | undefined> {
+  const wanted = input.project.settings.audioChannels ?? 2;
+  if (await canEncodeAudio(input, wanted)) return wanted;
+  if (wanted !== 2 && (await canEncodeAudio(input, 2))) return 2;
+  return undefined;
 }
 
 export function startExport(input: ExportInput): ExportHandle {
@@ -223,13 +238,14 @@ async function renderAudio(input: ExportInput): Promise<ExportAudio | undefined>
   // A browser can carry a format's picture and not its sound -- Chrome on Linux encodes H.264 and
   // refuses AAC. The interface already says what happens then ("the export will be silent"), and
   // this is where that becomes true instead of an exception halfway through the encode.
-  if (!(await canEncodeAudio(input))) return undefined;
+  const channels = await encodableChannels(input);
+  if (channels === undefined) return undefined;
   const sampleRate = project.settings.sampleRate;
   const length = Math.max(
     1,
     Math.round(timeToSeconds(options.range.to - options.range.from) * sampleRate),
   );
-  const context = new OfflineAudioContext(2, length, sampleRate);
+  const context = new OfflineAudioContext(channels, length, sampleRate);
   // The same resolver the frames are drawn from. An export that resolved its own keyframes would be
   // exactly the divergence between what was heard and what was written that this graph exists to
   // rule out.

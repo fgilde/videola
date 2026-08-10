@@ -445,6 +445,13 @@ async function announce() {
     all(".v-inspector .v-param").find(
       (row) => row.querySelector(".v-param__label").textContent.startsWith(text))
       ?.querySelector('input[type="range"]');
+  // The same question of a mixer strip. Two lookups rather than one across both panels: a label like
+  // "LFE" exists on a strip and nowhere else, and a search that spanned them would answer for
+  // whichever happened to be open.
+  const stripSlider = (text) =>
+    all(".v-mixer .v-param").find(
+      (row) => row.querySelector(".v-param__label").textContent.startsWith(text))
+      ?.querySelector('input[type="range"]');
 
   /**
    * The lane, end to end and through nothing but the surface: a transform field put on the clock
@@ -974,6 +981,23 @@ async function announce() {
     // whole insert chain were below the cut. Read off the scroll container, which is where being
     // cut off actually shows: a box shorter than what it holds.
     noteZones("desk-open");
+    // Surround: the layout lives on the master strip, and the two position controls appear on every
+    // strip only once there is somewhere to put a track. In stereo they must not be there at all --
+    // this project has no controls that do nothing.
+    check("a stereo project offers no rear control", stripSlider("Hinten"), undefined);
+    const layout = q('[data-testid="mixer-master"] select[aria-label="Kanäle"]');
+    check("the master strip is where the layout is chosen", layout !== null, true);
+    check("and it offers the two this build lays a mix out over",
+      [...layout.options].map((option) => option.textContent), ["Stereo", "5.1 Surround"]);
+    setValue(layout, "6");
+    await sleep(200);
+    check("choosing 5.1 gives every strip a position", stripSlider("Hinten") !== undefined, true);
+    check("and an LFE send", stripSlider("LFE") !== undefined, true);
+    check("switching the layout raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(200);
+    check("and undoing takes the layout back with the controls", stripSlider("Hinten"), undefined);
+
     checkAtMost("the mixer shows whole strips and not the tops of them",
       q(".v-mixer__strips").scrollHeight - q(".v-mixer__strips").clientHeight, 0);
     // And the same claim from the other side, on the control that sits last in a strip -- the one

@@ -70,6 +70,7 @@ function template(overrides: Partial<Template["manifest"]> = {}): Template {
         height: 1080,
         fps: { numerator: 30, denominator: 1 },
         sampleRate: 48000,
+        audioChannels: 2,
         colorSpace: "srgb",
         background: "#101820",
       },

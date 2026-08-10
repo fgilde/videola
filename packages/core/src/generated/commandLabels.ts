@@ -8,6 +8,7 @@ export const COMMAND_LABELS = [
   "cmd.track.rename",
   "cmd.track.setVolume",
   "cmd.track.setPan",
+  "cmd.track.setSurround",
   "cmd.track.setFlags",
   "cmd.clip.add",
   "cmd.clip.insert",

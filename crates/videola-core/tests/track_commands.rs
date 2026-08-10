@@ -226,6 +226,7 @@ fn setting_project_settings_replaces_them_wholesale() {
         height: 2160,
         fps: Rate::from_fps(60),
         sample_rate: 48_000,
+        audio_channels: 2,
         color_space: "srgb".into(),
         background: "#000000".into(),
     };
@@ -243,6 +244,7 @@ fn ntsc_settings() -> ProjectSettings {
         height: 2160,
         fps: Rate::new(30_000, 1001),
         sample_rate: 48_000,
+        audio_channels: 2,
         color_space: "srgb".into(),
         background: "#000000".into(),
     }

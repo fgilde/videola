@@ -87,6 +87,22 @@ pub(super) fn set_track_pan(target: &mut Project, track: &TrackId, pan: f32) -> 
     Ok(())
 }
 
+// Both clamped to what a position can be: the panner reads them as a point in the field, and a rear
+// of two would place a track outside the room.
+pub(super) fn set_track_surround(
+    target: &mut Project,
+    track: &TrackId,
+    rear: f32,
+    lfe: f32,
+) -> Result<()> {
+    let rear = finite(rear)?;
+    let lfe = finite(lfe)?;
+    let found = track_mut(target, track)?;
+    found.rear = rear.clamp(0.0, 1.0);
+    found.lfe = lfe.clamp(0.0, 1.0);
+    Ok(())
+}
+
 pub(super) fn set_track_flags(
     target: &mut Project,
     track: &TrackId,

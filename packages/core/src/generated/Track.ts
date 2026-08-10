@@ -5,4 +5,20 @@ import type { TrackId } from "./TrackId";
 import type { TrackKind } from "./TrackKind";
 import type { JsonValue } from "./serde_json/JsonValue";
 
-export type Track = { id: TrackId, kind: TrackKind, name: string, colorHex: string, height: number, locked: boolean, hidden: boolean, muted: boolean, solo: boolean, volume: number, pan: number, clips: Array<Clip>, effects: Array<Effect>, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });
+export type Track = { id: TrackId, kind: TrackKind, name: string, colorHex: string, height: number, locked: boolean, hidden: boolean, muted: boolean, solo: boolean, volume: number, pan: number, 
+/**
+ * Where the track sits front to back, from 0 at the front speakers to 1 at the rear ones.
+ *
+ * Together with `pan` this is a position in the surround field rather than two knobs: a point at
+ * (pan, rear) is placed by the same constant-power law in both directions. In a stereo project it
+ * is ignored -- there is nowhere behind a stereo pair to put anything -- and it stays in the file,
+ * so a mix laid out for 5.1 and delivered in stereo does not lose its placement.
+ */
+rear?: number, 
+/**
+ * How much of this track is sent to the LFE channel, from 0 to 1.
+ *
+ * A send and not a position: the LFE is a channel and not a place, which is why every desk gives
+ * it its own control. Silent in a stereo project, like `rear`.
+ */
+lfe?: number, clips: Array<Clip>, effects: Array<Effect>, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });

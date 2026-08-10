@@ -1,7 +1,9 @@
 import { useMemo, useState, type ReactElement } from "react";
 
 import {
+  AUDIO_LAYOUTS,
   cmd,
+  isSurround,
   on,
   type Command,
   type Effect,
@@ -109,6 +111,7 @@ export function Mixer({
 }: MixerProps): ReactElement {
   const { t } = useI18n();
   const tracks = project.timeline.tracks;
+  const surround = isSurround(project.settings.audioChannels ?? 2);
   // `project` is in the dependencies because the core hands out a fresh one per edit, while
   // `effectParamsAt` is bound to the document rather than to the state it is asked about.
   const resolved = useMemo(
@@ -129,6 +132,7 @@ export function Mixer({
             key={track.id}
             track={track}
             others={tracks.filter((other) => other.id !== track.id)}
+            surround={surround}
             dispatch={dispatch}
             chain={chain}
             read={meter(track.id)}
@@ -161,6 +165,7 @@ export function Mixer({
 function Strip({
   track,
   others,
+  surround,
   dispatch,
   chain,
   read,
@@ -171,6 +176,8 @@ function Strip({
 }: {
   track: Track;
   others: readonly Track[];
+  /** True where the project is laid out over more than two channels. */
+  surround: boolean;
   dispatch: (command: Command, coalesceKey?: string) => void;
   chain: ChainContext;
   read?: ReadLevel;
@@ -210,6 +217,30 @@ function Strip({
         max={1}
         onChange={(value, key) => dispatch(cmd.trackSetPan(track.id, value), key)}
       />
+      {surround && (
+        <>
+          <ParamRow
+            label={t("mixer.rearShort")}
+            name={t("mixer.rear", { name: track.name })}
+            value={track.rear ?? 0}
+            min={0}
+            max={1}
+            onChange={(value, key) =>
+              dispatch(cmd.trackSetSurround(track.id, value, track.lfe ?? 0), key)
+            }
+          />
+          <ParamRow
+            label={t("mixer.lfeShort")}
+            name={t("mixer.lfe", { name: track.name })}
+            value={track.lfe ?? 0}
+            min={0}
+            max={1}
+            onChange={(value, key) =>
+              dispatch(cmd.trackSetSurround(track.id, track.rear ?? 0, value), key)
+            }
+          />
+        </>
+      )}
       <div className="v-mixer__flags">
         {/* Mute beats solo in the graph, so the two buttons are independent here as well: a track
             that is both stays silent, and pressing solo on it must not quietly clear its mute. */}
@@ -356,6 +387,30 @@ function MasterStrip({
         max={MAX_GAIN}
         onChange={(value, key) => dispatch(cmd.projectSetMasterVolume(value), key)}
       />
+      {/* Where the mix is laid out, on the strip the mix leaves through. A select rather than a switch
+          because it is an answer to one question and the list will grow -- and it says how many
+          channels each answer is, because that is the number the export and the meters count in. */}
+      <label className="v-mixer__layout">
+        <span className="v-mixer__layoutLabel">{t("mixer.layout")}</span>
+        <select
+          aria-label={t("mixer.layout")}
+          value={project.settings.audioChannels ?? 2}
+          onChange={(event) =>
+            dispatch(
+              cmd.projectSetSettings({
+                ...project.settings,
+                audioChannels: Number(event.target.value),
+              }),
+            )
+          }
+        >
+          {AUDIO_LAYOUTS.map((channels) => (
+            <option key={channels} value={channels}>
+              {t(`mixer.layout.${channels}`)}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="v-mixer__loudness">
         <button
           type="button"

@@ -20,8 +20,11 @@ import type {
 import type { Peaks } from "@videola/media";
 
 import { audibleClips } from "../nesting";
+import { isSurround } from "@videola/core";
+
 import { clampParam } from "../effects/registry";
 import { audioEffect, offlineAudioEffect } from "./effects";
+import { CHANNEL, LFE_CUTOFF_HZ, stereoSpread } from "./surround";
 import type { OfflineAudioEffect } from "./effects";
 import type { EffectParam } from "./effects";
 import { integratedLufs, levelFrom, SILENT_LEVEL } from "./loudness";
@@ -68,6 +71,10 @@ export class AudioGraph {
   #meters = new Map<string, AnalyserNode>();
   #levels = new Map<string, Level>();
   #window = new Float32Array(METER_WINDOW);
+  // How many channels the mix is laid out over, from the project rather than from the context: an
+  // offline render of a 5.1 project on a stereo device still has to *place* every track in six
+  // channels, and what the machine can play is the browser's problem after that.
+  #channels = 2;
 
   /**
    * `params` is the core's own resolver -- `Document.effectParamsAt` -- and the reason a keyframed
@@ -114,6 +121,7 @@ export class AudioGraph {
     for (const id of [...this.#meters.keys()]) {
       if (!alive.has(id)) this.#meters.delete(id);
     }
+    this.#channels = project.settings.audioChannels ?? 2;
     this.#tracks = project.timeline.tracks;
     this.#masterEffects = project.master.effects;
     this.#voices = voices;
@@ -279,17 +287,73 @@ export class AudioGraph {
   ): AudioNode {
     const gain = this.#ctx.createGain();
     gain.gain.value = soloing && !track.solo ? 0 : track.muted ? 0 : track.volume;
-    const panner = this.#ctx.createStereoPanner();
-    panner.pan.value = track.pan;
-    // After the fader and the pan, which is what the strip's meter is asked about: what this track
-    // is sending, not what its clips were before anyone touched the desk. The tap is disconnected
-    // first because it outlives the bus around it -- a seek builds a new one every time, and the
-    // meter has to survive that or a hold marker would be reset by scrubbing.
+    // After the fader, which is what the strip's meter is asked about: what this track is sending, not
+    // what its clips were before anyone touched the desk. The tap is disconnected first because it
+    // outlives the bus around it -- a seek builds a new one every time, and the meter has to survive
+    // that or a hold marker would be reset by scrubbing.
+    //
+    // Ahead of the panner rather than behind it, and that is a change surround forced: a six-channel
+    // tap would report the loudest speaker rather than the level of the track, and a strip reads a
+    // track. In stereo the two are the same number.
     const meter = this.#meter(track.id);
     meter.disconnect();
-    gain.connect(panner).connect(meter).connect(masterIn);
-    this.#live.push(gain, panner);
+    const placed = isSurround(this.#channels) ? this.#place(track) : this.#stereoPan(track);
+    gain.connect(meter).connect(placed.head);
+    placed.out.connect(masterIn);
+    this.#live.push(gain, ...placed.nodes);
     return this.#chain(track.effects, gain, contextTime, projectTime);
+  }
+
+  // The stereo case, unchanged: one native node, one number.
+  #stereoPan(track: Track): Placed {
+    const panner = this.#ctx.createStereoPanner();
+    panner.pan.value = track.pan;
+    return { head: panner, out: panner, nodes: [panner] };
+  }
+
+  /**
+   * A track placed in the surround field: one gain per output channel, merged into the layout.
+   *
+   * Built out of a splitter, a gain per destination and a merger rather than out of a `PannerNode`,
+   * because that node is a stereo device -- it renders a 3D position to two channels through HRTF or
+   * an equal-power law and has no notion of a centre speaker or an LFE. What a surround panner is, is
+   * exactly this table of gains, and `surroundGains` is where the table is decided.
+   *
+   * A stereo track keeps its width: each of its two channels is placed half a pan-width to its own
+   * side, so a bed left alone comes out of the front pair the way it went in. A mono track is a point.
+   *
+   * The LFE is a send with a low-pass in front of it, at the 120 Hz the specification for that channel
+   * asks for -- a band rather than a place, which is why it is a knob of its own and not a position.
+   */
+  #place(track: Track): Placed {
+    const ctx = this.#ctx;
+    const splitter = ctx.createChannelSplitter(2);
+    const merger = ctx.createChannelMerger(this.#channels);
+    const nodes: AudioNode[] = [splitter, merger];
+    const spread = stereoSpread(track.pan, track.rear ?? 0);
+    for (const [source, gains] of spread.entries()) {
+      for (const [channel, level] of gains.entries()) {
+        if (level <= 0) continue;
+        const send = ctx.createGain();
+        send.gain.value = level;
+        splitter.connect(send, source).connect(merger, 0, channel);
+        nodes.push(send);
+      }
+    }
+    const lfe = track.lfe ?? 0;
+    if (lfe > 0) {
+      // Off both channels, so a track panned hard to one side still reaches the subwoofer: the LFE has
+      // no side, and half the low end of a mix is not what a send of one asked for.
+      const cut = ctx.createBiquadFilter();
+      cut.type = "lowpass";
+      cut.frequency.value = LFE_CUTOFF_HZ;
+      const send = ctx.createGain();
+      send.gain.value = lfe;
+      for (const source of [0, 1]) splitter.connect(cut, source);
+      cut.connect(send).connect(merger, 0, CHANNEL.lfe);
+      nodes.push(cut, send);
+    }
+    return { head: splitter, out: merger, nodes };
   }
 
   // Inserts sit ahead of the fader, the way a console wires them: the fader then rides a signal the
@@ -576,4 +640,11 @@ function offlineKey(chain: readonly OfflinePass[]): string {
   return chain
     .map((pass) => `${pass.effect.id}:${Object.entries(pass.values).sort().flat().join(",")}`)
     .join("|");
+}
+
+/** A track's panning stage: where the signal goes in, where it comes out, and what to release. */
+interface Placed {
+  head: AudioNode;
+  out: AudioNode;
+  nodes: readonly AudioNode[];
 }

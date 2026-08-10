@@ -168,6 +168,7 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   "track.rename": (f) => ({ track: f.track, name: "Renamed" }),
   "track.setVolume": (f) => ({ track: f.track, volume: 0.5 }),
   "track.setPan": (f) => ({ track: f.track, pan: -0.25 }),
+  "track.setSurround": (f) => ({ track: f.track, rear: 0.75, lfe: 0.5 }),
   "track.setFlags": (f) => ({ track: f.track, muted: true }),
   "clip.add": (f) => ({
     track: f.otherTrack,

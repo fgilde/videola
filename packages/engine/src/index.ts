@@ -50,6 +50,7 @@ export type {
   ExportResult,
 } from "./export/run";
 export { audibleClips, leafClips } from "./nesting";
+export { CHANNEL, LFE_CUTOFF_HZ, stereoSpread, surroundGains, SURROUND_51 } from "./audio/surround";
 export type { Voice } from "./nesting";
 export {
   clipHashes,

@@ -85,6 +85,8 @@ features:
 - **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
   computed from the very matrix the compositor hands the GPU, and the motion path a series of
   position keys traces, sampled from the core rather than drawn corner to corner.
+- **Surround** — stereo or 5.1, a position per track rather than a knob between two speakers, pairwise
+  constant-power placement, and an LFE send that is a band.
 - **Noise reduction** — spectral, learned from the pauses in the clip itself: the noise inside a voice's
   own band drops by more than 9 dB while the voice stays within 2 dB.
 - **Motion blur** — a shutter per clip, averaged over eight real instants of the exposure: the layer's

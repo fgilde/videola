@@ -53,6 +53,15 @@ pub enum Command {
     /// Set a track's stereo position from -1 (left) through 0 (centre) to 1 (right).
     #[serde(rename = "track.setPan")]
     TrackSetPan { track: TrackId, pan: f32 },
+    /// Where the track sits front to back, and how much of it goes to the LFE channel. Both are
+    /// silent in a stereo project and both stay in the file, so a 5.1 mix delivered in stereo keeps
+    /// its placement for the next delivery.
+    #[serde(rename = "track.setSurround")]
+    TrackSetSurround {
+        track: TrackId,
+        rear: f32,
+        lfe: f32,
+    },
     /// Change any subset of a track's flags; a field left null keeps its current value.
     #[serde(rename = "track.setFlags")]
     TrackSetFlags {
@@ -433,6 +442,9 @@ impl Command {
                 project::set_track_volume(target, track, *volume)
             }
             Self::TrackSetPan { track, pan } => project::set_track_pan(target, track, *pan),
+            Self::TrackSetSurround { track, rear, lfe } => {
+                project::set_track_surround(target, track, *rear, *lfe)
+            }
             Self::TrackSetFlags {
                 track,
                 muted,
@@ -592,6 +604,7 @@ impl Command {
             Self::TrackRename { .. } => LABEL_TRACK_RENAME,
             Self::TrackSetVolume { .. } => LABEL_TRACK_SET_VOLUME,
             Self::TrackSetPan { .. } => LABEL_TRACK_SET_PAN,
+            Self::TrackSetSurround { .. } => LABEL_TRACK_SET_SURROUND,
             Self::TrackSetFlags { .. } => LABEL_TRACK_SET_FLAGS,
             Self::ClipAdd { .. } => LABEL_CLIP_ADD,
             Self::ClipInsert { .. } => LABEL_CLIP_INSERT,
@@ -644,6 +657,7 @@ pub const LABEL_TRACK_REORDER: &str = "cmd.track.reorder";
 pub const LABEL_TRACK_RENAME: &str = "cmd.track.rename";
 pub const LABEL_TRACK_SET_VOLUME: &str = "cmd.track.setVolume";
 pub const LABEL_TRACK_SET_PAN: &str = "cmd.track.setPan";
+pub const LABEL_TRACK_SET_SURROUND: &str = "cmd.track.setSurround";
 pub const LABEL_TRACK_SET_FLAGS: &str = "cmd.track.setFlags";
 pub const LABEL_CLIP_ADD: &str = "cmd.clip.add";
 pub const LABEL_CLIP_INSERT: &str = "cmd.clip.insert";
@@ -694,6 +708,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_TRACK_RENAME,
     LABEL_TRACK_SET_VOLUME,
     LABEL_TRACK_SET_PAN,
+    LABEL_TRACK_SET_SURROUND,
     LABEL_TRACK_SET_FLAGS,
     LABEL_CLIP_ADD,
     LABEL_CLIP_INSERT,

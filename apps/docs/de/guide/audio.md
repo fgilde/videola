@@ -283,6 +283,63 @@ hat.
 Ein gleichbleibender Ton hat keine Einsätze und liefert nichts. Das ist die richtige Antwort, kein
 Fehlschlag.
 
+## Surround
+
+**Gebaut.** Ein Projekt liegt über **Stereo oder 5.1**, gewählt am Master-Streifen, und jede Spur hat
+eine Position in diesem Feld statt eines Platzes zwischen zwei Boxen.
+
+Die Kanalreihenfolge wird einmal festgelegt und überall eingehalten: **L, R, C, LFE, Ls, Rs** —
+WAVE-Reihenfolge, das, was jeder Codec hier schreibt und worin der Offline-Kontext, der Encoder und die
+Anzeigen zählen.
+
+| Regler | Wirkung |
+|---|---|
+| Panorama | links nach rechts, dieselbe Zahl wie in einer Stereomischung — ein Projekt auf 5.1 umzustellen behält also die Platzierung, die es schon hatte |
+| Hinten | vorne nach hinten, 0 an den Frontboxen bis 1 hinter dem Hörer |
+| LFE | wie viel von der Spur auf den Tiefbasskanal geht |
+
+**Paarweise, konstante Leistung.** Eine Position wird zwischen den zwei Boxen aufgezogen, zwischen
+denen sie steht: links nach Mitte über die linke Hälfte des Panoramas, Mitte nach rechts über die
+rechte, und das hintere Paar als eine Spanne dahinter. Beide Achsen folgen einem
+Viertelkreis-Sinus/Kosinus, eine Spur behält also überall ihre Lautheit — ein linearer Verlauf fällt in
+der Mitte jeder Bewegung um 3 dB ab, was man hört, als würde der Ton beim Passieren der Mitte
+zurückweichen, und ist der Grund, warum kein Pult einen benutzt.
+
+Drei Amplituden auf einmal zu mischen verliert dieselben 3 dB: Amplituden addieren sich, und Leistung
+ist ihr Quadrat. Die erste Fassung hat genau das getan, und die Prüfung, die die Leistung an fünfzehn
+Positionen misst, hat es gefunden.
+
+**Eine Stereospur behält ihre Breite.** Jeder ihrer zwei Kanäle wird eine ganze Panoramabreite zu
+seiner Seite gesetzt, ein Bett, das bleibt, wo es ist, kommt also aus dem Frontpaar, wie es
+hineinging — nicht zu Mono summiert und als Punkt platziert, was ein Musikbett nicht übersteht. Zum
+Rand gezogen laufen die zwei Hälften zusammen und die Spur wird ein Punkt, denn jenseits der letzten
+Box gibt es nichts, worin sich etwas ausbreiten kann. Zieht man ein Bett nach innen, landet die Hälfte,
+die die Mitte erreicht, auf der **Center**-Box — genau dafür ist ein Center-Kanal da.
+
+**Der LFE ist ein Weg, kein Ort.** Was dort hingeht, ist ein Band: ein Tiefpass bei den 120 Hz, die die
+Spezifikation für diesen Kanal nennt, abgenommen von beiden Kanälen, damit auch eine hart zur Seite
+gezogene Spur den Subwoofer erreicht. Eine Position legt dort nie etwas ab.
+
+**Aus Verstärkungen gebaut und nicht aus `PannerNode`.** Dieser Knoten ist ein Stereogerät — er
+rechnet eine 3D-Position über HRTF oder ein Equal-Power-Gesetz auf zwei Kanäle und kennt weder eine
+Center-Box noch einen LFE. Ein Surround-Panner *ist* eine Tabelle von Verstärkungen: also ein Splitter,
+eine Verstärkung je Ziel und ein Merger, und `surroundGains` ist die eine Stelle, an der die Tabelle
+entschieden wird.
+
+**Ausgabe.** Der Export rendert im Layout des Projekts und kodiert es, wo die Maschine kann: eine
+5.1-Mischung, die der Browser nicht kodiert, wird in **Stereo** geschrieben und nicht in Stille — und
+die Platzierung wird dabei nicht weggeworfen: der Graph setzt jede Spur weiterhin dorthin, wo die
+Mischung es sagt, und der Zweikanal-Lauf faltet sechs nach den Standardregeln herunter. Verloren geht
+das Ausgabeformat, nicht die Mischung.
+
+Die Anzeige eines Streifens liest die Spur und nicht die lauteste Box — deshalb ist der Abgriff mit
+diesem Schritt vor den Panner gewandert. In Stereo sind beide dieselbe Zahl.
+
+**Gemessen und nicht behauptet.** Fünfzehn Positionen auf konstante Leistung, und für jede Behauptung
+ein echter Sechskanal-Lauf: ein Bett vorne landet auf dem Frontpaar und nichts dahinter, nach hinten
+geschoben auf dem hinteren Paar, nach innen gezogen erreicht es die Center-Box, vierzig Hertz passieren
+den LFE-Weg, während ein Kilohertz vierfach gedämpft ist, und ein halber Weg kommt mit halbem Pegel an.
+
 ## Pegelanzeigen
 
 Jeder Streifen trägt eine Pegelanzeige, die Spurstreifen wie der Summenzug, und jede davon ist ein
@@ -414,7 +471,7 @@ Benannt statt angedeutet, denn ein Bedienelement, das nichts tut, ist schlimmer 
   eine solche bearbeiten kann.
 - **Anzeige der Pegelreduktion.** Die Streifen zeigen, was ein Bus sendet; wie stark sein Kompressor
   arbeitet, ist eine zweite Anzeige, und `DynamicsCompressorNode.reduction` wäre ihre Quelle.
-- **Panorama über Stereo hinaus.** Der Panner ist ein Stereo-Panner; ein Surround-Bus ist ein anderer Knoten und ein anderer Satz Anzeigen.
+- **Layouts über 5.1 hinaus.** 7.1 und Atmos sind mehr Kanäle und, für das zweite, ein Renderer anderer Art. `AUDIO_LAYOUTS` im Kern ist die Stelle für einen dritten Eintrag.
 - **Bus-Automation in der Keyframe-Spur der Zeitleiste.** Die Ecken eines Duckings lassen sich auf
   dem Streifen bearbeiten, der sie geschrieben hat, mit denselben Bedienelementen wie im Inspektor;
   die Spur unter einem Clip zeichnet nur Clip-Keyframes, und die einer Spur zu zeichnen hieße, einer

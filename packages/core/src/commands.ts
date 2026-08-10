@@ -19,6 +19,21 @@ import type {
 
 export const FLICKS_PER_SECOND = 705_600_000;
 
+/**
+ * How many channels a mix may be laid out over, and what each count means.
+ *
+ * The same two the core's `AUDIO_LAYOUTS` accepts, because a layout the interface offers and the model
+ * refuses would be a control that produces an error. Which channel is which is stated where the
+ * placement is done (`surround.ts` in the engine): L, R, C, LFE, Ls, Rs, the order every codec here
+ * writes.
+ */
+export const AUDIO_LAYOUTS: readonly number[] = [2, 6];
+
+/** Whether a layout has anywhere to put a sound other than left and right. */
+export function isSurround(channels: number): boolean {
+  return channels >= 6;
+}
+
 export function secondsToTime(seconds: number): Time {
   return Math.round(seconds * FLICKS_PER_SECOND);
 }
@@ -234,6 +249,15 @@ export const cmd = {
     track,
     volume,
   }),
+  // Where a track sits front to back, and how much of it goes to the LFE channel. Both are read only
+  // where the project is laid out over more than two channels, and both stay in the file either way.
+  trackSetSurround: (track: string, rear: number, lfe: number) => ({
+    type: "track.setSurround" as const,
+    track,
+    rear,
+    lfe,
+  }),
+
   trackSetPan: (track: string, pan: number) => ({ type: "track.setPan", track, pan }),
   trackSetFlags: (
     track: string,

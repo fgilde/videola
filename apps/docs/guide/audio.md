@@ -261,6 +261,59 @@ back one at a time. The whole press is one step in the history whatever it found
 
 A steady tone has no onsets and yields nothing, which is the right answer rather than a failure.
 
+## Surround
+
+**Built.** A project is laid out over **stereo or 5.1**, chosen on the master strip, and every track
+has a position in that field rather than a place between two speakers.
+
+The channel order is stated once and kept everywhere: **L, R, C, LFE, Ls, Rs** — WAVE order, which is
+what every codec here writes and what the offline context, the encoder and the meters all count in.
+
+| Control | What it does |
+|---|---|
+| Pan | left to right, the same number a stereo mix uses — so switching a project to 5.1 keeps the placement it already had |
+| Rear | front to back, 0 at the front speakers to 1 behind the listener |
+| LFE | how much of the track is sent to the low-frequency channel |
+
+**Pairwise, constant power.** A position is panned between the two speakers it stands between: left to
+centre over the left half of the pan, centre to right over the right half, and the rear pair as one
+span behind. Both axes are a quarter-circle sine/cosine law, so a track swept anywhere keeps its
+loudness — a linear law dips by 3 dB in the middle of every sweep, which is heard as the sound
+receding as it passes the centre, and is the reason no desk uses one.
+
+Mixing three amplitudes at once loses the same 3 dB: amplitudes add and power is their square. The
+first version of this did exactly that, and the check that measures power at fifteen positions caught
+it.
+
+**A stereo track keeps its width.** Each of its two channels is placed a whole pan-width to its own
+side, so a bed left where it is comes out of the front pair the way it went in — not summed to mono and
+placed as a point, which is what a music bed cannot survive. Panned to an edge the two halves converge
+and the track becomes a point, because there is nothing beyond the last speaker to spread into. Pan a
+bed inwards and the half that reaches the middle lands on the **centre** speaker, which is what a
+centre channel is for.
+
+**The LFE is a send, not a place.** What goes there is a band: a low-pass at the 120 Hz the
+specification for that channel names, taken from both channels so a track panned hard to one side still
+reaches the subwoofer. A position never puts anything there.
+
+**Built out of gains rather than out of `PannerNode`.** That node is a stereo device — it renders a 3D
+position to two channels through HRTF or an equal-power law and has no notion of a centre speaker or an
+LFE. A surround panner *is* a table of gains, so this is a splitter, a gain per destination and a
+merger, and `surroundGains` is the one place the table is decided.
+
+**Delivery.** The export renders at the project's layout and encodes it where the machine can: a 5.1
+mix the browser cannot encode is written in **stereo** rather than in silence, and the placement is not
+thrown away doing it — the graph still puts every track where the mix says, and the two-channel render
+folds six down by the standard rules. What is lost is the delivery format, not the mix.
+
+A strip's meter reads the track and not the loudest speaker, which is why the tap moved ahead of the
+panner when this arrived. In stereo the two are the same number.
+
+**Measured, not asserted.** Fifteen positions for constant power, and a real six-channel render for
+every claim: a bed at the front lands on the front pair and nothing behind, pushed back it lands on the
+rear pair, panned inwards it reaches the centre speaker, forty hertz passes the LFE send while a
+kilohertz is four times down, and half a send arrives at half the level.
+
 ## Level meters
 
 Every strip carries a meter, the track strips and the master alike, and every one of them is a real
@@ -383,7 +436,7 @@ Named rather than hinted at, because a control that does nothing is worse than n
   `choice` kind; the shelves arrive with the widget that can edit one.
 - **Gain-reduction metering.** The strips show what a bus is sending; how hard its compressor is
   working is a second reading, and `DynamicsCompressorNode.reduction` is where it would come from.
-- **Spatial panning beyond stereo.** The panner is a stereo one; a surround bus is a different node and a different set of meters.
+- **Layouts beyond 5.1.** 7.1 and Atmos are more channels and, for the second, a renderer of another kind. `AUDIO_LAYOUTS` in the core is where a third entry would go.
 - **Bus automation in the timeline's keyframe lane.** A duck's corners are editable on the strip
   that wrote them, with the same controls the inspector uses; the lane below a clip draws clip
   keyframes only, and drawing a track's would mean giving a lane an identity that is not a clip.

@@ -34,6 +34,7 @@ same `0 .. 4` a track's fader is, so a slider can send whatever it produces.
 | `track.rename` | `track`, `name` |
 | `track.setVolume` | `track`, `volume` |
 | `track.setPan` | `track`, `pan` |
+| `track.setSurround` | `track`, `rear`, `lfe` |
 | `track.setFlags` | `track`, `muted`, `solo`, `locked`, `hidden` |
 
 `track.setFlags` takes each flag as a nullable value so one command can change any subset of them;

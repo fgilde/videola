@@ -41,6 +41,10 @@ pub enum TrackKind {
     Adjustment,
 }
 
+fn is_zero(value: &f32) -> bool {
+    *value == 0.0
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
@@ -55,6 +59,20 @@ pub struct Track {
     pub solo: bool,
     pub volume: f32,
     pub pan: f32,
+    /// Where the track sits front to back, from 0 at the front speakers to 1 at the rear ones.
+    ///
+    /// Together with `pan` this is a position in the surround field rather than two knobs: a point at
+    /// (pan, rear) is placed by the same constant-power law in both directions. In a stereo project it
+    /// is ignored -- there is nowhere behind a stereo pair to put anything -- and it stays in the file,
+    /// so a mix laid out for 5.1 and delivered in stereo does not lose its placement.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub rear: f32,
+    /// How much of this track is sent to the LFE channel, from 0 to 1.
+    ///
+    /// A send and not a position: the LFE is a channel and not a place, which is why every desk gives
+    /// it its own control. Silent in a stereo project, like `rear`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub lfe: f32,
     pub clips: Vec<Clip>,
     pub effects: Vec<Effect>,
     #[serde(flatten)]
@@ -75,6 +93,8 @@ impl Track {
             solo: false,
             volume: 1.0,
             pan: 0.0,
+            rear: 0.0,
+            lfe: 0.0,
             clips: Vec::new(),
             effects: Vec::new(),
             extra: Map::new(),

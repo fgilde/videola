@@ -441,6 +441,11 @@ fn every_command_undoes_to_the_exact_prior_state() {
             clip: clip.clone(),
             volume: 0.5,
         },
+        |Fixture { track, .. }| Command::TrackSetSurround {
+            track: track.clone(),
+            rear: 0.75,
+            lfe: 0.5,
+        },
         |Fixture { clip, .. }| Command::ClipSetMotionBlur {
             clip: clip.clone(),
             amount: 0.5,
