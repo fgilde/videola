@@ -233,22 +233,78 @@ const megabytes = (bytes: number): string =>
   margin-top: 0;
 }
 
-/* The one the visitor almost certainly wants, at the size that says so. */
+/* The one the visitor almost certainly wants, at the size that says so.
+
+   The fill is the site's own gradient and it does not change on hover. It used to go to
+   --vp-c-brand-2, which is #7d9bff -- white type on that is about 2.3:1, so the label all but
+   vanished under the pointer. What hover changes instead is the light around the button: a glow, a
+   brighter edge and a sheen that travels across it once. Nothing that touches the contrast of the
+   text, because a button says what it is at every moment a pointer is over it. */
 .dl__primary {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   padding: 1.1rem 1.4rem;
   border-radius: 12px;
-  background: var(--vp-c-brand-3);
-  color: var(--vp-c-white);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: var(--v-gradient);
+  color: #ffffff;
   text-decoration: none;
-  transition: background 0.2s, transform 0.2s;
+  box-shadow: 0 2px 10px -4px rgb(0 0 0 / 0.6);
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.dl__primary:hover {
-  background: var(--vp-c-brand-2);
-  transform: translateY(-1px);
+/* The sheen. Parked off the left edge and sent across on hover: one pass, not a loop, so it reads as
+   a highlight catching the surface rather than as something demanding attention. */
+.dl__primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.22) 45%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.6s ease;
+}
+
+.dl__primary:hover,
+.dl__primary:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgb(255 255 255 / 0.55);
+  box-shadow:
+    0 10px 30px -8px var(--v-blue),
+    0 0 0 3px rgb(91 140 255 / 0.28);
+}
+
+.dl__primary:hover::after,
+.dl__primary:focus-visible::after {
+  transform: translateX(120%);
+}
+
+/* A glow is a decoration and a travel is a movement: whoever asked for less of the second keeps the
+   first, because the contrast of the label never depended on either. */
+@media (prefers-reduced-motion: reduce) {
+  .dl__primary,
+  .dl__primary::after {
+    transition: none;
+  }
+
+  .dl__primary:hover,
+  .dl__primary:focus-visible {
+    transform: none;
+  }
+
+  .dl__primary:hover::after,
+  .dl__primary:focus-visible::after {
+    transform: translateX(-120%);
+  }
 }
 
 .dl__primaryName {

@@ -231,3 +231,40 @@
   vertical-align: -3px;
   margin-right: 0.4em;
 }
+
+/* The default theme fills a brand button with --vp-c-brand-3 and its hover with --vp-c-brand-2. With
+   this palette that is #5b8cff going to #7d9bff under white type: about 2.3:1, which is a label that
+   all but disappears exactly when a pointer is on it. Reported on the download page and true of every
+   hero button as well, so the fix belongs here rather than beside one of them.
+
+   The fill therefore stays put and the *light around* the button answers the pointer: a brighter edge
+   and a glow in the brand's own blue. Nothing that touches the contrast of the text. */
+.VPButton.brand {
+  border: 1px solid rgb(255 255 255 / 0.16);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+.VPButton.brand:hover,
+.VPButton.brand:focus-visible {
+  background: var(--vp-c-brand-3);
+  border-color: rgb(255 255 255 / 0.55);
+  box-shadow:
+    0 10px 30px -10px var(--v-blue),
+    0 0 0 3px rgb(91 140 255 / 0.28);
+  transform: translateY(-1px);
+}
+
+.VPButton.brand:active {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPButton.brand {
+    transition: none;
+  }
+
+  .VPButton.brand:hover,
+  .VPButton.brand:focus-visible {
+    transform: none;
+  }
+}
