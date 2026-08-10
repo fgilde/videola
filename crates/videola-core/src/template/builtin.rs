@@ -33,6 +33,9 @@ pub fn templates() -> Vec<Template> {
         lower_third(),
         end_card(),
         product_reveal(),
+        quote_card(),
+        before_after(),
+        interview(),
     ]
 }
 
@@ -749,7 +752,7 @@ fn lower_third() -> Template {
         ),
         text_slot(
             "role",
-            Localized::new("Rolle", "Role"),
+            Localized::new("Funktion", "Role"),
             Localized::new(
                 "Die kleine gesperrte Zeile darunter.",
                 "The small tracked-out line beneath it.",
@@ -1008,6 +1011,330 @@ fn product_reveal() -> Template {
 
 // The material a slot has yet to be given. The id names nothing that exists, which is exactly what
 // `check_every_clip_has_a_source` demands a slot for.
+
+/// Somebody's words, over their picture. What it shows: a shot dimmed by a brightness ramp so type
+/// can be read off it, a large quotation that rises in, and a source line that follows -- the
+/// commonest single card in the trade and the one this set was missing.
+fn quote_card() -> Template {
+    let mut lane = video_track("trk_main", "V1");
+    let mut shot = placeholder("clp_shot", 0.0, 6.0);
+    // Dimmed rather than covered by a black rectangle: the picture stays a picture, and type over it
+    // is readable because the picture gave way, not because something was laid on top of it.
+    shot.effects
+        .push(brightness_ramp("eff_dim", 0.0, 1.0, 1.2, 0.38));
+    shot.effects.push(vignette("eff_vignette", 0.4, 0.85));
+    lane.clips.push(shot);
+
+    let mut words = text_track("trk_quote", "T1");
+    words.clips.push(text_clip(
+        "clp_quote",
+        1.0,
+        4.4,
+        "Der Schnitt ist die Sprache des Films.",
+        &[
+            ("fontSize", json!(0.072)),
+            ("fontWeight", json!(700)),
+            ("y", json!(0.42)),
+            ("maxWidth", json!(0.76)),
+            ("animateIn", json!("rise")),
+            ("animateInSeconds", json!(0.7)),
+            ("animateOut", json!("fade")),
+        ],
+    ));
+
+    let mut source = text_track("trk_source", "T2");
+    source.clips.push(text_clip(
+        "clp_source",
+        1.9,
+        3.4,
+        "— Wer es gesagt hat",
+        &[
+            ("fontSize", json!(0.034)),
+            ("fontWeight", json!(500)),
+            ("letterSpacing", json!(0.14)),
+            ("y", json!(0.62)),
+            ("color", json!("#c9d6f0")),
+            ("animateIn", json!("fade")),
+            ("animateInSeconds", json!(0.7)),
+            ("animateOut", json!("fade")),
+        ],
+    ));
+
+    let slots = vec![
+        media_slot_named(
+            "shot",
+            Localized::new("Aufnahme hinter dem Zitat", "Shot behind the quotation"),
+            Localized::new(
+                "Wird abgedunkelt, damit die Schrift lesbar bleibt.",
+                "Dimmed so the type stays readable over it.",
+            ),
+            "clp_shot",
+        ),
+        text_slot(
+            "quote",
+            Localized::new("Das Zitat", "The quotation"),
+            Localized::new(
+                "Die grosse Zeile. Bricht selbst um, wenn sie zu lang wird.",
+                "The large line. Wraps on its own where it runs long.",
+            ),
+            vec![generator_text("clp_quote"), SlotBinding::ProjectTitle],
+        ),
+        text_slot(
+            "source",
+            Localized::new("Quelle", "Source"),
+            Localized::new(
+                "Wer es gesagt hat, klein und unter dem Zitat.",
+                "Who said it: small, under the quotation.",
+            ),
+            vec![generator_text("clp_source")],
+        ),
+    ];
+
+    template(
+        "quote-card",
+        Localized::new("Zitat", "Quotation"),
+        Localized::new(
+            "Die Aufnahme dunkelt ab, das Zitat steigt herein, die Quelle folgt. Kein schwarzes \
+             Rechteck ueber dem Bild -- das Bild selbst gibt nach.",
+            "The shot dims, the quotation rises in, the source follows. No black rectangle over the \
+             picture: the picture itself gives way.",
+        ),
+        TITLES,
+        vec!["zitat", "spruch", "karte"],
+        vec![LANDSCAPE, PORTRAIT, SQUARE],
+        2.6,
+        slots,
+        project_with(LANDSCAPE, "#05070c", vec![lane, words, source]),
+    )
+}
+
+/// Two versions of the same thing, one wiped over the other. What it shows: a mask whose position is
+/// animated -- the edge travels across the frame rather than a transition doing it -- so both
+/// pictures are on screen for the whole shot instead of one replacing the other.
+fn before_after() -> Template {
+    let mut under = video_track("trk_before", "V1");
+    under.clips.push(placeholder("clp_before", 0.0, 6.0));
+
+    let mut over = video_track("trk_after", "V2");
+    let mut after = placeholder("clp_after", 0.0, 6.0);
+    // A band that starts off the left edge and ends off the right one. The mask travels; nothing is
+    // cut, so both pictures are there the whole time and the edge between them is the story.
+    let mut band = band_mask("eff_band", -0.5, 0.5, 1.0, 1.0, 0.004);
+    band.keyframes.insert(
+        "x".to_string(),
+        vec![float_key(0.6, -0.5), float_key(5.2, 1.5)],
+    );
+    after.effects.push(band);
+    over.clips.push(after);
+
+    let mut marks = text_track("trk_marks", "T1");
+    marks.clips.push(text_clip(
+        "clp_before_label",
+        0.4,
+        5.2,
+        "Vorher",
+        &[
+            ("fontSize", json!(0.038)),
+            ("fontWeight", json!(650)),
+            ("letterSpacing", json!(0.22)),
+            ("x", json!(0.16)),
+            ("y", json!(0.9)),
+            ("animateIn", json!("fade")),
+            ("animateInSeconds", json!(0.4)),
+        ],
+    ));
+
+    let mut marks_after = text_track("trk_marks_after", "T2");
+    marks_after.clips.push(text_clip(
+        "clp_after_label",
+        0.4,
+        5.2,
+        "Nachher",
+        &[
+            ("fontSize", json!(0.038)),
+            ("fontWeight", json!(650)),
+            ("letterSpacing", json!(0.22)),
+            ("x", json!(0.84)),
+            ("y", json!(0.9)),
+            ("animateIn", json!("fade")),
+            ("animateInSeconds", json!(0.4)),
+        ],
+    ));
+
+    let slots = vec![
+        media_slot_named(
+            "before",
+            Localized::new("Vorher", "Before"),
+            Localized::new(
+                "Liegt unten und wird von der wandernden Kante freigelegt.",
+                "Sits underneath and is uncovered by the travelling edge.",
+            ),
+            "clp_before",
+        ),
+        media_slot_named(
+            "after",
+            Localized::new("Nachher", "After"),
+            Localized::new(
+                "Liegt oben; die Maske schiebt sie ueber das Bild.",
+                "Sits on top; the mask carries it across the frame.",
+            ),
+            "clp_after",
+        ),
+        text_slot(
+            "before_label",
+            Localized::new("Beschriftung links", "Label on the left"),
+            Localized::new(
+                "Steht ueber der unteren Aufnahme.",
+                "Sits over the lower shot.",
+            ),
+            vec![generator_text("clp_before_label")],
+        ),
+        text_slot(
+            "after_label",
+            Localized::new("Beschriftung rechts", "Label on the right"),
+            Localized::new(
+                "Steht ueber der oberen Aufnahme.",
+                "Sits over the upper shot.",
+            ),
+            vec![generator_text("clp_after_label")],
+        ),
+    ];
+
+    template(
+        "before-after",
+        Localized::new("Vorher / Nachher", "Before and After"),
+        Localized::new(
+            "Eine Kante wandert ueber das Bild und legt die zweite Aufnahme frei. Beide sind die \
+             ganze Zeit da -- die Maske bewegt sich, nicht der Schnitt.",
+            "An edge travels across the frame and uncovers the second shot. Both are there the \
+             whole time: the mask moves, not the cut.",
+        ),
+        PRODUCT,
+        vec!["vergleich", "maske", "vorher"],
+        vec![LANDSCAPE, SQUARE],
+        3.0,
+        slots,
+        project_with(LANDSCAPE, "#05070c", vec![under, over, marks, marks_after]),
+    )
+}
+
+/// Somebody talking, cut once. What it shows: the plainest thing in this set and the one most edits
+/// actually are -- two angles, a hard cut between them, and a name that arrives once and leaves.
+fn interview() -> Template {
+    let mut lane = video_track("trk_main", "V1");
+    lane.clips.push(placeholder("clp_wide", 0.0, 4.0));
+    lane.clips.push(placeholder("clp_close", 4.0, 4.0));
+
+    // A band along the bottom, dark enough to read a name off whatever is behind it.
+    let mut plate = overlay_track("trk_plate", "O1");
+    let mut bar = solid_clip("clp_plate", 0.8, 3.2, "#0b0e16");
+    bar.transform.scale_y = 0.14;
+    bar.transform.y = 340.0;
+    bar.transform.opacity = 0.82;
+    bar.fades.in_duration = Time::from_seconds(0.3);
+    bar.fades.out_duration = Time::from_seconds(0.4);
+    plate.clips.push(bar);
+
+    let mut name = text_track("trk_name", "T1");
+    name.clips.push(text_clip(
+        "clp_name",
+        1.0,
+        2.8,
+        "Ihr Name",
+        &[
+            ("fontSize", json!(0.05)),
+            ("fontWeight", json!(700)),
+            ("x", json!(0.12)),
+            ("y", json!(0.8)),
+            ("align", json!("left")),
+            ("animateIn", json!("rise")),
+            ("animateInSeconds", json!(0.45)),
+            ("animateOut", json!("fade")),
+        ],
+    ));
+
+    let mut role = text_track("trk_role", "T2");
+    role.clips.push(text_clip(
+        "clp_role",
+        1.2,
+        2.6,
+        "Was Sie tun",
+        &[
+            ("fontSize", json!(0.03)),
+            ("fontWeight", json!(500)),
+            ("x", json!(0.12)),
+            ("y", json!(0.87)),
+            ("align", json!("left")),
+            ("color", json!("#c9d6f0")),
+            ("animateIn", json!("fade")),
+            ("animateInSeconds", json!(0.6)),
+            ("animateOut", json!("fade")),
+        ],
+    ));
+
+    let slots = vec![
+        media_slot_named(
+            "wide",
+            Localized::new("Weite Einstellung", "Wide shot"),
+            Localized::new(
+                "Der Anfang: wer spricht und wo.",
+                "The opening: who is speaking, and where.",
+            ),
+            "clp_wide",
+        ),
+        media_slot_named(
+            "close",
+            Localized::new("Nahe Einstellung", "Close shot"),
+            Localized::new(
+                "Der harte Schnitt nach vier Sekunden.",
+                "The hard cut after four seconds.",
+            ),
+            "clp_close",
+        ),
+        text_slot(
+            "name",
+            Localized::new("Wer spricht", "Name"),
+            Localized::new(
+                "Die grosse Zeile auf der Leiste.",
+                "The large line on the plate.",
+            ),
+            vec![generator_text("clp_name"), SlotBinding::ProjectTitle],
+        ),
+        text_slot(
+            "role",
+            Localized::new("Funktion", "Role"),
+            Localized::new("Die kleine Zeile darunter.", "The small line under it."),
+            vec![generator_text("clp_role")],
+        ),
+        color_slot_named(
+            "plate",
+            Localized::new("Farbe der Leiste", "Plate colour"),
+            Localized::new(
+                "Faerbt die Flaeche unter den Zeilen.",
+                "Colours the band under the lines.",
+            ),
+            vec![generator_color("clp_plate")],
+        ),
+    ];
+
+    template(
+        "interview",
+        Localized::new("Gespräch", "Interview"),
+        Localized::new(
+            "Zwei Einstellungen, ein harter Schnitt, und eine Leiste mit Namen und Rolle, die \
+             einmal kommt und wieder geht.",
+            "Two angles, one hard cut, and a plate carrying a name and a role that arrives once \
+             and leaves.",
+        ),
+        TITLES,
+        vec!["interview", "bauchbinde", "gespraech"],
+        vec![LANDSCAPE, PORTRAIT],
+        1.6,
+        slots,
+        project_with(LANDSCAPE, "#05070c", vec![lane, plate, name, role]),
+    )
+}
+
 const PLACEHOLDER: &str = "med_awaiting_a_slot_answer";
 
 #[allow(clippy::too_many_arguments)]

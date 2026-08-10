@@ -1,6 +1,6 @@
 # Vorlagen
 
-**Gebaut.** Eine Galerie mit neun Vorlagen in fünf Kategorien, jede Karte ein Bild, das aus der
+**Gebaut.** Eine Galerie mit zwölf Vorlagen in fünf Kategorien, jede Karte ein Bild, das aus der
 Vorlage selbst gerendert wurde; ein Assistent, der zeigt, was er baut, während man ihn ausfüllt; und
 eine `.videolat`-Datei, die man weitergeben kann. Was am Ende herauskommt, ist ein gewöhnliches
 Projekt: derselbe Editor, dieselben Commands, derselbe Undo-Stapel. Es gibt keinen Vorlagen-Modus,
@@ -33,9 +33,20 @@ Typografie, Farbe und Bewegung — und genau daran erkennt man, ob sie etwas tau
 | Bauchbinde | Titel und Abspann | Name und Rolle über Ihrer Aufnahme, 6 s | ein Balken, der hereinfährt, weil seine *Maske* sich bewegt, und zwei Zeilen um Sekundenbruchteile versetzt, damit sie als eine Geste lesen |
 | Abspann | Titel und Abspann | die Aufnahme dunkelt ab, eine Karte übernimmt, 6,5 s | eine keyframebare Helligkeit, die das Bild auf nichts bringt, der Dip-Übergang, zwei Schlusszeilen im Abstand eines Taktes |
 | Produkt im Blick | Produkte | eine Sache, richtig gezeigt, 7 s | ein Bewegungspfad — eine `position`-Spur, die eine Zeile durchs Bild trägt — dazu eine Vignette und eine Contain-Einpassung |
+| Zitat | Titel und Abspann | jemandes Worte über seinem Bild, 6 s | eine Aufnahme, die von einer Keyframe-Helligkeit abgedunkelt wird, damit Schrift darauf lesbar ist — statt eines schwarzen Rechtecks darüber |
+| Vorher / Nachher | Produkte | eine Kante wandert über das Bild, 6 s | eine Maske, deren *Position* gekeyframt ist: beide Bilder sind die ganze Zeit da, und die Kante dazwischen ist die Geschichte |
+| Gespräch | Titel und Abspann | zwei Einstellungen, ein harter Schnitt, Name und Funktion, 8 s | das Einfachste hier und das, was die meisten Schnitte wirklich sind: gar kein Übergang, und eine Leiste, die einmal kommt und geht |
 
-Zusammen benutzen die neun **jeden Übergang, den der Renderer hat**. Das ist ein Test und kein Zufall:
-eine Galerie mit neun Karten lohnt sich nur, wenn die neun nicht dieselbe Karte sind.
+Zusammen benutzen sie **jeden Übergang, den der Renderer hat**. Das ist ein Test und kein Zufall:
+eine Galerie lohnt sich nur, wenn die Karten nicht dieselbe Karte sind.
+
+Eines fehlt mit Absicht. Das Modell trägt einen `countdown`-Generator — eine Zahl, die der Renderer
+aus einem Feld zeichnen würde statt aus drei Textclips — und **nichts zeichnet ihn**:
+`paintsGenerator` listet Text, Solid und Gradient, und ein Clip, dessen Generator nicht darauf steht,
+fällt ganz aus der Draw-List. Eine Countdown-Vorlage war geschrieben und wurde zurückgezogen, denn
+eine Karte, die ein leeres Rechteck zeigt, ist schlimmer als eine Kategorie mit einem Eintrag
+weniger. Gefunden hat es der Test, der jede ausgelieferte Vorlage backt und einen Clip ablehnt, für
+den dieser Stand nichts zeichnet.
 
 ## Die Karte ist ein gerendertes Bild
 

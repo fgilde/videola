@@ -248,7 +248,7 @@ A template is the same container as a project with one extra entry, so the same 
 a project. Pick one, answer the wizard, and what you get is an ordinary editable project — there is
 no template mode to leave.
 
-**Nine ship, in five categories, and not one of them carries a frame of video.** A template is a
+**Twelve ship, in five categories, and not one of them carries a frame of video.** A template is a
 recipe, so each is built out of what the renderer can draw from a project file alone: the text
 generator with its entry, exit and loop moves, solids and gradients, the ten effects, the five
 transitions, masks, and keyframed transforms including a motion path. Your own material arrives
