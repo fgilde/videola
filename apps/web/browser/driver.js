@@ -138,13 +138,20 @@ async function announce() {
       const node = document.querySelector(selector);
       return node === null ? "-" : String(Math.round(node.getBoundingClientRect().height));
     };
+    // Every child of the grid and not a roster of the ones this file happens to know about: on a CI
+    // runner the rows the checks read added up to two hundred and thirty-two pixels less than the
+    // editor, and a list can only ever be missing exactly the row that took them.
+    const children = [...(q(".v-editor")?.children ?? [])]
+      .map((node) => {
+        const name = node.className.split(" ")[0] || node.tagName.toLowerCase();
+        return `${name}:${Math.round(node.getBoundingClientRect().height)}`;
+      })
+      .join(" ");
     results.push({
       name:
         `ZONES ${when} viewport ${innerWidth}x${innerHeight} editor ${zone(".v-editor")}` +
-        ` preview ${zone(".v-preview")} canvas ${zone(".v-preview__canvas")}` +
-        ` transport ${zone(".v-transport")} scopes ${zone(".v-scopes")}` +
-        ` timeline ${zone(".v-timeline")} mixer ${zone('[data-testid="mixer"]')}` +
-        ` strip ${zone(".v-mixer__strip")} strips ${zone(".v-mixer__strips")}`,
+        ` canvas ${zone(".v-preview__canvas")} strip ${zone(".v-mixer__strip")}` +
+        ` strips ${zone(".v-mixer__strips")} | ${children}`,
       ok: true,
       got: "noted",
       want: "noted",
