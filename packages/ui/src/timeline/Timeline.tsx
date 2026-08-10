@@ -204,6 +204,13 @@ export function Timeline({
     dispatch,
     onSeek,
     onSelect: select,
+    onSelectMany: useCallback(
+      (clips: readonly ClipId[]) => {
+        setSelected(new Set(clips));
+        onSelectionChange?.([...clips]);
+      },
+      [onSelectionChange],
+    ),
     onSelectKeyframe: useCallback((hit) => setKeyframe({ row: hit.row, time: hit.time }), []),
     selection: selected,
     zoom,
@@ -745,6 +752,20 @@ export function Timeline({
               data-testid="timeline-playhead"
               style={{ left: `${timeToX(playhead, flicksPerPixel)}px` }}
             />
+            {/* Drawn inside the tracks area and after the clips, so it lies over them: the band is
+                feedback about a gesture in flight and has to be visible over what it covers. */}
+            {gestures.marquee !== undefined && (
+              <div
+                className="v-timeline__marquee"
+                data-testid="timeline-marquee"
+                style={{
+                  left: `${gestures.marquee.left}px`,
+                  top: `${gestures.marquee.top}px`,
+                  width: `${gestures.marquee.width}px`,
+                  height: `${gestures.marquee.height}px`,
+                }}
+              />
+            )}
             {gestures.snapLine !== undefined && (
               <div
                 className="v-timeline__snapLine"

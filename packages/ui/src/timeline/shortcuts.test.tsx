@@ -285,3 +285,142 @@ describe("a running transport and the view", () => {
     expect(scroll.scrollLeft).toBe(40);
   });
 });
+
+// jsdom lays nothing out, so a gesture measured in pixels needs the boxes handed to it. What is being
+// checked is the arithmetic from a rectangle to a set of clips; that the rectangle is where the
+// pointer went is the browser harness's claim.
+function stubBoxes(): void {
+  Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value(this: HTMLElement) {
+      // The tracks area and the scroll surface both start at the origin; every track is 72 px tall
+      // and the two of them are what a band is measured against.
+      const height = this.classList.contains("v-timeline__tracks") ? 144 : 400;
+      return { left: 0, top: 0, right: 900, bottom: height, width: 900, height } as DOMRect;
+    },
+  });
+}
+
+function restoreBoxes(): void {
+  Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
+}
+
+function bandOver(fromX: number, fromY: number, toX: number, toY: number): void {
+  const surface = document.querySelector<HTMLElement>(".v-timeline__tracks") ?? surfaceOf();
+  fireEvent.pointerDown(surface, { pointerId: 1, pointerType: "mouse", button: 0, clientX: fromX, clientY: fromY });
+  fireEvent.pointerMove(surfaceOf(), { pointerId: 1, pointerType: "mouse", clientX: toX, clientY: toY });
+  fireEvent.pointerUp(surfaceOf(), { pointerId: 1, pointerType: "mouse", clientX: toX, clientY: toY });
+}
+
+function surfaceOf(): HTMLElement {
+  const element = document.querySelector<HTMLElement>(".v-timeline__scroll");
+  if (element === null) throw new Error("timeline surface missing");
+  return element;
+}
+
+describe("a rubber band over empty timeline", () => {
+  beforeEach(() => {
+    seen.selection = [];
+    stubViewport();
+    stubBoxes();
+  });
+  afterEach(() => {
+    restoreBoxes();
+    restoreViewport();
+  });
+
+  it("selects every clip it touches", async () => {
+    const doc = await documentWithClips(4);
+    render(<Harness doc={doc} />);
+
+    // A hundred pixels a second: from three seconds to seven covers the second and third clip and
+    // touches the fourth's head at six seconds.
+    bandOver(300, 10, 700, 60);
+
+    expect(seen.selection.length).toBe(3);
+  });
+
+  // Touching, not swallowing: a band that only took clips it contained whole would be useless on a
+  // clip wider than the window, which is most of them at a working zoom.
+  it("takes a clip it only reaches into", async () => {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+
+    // A band wholly inside the first clip, from 1.5 s to 1.9 s: it swallows nothing and still takes
+    // the clip it is inside.
+    bandOver(150, 10, 190, 60);
+
+    expect(seen.selection.length).toBe(1);
+  });
+
+  // Two rows, and a band in one of them. Without the row test a band anywhere would take every clip
+  // whose time it happened to cross, on tracks nobody was pointing at.
+  it("takes only the rows it crosses", async () => {
+    const doc = await documentWithClips(2);
+    doc.dispatch(cmd.trackAdd("video", "V2"));
+    const upper = doc.state.timeline.tracks[1]!.id;
+    doc.dispatch(
+      cmd.clipAdd(
+        upper,
+        { kind: "generator", generator: { type: "solid", color: "#00ff00" } },
+        0,
+        CLIP_SECONDS * SECOND,
+      ),
+    );
+    render(<Harness doc={doc} />);
+
+    // Rows are 72 px and drawn top first, so the lower half of the area is tracks[0].
+    bandOver(20, 80, 120, 140);
+    const lower = seen.selection;
+    expect(lower.length).toBe(1);
+
+    bandOver(20, 4, 120, 60);
+    expect(seen.selection.length).toBe(1);
+    expect(seen.selection[0]).not.toBe(lower[0]);
+
+    // And a band across both rows takes both. Dragged upwards, so the row the press landed on is the
+    // *lower* index of the two: rows are drawn top first while tracks[0] is the bottom one, and a
+    // range that trusted the press to be the first row would come out empty half the time.
+    bandOver(20, 130, 120, 10);
+    expect(seen.selection.length).toBe(2);
+  });
+
+  // A band dragged out and then back to where it started is a band that covers nothing, and the
+  // selection has to follow it back rather than keeping what it briefly held.
+  it("gives back what it takes when it is dragged shut again", async () => {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+    const surface = surfaceOf();
+
+    fireEvent.pointerDown(surface, { pointerId: 1, pointerType: "mouse", button: 0, clientX: 20, clientY: 10 });
+    fireEvent.pointerMove(surface, { pointerId: 1, pointerType: "mouse", clientX: 320, clientY: 60 });
+    expect(seen.selection.length).toBe(2);
+
+    fireEvent.pointerMove(surface, { pointerId: 1, pointerType: "mouse", clientX: 21, clientY: 11 });
+    expect(seen.selection).toEqual([]);
+    fireEvent.pointerUp(surface, { pointerId: 1, pointerType: "mouse", clientX: 21, clientY: 11 });
+  });
+
+  it("takes nothing where it crosses no clip", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+    press("a", { ctrlKey: true });
+    expect(seen.selection.length).toBe(1);
+
+    bandOver(600, 10, 800, 60);
+
+    expect(seen.selection).toEqual([]);
+  });
+
+  // A press that trembles is a click, and a click on empty timeline clears the selection rather than
+  // opening a band nobody dragged.
+  it("is not opened by a press that barely moved", async () => {
+    const doc = await documentWithClips(2);
+    render(<Harness doc={doc} />);
+
+    bandOver(300, 20, 302, 21);
+
+    expect(document.querySelector('[data-testid="timeline-marquee"]')).toBeNull();
+    expect(seen.selection).toEqual([]);
+  });
+});

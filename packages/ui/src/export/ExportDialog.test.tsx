@@ -108,6 +108,29 @@ describe("ExportDialog", () => {
     expect(exported[0]).toMatchObject({ formatId: "mp4", width: 1280, height: 720, fps: NTSC });
   });
 
+  it("fills the size fields from a preset, and keeps the project's frame rate", () => {
+    const { exported } = show({ settings: { width: 1280, height: 720, fps: NTSC } });
+    fireEvent.change(field("Vorgabe"), { target: { value: "vertical" } });
+    fireEvent.click(screen.getByText("Export starten"));
+    expect(exported[0]).toMatchObject({ width: 1080, height: 1920, fps: NTSC });
+  });
+
+  // A bitrate typed for 720p is not the bitrate for 4K. The field goes back to being derived, which is
+  // the one thing a preset cannot honestly leave alone.
+  it("lets the bitrate follow the size a preset chose, even after one was typed", () => {
+    const { exported } = show();
+    fireEvent.change(field("Bitrate (Mbit/s)"), { target: { value: "4" } });
+    fireEvent.change(field("Vorgabe"), { target: { value: "uhd" } });
+    fireEvent.click(screen.getByText("Export starten"));
+    expect(exported[0]?.videoBitrate).toBe(defaultBitrate(3840, 2160, FLAT));
+  });
+
+  it("stays on its own heading after a pick, so it names an action and not a state", () => {
+    show();
+    fireEvent.change(field("Vorgabe"), { target: { value: "hd" } });
+    expect((field("Vorgabe") as HTMLSelectElement).value).toBe("");
+  });
+
   it("keeps the frame rate rational when one is chosen", () => {
     const { exported } = show();
     fireEvent.change(field("Bilder pro Sekunde"), { target: { value: "30000/1001" } });

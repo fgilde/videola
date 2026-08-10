@@ -77,6 +77,34 @@ export function defaultBitrate(width: number, height: number, fps: Rate): number
   return Math.round((width * height * rate * BITS_PER_PIXEL) / 1000) * 1000;
 }
 
+
+/**
+ * The sizes people actually deliver, as one choice instead of three fields.
+ *
+ * Sizes and frame rates only. Not a bitrate: the suggestion below is computed from the size and the
+ * rate, so a preset that carried one as well would be a second opinion about the same question — and
+ * the one that is wrong is the one nobody recomputed after changing the size.
+ *
+ * The project's own frame rate wins wherever a preset does not insist. A preset that quietly moved a
+ * 25 fps edit to 30 would drop or repeat a frame in five, which is not what "1080p" asked for.
+ */
+export interface ExportPreset {
+  id: string;
+  width: number;
+  height: number;
+  /** Only where the platform really wants one; otherwise the project's rate is kept. */
+  fps?: Rate;
+}
+
+export const EXPORT_PRESETS: readonly ExportPreset[] = [
+  { id: "hd", width: 1920, height: 1080 },
+  { id: "uhd", width: 3840, height: 2160 },
+  { id: "hdReady", width: 1280, height: 720 },
+  // The two shapes a phone delivers, both at the sizes the platforms serve back.
+  { id: "vertical", width: 1080, height: 1920 },
+  { id: "square", width: 1080, height: 1080 },
+];
+
 export function rateKey(rate: Rate): string {
   return `${rate.numerator}/${rate.denominator}`;
 }
@@ -155,6 +183,35 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
             {usable.map((format) => (
               <option key={format.id} value={format.id}>
                 {t(`export.format.${format.id}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* Above the three fields it fills, because it is the short way to answer all of them. It
+            resets to its own heading after a pick: it names a thing to do, not a state the export is
+            in -- the fields below are the state, and they are what a person edits next. */}
+        <label className="v-export__row">
+          {t("export.preset")}
+          <select
+            aria-label={t("export.preset")}
+            value=""
+            disabled={running}
+            onChange={(event) => {
+              const preset = EXPORT_PRESETS.find((entry) => entry.id === event.target.value);
+              if (preset === undefined) return;
+              setWidth(preset.width);
+              setHeight(preset.height);
+              if (preset.fps !== undefined) setFpsKey(rateKey(preset.fps));
+              // The bitrate goes back to being derived: a number left over from the previous size is
+              // the one thing a preset cannot honestly keep.
+              setBitrate(undefined);
+            }}
+          >
+            <option value="">{t("export.preset")}</option>
+            {EXPORT_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {t(`export.preset.${preset.id}`)}
               </option>
             ))}
           </select>

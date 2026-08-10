@@ -26,6 +26,7 @@ zone on the screen and neither of them is worth giving that up unasked.
 | Drag an edge | trims, ripples or rolls, depending on the edge mode |
 | Drag with the move mode on slip or slide | slips the source under the clip, or slides the clip between its neighbours |
 | Drag in the ruler | scrubs |
+| Drag over empty timeline | a rubber band over everything it touches |
 | Two pointers | zoom by the change in distance |
 | Long press | opens the context menu |
 

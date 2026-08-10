@@ -344,6 +344,15 @@
   border-radius: 2px 2px 5px 5px;
 }
 
+.v-timeline__marquee {
+  position: absolute;
+  border: 1px solid var(--v-focus);
+  /* A wash rather than a fill: the clips under the band are what somebody is aiming at. */
+  background: color-mix(in srgb, var(--v-focus) 18%, transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+
 .v-timeline__snapLine {
   position: absolute;
   top: 0;

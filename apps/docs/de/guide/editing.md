@@ -307,12 +307,24 @@ schraffiert, und das Schloss neben ihrem Namen sagt warum.
 | Ziehen in der Clipmitte | verschiebt die ganze Auswahl, bei einem Clip auch über Spuren hinweg |
 | Ziehen an einer Clipkante | trimmt diese Kante |
 | Ziehen im Lineal | scrubbt |
+| Ziehen über leere Zeitleiste | ein Gummiband: jeder Clip, den es berührt, wird ausgewählt |
 | Zwei Zeiger | zoomen über die Abstandsänderung |
 | Langes Drücken, rechte Maustaste | öffnet das Kontextmenü des Clips oder des Markers darunter |
 
 Ein Druck innerhalb einer mehrteiligen Auswahl behält sie — sonst hätte der Druck, der den Zug
 beginnt, gerade das weggeworfen, was er gleich bewegen soll. Loslassen ohne Zug engt auf den einen
 Clip ein.
+
+Das Gummiband wählt aus, was es **berührt**, nicht was es ganz umschließt: bei einem
+Arbeitszoom sind die meisten Clips breiter als das Fenster, und ein Band, das nur Umschlossenes nähme,
+wäre nutzlos. Es löst bei jeder Zeigerbewegung auf und nicht erst beim Loslassen — ein Zug zurück über
+einen Clip nimmt ihn also wieder heraus, und ein zugezogenes Band wählt nichts, so macht man es ohne
+Loslassen rückgängig. Unter vier Pixeln gibt es gar kein Band: ein Druck, der gezittert hat, ist ein
+Klick, und ein Klick auf leere Zeitleiste räumt die Auswahl.
+
+Reihen werden von oben gezeichnet, während `tracks[0]` die unterste ist; der Bereich der Reihen, den
+ein Band abdeckt, wird deshalb sortiert und nicht vom Druck übernommen — ein nach oben gezogenes Band
+käme sonst leer heraus.
 
 Alles läuft über Pointer Events, damit Maus, Stift und Finger denselben Weg nehmen. Ist der Zeiger
 keine Maus, wachsen die Trimm-Zonen auf 44 px — ein 4 px breites Ziel am Clipende ist mit dem

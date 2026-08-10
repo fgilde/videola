@@ -61,11 +61,23 @@ the audio codec is not available, it says the export will be silent rather than 
 
 | Setting | Notes |
 |---|---|
+| Preset | 1080p, 4K, 720p, upright 1080 × 1920, square 1080 — fills the size fields below |
 | Format | MP4 (H.264 + AAC) or WebM (VP9 + Opus), filtered by what encodes |
 | Width, height | Default from the project; both edges are kept even, because every codec here samples chroma at half resolution |
 | Frames per second | Rational throughout — 30000/1001 is offered as itself, never as 29.97 |
 | Bitrate | In Mbit/s. The suggestion follows the resolution and rate until you type your own |
 | Range | The whole project, or the selected clip |
+
+A preset carries **sizes and frame rates only**, never a bitrate: the suggestion is computed from the
+size and the rate, so a preset that brought its own would be a second opinion about the same question —
+and the wrong one would be whichever nobody recomputed after changing the size. Picking one therefore
+hands the bitrate field back to that suggestion, even if a number had been typed into it: a bitrate
+chosen for 720p is not the bitrate for 4K.
+
+The project's own frame rate is kept unless a preset insists on one. Quietly moving a 25 fps edit to 30
+would drop or repeat a frame in five, and nothing in the word "1080p" asked for that. The select
+returns to its own heading after a pick, because it names an action and the fields under it are the
+state.
 
 Progress is counted in output frames and reaches a hundred percent on the last one. **Cancel really
 stops it**: the worker is ended, and because the file only ever exists in that worker's memory,

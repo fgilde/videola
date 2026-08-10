@@ -289,11 +289,22 @@ padlock beside its name says why.
 | Drag the middle of a clip | moves the whole selection, across tracks when one clip is dragged |
 | Drag a clip edge | trims that edge |
 | Drag in the ruler | scrubs |
+| Drag over empty timeline | a rubber band: every clip it touches is selected |
 | Two pointers | zooms by the change in distance |
 | Long press, right click | opens the context menu of the clip or the marker under the pointer |
 
 A press inside a selection of several clips keeps it — otherwise the press that starts a drag would
 have thrown away what it is about to move. Releasing without dragging narrows it to the one clip.
+
+The rubber band selects what it **touches**, not what it swallows whole: at a working zoom most clips
+are wider than the window, and a band that only took the ones it contained would be useless. It
+resolves on every pointer move rather than on release, so dragging back over a clip takes it out
+again — and a band dragged shut selects nothing, which is how a band is undone without letting go.
+Under four pixels there is no band at all: a press that trembled is a click, and a click on empty
+timeline clears the selection.
+
+Rows are drawn top first while `tracks[0]` is the bottom one, so the row range a band covers is
+sorted rather than taken from the press — a band dragged upwards would otherwise come out empty.
 
 Everything runs through Pointer Events, so mouse, pen and finger take the same path. When the
 pointer is not a mouse the trim zones grow to 44 px, because a 4 px target at the end of a clip is

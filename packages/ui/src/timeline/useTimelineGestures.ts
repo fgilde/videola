@@ -59,6 +59,16 @@ export interface TimelineGestures {
   menu: TimelineMenu | undefined;
   closeMenu(): void;
   snapLine: Time | undefined;
+  /** The rubber band being dragged over empty timeline, in pixels inside the tracks area. */
+  marquee: Marquee | undefined;
+}
+
+/** Where the rubber band stands, already ordered so width and height are never negative. */
+export interface Marquee {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export interface GestureConfig {
@@ -70,6 +80,12 @@ export interface GestureConfig {
   dispatch: (command: Command, coalesceKey?: string) => void;
   onSeek: (time: Time) => void;
   onSelect: (clip: ClipId | undefined, how?: SelectHow) => void;
+  /**
+   * Every clip a rubber band closed over, as one answer. Not a run of `onSelect` calls: a band over
+   * twenty clips would be twenty renders, and the set it produces is a whole answer rather than
+   * twenty additions to whatever was selected before.
+   */
+  onSelectMany: (clips: readonly ClipId[]) => void;
   /** Which keyframe the lane has under the hand, kept where the timeline keeps its selections. */
   onSelectKeyframe: (keyframe: KeyframeHit) => void;
   selection: ReadonlySet<ClipId>;
@@ -90,6 +106,7 @@ interface Held {
 }
 
 type Drag =
+  | { mode: "marquee"; pointerId: number; fromX: number; fromY: number; toX: number; toY: number }
   | { mode: "move"; pointerId: number; clip: ClipId; track: TrackId; clientX: number; clientY: number; start: Time; held: Held[]; key: string; live: boolean; additive: boolean }
   | { mode: "trim"; pointerId: number; clip: ClipId; edge: TrimEdge; clientX: number; clientY: number; edgeTime: Time; duration: Time; key: string; live: boolean; additive: boolean }
   // `at` is where the core last put the keyframe, not where the pointer wants it. Every move sends
@@ -116,6 +133,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const [trimZonePx, setTrimZonePx] = useState(COARSE_TRIM_ZONE_PX);
   const [menu, setMenu] = useState<TimelineMenu>();
   const [snapLine, setSnapLine] = useState<Time>();
+  const [marquee, setMarquee] = useState<Marquee>();
 
   const cancelLongPress = useCallback(() => {
     clearTimeout(longPress.current);
@@ -157,7 +175,20 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       const hit = hitTest(event.target);
       if (hit === undefined) {
         config.onSelect(undefined);
-        drag.current = undefined;
+        // A press on empty timeline clears the selection, and a drag from there closes a rubber band
+        // over what it covers. The clear happens on the press either way: a band that began by
+        // keeping the old selection would have no way to shrink one.
+        drag.current = insideTracks(config, event.clientX, event.clientY)
+          ? {
+              mode: "marquee",
+              pointerId: event.pointerId,
+              fromX: event.clientX,
+              fromY: event.clientY,
+              toX: event.clientX,
+              toY: event.clientY,
+            }
+          : undefined;
+        setMarquee(undefined);
         return;
       }
       if (hit.kind === "ruler") {
@@ -266,6 +297,16 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         setSnapLine(seekTo(config, event.clientX, snapOptions(config, event.altKey))?.time);
         return;
       }
+      if (active.mode === "marquee") {
+        active.toX = event.clientX;
+        active.toY = event.clientY;
+        const band = marqueeBox(config, active);
+        setMarquee(band);
+        // Resolved on every move, so the selection is what the band covers right now rather than
+        // what it covered when it was let go: dragging back over a clip has to take it out again.
+        config.onSelectMany(band === undefined ? [] : clipsUnder(config, active));
+        return;
+      }
 
       const dx = event.clientX - active.clientX;
       const dy = event.clientY - active.clientY;
@@ -299,6 +340,13 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       const active = drag.current;
       if (active === undefined) return;
 
+      if (active.mode === "marquee") {
+        // Nothing to revert: a band changed a selection and no command went out, so a cancelled one
+        // simply leaves the selection it had already reported.
+        drag.current = undefined;
+        setMarquee(undefined);
+        return;
+      }
       if (active.mode === "pinch") {
         // Lifting one of three fingers leaves a pinch that can still run; re-seeding from the
         // remaining pair continues it instead of ending the gesture under the user's hands.
@@ -370,6 +418,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
     menu,
     closeMenu: useCallback(() => setMenu(undefined), []),
     snapLine,
+    marquee,
   };
 }
 
@@ -379,6 +428,67 @@ export interface SelectHow {
   collapse?: boolean;
 }
 
+
+// Whether a press landed on the tracks at all. Outside them -- on the toolbar, the ruler's row, the
+// slack under the last track -- a rubber band would be a selection gesture nobody aimed.
+function insideTracks(config: GestureConfig, clientX: number, clientY: number): boolean {
+  const area = config.tracksArea.current;
+  const surface = config.surface.current;
+  if (area === null || surface === null) return false;
+  const box = area.getBoundingClientRect();
+  const across = surface.getBoundingClientRect();
+  return (
+    clientY >= box.top &&
+    clientY <= box.bottom &&
+    clientX >= across.left &&
+    clientX <= across.right
+  );
+}
+
+// The band in pixels inside the tracks area, ordered so a drag up and to the left is the same
+// rectangle as one down and to the right. Undefined until it is worth drawing: a band of two pixels
+// is a click that trembled.
+const MARQUEE_MIN_PX = 4;
+
+function marqueeBox(config: GestureConfig, drag: MarqueeDrag): Marquee | undefined {
+  const area = config.tracksArea.current;
+  const surface = config.surface.current;
+  if (area === null || surface === null) return undefined;
+  const box = area.getBoundingClientRect();
+  const across = surface.getBoundingClientRect();
+  const left = Math.min(drag.fromX, drag.toX) - across.left + surface.scrollLeft;
+  const right = Math.max(drag.fromX, drag.toX) - across.left + surface.scrollLeft;
+  const top = Math.min(drag.fromY, drag.toY) - box.top;
+  const bottom = Math.max(drag.fromY, drag.toY) - box.top;
+  if (right - left < MARQUEE_MIN_PX && bottom - top < MARQUEE_MIN_PX) return undefined;
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+// Every clip the band touches: its time range overlaps the band's, and its row is one of the rows the
+// band crosses. Touching rather than containing, which is what every timeline does -- a band that
+// only took clips it swallowed whole would be useless on a clip wider than the window.
+function clipsUnder(config: GestureConfig, drag: MarqueeDrag): ClipId[] {
+  const band = marqueeBox(config, drag);
+  const tracks = config.project.timeline.tracks;
+  if (band === undefined) return [];
+  const from = xToTime(band.left, config.flicksPerPixel);
+  const to = xToTime(band.left + band.width, config.flicksPerPixel);
+  // Both ends through the same map as a drop: the rows are drawn top first while tracks[0] is the
+  // bottom one, so the row under the *lower* edge is the lower index.
+  const high = trackAt(tracks, band.top);
+  const low = trackAt(tracks, band.top + band.height);
+  const [first, last] = high <= low ? [high, low] : [low, high];
+  const found: ClipId[] = [];
+  for (const [index, track] of tracks.entries()) {
+    if (index < first || index > last) continue;
+    for (const clip of track.clips) {
+      if (clip.start + clip.duration > from && clip.start < to) found.push(clip.id);
+    }
+  }
+  return found;
+}
+
+type MarqueeDrag = Extract<Drag, { mode: "marquee" }>;
 type MoveDrag = Extract<Drag, { mode: "move" }>;
 type TrimDrag = Extract<Drag, { mode: "trim" }>;
 type KeyframeDrag = Extract<Drag, { mode: "keyframe" }>;

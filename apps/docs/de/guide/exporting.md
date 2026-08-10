@@ -63,11 +63,23 @@ an. Fehlt der Audio-Codec, sagt er, dass der Export stumm bleibt, statt auf halb
 
 | Einstellung | Anmerkung |
 |---|---|
+| Vorgabe | 1080p, 4K, 720p, hochkant 1080 × 1920, quadratisch 1080 — füllt die Größenfelder darunter |
 | Format | MP4 (H.264 und AAC) oder WebM (VP9 und Opus), gefiltert nach dem, was kodiert |
 | Breite, Höhe | Vorgabe aus dem Projekt; beide Kanten bleiben gerade, weil jeder Codec hier die Farbe halb so fein abtastet |
 | Bilder pro Sekunde | Durchgehend rational — 30000/1001 steht als es selbst da, nie als 29,97 |
 | Bitrate | In Mbit/s. Der Vorschlag folgt Auflösung und Bildrate, bis Sie selbst etwas eintragen |
 | Bereich | Das ganze Projekt oder der ausgewählte Clip |
+
+Eine Vorgabe trägt **nur Größen und Bildraten**, nie eine Bitrate: der Vorschlag wird aus Größe und
+Rate gerechnet, eine Vorgabe mit eigener Bitrate wäre also eine zweite Meinung zur selben Frage — und
+falsch wäre die, die nach dem Ändern der Größe niemand neu gerechnet hat. Eine Vorgabe gibt das
+Bitratenfeld deshalb an diesen Vorschlag zurück, auch wenn dort schon eine Zahl stand: eine Bitrate für
+720p ist nicht die Bitrate für 4K.
+
+Die Bildrate des Projekts bleibt, solange eine Vorgabe nicht auf einer besteht. Einen 25er-Schnitt
+stillschweigend auf 30 zu setzen ließe jedes fünfte Bild fallen oder doppelt sein, und im Wort „1080p"
+stand davon nichts. Die Auswahl geht nach einem Griff auf ihre eigene Überschrift zurück, denn sie
+benennt eine Handlung — der Zustand sind die Felder darunter.
 
 Der Fortschritt zählt Ausgabebilder und erreicht auf dem letzten hundert Prozent. **Abbrechen hält
 wirklich an**: der Worker wird beendet, und weil die Datei ausschließlich in dessen Speicher

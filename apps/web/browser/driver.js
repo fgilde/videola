@@ -2128,6 +2128,37 @@ async function announce() {
 
     button("An den Anfang").click();
     await sleep(100);
+
+    // The rubber band, dragged over empty timeline with a real pointer. Only here is it worth
+    // checking: every number in it comes off a rectangle, and jsdom has no rectangles.
+    //
+    // The upper row is the empty one -- rows are drawn top first while tracks[0] is the bottom one --
+    // so a band can start there without the press landing on a clip.
+    const tracks = q(".v-timeline__tracks");
+    const rows = all(".v-track").map((row) => row.getBoundingClientRect());
+    const empty = rows[0];
+    const withClip = rows[rows.length - 1];
+    const clip = q("[data-clip-id]").getBoundingClientRect();
+    const startX = clip.left + Math.min(60, clip.width / 3);
+
+    pointer("pointerdown", tracks, { clientX: startX, clientY: empty.top + 8 });
+    pointer("pointermove", tracks, { clientX: startX + 60, clientY: withClip.top + 8 });
+    await sleep(120);
+    check("a drag over empty timeline draws a band", q('[data-testid="timeline-marquee"]') !== null, true);
+    pointer("pointerup", tracks, { clientX: startX + 60, clientY: withClip.top + 8 });
+    await sleep(150);
+    check("and it lets go of the band", q('[data-testid="timeline-marquee"]'), null);
+    check("what it closed over is selected",
+      all('[data-clip-id][data-selected="true"]').length, 1);
+
+    // A band that stays in the empty row takes nothing, and clears what the last one took.
+    pointer("pointerdown", tracks, { clientX: startX, clientY: empty.top + 8 });
+    pointer("pointermove", tracks, { clientX: startX + 80, clientY: empty.top + 20 });
+    pointer("pointerup", tracks, { clientX: startX + 80, clientY: empty.top + 20 });
+    await sleep(150);
+    check("a band over nothing selects nothing",
+      all('[data-clip-id][data-selected="true"]').length, 0);
+    check("the band raised nothing", banner(), "");
   }
 
   async function dropFixture() {

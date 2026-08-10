@@ -28,6 +28,7 @@ auf dem Schirm, und keines von beidem ist es wert, das ungefragt aufzugeben.
 | Ziehen an einer Kante | trimmt, rippelt oder rollt, je nach Kantenmodus |
 | Ziehen im Slip- oder Slide-Modus | schiebt die Quelle unter dem Clip, oder den Clip zwischen seinen Nachbarn |
 | Ziehen im Lineal | scrubbt |
+| Ziehen über leere Zeitleiste | ein Gummiband über alles, was es berührt |
 | Zwei Zeiger | zoomen über die Abstandsänderung |
 | Langes Drücken | öffnet das Kontextmenü |
 
