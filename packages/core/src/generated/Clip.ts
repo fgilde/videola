@@ -19,4 +19,15 @@ export type Clip = { id: ClipId, label?: string | null, groupId?: GroupId | null
  * what decides how long a smear is -- and defaulted to off, because a smear nobody asked for is
  * a renderer deciding how somebody's edit looks.
  */
-motionBlur?: number, effects: Array<Effect>, transitionIn?: Transition | null, transitionOut?: Transition | null, keyframes: { [key in string]: Array<Keyframe> }, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });
+motionBlur?: number, 
+/**
+ * Whether the clip is drawn and heard at all.
+ *
+ * A disabled clip keeps its place, its length and everything else about it: the timeline shows it,
+ * the renderer leaves it out of the draw list and the audio graph schedules no voice for it. That
+ * is what makes it the way to compare two takes -- deleting one and pasting it back is not the
+ * same operation, because it loses where the clip was.
+ *
+ * Defaulted to true, so a project written before this field existed opens with every clip on.
+ */
+enabled?: boolean, effects: Array<Effect>, transitionIn?: Transition | null, transitionOut?: Transition | null, keyframes: { [key in string]: Array<Keyframe> }, } & ({ [key in string]: number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null });

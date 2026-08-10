@@ -724,3 +724,15 @@
     min-height: var(--v-touch-target);
   }
 }
+
+/* A clip switched off. Dimmed and hatched rather than hidden: it is still where it was, and the
+   hatching is what tells the two apart at a glance on a small strip where opacity alone reads as
+   "unselected". */
+.v-clip[data-enabled="false"] {
+  opacity: 0.4;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    rgb(0 0 0 / 0.35) 6px 12px
+  );
+}

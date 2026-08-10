@@ -327,6 +327,9 @@ function drawItem(
   matrix: readonly number[] | undefined,
 ): DrawItem | undefined {
   if (at < clip.start || at >= clip.start + clip.duration) return undefined;
+  // A clip switched off is out of the list entirely: no picture, no decode, no effect pass. It keeps
+  // its place on the timeline, which is the difference between switching a take off and deleting it.
+  if (clip.enabled === false) return undefined;
   // The core resolved the keyframes; `clip.transform` is the value at rest, reached only when the
   // caller supplied no snapshot at all, which no renderer does.
   //

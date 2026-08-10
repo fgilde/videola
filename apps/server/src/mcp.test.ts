@@ -197,6 +197,7 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   "clip.setSpeed": (f) => ({ clip: f.clip, rate: 2, reverse: true, preservePitch: false }),
   "clip.setVolume": (f) => ({ clip: f.clip, volume: 0.25 }),
   "clip.setMotionBlur": (f) => ({ clip: f.clip, amount: 0.5 }),
+  "clip.setEnabled": (f) => ({ clip: f.clip, enabled: false }),
   "clip.setTransform": (f) => ({
     clip: f.clip,
     transform: {

@@ -446,6 +446,10 @@ fn every_command_undoes_to_the_exact_prior_state() {
             rear: 0.75,
             lfe: 0.5,
         },
+        |Fixture { clip, .. }| Command::ClipSetEnabled {
+            clip: clip.clone(),
+            enabled: false,
+        },
         |Fixture { clip, .. }| Command::ClipSetMotionBlur {
             clip: clip.clone(),
             amount: 0.5,

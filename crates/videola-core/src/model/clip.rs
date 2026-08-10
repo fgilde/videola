@@ -13,6 +13,14 @@ fn is_zero(value: &f32) -> bool {
     *value == 0.0
 }
 
+fn enabled_default() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Clip {
@@ -37,6 +45,16 @@ pub struct Clip {
     /// a renderer deciding how somebody's edit looks.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub motion_blur: f32,
+    /// Whether the clip is drawn and heard at all.
+    ///
+    /// A disabled clip keeps its place, its length and everything else about it: the timeline shows it,
+    /// the renderer leaves it out of the draw list and the audio graph schedules no voice for it. That
+    /// is what makes it the way to compare two takes -- deleting one and pasting it back is not the
+    /// same operation, because it loses where the clip was.
+    ///
+    /// Defaulted to true, so a project written before this field existed opens with every clip on.
+    #[serde(default = "enabled_default", skip_serializing_if = "is_true")]
+    pub enabled: bool,
     #[serde(default)]
     pub effects: Vec<Effect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -74,6 +92,7 @@ impl Clip {
             volume: 1.0,
             pan: 0.0,
             motion_blur: 0.0,
+            enabled: true,
             effects: Vec::new(),
             transition_in: None,
             transition_out: None,

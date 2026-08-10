@@ -16,7 +16,7 @@ Die beiden nach außen gerichteten stehen in [Die API und der MCP-Server](/de/gu
 |---|---|
 | `project.*` | `setSettings`, `setTitle`, `setMasterVolume` |
 | `track.*` | `add`, `remove`, `reorder`, `rename`, `setVolume`, `setPan`, `setSurround`, `setFlags` |
-| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `nest`, `setSpeed`, `setVolume`, `setMotionBlur`, `setTransform`, `setGenerator`, `setTransition` |
+| `clip.*` | `add`, `remove`, `move`, `trim`, `split`, `rippleDelete`, `rippleTrim`, `roll`, `slip`, `slide`, `paste`, `group`, `ungroup`, `nest`, `setSpeed`, `setVolume`, `setMotionBlur`, `setEnabled`, `setTransform`, `setGenerator`, `setTransition` |
 | `effect.*` | `add`, `remove`, `setEnabled`, `setParam` |
 | `keyframe.*` | `add`, `remove`, `move`, `setInterp`, `setHandles` |
 | `marker.*` | `add`, `remove`, `rename` |

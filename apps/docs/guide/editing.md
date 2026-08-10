@@ -378,6 +378,13 @@ own save dialogue over an editor is the one thing it must never produce.
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> | selects every clip |
 | <kbd>Ctrl</kbd>+<kbd>D</kbd> | duplicates the selection, each copy directly behind its original |
 
+**Switch this clip off** sits in the context menu beside the two deletes, and it is what somebody
+reaches for instead of one: a clip switched off keeps its place, its length and everything else about
+it, and one press puts it back. Nothing draws it — no decode, no effect pass, no upload — and nothing
+plays it, because the renderer and the audio graph read the same flag. It is drawn dimmed and hatched on
+the timeline, because opacity alone reads as "not selected" on a small strip. That is the way to compare
+two takes; deleting one and pasting it back is a different operation, and it loses where the clip was.
+
 <kbd>S</kbd> cuts every selected clip the playhead stands inside, or — with nothing selected — every
 clip it stands inside at all. Not at an edge: a cut there is a clip of no length on one side, which the
 core refuses, and a refusal out of one keystroke is an error message for something that meant nothing.

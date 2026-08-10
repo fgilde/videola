@@ -400,6 +400,14 @@ hervorbringen darf.
 | <kbd>Strg</kbd>+<kbd>A</kbd> | wählt alle Clips aus |
 | <kbd>Strg</kbd>+<kbd>D</kbd> | verdoppelt die Auswahl, jede Kopie direkt hinter ihr Original |
 
+**Clip ausschalten** steht im Kontextmenü neben den zwei Löschbefehlen, und man greift danach statt nach
+einem von ihnen: ein ausgeschalteter Clip behält seinen Platz, seine Länge und alles andere an sich, und
+ein Druck holt ihn zurück. Nichts zeichnet ihn — keine Dekodierung, kein Effektdurchgang, kein
+Upload — und nichts spielt ihn, denn Renderer und Tongraph lesen dieselbe Marke. In der Zeitleiste
+erscheint er abgedunkelt und schraffiert, weil Deckkraft allein auf einem schmalen Streifen wie „nicht
+ausgewählt" aussieht. So vergleicht man zwei Takes; einen zu löschen und wieder einzufügen ist eine
+andere Handlung, und sie verliert, wo der Clip war.
+
 <kbd>S</kbd> schneidet jeden ausgewählten Clip, in dem der Playhead steht — oder, wenn nichts
 ausgewählt ist, jeden Clip, in dem er überhaupt steht. Nicht an einer Kante: ein Schnitt dort ist auf
 einer Seite ein Clip ohne Länge, den der Kern ablehnt, und eine Ablehnung aus einem einzigen

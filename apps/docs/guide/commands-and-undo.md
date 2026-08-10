@@ -52,6 +52,7 @@ same `0 .. 4` a track's fader is, so a slider can send whatever it produces.
 | `clip.setSpeed` | `clip`, `rate`, `reverse`, `preservePitch` |
 | `clip.setVolume` | `clip`, `volume` |
 | `clip.setMotionBlur` | `clip`, `amount` |
+| `clip.setEnabled` | `clip`, `enabled` |
 | `clip.setTransform` | `clip`, `transform` |
 | `clip.setTransition` | `clip`, `transition` |
 | `clip.rippleDelete` | `clip` |

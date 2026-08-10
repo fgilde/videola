@@ -107,6 +107,9 @@ export class AudioGraph {
     // Nested clips arrive already folded into the outer timeline's coordinates, so nothing below
     // this line knows about compound clips.
     for (const { clip, track } of audibleClips(project)) {
+      // The same flag the renderer reads: a clip switched off is not heard either, and one that was
+      // silent in the picture and audible in the mix would be the worst of both answers.
+      if (clip.enabled === false) continue;
       const hash = audibleHash(clip, library);
       if (hash === undefined) continue;
       const buffer = await this.#load(hash, clip);

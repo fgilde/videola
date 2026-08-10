@@ -55,6 +55,7 @@ export function Clip({
       data-clip-id={box.clip.id}
       data-clip-run={box.count > 1 ? box.count : undefined}
       data-selected={selected}
+      data-enabled={box.clip.enabled !== false}
       data-clip-group={box.clip.groupId ?? undefined}
       aria-pressed={selected}
       aria-label={box.count > 1 ? t("timeline.clipRun", { count: box.count }) : undefined}

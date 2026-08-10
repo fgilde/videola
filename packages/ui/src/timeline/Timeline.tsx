@@ -889,6 +889,18 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
         !(playhead > clip.start && playhead + FREEZE_HOLD < clip.start + clip.duration),
       onSelect: close(() => props.onFreeze?.(clip.id, playhead, FREEZE_HOLD)),
     },
+    {
+      // Beside the two deletes, because it is what somebody reaches for instead of one: a clip
+      // switched off keeps its place, and one press puts it back.
+      label: t(clip.enabled === false ? "timeline.clipEnable" : "timeline.clipDisable"),
+      onSelect: close(() => {
+        const key = `timeline-enabled-${(actionSequence += 1)}`;
+        const wanted = clip.enabled === false;
+        for (const id of selected.size > 0 ? selected : [clip.id]) {
+          dispatch(cmd.clipSetEnabled(id, wanted), key);
+        }
+      }),
+    },
     { label: t("timeline.deleteClip"), onSelect: close(() => props.onDelete(false)) },
     { label: t("timeline.rippleDelete"), onSelect: close(() => props.onDelete(true)) },
     { label: t("timeline.copy"), onSelect: close(props.onCopy) },

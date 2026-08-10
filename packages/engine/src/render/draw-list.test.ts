@@ -1076,3 +1076,28 @@ describe("an adjustment track", () => {
     expect(passesOn(drawn, "clp_outside")).toEqual([]);
   });
 });
+
+// A clip switched off keeps its place on the timeline and leaves the picture entirely: no item, so no
+// decode, no effect pass and no upload. The flag defaults to on, because a project written before it
+// existed had every clip on.
+describe("a clip that is switched off", () => {
+  it("is left out of the list while its neighbours stay", () => {
+    const scene = project([
+      track("trk_1", [
+        clip({ id: "clp_on", start: 0, duration: SECOND }),
+        clip({ id: "clp_off", start: SECOND, duration: SECOND, enabled: false }),
+      ]),
+    ]);
+
+    expect(drawnClips(list(scene, 0))).toEqual(["clp_on"]);
+    expect(drawnClips(list(scene, SECOND))).toEqual([]);
+  });
+
+  it("is drawn again the moment it is switched back on", () => {
+    const scene = project([
+      track("trk_1", [clip({ id: "clp_1", start: 0, duration: SECOND, enabled: true })]),
+    ]);
+
+    expect(drawnClips(list(scene, 0))).toEqual(["clp_1"]);
+  });
+});

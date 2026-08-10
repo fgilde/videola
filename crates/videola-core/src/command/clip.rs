@@ -631,6 +631,14 @@ pub(super) fn set_volume(target: &mut Project, clip: &ClipId, volume: f32) -> Re
     Ok(())
 }
 
+// No clamp and nothing to validate: a flag is a flag. Here rather than inline in the dispatch so every
+// clip setter is in one file and reads the same way.
+pub(super) fn set_enabled(target: &mut Project, clip: &ClipId, enabled: bool) -> Result<()> {
+    let (track, index) = find_clip_mut(target, clip)?;
+    track.clips[index].enabled = enabled;
+    Ok(())
+}
+
 // Bounded at one frame. Longer than that and consecutive output frames would be averaged over
 // overlapping windows -- every moment of the material drawn into two frames, which is not a shutter
 // any camera has and reads as a dissolve rather than as movement.

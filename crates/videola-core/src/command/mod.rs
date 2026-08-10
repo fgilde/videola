@@ -180,6 +180,10 @@ pub enum Command {
     /// Set a clip's gain, where 1 is unity and 4 the accepted maximum.
     #[serde(rename = "clip.setVolume")]
     ClipSetVolume { clip: ClipId, volume: f32 },
+    /// Switch a clip off without taking it out: it keeps its place and its length, and nothing draws
+    /// or plays it. The way to compare two takes.
+    #[serde(rename = "clip.setEnabled")]
+    ClipSetEnabled { clip: ClipId, enabled: bool },
     /// How much of a frame the clip was exposed for: 0 off, 0.5 a 180-degree shutter, 1 the whole
     /// frame. What the renderer does with it is average the clip over that window.
     #[serde(rename = "clip.setMotionBlur")]
@@ -411,6 +415,7 @@ impl Command {
             | Self::ClipSetSpeed { clip, .. }
             | Self::ClipSetVolume { clip, .. }
             | Self::ClipSetMotionBlur { clip, .. }
+            | Self::ClipSetEnabled { clip, .. }
             | Self::ClipSetTransform { clip, .. }
             | Self::ClipSetGenerator { clip, .. }
             | Self::ClipSetTransition { clip, .. } => holding(clip),
@@ -498,6 +503,7 @@ impl Command {
                 preserve_pitch,
             } => clip::set_speed(target, clip, *rate, *reverse, *preserve_pitch),
             Self::ClipSetVolume { clip, volume } => clip::set_volume(target, clip, *volume),
+            Self::ClipSetEnabled { clip, enabled } => clip::set_enabled(target, clip, *enabled),
             Self::ClipSetMotionBlur { clip, amount } => {
                 clip::set_motion_blur(target, clip, *amount)
             }
@@ -625,6 +631,7 @@ impl Command {
             Self::ClipSetSpeed { .. } => LABEL_CLIP_SET_SPEED,
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
             Self::ClipSetMotionBlur { .. } => LABEL_CLIP_SET_MOTION_BLUR,
+            Self::ClipSetEnabled { .. } => LABEL_CLIP_SET_ENABLED,
             Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
             Self::ClipSetGenerator { .. } => LABEL_CLIP_SET_GENERATOR,
             Self::ClipSetTransition { .. } => LABEL_CLIP_SET_TRANSITION,
@@ -678,6 +685,7 @@ pub const LABEL_CLIP_NEST: &str = "cmd.clip.nest";
 pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
 pub const LABEL_CLIP_SET_MOTION_BLUR: &str = "cmd.clip.setMotionBlur";
+pub const LABEL_CLIP_SET_ENABLED: &str = "cmd.clip.setEnabled";
 pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
 pub const LABEL_CLIP_SET_GENERATOR: &str = "cmd.clip.setGenerator";
 pub const LABEL_CLIP_SET_TRANSITION: &str = "cmd.clip.setTransition";
@@ -729,6 +737,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_CLIP_SET_SPEED,
     LABEL_CLIP_SET_VOLUME,
     LABEL_CLIP_SET_MOTION_BLUR,
+    LABEL_CLIP_SET_ENABLED,
     LABEL_CLIP_SET_TRANSFORM,
     LABEL_CLIP_SET_GENERATOR,
     LABEL_CLIP_SET_TRANSITION,

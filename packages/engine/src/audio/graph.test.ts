@@ -1148,6 +1148,27 @@ describe("AudioGraph, speed ramps", () => {
 // can be asked about those samples is `waveforms`, and it is drawn from the very buffers playback uses
 // -- so the strips the timeline shows are the measurement, and a picture that disagreed with what is
 // heard would be this check failing rather than something nobody notices.
+// The same flag the renderer reads. A clip that was silent in the picture and audible in the mix would
+// be the worst of both answers, so the audio graph schedules no voice for one that is switched off.
+describe("a clip that is switched off", () => {
+  it("is not heard, and its neighbours still are", async () => {
+    const ctx = context(2);
+    const out = await render(
+      ctx,
+      signal(ctx, () => 1),
+      project([
+        track("trk_0", [
+          clip({ id: "clp_off", start: 0, duration: SECOND / 2, enabled: false } as Partial<Clip>),
+          clip({ id: "clp_on", start: SECOND / 2, duration: SECOND / 2 }),
+        ]),
+      ]),
+    );
+
+    expect(Math.abs(at(out, 0.25))).toBeCloseTo(0, 3);
+    expect(Math.abs(at(out, 0.75))).toBeCloseTo(1, 2);
+  });
+});
+
 describe("an offline effect on a clip", () => {
   // Hiss, deterministic, so there is something to take away and something to measure.
   const hiss: AudioBufferSource = {
