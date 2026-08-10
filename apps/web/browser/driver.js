@@ -129,6 +129,28 @@ async function announce() {
     throw new Error("timed out waiting for " + what);
   }
 
+  // Every zone's height, as a passing note. Three layout checks read differently on a CI runner than
+  // on a desktop, and a failure that says "216 px" without saying which row took the rest is a
+  // failure nobody can act on. Called where a claim is made, not only at the end -- the panels come
+  // and go during a run, so the end says nothing about the moment a check looked.
+  const noteZones = (when) => {
+    const zone = (selector) => {
+      const node = document.querySelector(selector);
+      return node === null ? "-" : String(Math.round(node.getBoundingClientRect().height));
+    };
+    results.push({
+      name:
+        `ZONES ${when} viewport ${innerWidth}x${innerHeight} editor ${zone(".v-editor")}` +
+        ` preview ${zone(".v-preview")} canvas ${zone(".v-preview__canvas")}` +
+        ` transport ${zone(".v-transport")} scopes ${zone(".v-scopes")}` +
+        ` timeline ${zone(".v-timeline")} mixer ${zone('[data-testid="mixer"]')}` +
+        ` strip ${zone(".v-mixer__strip")} strips ${zone(".v-mixer__strips")}`,
+      ok: true,
+      got: "noted",
+      want: "noted",
+    });
+  };
+
   const q = (selector) => document.querySelector(selector);
   const all = (selector) => Array.from(document.querySelectorAll(selector));
   const button = (label) => document.querySelector('button[aria-label="' + label + '"]');
@@ -782,6 +804,7 @@ async function announce() {
       labelled("Originale benutzen").getAttribute("aria-pressed"), "false");
     check("and the timeline is untouched by any of it", all("[data-clip-id]").length, 1);
 
+    noteZones("layout");
     // The picture is the reason anyone opens the application, and on a desktop it had been squeezed
     // to a stamp between the transport and a mixer strip that grew with every track. Measured on the
     // canvas and not on its pane: a pane can be tall and hold nothing but letterbox.
@@ -810,6 +833,7 @@ async function announce() {
     // the volume fader was the only part of a mixer anybody ever saw -- pan, mute, solo and the
     // whole insert chain were below the cut. Read off the scroll container, which is where being
     // cut off actually shows: a box shorter than what it holds.
+    noteZones("desk-open");
     checkAtMost("the mixer shows whole strips and not the tops of them",
       q(".v-mixer__strips").scrollHeight - q(".v-mixer__strips").clientHeight, 0);
     // And the same claim from the other side, on the control that sits last in a strip -- the one
@@ -1862,10 +1886,14 @@ async function announce() {
       if (noise.length > 0) {
         results.push({ name: "nothing reached the console", ok: false, got: noise, want: [] });
       }
+      if (noise.length > 0) {
+        results.push({ name: "nothing reached the console", ok: false, got: noise, want: [] });
+      }
       // What the page was actually laid out in. Chrome writes --screenshot at the size of the
       // window, and the window is taller than the page by the height of its own furniture; without
       // this the harness has no way to know where the editor stops and the black band starts.
       results.push({ name: `VIEWPORT ${innerWidth}x${innerHeight}`, ok: true, got: "noted", want: "noted" });
+      noteZones("end");
       results.push({
         name: `ENV ${window.__videolaEnv ?? "unknown"}`,
         ok: true,

@@ -342,7 +342,11 @@ try {
     cropHeight(path, viewport(results));
   }
   const results = [...live, ...drawn, ...baked, ...shelved, ...pocket, ...slate];
-  for (const note of results.filter((entry) => entry.name.startsWith("ENV "))) {
+  // Printed whether the run passed or not: which container the browser could read, what viewport
+  // the page was laid out in, and how tall every zone came out. Three layout checks read differently
+  // on a CI runner than on a desktop, and a failure that says "216 px" without saying which row took
+  // the rest is a failure nobody can act on.
+  for (const note of results.filter((entry) => /^(?:ENV|VIEWPORT|ZONES) /.test(entry.name))) {
     console.log(note.name);
   }
   for (const result of results.filter((entry) => !entry.ok)) {
