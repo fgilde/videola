@@ -52,6 +52,20 @@ features:
       which divides evenly into every frame rate and audio sample rate the editor will meet.
     link: /guide/architecture#time-is-an-integer
     linkText: Why flicks
+  - title: Sound that is finished here
+    details: >
+      Stereo or 5.1 with a position per track, spectral noise reduction learned from the pauses in the
+      recording itself, loudness to a target, ducking and silence cutting. Measured against a real
+      renderer rather than asserted.
+    link: /guide/audio
+    linkText: Audio
+  - title: Motion blur that is motion
+    details: >
+      A shutter per clip, averaged over eight real instants of the exposure: each one asks the core
+      where the clip reads from then and where it stands there, so a layer smears along its own path
+      and the material smears with it.
+    link: /guide/effects-and-transitions#motion-blur
+    linkText: Effects
   - title: A project file you can open with unzip
     details: >
       .videola is a ZIP holding a manifest, project.json and the media files, each named after

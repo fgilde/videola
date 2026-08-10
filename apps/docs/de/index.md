@@ -54,6 +54,20 @@ features:
       Editor begegnen wird.
     link: /de/guide/architecture
     linkText: Warum Flicks
+  - title: Ton, der hier fertig wird
+    details: >
+      Stereo oder 5.1 mit einer Position je Spur, spektrale Rauschunterdrückung, die den Boden aus den
+      Pausen der Aufnahme selbst lernt, Lautheit auf einen Zielwert, Ducking und Stille schneiden.
+      Gegen einen echten Renderer gemessen statt behauptet.
+    link: /de/guide/audio
+    linkText: Ton
+  - title: Bewegungsunschärfe, die Bewegung ist
+    details: >
+      Eine Belichtung je Clip, gemittelt über acht echte Zeitpunkte: jeder fragt den Kern, woher der
+      Clip dann liest und wo er dann steht — eine Ebene zieht also entlang ihrer eigenen Bahn, und das
+      Material zieht mit.
+    link: /de/guide/effects-and-transitions#bewegungsunscharfe
+    linkText: Effekte
   - title: Eine Projektdatei, die unzip öffnet
     details: >
       .videola ist ein ZIP mit einem Manifest, project.json und den Mediendateien, jede benannt

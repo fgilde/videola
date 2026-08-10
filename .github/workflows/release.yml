@@ -197,7 +197,9 @@ jobs:
           # mehr aktualisiert (tauri-action laesst Drafts absichtlich in Ruhe),
           # also muss der Text hier stehen statt in einem spaeteren Job.
           releaseBody: |
-            This build packages the app shell — no timeline, no playback, no effects, no export.
+            Installers for this tag. The notes for the release itself are written on the draft before it
+            is published — this text is what the packaging job can say without knowing what went into
+            the tag, and saying more from here would be a changelog nobody wrote.
 
             The macOS DMG is unsigned unless an Apple certificate is configured, so Gatekeeper will block it.
             Android and iOS assets are absent whenever their signing keys are: four assets is the expected
