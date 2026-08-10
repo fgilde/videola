@@ -1,5 +1,11 @@
 # Einstieg
 
+## Einfach benutzen
+
+Nichts hiervon braucht man, um Videola zu *benutzen*. Die [Download-Seite](/de/download) findet
+heraus, auf welchem System du bist, bietet diese Ausgabe zuerst an und listet die anderen; die
+Browser-Version braucht überhaupt keine Installation. Was folgt, ist für die, die es selbst bauen.
+
 ## Voraussetzungen
 
 | Werkzeug | Version | Wofür |
@@ -55,6 +61,14 @@ cargo test --workspace
 ```
 
 ## Die Desktop-App starten
+
+Die Desktop-Ausgabe öffnet mit verborgenem Fenster hinter einem kleinen Startbild und zeigt den
+Editor, sobald der Kern steht. Das ist keine Zierde: das Erste, was ein kalter Start tut, ist ein
+WASM-Modul zu übersetzen, und ein Fenster, das dabei einen leeren grauen Editor zeigt, sieht aus wie
+ein abgestürztes Programm. Die Hülle trägt einen Zehn-Sekunden-Zeitgeber, der das Fenster trotzdem
+zeigt — eine Ausgabe, deren Kern nie lädt, ist damit ein sichtbares Problem und kein Prozess ohne
+Fenster.
+
 
 ```sh
 pnpm --filter videola-desktop dev

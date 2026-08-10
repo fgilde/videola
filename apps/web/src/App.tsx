@@ -81,6 +81,7 @@ import {
 } from "@videola/media";
 import type { Peaks, Session } from "@videola/media";
 import {
+  About,
   AppShell,
   chosenTransition,
   DropZone,
@@ -119,7 +120,7 @@ import {
 import { effectTiles, revokeTiles } from "./effectTiles";
 import { useTemplatePosters } from "./posters";
 import { useThumbnails } from "./thumbnails";
-import { offerUpdate } from "./updates";
+import { insideTauri, offerUpdate, revealWindow } from "./updates";
 
 // Two of these are not failures of the program but of the file, and they read that way: a subtitle
 // file with nothing legible in it, and a project with no subtitles to write.
@@ -178,6 +179,10 @@ const NO_PROXIES: ReadonlyMap<string, ProxyState> = new Map();
 // is what makes an upright picture reachable by hand.
 const ROTATE_STEP = 15;
 
+// Where the documentation and the builds live. One constant, because the about dialogue and the
+// offer in the menu must not disagree about it.
+const SITE = "https://fgilde.github.io/videola/";
+
 // The keyframe track that carries a motion path, spelled the way the core spells it.
 const POSITION_TRACK = "position";
 
@@ -234,6 +239,7 @@ export function App(): ReactElement {
   // transport is for the layouts that have no tabs.
   const [scopesOpen, setScopesOpen] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(false);
+  const [about, setAbout] = useState(false);
   const [grab, setGrab] = useState<MediaGrab>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
@@ -521,6 +527,16 @@ export function App(): ReactElement {
   // Deliberately not wrapped in try/catch: the timeline decides which refusals are ordinary,
   // and it can only do that if they reach it. Catching here turned a trim held against its
   // limit into nine error banners in a single drag.
+  // The desktop build opens hidden behind a splash screen: a window showing an empty grey editor
+  // while a WASM module compiles looks like a program that has crashed. The core being up is the
+  // first moment there is anything worth looking at, and it is a moment only this side knows.
+  const shown = useRef(false);
+  useEffect(() => {
+    if (doc === undefined || shown.current) return;
+    shown.current = true;
+    void revealWindow();
+  }, [doc]);
+
   const edit = useCallback(
     (command: Command, coalesceKey?: string) => {
       doc?.dispatch(command, coalesceKey);
@@ -1311,6 +1327,10 @@ export function App(): ReactElement {
 
   return (
     <AppShell
+      onAbout={() => setAbout(true)}
+      // Only in a browser: in the desktop build this would offer to install what is already
+      // running. `insideTauri` is the same question the updater asks, and asked the same way.
+      getAppHref={insideTauri() ? undefined : `${SITE}download`}
       onNew={() => window.location.reload()}
       onTemplates={openGallery}
       onOpen={() => void open()}
@@ -1563,6 +1583,9 @@ export function App(): ReactElement {
           onCancel={cancelExport}
           onClose={() => setExporting(false)}
         />
+      )}
+      {about && (
+        <About version={APP_VERSION} desktop={insideTauri()} onClose={() => setAbout(false)} />
       )}
     </AppShell>
   );

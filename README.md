@@ -109,7 +109,8 @@ turns behind a tab bar where there is no room for them side by side. The layout 
 width and from `(any-pointer: fine)`, and a setting beside the theme switch pins it where the
 detection is wrong — a wide screen whose mouse the browser cannot see.
 
-**Packaging.** A Tauri shell building Windows, Linux and macOS installers with an opt-in signed
+**Packaging.** A Tauri shell — opening behind a splash screen and showing the editor the moment the
+core is up — building Windows, Linux and macOS installers with an opt-in signed
 auto-update, a Docker image carrying the editor, the API and the MCP server, and a CLI that applies
 a list of commands to a project without a browser.
 

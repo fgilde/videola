@@ -1,5 +1,11 @@
 # Getting started
 
+## Just use it
+
+Nothing here is needed to *use* Videola. The [downloads page](/download) works out which system you
+are on, offers that build first, and lists the others; the browser version needs no installation at
+all. What follows is for building it yourself.
+
 ## Prerequisites
 
 | Tool | Version | Needed for |
@@ -54,6 +60,13 @@ cargo test --workspace
 ```
 
 ## Run the desktop app
+
+The desktop build opens with its window hidden behind a small splash screen and shows the editor the
+moment the core is up. That is not decoration: the first thing a cold start does is compile a WASM
+module, and a window showing an empty grey editor while that runs looks like a program that has
+crashed. The shell carries a ten-second timer that shows the window regardless, so a build whose
+core never loads is a visible problem rather than a process with no window.
+
 
 ```sh
 pnpm --filter videola-desktop dev

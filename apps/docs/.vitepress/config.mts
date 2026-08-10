@@ -107,7 +107,7 @@ export default defineConfig({
           { text: "Features", link: "/guide/features" },
           { text: "Documentation", link: "/guide/getting-started" },
           { text: "Architecture", link: "/guide/architecture" },
-          { text: "Downloads", link: `${REPO}/releases` },
+          { text: "Downloads", link: "/download" },
         ],
         sidebar: sidebar("", "Documentation", CHAPTERS),
         editLink: {
@@ -132,7 +132,7 @@ export default defineConfig({
           { text: "Funktionen", link: "/de/guide/features" },
           { text: "Dokumentation", link: "/de/guide/getting-started" },
           { text: "Architektur", link: "/de/guide/architecture" },
-          { text: "Downloads", link: `${REPO}/releases` },
+          { text: "Downloads", link: "/de/download" },
         ],
         sidebar: sidebar("/de", "Dokumentation", KAPITEL),
         editLink: {

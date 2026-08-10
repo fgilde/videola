@@ -1,0 +1,74 @@
+/* A native dialog, so the browser owns the focus trap, the Escape key and the backdrop. What is
+   styled here is only what it looks like. */
+.v-about {
+  width: min(420px, calc(100vw - 2 * var(--v-space-4)));
+  padding: var(--v-space-5);
+  background: var(--v-bg-elevated);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-lg);
+  box-shadow: var(--v-shadow-raised);
+}
+
+.v-about::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.v-about__brand {
+  display: block;
+  width: 168px;
+  height: auto;
+  /* The wordmark carries its own near-black plate; repeating it as a rounded chip makes that edge
+     deliberate instead of a seam, the same correction the top bar makes. */
+  padding: 5px 10px;
+  background: #05060a;
+  border-radius: var(--v-radius-md);
+}
+
+.v-about__version {
+  margin: var(--v-space-3) 0 0;
+  font-family: var(--v-font-mono);
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+}
+
+.v-about__what {
+  margin: var(--v-space-2) 0 0;
+  font-size: var(--v-text-sm);
+  line-height: var(--v-leading);
+  color: var(--v-text);
+}
+
+.v-about__links {
+  display: grid;
+  gap: var(--v-space-1);
+  margin: var(--v-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--v-text-sm);
+}
+
+.v-about__links a {
+  color: var(--v-accent);
+}
+
+.v-about__get {
+  display: inline-flex;
+  margin-top: var(--v-space-4);
+  text-decoration: none;
+}
+
+.v-about__copyright {
+  margin: var(--v-space-4) 0 0;
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}
+
+.v-about__copyright a {
+  color: var(--v-text-muted);
+}
+
+.v-about__close {
+  margin-top: var(--v-space-4);
+  width: 100%;
+}

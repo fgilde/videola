@@ -8,6 +8,9 @@ import { SettingsMenu } from "./SettingsMenu";
 import wordmark from "./videola-wordmark.png";
 
 export interface TopBarActions {
+  onAbout?: () => void;
+  /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
+  getAppHref?: string;
   onNew?: () => void;
   onTemplates?: () => void;
   onOpen?: () => void;
@@ -50,6 +53,14 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
       <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
       <Action label={t("action.exportCaptions")} onClick={actions.onExportCaptions} />
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
+      {/* Last in the menu, where an "about" belongs, and above the offer to fetch a build -- which
+          is only here at all in a browser, where there is something to fetch. */}
+      <Action label={t("about.label")} onClick={actions.onAbout} />
+      {actions.getAppHref !== undefined && (
+        <a className="v-button" href={actions.getAppHref} target="_blank" rel="noreferrer">
+          {t("action.getApp")}
+        </a>
+      )}
     </>
   );
   // Three ranks in three lines: the export is something the project does, the two switches are

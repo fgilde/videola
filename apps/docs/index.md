@@ -11,7 +11,7 @@ hero:
   actions:
     - theme: brand
       text: Downloads
-      link: https://github.com/fgilde/videola/releases
+      link: /download
     - theme: alt
       text: What it does
       link: /guide/features
