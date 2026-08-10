@@ -23,6 +23,8 @@ const tabletShot = join(here, "tablet.png");
 // half-deleted profile in a working tree is worse than one in the temp directory.
 const profiles = join(tmpdir(), `videola-harness-${process.pid}`);
 const PORT = Number(process.env.VIDEOLA_HARNESS_PORT ?? 4399);
+// How long any one run may take before the harness calls it stopped. See the note at the first run.
+const RUN_BUDGET_MS = 600_000;
 let devtoolsPort = PORT + 1;
 // An iPhone 14 in portrait. It cannot be had from --window-size: Chrome on Windows refuses a
 // window narrower than 500 CSS pixels and silently gives 500 instead, which is a small tablet
@@ -301,10 +303,12 @@ await new Promise((resolve) => server.listen(PORT, resolve));
 try {
   const desktop = ["--window-size=1440,900", "--virtual-time-budget=300000"];
   // Wall clock: the frame clock runs, so playback can tick and the transport can be watched.
-  // The same budget the other three get. The effect shelf draws every tile as that effect's own
-  // shader over the current frame, and on a two-core runner through SwiftShader that alone can take
-  // minutes -- a run cut off at two of them would be a machine being slow reported as a fault.
-  const live = await drive(`http://localhost:${PORT}/`, ["--window-size=1440,900"], 300_000);
+  // Ten minutes each, and the same for all four. The effect shelf draws every tile as that effect's
+  // own shader over the current frame, and on a two-core runner through SwiftShader that alone takes
+  // minutes -- a run cut off while the grid was still arriving is a slow machine reported as a
+  // fault. On a desktop every one of these finishes inside a minute; the budget is a backstop
+  // against a run that has genuinely stopped, not a target anyone is racing.
+  const live = await drive(`http://localhost:${PORT}/`, ["--window-size=1440,900"], RUN_BUDGET_MS);
   // Every desktop run lays the editor out in the same viewport, and the runs that take pictures say
   // what it was. A picture is the window; this is where it becomes the page.
   const viewport = (results) => {
@@ -315,7 +319,7 @@ try {
   // Virtual clock: the frame clock is stopped, so the drawing buffer survives long enough to be
   // read back. The one run whose picture is arranged rather than incidental: it grades a clip and
   // turns the instruments on, and the shot is taken while that is on screen.
-  const drawn = await drive(`http://localhost:${PORT}/?virtual=1`, [...desktop, `--screenshot=${shot}`], 300_000);
+  const drawn = await drive(`http://localhost:${PORT}/?virtual=1`, [...desktop, `--screenshot=${shot}`], RUN_BUDGET_MS);
   // The template run needs both halves the other two runs split between them: real decoding time
   // (so the fetch-driven clock) and a drawing buffer nobody has taken away (so virtual time). It is
   // its own launch because it starts from an untouched editor -- a gallery that replaces the
@@ -323,7 +327,7 @@ try {
   const baked = await drive(
     `http://localhost:${PORT}/?templates=1&virtual=1`,
     [...desktop, `--screenshot=${templateShot}`],
-    300_000,
+    RUN_BUDGET_MS,
   );
   // The effect library, for the same reason the template run is its own launch: it opens on a fresh
   // editor, and the picture at the end of the budget has to be the shelf rather than whatever the
@@ -331,13 +335,13 @@ try {
   const shelved = await drive(
     `http://localhost:${PORT}/?effects=1&virtual=1`,
     [...desktop, `--screenshot=${effectShot}`],
-    300_000,
+    RUN_BUDGET_MS,
   );
-  const pocket = await driveTouch(PHONE, "phone=1", 180_000, "the phone");
+  const pocket = await driveTouch(PHONE, "phone=1", RUN_BUDGET_MS, "the phone");
   // The mode that had a layout rule and no run behind it. It is also the only viewport where a
   // drag from the library onto a track can be driven with a finger, because it is the only one
   // where both panels are on screen at the same time.
-  const slate = await driveTouch(TABLET, "tablet=1", 180_000, "the tablet");
+  const slate = await driveTouch(TABLET, "tablet=1", RUN_BUDGET_MS, "the tablet");
   // Last, and not next to the run that took each picture: Chrome writes --screenshot when the
   // virtual budget runs out, which is after the run has already reported back. Cropped too early
   // the harness trims the file the run before it left, and the real one lands uncropped on top.
