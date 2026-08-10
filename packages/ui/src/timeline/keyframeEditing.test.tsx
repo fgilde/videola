@@ -21,6 +21,7 @@ import { initSync } from "@videola/core/src/wasm/videola_core.js";
 
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { EffectDescriptor } from "../inspector/Inspector";
+import { fromField, upField } from "./KeyframeCurve";
 import { DEFAULT_FLICKS_PER_PIXEL, Timeline } from "./Timeline";
 import { restoreViewport, stubViewport } from "./Timeline.test";
 
@@ -547,6 +548,15 @@ function plotted(): number[] {
     .map((step) => Number(step.trim().split(/\s+/)[1]));
 }
 
+// A plotted y, back as the value it stands for. The field draws through `upField`, which reaches
+// past the unit square so an overshoot can be seen; reading the drawing back through the same
+// mapping means these checks are about the shape and not about how far past it the field reaches.
+function valueAt(shape: readonly number[], index: number): number {
+  const y = shape[index];
+  if (y === undefined) throw new Error(`no sample at ${index}`);
+  return fromField(1 - y / 100);
+}
+
 // The field is a square box on a page that does not lay out in jsdom, so a pointer position has to
 // be given something to be measured against. The real geometry is measured in the browser run.
 function stubField(field: HTMLElement, size: number): void {
@@ -634,9 +644,11 @@ describe("the curve field", () => {
     pick(SECOND);
     openCurve();
 
-    // A bezier with no handles is ease-in-out, which lags the diagonal's 75 at a quarter.
+    // A bezier with no handles is ease-in-out, which lags the diagonal's 0.25 at a quarter. Read
+    // through the field's own mapping, so a field that reaches further past the unit square than it
+    // does today does not turn this into a number nobody can read.
     const opened = plotted();
-    expect(opened[16]).toBeGreaterThan(80);
+    expect(valueAt(opened, 16)).toBeLessThan(0.2);
 
     // Through `act`, because this one command comes from outside a React event: without it the
     // subscriber has fired but the tree has not been asked to redraw yet, and the two readings
@@ -650,12 +662,12 @@ describe("the curve field", () => {
     });
 
     const bent = plotted();
-    expect(bent[0]).toBeCloseTo(100, 1);
-    expect(bent[bent.length - 1]).toBeCloseTo(0, 1);
+    expect(valueAt(bent, 0)).toBeCloseTo(0, 2);
+    expect(valueAt(bent, bent.length - 1)).toBeCloseTo(1, 2);
     // Bent far below what it drew a moment ago: with that handle, nothing has happened yet a
     // quarter of the way through.
-    expect(bent[16]).toBeGreaterThan((opened[16] ?? 0) + 5);
-    expect(bent[16]).toBeGreaterThan(93);
+    expect(valueAt(bent, 16)).toBeLessThan(valueAt(opened, 16) - 0.05);
+    expect(valueAt(bent, 16)).toBeLessThan(0.07);
   });
 
   // A hold does not ease, it waits. `ease` answers a straight line for it -- `interpolate` never
@@ -668,8 +680,8 @@ describe("the curve field", () => {
     openCurve();
 
     const shape = plotted();
-    expect(shape[32]).toBeCloseTo(100, 1);
-    expect(shape[shape.length - 1]).toBeCloseTo(0, 1);
+    expect(valueAt(shape, 32)).toBeCloseTo(0, 2);
+    expect(valueAt(shape, shape.length - 1)).toBeCloseTo(1, 2);
   });
 
   // Presets stay one click and the curve is the fourth entry, not a mode that replaces them.
@@ -751,10 +763,54 @@ describe("the curve field", () => {
     expect(watch.errors.map((error) => error.message)).toEqual([]);
     const key = trackOf(doc)[0];
     expect(key?.handleOut?.[0]).toBeCloseTo(0.7, 2);
-    expect(key?.handleOut?.[1]).toBeCloseTo(0.7, 2);
+    // The pointer ended 70% up a 200 px field, and the field's y runs from -1/3 to 4/3 so that an
+    // overshoot can be dragged -- so 70% up is not the value 0.7. Read through the same mapping the
+    // field draws with rather than restated as a number.
+    expect(key?.handleOut?.[1]).toBeCloseTo(fromField(0.7), 2);
     // Still the pair it was given, to the precision an f32 keeps it in.
     expect(key?.handleIn?.[0]).toBeCloseTo(0.1, 5);
     expect(key?.handleIn?.[1]).toBeCloseTo(0.2, 5);
+  });
+
+  // The shape a bounce is made of: a handle whose y is past where the travel arrives, so the value
+  // overshoots and comes back. The core has always stored, loaded and animated it; the field used to
+  // pin it to the edge, and the first drag flattened a shape nobody could put back.
+  it("takes a handle past the unit square, which is what a bounce is", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    stubField(openCurve(), 200);
+
+    // Ninety-five percent up the field, which is well past where the travel arrives.
+    fireEvent.pointerDown(handle("out"), { pointerId: 3, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(handle("out"), { pointerId: 3, clientX: 160, clientY: 10 });
+    fireEvent.pointerUp(handle("out"), { pointerId: 3, clientX: 160, clientY: 10 });
+
+    const key = trackOf(doc)[0];
+    expect(key?.handleOut?.[1]).toBeGreaterThan(1);
+
+    // And it is drawn where it was put, not against the edge: the handle's own box sits above the
+    // line the travel arrives on.
+    const drawn = Number(handle("out").style.bottom.replace("%", ""));
+    expect(drawn).toBeGreaterThan(upField(1) * 100);
+    // Past the far end of the field it is held, because a handle nobody can see is a handle nobody
+    // can drag back.
+    expect(drawn).toBeLessThanOrEqual(100);
+  });
+
+  // A pointer dragged clean out of the top of the field stops at what the field shows rather than
+  // running off into a number no drag can undo.
+  it("holds a handle at the edge of what the field shows", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    stubField(openCurve(), 200);
+
+    fireEvent.pointerDown(handle("out"), { pointerId: 4, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(handle("out"), { pointerId: 4, clientX: 100, clientY: -4000 });
+    fireEvent.pointerUp(handle("out"), { pointerId: 4, clientX: 100, clientY: -4000 });
+
+    expect(trackOf(doc)[0]?.handleOut?.[1]).toBeCloseTo(fromField(1), 4);
   });
 
   // One gesture, one entry on the undo stack -- and what it takes back is the shape the curve had
@@ -792,7 +848,7 @@ describe("the curve field", () => {
     const track = trackOf(doc);
     expect(track[0]?.handleIn ?? null).toBeNull();
     expect(track[1]?.handleIn?.[0]).toBeCloseTo(0.25, 2);
-    expect(track[1]?.handleIn?.[1]).toBeCloseTo(0.75, 2);
+    expect(track[1]?.handleIn?.[1]).toBeCloseTo(fromField(0.75), 2);
   });
 
   // The precedence rule, said on the surface that would otherwise be the most convincing of all

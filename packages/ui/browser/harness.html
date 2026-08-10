@@ -580,9 +580,22 @@ test("the curve field sits beside the picked keyframe, not on the timeline's axi
     q(".v-keylane").contains(field), false);
 
   // A curve is read as a square: the same span across as up, so a shape is not stretched into
-  // looking gentler than it is.
+  // looking gentler than it is. The *field* is taller than that, because it reaches past the unit
+  // square at both ends so an overshoot -- what a bounce is made of -- can be seen and dragged. So
+  // what has to be square is the unit square itself, and it is measured between the two lines that
+  // mark where the travel sets off and arrives rather than computed from a fraction this file would
+  // then have to keep in step with the stylesheet.
   const box = q(".v-curve").getBoundingClientRect();
-  check("the field is square", Math.round(box.width - box.height), 0);
+  const bounds = [...document.querySelectorAll(".v-keycurve .v-curve__bound")]
+    .map((line) => line.getBoundingClientRect().top)
+    .sort((a, b) => a - b);
+  check("both ends of the travel are drawn", bounds.length, 2);
+  // Against the content box and not the border box: the two lines are drawn inside the border, and
+  // a one-pixel rule at each end is exactly the two pixels that would otherwise read as a stretch.
+  check("the unit square is square",
+    Math.round(q(".v-keycurve .v-curve").clientWidth - (bounds[1] - bounds[0])), 0);
+  checkAtLeast("and the field reaches past it, which is where an overshoot goes",
+    Math.round(box.height - box.width), 40);
   checkAtLeast("and big enough to aim inside", Math.round(box.width), 120);
 
   // It must not push the tracks off the screen: the picture is the largest zone here.

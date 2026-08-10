@@ -336,6 +336,23 @@
 
 /* The curve that changes nothing, so the shape of the one that does is readable as a departure
    from it rather than as a line on its own. */
+/* Where the travel arrives and where it sets off. The field reaches a third past both so an
+   overshoot can be seen and dragged; these two lines are what it overshoots. Firmer than the grid
+   and quieter than the curve. */
+/* Taller than wide, by exactly the third the field reaches past the unit square at each end: that
+   keeps the unit square itself square, so the dashed diagonal is a diagonal and the evenly paced
+   travel it stands for reads as one. In the inspector's own tone curve there is nothing past the
+   unit square, and this only applies where the keyframe field asks for it. */
+.v-keycurve .v-curve {
+  aspect-ratio: 3 / 5;
+}
+
+.v-curve__bound {
+  stroke: var(--v-border-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
 .v-curve__diagonal {
   stroke: var(--v-border-strong);
   stroke-width: 1;

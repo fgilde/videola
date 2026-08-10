@@ -83,7 +83,7 @@ export function KeyframeCurve({
     // place in this component where the two directions meet.
     return [
       unit((event.clientX - box.left) / box.width),
-      unit(1 - (event.clientY - box.top) / box.height),
+      inField(fromField(1 - (event.clientY - box.top) / box.height)),
     ];
   };
 
@@ -141,15 +141,25 @@ export function KeyframeCurve({
         aria-label={t("keyframe.curveField")}
       >
         <svg className="v-curve__plot" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          {[25, 50, 75].map((line) => (
+          {[0.25, 0.5, 0.75].map((line) => (
             <g key={line}>
-              <line className="v-curve__grid" x1={line} y1="0" x2={line} y2="100" />
-              <line className="v-curve__grid" x1="0" y1={line} x2="100" y2={line} />
+              <line className="v-curve__grid" x1={line * 100} y1="0" x2={line * 100} y2="100" />
+              <line
+                className="v-curve__grid"
+                x1="0"
+                y1={down(line)}
+                x2="100"
+                y2={down(line)}
+              />
             </g>
           ))}
+          {/* Where the travel arrives and where it sets off. The field reaches past both, so
+              without these two the overshoot has nothing to be an overshoot of. */}
+          <line className="v-curve__bound" x1="0" y1={down(0)} x2="100" y2={down(0)} />
+          <line className="v-curve__bound" x1="0" y1={down(1)} x2="100" y2={down(1)} />
           {/* The travel that is evenly paced, so the shape of the one that is not reads as a
               departure from it rather than as a line on its own. */}
-          <line className="v-curve__diagonal" x1="0" y1="100" x2="100" y2="0" />
+          <line className="v-curve__diagonal" x1="0" y1={down(0)} x2="100" y2={down(1)} />
           {/* Each handle tethered to the key it belongs to. Without the tether the two dots are
               points in a box, and which end of the segment each one governs is a guess. */}
           {bendable && (
@@ -157,16 +167,16 @@ export function KeyframeCurve({
               <line
                 className="v-keycurve__tether"
                 x1="0"
-                y1="100"
+                y1={down(0)}
                 x2={out[0] * 100}
-                y2={100 - out[1] * 100}
+                y2={down(out[1])}
               />
               <line
                 className="v-keycurve__tether"
                 x1="100"
-                y1="0"
+                y1={down(1)}
                 x2={into[0] * 100}
-                y2={100 - into[1] * 100}
+                y2={down(into[1])}
               />
             </>
           )}
@@ -182,7 +192,10 @@ export function KeyframeCurve({
                 className="v-curve__point"
                 data-curve-handle={end}
                 data-held={held === end || undefined}
-                style={{ left: `${unit(point[0]) * 100}%`, bottom: `${unit(point[1]) * 100}%` }}
+                style={{
+                  left: `${unit(point[0]) * 100}%`,
+                  bottom: `${upField(inField(point[1])) * 100}%`,
+                }}
                 aria-label={t(`keyframe.handle.${end}`)}
                 onPointerDown={(event) => startDrag(event, end)}
                 onPointerMove={(event) => {
@@ -206,7 +219,7 @@ export function KeyframeCurve({
                   moveTo(
                     end,
                     unit(point[0] + step[0]),
-                    unit(point[1] + step[1]),
+                    inField(point[1] + step[1]),
                     `keyframe-curve-${(gesture += 1)}`,
                   );
                 }}
@@ -238,14 +251,7 @@ const ARROWS: Record<string, [number, number] | undefined> = {
   ArrowDown: [0, -STEP],
 };
 
-/**
- * A handle as it can be drawn and dragged: finite, and in the unit square.
- *
- * ponytail: an overshoot handle -- y outside 0..1, which is what a bounce is made of -- is stored,
- * loaded and animated correctly by the core, but is drawn pinned to the edge of the field here and
- * the first drag flattens it. Widen the field's viewBox past the unit square if bounce curves are
- * ever authored rather than merely loaded.
- */
+/** A handle as it can be drawn and dragged: finite, and inside what the field shows. */
 function pair(
   value: readonly [number, number] | null | undefined,
   fallback: readonly [number, number],
@@ -256,20 +262,55 @@ function pair(
   return [x, y];
 }
 
-// The samples the core handed over, in the 0..100 box the viewBox declares, with y turned over the
-// way a graph is read.
+// The samples the core handed over, in the 0..100 box the viewBox declares. `down` is the one place
+// a value becomes a y, so the line, the handles, the tethers and the two bounds cannot disagree
+// about where 1 is.
 function pathOf(shape: readonly number[]): string {
   const last = shape.length - 1;
   if (last < 1) return "";
   return shape
     .map(
       (value, index) =>
-        `${index === 0 ? "M" : "L"}${((index / last) * 100).toFixed(2)} ${(100 - value * 100).toFixed(2)}`,
+        `${index === 0 ? "M" : "L"}${((index / last) * 100).toFixed(2)} ${down(value).toFixed(2)}`,
     )
     .join(" ");
+}
+
+// A value, as the y a page draws it at: the field's own fraction, turned over, times a hundred.
+function down(value: number): number {
+  return 100 - upField(value) * 100;
 }
 
 function unit(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(Math.max(value, 0), 1);
+}
+
+/**
+ * How far past the unit square the field reaches, above and below, as a fraction of it.
+ *
+ * A bounce is made of a handle whose y is outside 0..1: the travel goes past its destination and
+ * comes back, or dips under its start before setting off. The core stores, loads and animates that
+ * correctly — only the field used to pin it to the edge, so the first drag flattened a shape nobody
+ * could put back. A third either way is what an overshoot is: enough for every bounce anyone hand
+ * authors, and little enough that the unit square is still most of what is on screen.
+ */
+const OVERSHOOT = 1 / 3;
+
+const SPAN = 1 + 2 * OVERSHOOT;
+
+/** A handle's y, as the fraction up the field it is drawn at. Where the three places agree. */
+export function upField(y: number): number {
+  return (y + OVERSHOOT) / SPAN;
+}
+
+/** And back: the fraction up the field a pointer sits at, as a handle's y. */
+export function fromField(fraction: number): number {
+  return fraction * SPAN - OVERSHOOT;
+}
+
+/** Clamped to what the field shows rather than to the unit square. */
+export function inField(y: number): number {
+  if (!Number.isFinite(y)) return 0;
+  return Math.min(Math.max(y, -OVERSHOOT), 1 + OVERSHOOT);
 }

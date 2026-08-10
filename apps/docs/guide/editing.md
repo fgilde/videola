@@ -487,8 +487,17 @@ a **rate track is never offered `bezier` at all**: `keyframe::integrate` has no 
 bezier, the additivity `consumed_source` rests on would go with it, and the core refuses the change.
 An entry that could only ever produce a refusal is worse than an entry that is not there.
 
-A handle beyond the unit square — the overshoot a bounce is made of — is stored, loaded and
-animated correctly, but the field pins it to its edge and the first drag flattens it.
+**The field reaches past the unit square**, by a third at each end, and that is what makes a bounce
+authorable: a handle whose y is above where the travel arrives sends the value past its destination
+and brings it back. Two firmer lines mark where the travel sets off and arrives, so an overshoot has
+something to be an overshoot of, and the unit square itself is kept square — the field is taller than
+it is wide by exactly that third at each end — so the dashed diagonal is a diagonal and the evenly
+paced travel it stands for reads as one.
+
+A drag is held at what the field shows rather than at the unit square, and past that it stops: a
+handle dragged clean off the top would be a shape no drag could bring back. `x` is still clamped to
+0..1, and that clamp is the core's — `cubic_bezier_y_at` bisects on x and needs it to rise across the
+span, so the same clamp answers for a project written by hand and for a handle dragged here.
 
 ## Speed ramps
 

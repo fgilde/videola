@@ -113,11 +113,8 @@ features:
 ## Was noch fehlt
 
 Kein Motion-Blur. Keine Rauschunterdrückung: Tiefen- und Höhensperre nehmen ein Band weg, was
-nicht dasselbe ist, wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Die Keyframe-Glättung hat ein
-Kurvenfeld mit ziehbaren Anfassern, aber ein Anfasser außerhalb des Einheitsquadrats — das
-Überschwingen, aus dem ein Abprall gemacht ist — wird an dessen Rand geklemmt, und eine Kurve lässt
-sich nicht von einem Parameter auf einen anderen übertragen. Die Magnetic-Timeline fehlt bewusst,
-und das
+nicht dasselbe ist, wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Eine Kurve lässt sich nicht von einem Parameter auf einen
+anderen übertragen. Die Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

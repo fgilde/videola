@@ -514,9 +514,19 @@ trotzdem kein Bild. Und einer **Ratenspur wird `bezier` gar nicht erst angeboten
 der `consumed_source` steht, und der Kern lehnt die Änderung ab. Ein Eintrag, der nur eine Absage
 erzeugen kann, ist schlechter als ein Eintrag, den es nicht gibt.
 
-Ein Anfasser außerhalb des Einheitsquadrats — das Überschwingen, aus dem ein Abprall gemacht ist —
-wird korrekt gespeichert, geladen und animiert, aber das Feld heftet ihn an seinen Rand, und der
-erste Zug zieht ihn flach.
+**Das Feld reicht über das Einheitsquadrat hinaus**, um je ein Drittel nach oben und unten, und
+genau das macht einen Abprall herstellbar: ein Anfasser, dessen y über dem Ziel der Bewegung liegt,
+schickt den Wert über sein Ziel hinaus und zurück. Zwei kräftigere Linien markieren, wo die Bewegung
+losgeht und wo sie ankommt, damit das Überschwingen etwas hat, was es überschwingt — und das
+Einheitsquadrat bleibt quadratisch: das Feld ist um genau dieses Drittel je Ende höher als breit,
+also ist die gestrichelte Diagonale eine Diagonale und die gleichmäßige Bewegung, für die sie steht,
+liest sich als eine.
+
+Ein Zug wird an dem gehalten, was das Feld zeigt, und dahinter endet er: ein Anfasser, der oben
+hinausgezogen wird, wäre eine Form, die kein Zug zurückholt. `x` bleibt auf 0..1 geklemmt, und diese
+Klemme ist die des Kerns — `cubic_bezier_y_at` bisektiert auf x und braucht es steigend über die
+Spanne, dieselbe Klemme antwortet also für ein handgeschriebenes Projekt und für einen hier
+gezogenen Anfasser.
 
 ## Geschwindigkeitsrampen
 

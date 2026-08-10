@@ -109,9 +109,7 @@ features:
 ## What is not there yet
 
 No motion blur. No noise reduction: the low and high cut take away a band, which is not the same
-as separating a voice from noise sharing its band. Keyframe easing has a curve field with
-handles to drag, but a handle beyond the unit square — the overshoot a bounce is made of — is pinned
-to its edge, and a curve cannot be copied from one parameter to another. The magnetic timeline is
+as separating a voice from noise sharing its band. A curve cannot be copied from one parameter to another. The magnetic timeline is
 deliberately absent,
 and the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
 browser's own encoders.
