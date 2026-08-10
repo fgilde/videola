@@ -112,9 +112,10 @@ features:
 
 ## Was noch fehlt
 
-Kein Motion-Blur. Keine Rauschunterdrückung: Tiefen- und Höhensperre nehmen ein Band weg, was
-nicht dasselbe ist, wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Eine Kurve lässt sich nicht von einem Parameter auf einen
-anderen übertragen. Die Magnetic-Timeline fehlt bewusst, und das
+Kein Motion-Blur. Keine Rauschunterdrückung: Tiefen- und Höhensperre nehmen ein Band weg, was nicht
+dasselbe ist, wie eine Stimme von einem Geräusch in ihrem Band zu trennen. Eine Kurve wird über die
+Spur eines Parameters kopiert und nicht weiter — die Keys zweier Spuren müssen nicht zueinander
+passen. Die Magnetic-Timeline fehlt bewusst, und das
 [Kapitel zum Schneiden](/de/guide/editing) begründet warum. FFmpeg ist nicht eingebunden; der Export
 nutzt die Encoder des Browsers.
 

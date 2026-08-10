@@ -494,6 +494,16 @@ something to be an overshoot of, and the unit square itself is kept square — t
 it is wide by exactly that third at each end — so the dashed diagonal is a diagonal and the evenly
 paced travel it stands for reads as one.
 
+**One shape for the whole move.** Under the field, on a track of more than two keys, is the answer
+to "copy this curve": the picked segment's easing on every other key of the same track. A shape
+somebody spent a minute on is a shape they want for the move, not for one segment of it, and setting
+it again key by key is that minute over and over. The interpolation travels with the pair, because
+handles on a key set to `linear` are stored and ignored — a copy of the pair alone would be a press
+that changes nothing. One press is one step in the history.
+
+It is scoped to one parameter's own track and stops there. Across two parameters it would need the
+second track's keys to line up with the first's, and nothing in the model says they do.
+
 A drag is held at what the field shows rather than at the unit square, and past that it stops: a
 handle dragged clean off the top would be a shape no drag could bring back. `x` is still clamped to
 0..1, and that clamp is the core's — `cubic_bezier_y_at` bisects on x and needs it to rise across the

@@ -813,6 +813,52 @@ describe("the curve field", () => {
     expect(trackOf(doc)[0]?.handleOut?.[1]).toBeCloseTo(fromField(1), 4);
   });
 
+  // A shape somebody spent a minute on, on the whole move rather than on one segment of it.
+  it("puts this segment's easing on every key of the track", async () => {
+    const { doc, clip } = await sceneWithKeyframes([1, 3, 5]);
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", SECOND, "bezier"));
+    doc.dispatch(
+      cmd.keyframeSetHandles(on.clip(clip), null, "opacity", SECOND, [0.3, 1.2], [0.85, 0.1]),
+    );
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    fireEvent.click(screen.getByRole("button", { name: "Diesen Verlauf auf alle Keys" }));
+
+    for (const key of trackOf(doc)) {
+      expect(key.interp).toBe("bezier");
+      expect(key.handleOut?.[0]).toBeCloseTo(0.85, 4);
+      // The overshoot travels with it, which is the whole reason the field reaches past the square.
+      expect(key.handleIn?.[1]).toBeCloseTo(1.2, 4);
+    }
+  });
+
+  it("is one step to undo, whatever it touched", async () => {
+    const { doc, clip } = await sceneWithKeyframes([1, 3, 5]);
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", SECOND, "bezier"));
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+    const before = trackOf(doc).map((key) => key.interp);
+
+    fireEvent.click(screen.getByRole("button", { name: "Diesen Verlauf auf alle Keys" }));
+    expect(trackOf(doc).map((key) => key.interp)).not.toEqual(before);
+
+    act(() => void doc.undo());
+    expect(trackOf(doc).map((key) => key.interp)).toEqual(before);
+  });
+
+  // A track of two keys has one segment, so there is nowhere for the shape to go.
+  it("is not offered where there is only one segment", async () => {
+    const { doc } = await pickedBezier();
+    render(<Harness doc={doc} />);
+    pick(SECOND);
+    openCurve();
+
+    expect(screen.queryByRole("button", { name: "Diesen Verlauf auf alle Keys" })).toBeNull();
+  });
+
   // One gesture, one entry on the undo stack -- and what it takes back is the shape the curve had
   // before the drag, not the one the second-to-last pointer move left.
   it("makes one drag one undo step", async () => {

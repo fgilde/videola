@@ -3,6 +3,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactEle
 import {
   cmd,
   on,
+  spreadEasing,
   type ClipId,
   type Command,
   type CurveShape,
@@ -227,6 +228,29 @@ export function KeyframeCurve({
             );
           })}
       </div>
+      {/* A shape somebody spent a minute on is a shape they want for the whole move. Offered only
+          where there is somewhere for it to go: a track of two keys has one segment, and this
+          would be a button that changes nothing. */}
+      {row.track.length > 2 && (
+        <button
+          type="button"
+          className="v-keycurve__spread"
+          onClick={() => {
+            const key = `keyframe-spread-${(gesture += 1)}`;
+            for (const command of spreadEasing(
+              row.track,
+              on.clip(clip),
+              row.effectType,
+              row.key,
+              left,
+            )) {
+              dispatch(command, key);
+            }
+          }}
+        >
+          {t("keyframe.curveEverywhere")}
+        </button>
+      )}
       {/* A field with no handles says why rather than looking broken. The presets are still a
           single click in the select beside it; this is the fourth option, not a replacement. */}
       {!bendable && <p className="v-keycurve__hint">{t("keyframe.curveNeedsBezier")}</p>}

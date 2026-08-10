@@ -4,10 +4,11 @@ import { fileURLToPath } from "node:url";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { cmd } from "./commands";
+import { cmd, on } from "./commands";
 import { createWasmBackend } from "./wasm-backend";
 import { VideolaDocument } from "./document";
-import { markerTimes, splitAtTimes } from "./edits";
+import { markerTimes, spreadEasing, splitAtTimes } from "./edits";
+import type { Keyframe } from "./generated/Keyframe";
 import { initSync } from "./wasm/videola_core.js";
 
 // The real core, because what is being asked is what a split leaves behind — and a stand-in that
@@ -117,5 +118,82 @@ describe("cutting at instants", () => {
     expect(markerTimes(doc.state)).toEqual([1 * SECOND, 3 * SECOND]);
     expect(splitAtTimes(doc, markerTimes(doc.state))).toBe(2);
     expect(starts(doc)).toEqual([[0, 1, 3]]);
+  });
+});
+
+describe("one key's easing on the whole track", () => {
+  async function eased(): Promise<{ doc: VideolaDocument; clip: string }> {
+    const doc = await timeline(1);
+    const clip = doc.state.timeline.tracks[0]?.clips[0]?.id ?? "";
+    for (const [at, value] of [
+      [0, 1],
+      [1, 0.5],
+      [2, 0.2],
+      [3, 1],
+    ] as const) {
+      doc.dispatch(
+        cmd.keyframeAdd(on.clip(clip), null, "opacity", at * SECOND, { kind: "float", value }),
+      );
+    }
+    doc.dispatch(cmd.keyframeSetInterp(on.clip(clip), null, "opacity", 0, "bezier"));
+    doc.dispatch(
+      cmd.keyframeSetHandles(on.clip(clip), null, "opacity", 0, [0.4, 1.2], [0.9, 0.05]),
+    );
+    return { doc, clip };
+  }
+
+  const keys = (doc: VideolaDocument): readonly Keyframe[] =>
+    doc.state.timeline.tracks[0]?.clips[0]?.keyframes.opacity ?? [];
+
+  it("gives every other key the same shape", async () => {
+    const { doc, clip } = await eased();
+    const model = keys(doc)[0];
+    expect(model).toBeDefined();
+
+    for (const command of spreadEasing(keys(doc), on.clip(clip), null, "opacity", model!)) {
+      doc.dispatch(command, "spread-1");
+    }
+
+    for (const key of keys(doc)) {
+      expect(key.interp).toBe("bezier");
+      expect(key.handleOut?.[0]).toBeCloseTo(0.9, 5);
+      expect(key.handleOut?.[1]).toBeCloseTo(0.05, 5);
+      expect(key.handleIn?.[0]).toBeCloseTo(0.4, 5);
+      expect(key.handleIn?.[1]).toBeCloseTo(1.2, 5);
+    }
+  });
+
+  // An overshoot survives the trip: the pair the model key carries is the pair the others get, and
+  // the core keeps a y above 1 because that is what a bounce is.
+  it("carries an overshoot with it", async () => {
+    const { doc, clip } = await eased();
+    for (const command of spreadEasing(keys(doc), on.clip(clip), null, "opacity", keys(doc)[0]!)) {
+      doc.dispatch(command, "spread-2");
+    }
+    expect(keys(doc).every((key) => (key.handleIn?.[1] ?? 0) > 1)).toBe(true);
+  });
+
+  it("is one step to undo, however many keys it touched", async () => {
+    const { doc, clip } = await eased();
+    const before = keys(doc).map((key) => key.interp);
+    for (const command of spreadEasing(keys(doc), on.clip(clip), null, "opacity", keys(doc)[0]!)) {
+      doc.dispatch(command, "spread-3");
+    }
+    expect(keys(doc).map((key) => key.interp)).not.toEqual(before);
+
+    doc.undo();
+    expect(keys(doc).map((key) => key.interp)).toEqual(before);
+  });
+
+  it("says nothing about the key it was read from", async () => {
+    const { doc, clip } = await eased();
+    const commands = spreadEasing(keys(doc), on.clip(clip), null, "opacity", keys(doc)[0]!);
+    expect(commands).toHaveLength(6);
+    expect(commands.every((command) => (command as { time: number }).time !== 0)).toBe(true);
+  });
+
+  it("has nothing to say about a track of one key", async () => {
+    const { doc, clip } = await eased();
+    expect(spreadEasing([keys(doc)[0]!], on.clip(clip), null, "opacity", keys(doc)[0]!)).toEqual([]);
   });
 });

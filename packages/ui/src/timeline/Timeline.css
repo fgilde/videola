@@ -689,3 +689,29 @@
   color: var(--v-text-muted);
   font-size: var(--v-text-sm);
 }
+
+/* Under the field, across it: it acts on every key of the track and not on the segment on screen. */
+.v-keycurve__spread {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  margin-top: var(--v-space-2);
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  cursor: pointer;
+}
+
+.v-keycurve__spread:hover {
+  background: var(--v-surface-hover);
+}
+
+@media (pointer: coarse) {
+  .v-keycurve__spread {
+    min-height: var(--v-touch-target);
+  }
+}

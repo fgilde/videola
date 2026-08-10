@@ -522,6 +522,17 @@ Einheitsquadrat bleibt quadratisch: das Feld ist um genau dieses Drittel je Ende
 also ist die gestrichelte Diagonale eine Diagonale und die gleichmäßige Bewegung, für die sie steht,
 liest sich als eine.
 
+**Eine Form für die ganze Bewegung.** Unter dem Feld steht, sobald die Spur mehr als zwei Keys hat,
+die Antwort auf „diese Kurve kopieren": der Verlauf des gewählten Abschnitts auf jedem anderen Key
+derselben Spur. Eine Form, an der jemand eine Minute gesessen hat, ist eine Form für die Bewegung und
+nicht für einen ihrer Abschnitte, und sie Key für Key erneut zu setzen ist dieselbe Minute wieder und
+wieder. Der Verlauf reist mit dem Anfasserpaar mit, denn Anfasser an einem Key auf `linear` werden
+gespeichert und ignoriert — eine Kopie nur des Paares wäre ein Tastendruck, der nichts ändert. Ein
+Druck ist ein Schritt in der Historie.
+
+Es gilt für die Spur eines Parameters und endet dort. Über zwei Parameter hinweg müssten die Keys der
+zweiten Spur zu denen der ersten passen, und nichts im Modell sagt, dass sie das tun.
+
 Ein Zug wird an dem gehalten, was das Feld zeigt, und dahinter endet er: ein Anfasser, der oben
 hinausgezogen wird, wäre eine Form, die kein Zug zurückholt. `x` bleibt auf 0..1 geklemmt, und diese
 Klemme ist die des Kerns — `cubic_bezier_y_at` bisektiert auf x und braucht es steigend über die
