@@ -131,6 +131,20 @@ insert opens the gap on **every** track, so skipping the locked one would move t
 under its own sound — the one thing the operation exists to prevent. Refusing is the honest answer;
 unlock the track and edit, or leave it alone.
 
+## The same edit in another shape
+
+**Change shape** in the overflow menu turns a widescreen cut into a portrait, square or 4:5 one. The
+frame takes its new size and every clip is scaled to **cover** it in the same step, because a reframe
+that left black bars down both sides is not what anybody meant by one.
+
+The factor is applied to what the author already chose rather than replacing it, so a clip blown up to
+1.5 keeps that relationship to the others. Placement scales with the frame it is measured in — each
+axis by its own ratio — so a lower third stays a lower third instead of ending up 1080 pixels from
+the middle of a taller frame.
+
+A locked track is passed over, the same rule cutting at the markers follows. Frame and clips move in
+one step, so one undo puts the whole thing back.
+
 ## Pasting attributes
 
 Copy a clip, select others, and **Paste attributes** puts the first one's look on all of them:

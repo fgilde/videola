@@ -13,7 +13,9 @@ import {
   parseCaptions,
   readTemplateFile,
   toSrt,
+  ASPECTS,
   markerTimes,
+  reframe,
   splitAtTimes,
   timeToSeconds,
   VideolaDocument,
@@ -654,6 +656,25 @@ export function App(): ReactElement {
       }
     },
     [analysisPeaks, doc, project, reportError],
+  );
+
+  // The same edit in a frame of another shape -- a widescreen cut as a portrait one, which is the
+  // single most asked-for thing a modern editor does. Every clip is scaled to cover the new frame in
+  // the same step, because a reframe that left black bars down both sides would be a reframe nobody
+  // wanted.
+  const reframeInto = useCallback(
+    (id: string) => {
+      const into = ASPECTS.find((aspect) => aspect.id === id);
+      if (doc === undefined || into === undefined) return;
+      try {
+        const key = `reframe-${id}-${(actionSequence += 1)}`;
+        for (const command of reframe(doc.state, into)) doc.dispatch(command, key);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
   );
 
   // Where the markers become an edit. Every clip a marker passes through is cut, on every track
@@ -1331,6 +1352,7 @@ export function App(): ReactElement {
       // Only in a browser: in the desktop build this would offer to install what is already
       // running. `insideTauri` is the same question the updater asks, and asked the same way.
       getAppHref={insideTauri() ? undefined : `${SITE}download`}
+      onReframe={doc === undefined ? undefined : reframeInto}
       onNew={() => window.location.reload()}
       onTemplates={openGallery}
       onOpen={() => void open()}

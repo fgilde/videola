@@ -105,6 +105,8 @@ features:
 - **Ton** — Mischpult mit Lautstärke, Panorama, Stumm und Solo, Fades als Automation, Waveforms,
   EBU-R128-Lautheit gegen die Tech-3341-Fälle geprüft.
 - **Export** — MP4 oder WebM in einem Worker, mit Fortschritt und einem Abbruch, der wirklich stoppt.
+- **Anderes Format in einem Druck** — hochkant, quadratisch oder 4:5, jeder Clip im selben
+  Undo-Schritt auf den neuen Rahmen skaliert.
 - **Vorlagen** — Galerie, Assistent, und ein Backen, das ein ganz normales Projekt hinterlässt.
 - **Schnittstelle, MCP-Server und CLI** — der ganze Command-Katalog, aus dem Rust-Enum generiert,
   dazu Standbilder und Tonspitzen, damit ein Agent sehen kann, was er gerade getan hat.

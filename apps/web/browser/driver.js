@@ -696,6 +696,31 @@ async function announce() {
       Number(rowSlider("Position X").value) !== held, true);
     check("without minting a key of its own", all("[data-path-key]").length, 2);
 
+    // The same edit in a frame of another shape, end to end. Read on the canvas rather than on the
+    // settings: what a reframe has to change is the picture, and the element the compositor draws
+    // into is the one thing that cannot agree with a number nobody looked at.
+    const wide = q(".v-preview__canvas").getBoundingClientRect();
+    check("the picture starts out wider than it is tall", wide.width > wide.height, true);
+    openMenu();
+    const shape = [...q(".v-topbar__menu").querySelectorAll("select")]
+      .find((node) => node.getAttribute("aria-label") === "Format ändern");
+    check("the shape of the edit can be changed from the menu", shape !== undefined, true);
+    setValue(shape, "portrait");
+    await sleep(500);
+    const tall = q(".v-preview__canvas").getBoundingClientRect();
+    check("and it turns upright", tall.height > tall.width, true);
+    checkNear("in the ratio the shape names", tall.height / tall.width, 1920 / 1080, 0.05);
+    check("reframing raised nothing", banner(), "");
+    // Every clip was scaled to cover it in the same step, so one undo takes the frame and the clips
+    // back together.
+    checkAtLeast("and the clip was scaled to cover it",
+      Number(rowSlider("Breite (Faktor)").value), 1.5);
+    button("Rückgängig").click();
+    await sleep(400);
+    checkNear("undone in one step, frame and clips together",
+      q(".v-preview__canvas").getBoundingClientRect().width / q(".v-preview__canvas").getBoundingClientRect().height,
+      wide.width / wide.height, 0.05);
+
     // Put the timeline back the way the rest of the run expects to find it: no keys, no path, and
     // the playhead at the start. A check that leaves its own state behind is a check that breaks
     // the next one.
@@ -1129,6 +1154,10 @@ async function announce() {
     check("and the offer points at the download page",
       getApp?.getAttribute("href"), "https://fgilde.github.io/videola/download");
     checkAtLeast("with room to hit it", Math.round(getApp.getBoundingClientRect().height), 44);
+    // The two questions in the menu that are answered by choosing rather than by pressing.
+    check("the shape of the edit is one of them",
+      [...menu.querySelectorAll("select")].map((node) => node.getAttribute("aria-label")),
+      ["Format ändern", "Layout"]);
     check("and the open menu stays inside the window",
       menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
       true);

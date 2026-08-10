@@ -199,6 +199,77 @@ function keysOnto(
   });
 }
 
+/** A frame to reframe into, and what the pictures inside it should do about it. */
+export interface Reframe {
+  width: number;
+  height: number;
+  /**
+   * `cover` fills the new frame and lets the sides go past it — what a shot cut for a phone wants.
+   * `contain` fits the whole picture inside and leaves the background showing — what a widescreen
+   * shot in a square frame wants when nothing may be lost. `keep` changes the frame and leaves every
+   * clip's scale where the author put it.
+   */
+  fit: "cover" | "contain" | "keep";
+}
+
+export const ASPECTS: readonly (Reframe & { id: string })[] = [
+  { id: "landscape", width: 1920, height: 1080, fit: "cover" },
+  { id: "portrait", width: 1080, height: 1920, fit: "cover" },
+  { id: "square", width: 1080, height: 1080, fit: "cover" },
+  { id: "vertical45", width: 1080, height: 1350, fit: "cover" },
+];
+
+/**
+ * The same edit into a frame of another shape.
+ *
+ * Turning a widescreen cut into a portrait one is the single most asked-for thing a modern editor
+ * does, and the whole of it is arithmetic: the frame gets a new size, and every clip is scaled so
+ * that its own picture covers that frame — or fits inside it, where nothing may be cropped away.
+ *
+ * The scale is computed from where each clip actually stands, not from a fresh start: a clip already
+ * blown up to 1.5 keeps that relationship, because the factor is applied to what the author chose
+ * rather than replacing it. A clip whose source size is unknown — a generator, a nested timeline — is
+ * drawn at the frame's size by the compositor, so the frame's own change is its change, and the
+ * factor is the same one.
+ *
+ * Positions are scaled with it. A title placed a third of the way down a 1080-tall frame belongs a
+ * third of the way down a 1920-tall one, not 1080 pixels from the middle of it.
+ */
+export function reframe(project: Project, into: Reframe): Command[] {
+  const from = project.settings;
+  if (from.width === into.width && from.height === into.height && into.fit === "keep") return [];
+
+  const commands: Command[] = [
+    cmd.projectSetSettings({ ...from, width: into.width, height: into.height }),
+  ];
+  if (into.fit === "keep") return commands;
+
+  const across = into.width / from.width;
+  const down = into.height / from.height;
+  // Cover takes the larger of the two, so the shorter axis is the one that overflows; contain takes
+  // the smaller, so the longer axis is the one that leaves room.
+  const factor = into.fit === "cover" ? Math.max(across, down) : Math.min(across, down);
+
+  for (const track of project.timeline.tracks) {
+    if (track.locked) continue;
+    for (const clip of track.clips) {
+      const transform = clip.transform;
+      commands.push(
+        cmd.clipSetTransform(clip.id, {
+          ...transform,
+          scaleX: transform.scaleX * factor,
+          scaleY: transform.scaleY * factor,
+          // Placement is measured from the middle of the frame, so it scales with the frame it is
+          // measured in -- each axis by its own ratio, which is what keeps a lower third lower.
+          x: transform.x * across,
+          y: transform.y * down,
+        }),
+      );
+    }
+  }
+  return commands;
+}
+
 /** Every marker's instant, which is what "cut on the beat" is asking for. */
 export function markerTimes(project: Project): Time[] {
   return project.markers.map((marker) => marker.time);

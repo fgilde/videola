@@ -267,3 +267,10 @@ textarea:hover {
 textarea:focus-visible {
   border-color: var(--v-accent);
 }
+
+/* The two selects in the top bar's overflow: a full-width row like the actions around them, because
+   a menu of buttons with one narrow dropdown in it reads as a control that got left behind. */
+.v-topbar__menu .v-topbar__reframe,
+.v-topbar__menu .v-topbar__layout {
+  width: 100%;
+}

@@ -7,7 +7,15 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { cmd, on } from "./commands";
 import { createWasmBackend } from "./wasm-backend";
 import { VideolaDocument } from "./document";
-import { ALL_ATTRIBUTES, markerTimes, pasteAttributes, spreadEasing, splitAtTimes } from "./edits";
+import {
+  ALL_ATTRIBUTES,
+  ASPECTS,
+  markerTimes,
+  pasteAttributes,
+  reframe,
+  spreadEasing,
+  splitAtTimes,
+} from "./edits";
 import type { Clip } from "./generated/Clip";
 import type { Command } from "./generated/Command";
 import type { Keyframe } from "./generated/Keyframe";
@@ -324,5 +332,113 @@ describe("one clip's look on another", () => {
 
     doc.undo();
     expect(clipOf(doc, other).transform.x).toBeCloseTo(before, 4);
+  });
+});
+
+describe("the same edit in a frame of another shape", () => {
+  const settings = (doc: VideolaDocument) => doc.state.settings;
+  const only = (doc: VideolaDocument): Clip => {
+    const found = doc.state.timeline.tracks[0]?.clips[0];
+    if (found === undefined) throw new Error("no clip");
+    return found;
+  };
+
+  async function landscape(): Promise<VideolaDocument> {
+    const doc = await timeline(1);
+    doc.dispatch(cmd.projectSetSettings({ ...doc.state.settings, width: 1920, height: 1080 }));
+    return doc;
+  }
+
+  function apply(doc: VideolaDocument, commands: readonly Command[]): void {
+    for (const command of commands) doc.dispatch(command, "reframe-1");
+  }
+
+  it("changes the frame", async () => {
+    const doc = await landscape();
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "cover" }));
+
+    expect([settings(doc).width, settings(doc).height]).toEqual([1080, 1920]);
+  });
+
+  // 1920x1080 into 1080x1920: across is 0.5625 and down is 1.777, so covering takes the larger of
+  // the two. A picture scaled by the smaller would leave bars down both sides, which is the one
+  // thing a portrait cut must not have.
+  it("scales every clip to cover the new frame", async () => {
+    const doc = await landscape();
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "cover" }));
+
+    expect(only(doc).transform.scaleX).toBeCloseTo(1920 / 1080, 4);
+    expect(only(doc).transform.scaleY).toBeCloseTo(1920 / 1080, 4);
+  });
+
+  it("scales it to fit inside where nothing may be cropped", async () => {
+    const doc = await landscape();
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "contain" }));
+
+    expect(only(doc).transform.scaleX).toBeCloseTo(1080 / 1920, 4);
+  });
+
+  // The factor is applied to what the author chose rather than replacing it: a clip already blown up
+  // keeps that relationship to the others.
+  it("keeps what the author already did to a clip", async () => {
+    const doc = await landscape();
+    doc.dispatch(cmd.clipSetTransform(only(doc).id, { ...only(doc).transform, scaleX: 1.5, scaleY: 1.5 }));
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "cover" }));
+
+    expect(only(doc).transform.scaleX).toBeCloseTo(1.5 * (1920 / 1080), 4);
+  });
+
+  // A lower third belongs at the lower third of the new frame, not 1080 px from the middle of it.
+  it("moves a placed clip by the ratio of the axis it is placed on", async () => {
+    const doc = await landscape();
+    doc.dispatch(cmd.clipSetTransform(only(doc).id, { ...only(doc).transform, x: 480, y: 270 }));
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "cover" }));
+
+    expect(only(doc).transform.x).toBeCloseTo(480 * (1080 / 1920), 3);
+    expect(only(doc).transform.y).toBeCloseTo(270 * (1920 / 1080), 3);
+  });
+
+  it("changes the frame and nothing else when told to keep the scales", async () => {
+    const doc = await landscape();
+    apply(doc, reframe(doc.state, { width: 1080, height: 1080, fit: "keep" }));
+
+    expect(settings(doc).width).toBe(1080);
+    expect(only(doc).transform.scaleX).toBeCloseTo(1, 6);
+  });
+
+  it("has nothing to do for the frame it is already in", async () => {
+    const doc = await landscape();
+    expect(reframe(doc.state, { width: 1920, height: 1080, fit: "keep" })).toEqual([]);
+  });
+
+  // A locked track is passed over, the same rule cutting at the markers follows: the core would
+  // refuse the edit, and one locked track must not take the whole reframe with it.
+  it("passes over a locked track", async () => {
+    const doc = await timeline(1, 2);
+    const locked = doc.state.timeline.tracks[0]?.id ?? "";
+    doc.dispatch(cmd.trackSetFlags(locked, null, null, true, null));
+
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "cover" }));
+
+    expect(doc.state.timeline.tracks[0]?.clips[0]?.transform.scaleX).toBeCloseTo(1, 6);
+    expect(doc.state.timeline.tracks[1]?.clips[0]?.transform.scaleX).toBeGreaterThan(1);
+  });
+
+  it("is one step to undo, frame and clips together", async () => {
+    const doc = await landscape();
+    apply(doc, reframe(doc.state, { width: 1080, height: 1920, fit: "cover" }));
+
+    doc.undo();
+    expect([settings(doc).width, settings(doc).height]).toEqual([1920, 1080]);
+    expect(only(doc).transform.scaleX).toBeCloseTo(1, 6);
+  });
+
+  it("offers the four shapes anyone asks for", () => {
+    expect(ASPECTS.map((aspect) => `${aspect.width}x${aspect.height}`)).toEqual([
+      "1920x1080",
+      "1080x1920",
+      "1080x1080",
+      "1080x1350",
+    ]);
   });
 });

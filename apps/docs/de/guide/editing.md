@@ -136,6 +136,21 @@ die Lücke auf **jeder** Spur; die gesperrte auszulassen hieße, das Bild unter 
 wegzuziehen — genau das, was diese Operation verhindern soll. Die ehrliche Antwort ist die
 Ablehnung: Spur entsperren und schneiden, oder sie in Ruhe lassen.
 
+## Derselbe Schnitt in anderem Format
+
+**Format ändern** im Überlaufmenü macht aus einem Querformat-Schnitt einen hochkanten, quadratischen
+oder 4:5-Schnitt. Der Rahmen bekommt seine neue Größe, und jeder Clip wird im selben Schritt so
+skaliert, dass er ihn **ausfüllt** — ein Formatwechsel, der schwarze Balken an beiden Seiten
+hinterlässt, ist nicht, was damit gemeint war.
+
+Der Faktor wird auf das angewendet, was der Autor schon gewählt hat, statt es zu ersetzen: ein auf
+1,5 vergrößerter Clip behält sein Verhältnis zu den anderen. Die Platzierung skaliert mit dem Rahmen,
+in dem sie gemessen ist — jede Achse mit ihrem eigenen Verhältnis — ein unteres Drittel bleibt also
+ein unteres Drittel, statt 1080 Pixel von der Mitte eines höheren Rahmens zu landen.
+
+Eine gesperrte Spur wird übergangen, dieselbe Regel wie beim Schneiden an den Markern. Rahmen und
+Clips wandern in einem Schritt, ein Undo holt also das Ganze zurück.
+
 ## Attribute einfügen
 
 Einen Clip kopieren, andere auswählen, **Attribute einfügen**: der Blick des ersten liegt auf allen

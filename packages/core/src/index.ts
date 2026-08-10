@@ -1,7 +1,15 @@
 export * from "./backend";
 export * from "./captions";
-export { ALL_ATTRIBUTES, markerTimes, pasteAttributes, spreadEasing, splitAtTimes } from "./edits";
-export type { Attributes, EditTarget } from "./edits";
+export {
+  ALL_ATTRIBUTES,
+  ASPECTS,
+  markerTimes,
+  pasteAttributes,
+  reframe,
+  spreadEasing,
+  splitAtTimes,
+} from "./edits";
+export type { Attributes, EditTarget, Reframe } from "./edits";
 export * from "./commands";
 export * from "./curve";
 export * from "./document";

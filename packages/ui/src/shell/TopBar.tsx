@@ -3,6 +3,8 @@ import { useRef, type ReactElement, type ReactNode } from "react";
 import { useI18n } from "../i18n/useI18n";
 import { Icon, IconButton } from "../primitives/Icon";
 import { useDismiss } from "../useDismiss";
+import { ASPECTS } from "@videola/core";
+
 import type { LayoutPreference } from "../layout/detectLayoutMode";
 import { SettingsMenu } from "./SettingsMenu";
 import wordmark from "./videola-wordmark.png";
@@ -12,6 +14,8 @@ export interface TopBarActions {
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
   onNew?: () => void;
+  /** Reframe the whole edit into another shape. The shapes themselves come from the core. */
+  onReframe?: (aspect: string) => void;
   onTemplates?: () => void;
   onOpen?: () => void;
   onSave?: () => void;
@@ -53,6 +57,25 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
       <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
       <Action label={t("action.exportCaptions")} onClick={actions.onExportCaptions} />
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
+      {/* A select and not four entries: they are four answers to one question, and a menu with
+          "Hochkant 9:16" three rows under "Querformat 16:9" reads as four unrelated actions. */}
+      {actions.onReframe !== undefined && (
+        <select
+          className="v-topbar__reframe"
+          aria-label={t("reframe.label")}
+          value=""
+          onChange={(event) => {
+            if (event.target.value !== "") actions.onReframe?.(event.target.value);
+          }}
+        >
+          <option value="">{t("reframe.label")}</option>
+          {ASPECTS.map((aspect) => (
+            <option key={aspect.id} value={aspect.id}>
+              {t(`reframe.${aspect.id}`)}
+            </option>
+          ))}
+        </select>
+      )}
       {/* Last in the menu, where an "about" belongs, and above the offer to fetch a build -- which
           is only here at all in a browser, where there is something to fetch. */}
       <Action label={t("about.label")} onClick={actions.onAbout} />

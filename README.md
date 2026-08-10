@@ -76,6 +76,10 @@ map from project time to source time is an integral rather than a multiplication
 H.264. It runs in a worker through the same compositor as the preview, with progress and a cancel
 that really stops it.
 
+**Another shape in one press.** Change the edit to portrait, square or 4:5 and every clip is scaled
+to cover the new frame in the same step — the factor applied to what the author already chose, and
+placement scaled by the axis it is measured on, so a lower third stays one.
+
 **Templates.** `.videolat` is the same container as `.videola` with one extra entry, so a template
 *is* a project with questions attached. Pick one from the gallery, answer the wizard, and the result
 is an ordinary editable project. Nine ship across five categories, none carrying footage — each is
