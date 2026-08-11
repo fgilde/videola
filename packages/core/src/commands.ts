@@ -291,6 +291,13 @@ export const cmd = {
   }),
   // Where a track sits front to back, and how much of it goes to the LFE channel. Both are read only
   // where the project is laid out over more than two channels, and both stay in the file either way.
+  // How tall the track is drawn. In the model since the first schema and until now settable by nothing.
+  trackSetHeight: (track: string, height: number) => ({
+    type: "track.setHeight" as const,
+    track,
+    height,
+  }),
+
   trackSetSurround: (track: string, rear: number, lfe: number) => ({
     type: "track.setSurround" as const,
     track,
@@ -397,6 +404,14 @@ export const cmd = {
   // subtitle's words change after the clip exists.
   // Switch a clip off without taking it out: it keeps its place and its length, nothing draws or plays
   // it, and one press puts it back. The way to compare two takes.
+  // What the clip is called on the timeline. Empty means it has no name of its own and the strip shows
+  // the medium's file name instead.
+  clipSetLabel: (clip: string, label: string) => ({
+    type: "clip.setLabel" as const,
+    clip,
+    label,
+  }),
+
   clipSetEnabled: (clip: string, enabled: boolean) => ({
     type: "clip.setEnabled" as const,
     clip,

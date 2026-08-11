@@ -352,6 +352,26 @@ that `pointerdown` mints; the next `pointerdown` mints another one. The inspecto
 same way, and it is the same rule that makes a slider drag over a keyframed parameter one entry on
 the undo stack instead of two hundred keyframes on the same spot.
 
+### A clip's own name, and how tall a row is
+
+Two fields the model has carried since the first schema with nothing able to set them, which is the same
+gap `Effect.enabled` had: the strip already showed a clip's own name over its file name, and the layout
+already laid a row out at its height.
+
+**The name** is a field in the properties panel, first in the list — after cutting a card into forty
+takes, forty clips called `card_0031.mp4` is a timeline nobody can read. Emptying it puts the file name
+back, and an empty name is stored as *absent* rather than as an empty string: the two look identical on
+the strip and different in the file, and a project full of empty strings claims every clip was named.
+Typing goes out under one coalesce key, so a name is one press of undo rather than one per letter.
+
+**The height** is two buttons on the track head, stepping by 24 px — a third of the resting row, so three
+presses double a track and three halve it. Buttons rather than a drag on the header: a drag there would
+have to be told apart from the timeline's own gestures, and a step is what somebody wants anyway. The
+core clamps the floor to the 44 px the layout treats as a minimum, because a height the model accepted
+and the layout ignored would be a number that lies, and the ceiling to a screen's worth. On a coarse
+pointer the buttons are not drawn — a row's height is not what a finger came for, and pinch already
+zooms.
+
 ### Snapping
 
 **Snap** in the toolbar toggles it. Candidates are the playhead, every clip edge on every track,

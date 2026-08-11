@@ -53,6 +53,10 @@ pub enum Command {
     /// Set a track's stereo position from -1 (left) through 0 (centre) to 1 (right).
     #[serde(rename = "track.setPan")]
     TrackSetPan { track: TrackId, pan: f32 },
+    /// How tall the track is drawn, in the pixels the timeline lays out with. In the model since the
+    /// first schema and until now settable by nothing.
+    #[serde(rename = "track.setHeight")]
+    TrackSetHeight { track: TrackId, height: u32 },
     /// Where the track sits front to back, and how much of it goes to the LFE channel. Both are
     /// silent in a stereo project and both stay in the file, so a 5.1 mix delivered in stereo keeps
     /// its placement for the next delivery.
@@ -176,6 +180,10 @@ pub enum Command {
     /// Set a clip's gain, where 1 is unity and 4 the accepted maximum.
     #[serde(rename = "clip.setVolume")]
     ClipSetVolume { clip: ClipId, volume: f32 },
+    /// What the clip is called on the timeline. Empty means "no name of its own", and the strip then
+    /// shows the medium's file name -- which is what a clip nobody renamed should say.
+    #[serde(rename = "clip.setLabel")]
+    ClipSetLabel { clip: ClipId, label: String },
     /// Switch a clip off without taking it out: it keeps its place and its length, and nothing draws
     /// or plays it. The way to compare two takes.
     #[serde(rename = "clip.setEnabled")]
@@ -412,6 +420,7 @@ impl Command {
             | Self::ClipSetVolume { clip, .. }
             | Self::ClipSetMotionBlur { clip, .. }
             | Self::ClipSetEnabled { clip, .. }
+            | Self::ClipSetLabel { clip, .. }
             | Self::ClipSetTransform { clip, .. }
             | Self::ClipSetGenerator { clip, .. }
             | Self::ClipSetTransition { clip, .. } => holding(clip),
@@ -443,6 +452,9 @@ impl Command {
                 project::set_track_volume(target, track, *volume)
             }
             Self::TrackSetPan { track, pan } => project::set_track_pan(target, track, *pan),
+            Self::TrackSetHeight { track, height } => {
+                project::set_track_height(target, track, *height)
+            }
             Self::TrackSetSurround { track, rear, lfe } => {
                 project::set_track_surround(target, track, *rear, *lfe)
             }
@@ -500,6 +512,7 @@ impl Command {
             } => clip::set_speed(target, clip, *rate, *reverse, *preserve_pitch),
             Self::ClipSetVolume { clip, volume } => clip::set_volume(target, clip, *volume),
             Self::ClipSetEnabled { clip, enabled } => clip::set_enabled(target, clip, *enabled),
+            Self::ClipSetLabel { clip, label } => clip::set_label(target, clip, label),
             Self::ClipSetMotionBlur { clip, amount } => {
                 clip::set_motion_blur(target, clip, *amount)
             }
@@ -606,6 +619,7 @@ impl Command {
             Self::TrackRename { .. } => LABEL_TRACK_RENAME,
             Self::TrackSetVolume { .. } => LABEL_TRACK_SET_VOLUME,
             Self::TrackSetPan { .. } => LABEL_TRACK_SET_PAN,
+            Self::TrackSetHeight { .. } => LABEL_TRACK_SET_HEIGHT,
             Self::TrackSetSurround { .. } => LABEL_TRACK_SET_SURROUND,
             Self::TrackSetFlags { .. } => LABEL_TRACK_SET_FLAGS,
             Self::ClipAdd { .. } => LABEL_CLIP_ADD,
@@ -628,6 +642,7 @@ impl Command {
             Self::ClipSetVolume { .. } => LABEL_CLIP_SET_VOLUME,
             Self::ClipSetMotionBlur { .. } => LABEL_CLIP_SET_MOTION_BLUR,
             Self::ClipSetEnabled { .. } => LABEL_CLIP_SET_ENABLED,
+            Self::ClipSetLabel { .. } => LABEL_CLIP_SET_LABEL,
             Self::ClipSetTransform { .. } => LABEL_CLIP_SET_TRANSFORM,
             Self::ClipSetGenerator { .. } => LABEL_CLIP_SET_GENERATOR,
             Self::ClipSetTransition { .. } => LABEL_CLIP_SET_TRANSITION,
@@ -660,6 +675,7 @@ pub const LABEL_TRACK_REORDER: &str = "cmd.track.reorder";
 pub const LABEL_TRACK_RENAME: &str = "cmd.track.rename";
 pub const LABEL_TRACK_SET_VOLUME: &str = "cmd.track.setVolume";
 pub const LABEL_TRACK_SET_PAN: &str = "cmd.track.setPan";
+pub const LABEL_TRACK_SET_HEIGHT: &str = "cmd.track.setHeight";
 pub const LABEL_TRACK_SET_SURROUND: &str = "cmd.track.setSurround";
 pub const LABEL_TRACK_SET_FLAGS: &str = "cmd.track.setFlags";
 pub const LABEL_CLIP_ADD: &str = "cmd.clip.add";
@@ -682,6 +698,7 @@ pub const LABEL_CLIP_SET_SPEED: &str = "cmd.clip.setSpeed";
 pub const LABEL_CLIP_SET_VOLUME: &str = "cmd.clip.setVolume";
 pub const LABEL_CLIP_SET_MOTION_BLUR: &str = "cmd.clip.setMotionBlur";
 pub const LABEL_CLIP_SET_ENABLED: &str = "cmd.clip.setEnabled";
+pub const LABEL_CLIP_SET_LABEL: &str = "cmd.clip.setLabel";
 pub const LABEL_CLIP_SET_TRANSFORM: &str = "cmd.clip.setTransform";
 pub const LABEL_CLIP_SET_GENERATOR: &str = "cmd.clip.setGenerator";
 pub const LABEL_CLIP_SET_TRANSITION: &str = "cmd.clip.setTransition";
@@ -712,6 +729,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_TRACK_RENAME,
     LABEL_TRACK_SET_VOLUME,
     LABEL_TRACK_SET_PAN,
+    LABEL_TRACK_SET_HEIGHT,
     LABEL_TRACK_SET_SURROUND,
     LABEL_TRACK_SET_FLAGS,
     LABEL_CLIP_ADD,
@@ -734,6 +752,7 @@ pub const ALL_COMMAND_LABELS: &[&str] = &[
     LABEL_CLIP_SET_VOLUME,
     LABEL_CLIP_SET_MOTION_BLUR,
     LABEL_CLIP_SET_ENABLED,
+    LABEL_CLIP_SET_LABEL,
     LABEL_CLIP_SET_TRANSFORM,
     LABEL_CLIP_SET_GENERATOR,
     LABEL_CLIP_SET_TRANSITION,

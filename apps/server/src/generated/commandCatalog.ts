@@ -52,6 +52,11 @@ export const COMMAND_CATALOG: readonly CommandSchema[] = [
     schema: {"$defs":{"TrackId":{"description":"Id of the form `trk_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"Set a track's stereo position from -1 (left) through 0 (centre) to 1 (right).","properties":{"pan":{"format":"float","type":"number"},"track":{"$ref":"#/$defs/TrackId"},"type":{"const":"track.setPan","type":"string"}},"required":["type","track","pan"],"type":"object"},
   },
   {
+    command: "track.setHeight",
+    description: "How tall the track is drawn, in the pixels the timeline lays out with. In the model since the\nfirst schema and until now settable by nothing.",
+    schema: {"$defs":{"TrackId":{"description":"Id of the form `trk_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"How tall the track is drawn, in the pixels the timeline lays out with. In the model since the\nfirst schema and until now settable by nothing.","properties":{"height":{"format":"uint32","minimum":0,"type":"integer"},"track":{"$ref":"#/$defs/TrackId"},"type":{"const":"track.setHeight","type":"string"}},"required":["type","track","height"],"type":"object"},
+  },
+  {
     command: "track.setSurround",
     description: "Where the track sits front to back, and how much of it goes to the LFE channel. Both are\nsilent in a stereo project and both stay in the file, so a 5.1 mix delivered in stereo keeps\nits placement for the next delivery.",
     schema: {"$defs":{"TrackId":{"description":"Id of the form `trk_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"Where the track sits front to back, and how much of it goes to the LFE channel. Both are\nsilent in a stereo project and both stay in the file, so a 5.1 mix delivered in stereo keeps\nits placement for the next delivery.","properties":{"lfe":{"format":"float","type":"number"},"rear":{"format":"float","type":"number"},"track":{"$ref":"#/$defs/TrackId"},"type":{"const":"track.setSurround","type":"string"}},"required":["type","track","rear","lfe"],"type":"object"},
@@ -150,6 +155,11 @@ export const COMMAND_CATALOG: readonly CommandSchema[] = [
     command: "clip.setVolume",
     description: "Set a clip's gain, where 1 is unity and 4 the accepted maximum.",
     schema: {"$defs":{"ClipId":{"description":"Id of the form `clp_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"Set a clip's gain, where 1 is unity and 4 the accepted maximum.","properties":{"clip":{"$ref":"#/$defs/ClipId"},"type":{"const":"clip.setVolume","type":"string"},"volume":{"format":"float","type":"number"}},"required":["type","clip","volume"],"type":"object"},
+  },
+  {
+    command: "clip.setLabel",
+    description: "What the clip is called on the timeline. Empty means \"no name of its own\", and the strip then\nshows the medium's file name -- which is what a clip nobody renamed should say.",
+    schema: {"$defs":{"ClipId":{"description":"Id of the form `clp_<hex>`.","type":"string"}},"$schema":"https://json-schema.org/draft/2020-12/schema","description":"What the clip is called on the timeline. Empty means \"no name of its own\", and the strip then\nshows the medium's file name -- which is what a clip nobody renamed should say.","properties":{"clip":{"$ref":"#/$defs/ClipId"},"label":{"type":"string"},"type":{"const":"clip.setLabel","type":"string"}},"required":["type","clip","label"],"type":"object"},
   },
   {
     command: "clip.setEnabled",

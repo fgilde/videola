@@ -169,6 +169,7 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   "track.setVolume": (f) => ({ track: f.track, volume: 0.5 }),
   "track.setPan": (f) => ({ track: f.track, pan: -0.25 }),
   "track.setSurround": (f) => ({ track: f.track, rear: 0.75, lfe: 0.5 }),
+  "track.setHeight": (f) => ({ track: f.track, height: 120 }),
   "track.setFlags": (f) => ({ track: f.track, muted: true }),
   "clip.add": (f) => ({
     track: f.otherTrack,
@@ -198,6 +199,7 @@ const PAYLOADS: Record<string, (f: Fixture) => Record<string, unknown>> = {
   "clip.setVolume": (f) => ({ clip: f.clip, volume: 0.25 }),
   "clip.setMotionBlur": (f) => ({ clip: f.clip, amount: 0.5 }),
   "clip.setEnabled": (f) => ({ clip: f.clip, enabled: false }),
+  "clip.setLabel": (f) => ({ clip: f.clip, label: "the wide one" }),
   "clip.setTransform": (f) => ({
     clip: f.clip,
     transform: {

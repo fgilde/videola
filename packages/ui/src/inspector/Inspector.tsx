@@ -350,6 +350,23 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
 
   return (
     <Group title={t("inspector.playback")}>
+      {/* First, because it is what somebody looks for after cutting a card into forty takes: the strip
+          shows the file name until a clip has one of its own, and forty clips of "card_0031.mp4" is a
+          timeline nobody can read. Empty puts the file name back. */}
+      <label className="v-param v-param--text">
+        <span className="v-param__label">{t("inspector.clipName")}</span>
+        <input
+          type="text"
+          className="v-param__text"
+          value={clip.label ?? ""}
+          placeholder={t("inspector.clipNameHint")}
+          onChange={(event) =>
+            // One key for the whole edit, so typing a name is one press of undo rather than one per
+            // letter -- the same rule a slider drag follows.
+            send(cmd.clipSetLabel(clip.id, event.target.value), `label:${clip.id}`)
+          }
+        />
+      </label>
       <ParamRow
         label={t("inspector.volume")}
         value={clip.volume}

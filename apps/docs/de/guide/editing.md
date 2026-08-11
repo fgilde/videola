@@ -375,6 +375,27 @@ Coalesce-Key, den `pointerdown` prägt; der nächste `pointerdown` prägt einen 
 Inspector arbeiten genauso, und dieselbe Regel macht einen Schieberzug über einem gekeyframten
 Parameter zu einem Eintrag im Verlauf statt zu zweihundert Keyframes an derselben Stelle.
 
+### Der eigene Name eines Clips, und wie hoch eine Reihe ist
+
+Zwei Felder, die das Modell seit dem ersten Schema trägt, ohne dass irgendetwas sie setzen konnte — dieselbe
+Lücke, die `Effect.enabled` hatte: der Streifen zeigte den eigenen Namen eines Clips schon vor seinem
+Dateinamen, und das Layout legte eine Reihe schon in ihrer Höhe an.
+
+**Der Name** ist ein Feld im Eigenschaftenbereich, an erster Stelle — nachdem eine Karte in vierzig Takes
+zerlegt wurde, sind vierzig Clips namens `card_0031.mp4` eine Zeitleiste, die niemand lesen kann. Leert man
+ihn, steht wieder der Dateiname da, und ein leerer Name wird als *nicht vorhanden* gespeichert und nicht als
+leerer String: beides sieht auf dem Streifen gleich aus und in der Datei verschieden, und ein Projekt voller
+leerer Strings behauptet, jeder Clip sei benannt. Das Tippen geht unter einem Coalesce-Key hinaus, ein Name
+ist also ein Druck auf Rückgängig und nicht einer pro Buchstabe.
+
+**Die Höhe** sind zwei Knöpfe am Spurkopf, in Schritten von 24 px — ein Drittel der Ruhehöhe, drei Drücke
+verdoppeln eine Spur und drei halbieren sie. Knöpfe statt eines Zugs am Kopf: ein Zug dort müsste von den
+eigenen Gesten der Zeitleiste unterschieden werden, und einen Schritt will man ohnehin. Der Kern klemmt
+die Untergrenze auf die 44 px, die das Layout als Minimum behandelt — eine Höhe, die das Modell annimmt und
+das Layout ignoriert, wäre eine Zahl, die lügt — und die Obergrenze auf einen Bildschirm. Auf einem grobem
+Zeiger werden die Knöpfe nicht gezeichnet: die Höhe einer Reihe ist nicht, weswegen ein Finger gekommen
+ist, und Kneifen zoomt schon.
+
 ### Einrasten
 
 **Einrasten** in der Werkzeugleiste schaltet es um. Kandidaten sind der Playhead, jede Clipkante

@@ -1081,6 +1081,7 @@ async function announce() {
     await inserted();
     await keysAndView();
     await soundAndChain();
+    await namedAndSized();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
@@ -2281,6 +2282,70 @@ async function announce() {
     check("one press takes the whole split back", all("[data-clip-id]").length, before + 1);
     button("Rückgängig").click();
     await until("the project as it was", () => (all("[data-clip-id]").length === before ? true : null), 10000);
+  }
+
+  // A clip's own name and a track's height: two fields the model always had and nothing could set.
+  // After the layout checks, because the second of them moves a row and one of those checks measures
+  // how much empty room stands under the last one.
+  async function namedAndSized() {
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    const nameField = await until("the name field", () =>
+      all(".v-inspector input[type=\"text\"]").find((node) =>
+        node.closest(".v-param").querySelector(".v-param__label").textContent.startsWith("Name")));
+    check("a clip shows the file name until it has one of its own",
+      q("[data-clip-id]").textContent.includes("fixture"), true);
+    setValue(nameField, "die weite Einstellung");
+    await sleep(200);
+    check("and the strip shows the name it was given",
+      q("[data-clip-id]").textContent.includes("die weite Einstellung"), true);
+    setValue(nameField, "");
+    await sleep(200);
+    check("emptying it puts the file name back",
+      q("[data-clip-id]").textContent.includes("fixture"), true);
+    check("renaming raised nothing", banner(), "");
+
+    // Two fields the model always had and nothing could set. Only the built application shows both
+    // halves: the strip reads a clip's own name over its file name, and the layout lays a row out at
+    // whatever height the track carries.
+    //
+    // The header of *that* track, not the first one on screen: rows are drawn top first while
+    // tracks[0] is the bottom one, so measuring the first header would measure a different row than
+    // the one the button belongs to.
+    const headOf = (name) =>
+      all(".v-timeline__header").find(
+        (head) => head.querySelector(".v-timeline__headerName").textContent === name);
+    // The style the layout is given rather than the rectangle it produced: under a virtual clock the
+    // layout lags behind the DOM, and this claim is about the height a row was set to. That the layout
+    // honours it is what the slack check further down measures.
+    const tall = (name) => Math.round(Number.parseFloat(headOf(name).style.height));
+    // Whichever track is on top by now: earlier steps in this run add and remove tracks, so a name
+    // written into the check would be a name that stops existing.
+    const row = q(".v-timeline__headerName").textContent;
+    const resting = tall(row);
+    button(`${row} höher`).click();
+    await sleep(150);
+    checkAtLeast("a track can be made taller", tall(row) - resting, 20);
+    button(`${row} niedriger`).click();
+    await sleep(150);
+    check("and shorter again", tall(row), resting);
+    // The floor is the core's: pressing past it stops rather than shrinking a row out of reach.
+    // Awaited between presses: the handler reads the height off the project it was rendered with, so
+    // six clicks inside one task all compute from the same starting height. A person cannot click
+    // faster than a render; a script can.
+    for (let step = 0; step < 6; step += 1) {
+      button(`${row} niedriger`).click();
+      await sleep(60);
+    }
+    check("and never below a touch target", tall(row), 44);
+    check("the height buttons raised nothing", banner(), "");
+    // One press of undo, however many presses of the buttons: they share a coalesce key per track,
+    // because "I set this row's height" is one thing somebody did. That is also what puts the row back
+    // for everything below this line, which measures the layout.
+    button("Rückgängig").click();
+    await sleep(200);
+    check("the whole run of presses is one press of undo", tall(row), resting);
+
   }
 
   async function dropFixture() {

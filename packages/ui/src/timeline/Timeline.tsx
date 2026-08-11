@@ -80,6 +80,10 @@ export const DEFAULT_FLICKS_PER_PIXEL = FLICKS_PER_SECOND / 100;
 
 const ZOOM_FACTOR = 2;
 
+// One press of the height buttons. A third of the resting row, so three presses double a track and
+// three halve it -- and the core clamps both ends, so neither runs off.
+const HEIGHT_STEP = 24;
+
 const EDGE_MODES: EdgeMode[] = ["trim", "ripple", "roll"];
 const DRAG_MODES: DragMode[] = ["move", "slip", "slide"];
 
@@ -674,18 +678,58 @@ export function Timeline({
             >
               <span className="v-timeline__headerName">{track.name}</span>
               <span className="v-timeline__headerKind">{t(`track.kind.${track.kind}`)}</span>
-              {/* On the header and not in a menu: a lock is read as often as it is set -- the
-                  question "why will this clip not move" is answered by looking at the row. */}
-              <button
-                type="button"
-                className="v-timeline__lock"
-                aria-label={t(track.locked ? "track.unlock" : "track.lock", { name: track.name })}
-                title={t(track.locked ? "track.unlock" : "track.lock", { name: track.name })}
-                aria-pressed={track.locked}
-                onClick={() => dispatch(cmd.trackSetFlags(track.id, null, null, !track.locked, null))}
-              >
-                <Icon name={track.locked ? "lock" : "unlock"} />
-              </button>
+              {/* The lock and the two height steps in one cell. The header is a two-row grid with a
+                  named area per cell, and a third child with no area of its own is auto-placed into a
+                  row of its own -- which made every header taller than the row it stands beside and
+                  pushed the tracks column down. The harness caught it as slack under the last track. */}
+              <div className="v-timeline__headerTools">
+                {/* On the header and not in a menu: a lock is read as often as it is set -- the
+                    question "why will this clip not move" is answered by looking at the row. */}
+                <button
+                  type="button"
+                  className="v-timeline__lock"
+                  aria-label={t(track.locked ? "track.unlock" : "track.lock", { name: track.name })}
+                  title={t(track.locked ? "track.unlock" : "track.lock", { name: track.name })}
+                  aria-pressed={track.locked}
+                  onClick={() =>
+                    dispatch(cmd.trackSetFlags(track.id, null, null, !track.locked, null))
+                  }
+                >
+                  <Icon name={track.locked ? "lock" : "unlock"} />
+                </button>
+                {/* Two buttons rather than a drag handle: a drag on the header would have to be told
+                    apart from the timeline's own gestures, and a step is what somebody wants anyway --
+                    taller to see a waveform, shorter to fit eight tracks on a laptop. They share one
+                    coalesce key per track, so a run of presses is one press of undo. */}
+                <div className="v-timeline__size">
+                  <button
+                    type="button"
+                    className="v-timeline__sizeStep"
+                    aria-label={t("timeline.taller", { name: track.name })}
+                    onClick={() =>
+                      dispatch(
+                        cmd.trackSetHeight(track.id, trackHeight(track) + HEIGHT_STEP),
+                        `height:${track.id}`,
+                      )
+                    }
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    className="v-timeline__sizeStep"
+                    aria-label={t("timeline.shorter", { name: track.name })}
+                    onClick={() =>
+                      dispatch(
+                        cmd.trackSetHeight(track.id, trackHeight(track) - HEIGHT_STEP),
+                        `height:${track.id}`,
+                      )
+                    }
+                  >
+                    −
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
           <KeyframeLaneHeaders rows={laneRowList} effects={effects} />

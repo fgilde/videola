@@ -438,3 +438,27 @@
   width: var(--v-touch-target);
   height: var(--v-touch-target);
 }
+
+/* A text row is the same grid as a slider row without the readout: the label above, the field below,
+   so a long name has the whole width rather than a third of it. */
+.v-param--text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v-space-1);
+}
+
+.v-param__text {
+  min-height: 32px;
+  padding: var(--v-space-1) var(--v-space-2);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  background: var(--v-bg);
+  color: var(--v-text);
+  font: inherit;
+}
+
+@media (any-pointer: coarse) {
+  .v-param__text {
+    min-height: 44px;
+  }
+}

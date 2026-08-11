@@ -943,3 +943,39 @@ describe("freezing a frame", () => {
     ).toBe(true);
   });
 });
+
+// Two fields the model has carried since the first schema with nothing able to set them. Both are read
+// by the surface already -- the strip shows a clip's own name over the file name, and the layout lays a
+// row out at its height -- so a command was the whole of what was missing.
+describe("a clip's own name", () => {
+  it("is what the strip shows, and empty puts the file name back", async () => {
+    const doc = await documentWithClips(1);
+    const clip = clips(doc.state)[0]!;
+
+    act(() => void doc.dispatch(cmd.clipSetLabel(clip.id, "  the wide one  ")));
+    expect(clips(doc.state)[0]?.label).toBe("the wide one");
+
+    act(() => void doc.dispatch(cmd.clipSetLabel(clip.id, "   ")));
+    // Absent rather than an empty string: the two look the same on the strip and different in the file,
+    // and a project full of empty strings is a project claiming every clip was named.
+    expect(clips(doc.state)[0]?.label ?? null).toBeNull();
+  });
+});
+
+describe("how tall a track is drawn", () => {
+  it("takes a height and refuses to go below a touch target", async () => {
+    const doc = await documentWithClips(1);
+    const track = doc.state.timeline.tracks[0]!.id;
+
+    act(() => void doc.dispatch(cmd.trackSetHeight(track, 140)));
+    expect(doc.state.timeline.tracks[0]?.height).toBe(140);
+
+    act(() => void doc.dispatch(cmd.trackSetHeight(track, 4)));
+    // The floor is the interface's own minimum: a height the model took and the layout ignored would be
+    // a number that lies.
+    expect(doc.state.timeline.tracks[0]?.height).toBe(44);
+
+    act(() => void doc.dispatch(cmd.trackSetHeight(track, 10_000)));
+    expect(doc.state.timeline.tracks[0]?.height).toBe(400);
+  });
+});

@@ -631,6 +631,19 @@ pub(super) fn set_volume(target: &mut Project, clip: &ClipId, volume: f32) -> Re
     Ok(())
 }
 
+// Trimmed, and an empty name is `None` rather than `Some("")`: the two would look the same on the strip
+// and different in the file, and a project full of empty strings is a project that says a clip was named.
+pub(super) fn set_label(target: &mut Project, clip: &ClipId, label: &str) -> Result<()> {
+    let trimmed = label.trim();
+    let (track, index) = find_clip_mut(target, clip)?;
+    track.clips[index].label = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    };
+    Ok(())
+}
+
 // No clamp and nothing to validate: a flag is a flag. Here rather than inline in the dispatch so every
 // clip setter is in one file and reads the same way.
 pub(super) fn set_enabled(target: &mut Project, clip: &ClipId, enabled: bool) -> Result<()> {

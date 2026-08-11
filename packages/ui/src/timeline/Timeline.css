@@ -736,3 +736,44 @@
     rgb(0 0 0 / 0.35) 6px 12px
   );
 }
+
+/* The height steps. Stacked beside the lock, small on purpose: they are set once for a session and
+   read never, which is the opposite of the lock next to them. */
+.v-timeline__headerTools {
+  grid-area: lock;
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
+}
+
+.v-timeline__size {
+  display: flex;
+  /* Side by side rather than stacked: two 18 px buttons and a gap fit inside a 44 px row, and stacked
+     they did not. */
+  gap: 2px;
+}
+
+.v-timeline__sizeStep {
+  min-width: 18px;
+  padding: 0;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  background: var(--v-surface);
+  color: var(--v-text-muted);
+  font-size: var(--v-text-xs);
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.v-timeline__sizeStep:hover {
+  color: var(--v-text);
+  border-color: var(--v-focus);
+}
+
+/* A coarse pointer has no room for two 18 px targets, and a row's height is not what a finger came to
+   the timeline for -- pinch already zooms. */
+@media (any-pointer: coarse) {
+  .v-timeline__size {
+    display: none;
+  }
+}

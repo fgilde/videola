@@ -103,6 +103,20 @@ pub(super) fn set_track_surround(
     Ok(())
 }
 
+/// The floor is the interface's own `MIN_TRACK_HEIGHT` (geometry.ts): 44 px, a touch target. A height
+/// the model accepts and the layout then ignores is a number that lies. The ceiling is a screen's worth
+/// -- past that a timeline has one track in it and no way back.
+const MIN_TRACK_HEIGHT: u32 = 44;
+const MAX_TRACK_HEIGHT: u32 = 400;
+
+// Bounded at both ends: a track of no height is a row nobody can hit, and one taller than the window
+// is a timeline with one track in it. The floor matches `MIN_TRACK_HEIGHT` in the interface, because a
+// height the model accepts and the layout ignores is a number that lies.
+pub(super) fn set_track_height(target: &mut Project, track: &TrackId, height: u32) -> Result<()> {
+    track_mut(target, track)?.height = height.clamp(MIN_TRACK_HEIGHT, MAX_TRACK_HEIGHT);
+    Ok(())
+}
+
 pub(super) fn set_track_flags(
     target: &mut Project,
     track: &TrackId,

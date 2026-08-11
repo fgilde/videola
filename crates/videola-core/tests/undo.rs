@@ -441,6 +441,14 @@ fn every_command_undoes_to_the_exact_prior_state() {
             clip: clip.clone(),
             volume: 0.5,
         },
+        |Fixture { track, .. }| Command::TrackSetHeight {
+            track: track.clone(),
+            height: 120,
+        },
+        |Fixture { clip, .. }| Command::ClipSetLabel {
+            clip: clip.clone(),
+            label: "the wide one".into(),
+        },
         |Fixture { track, .. }| Command::TrackSetSurround {
             track: track.clone(),
             rear: 0.75,
