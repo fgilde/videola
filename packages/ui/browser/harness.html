@@ -342,9 +342,19 @@ test("context menu", function () {
   // rather than offering a half a screen can be split into.
   check("a split screen is disabled until two clips are selected",
     entry("Geteilter Bildschirm").disabled, true);
+  // Where it lands is measured against the window rather than against the pointer alone: a menu of
+  // fifteen entries is taller than what is under the pointer in a short window, and then the right
+  // answer is *not* the pointer -- it is pulled back so the last entry is still reachable. Both halves
+  // are asserted here because either one alone passes a menu that is wrong: the pointer alone accepts
+  // a menu hanging out of the window, and "inside the window" alone accepts a menu parked anywhere.
   const menuBox = q('[role="menu"]').getBoundingClientRect();
-  check("the menu lands on the pointer",
-    [Math.round(menuBox.left), Math.round(menuBox.top)], [at.clientX, at.clientY]);
+  check("the menu opens at the pointer horizontally", Math.round(menuBox.left), at.clientX);
+  check("and at the pointer vertically unless it would not fit",
+    Math.round(menuBox.top) === at.clientY || Math.round(menuBox.bottom) <= window.innerHeight, true);
+  check("the whole menu is inside the window",
+    [menuBox.top >= 0, Math.round(menuBox.bottom) <= window.innerHeight,
+     Math.round(menuBox.right) <= window.innerWidth],
+    [true, true, true]);
 });
 
 // ---------------------------------------------------------------- markers
