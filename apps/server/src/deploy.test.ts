@@ -47,9 +47,9 @@ const WEB_CONFIG = read("apps/web/vite.config.ts");
 
 describe("what every deployment agrees on", () => {
   it("copies into the image every file the web build reads", () => {
-    const read = [...WEB_CONFIG.matchAll(/new URL\("([^"]+)"/g)].map((match) =>
+    const read = [...WEB_CONFIG.matchAll(/new URL\("([^"]+)"/g)].map(
       // Relative to `apps/web`, which is where the config sits; the Dockerfile copies from the root.
-      match[1].replace(/^\.\.\//, "apps/"),
+      ([, path]) => (path ?? "").replace(/^\.\.\//, "apps/"),
     );
 
     expect(read.length).toBeGreaterThan(0);

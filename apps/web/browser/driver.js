@@ -1704,6 +1704,8 @@ async function announce() {
         "Vorlauf",
         "Vorher / Nachher",
         "Gespräch",
+        "Drei Karten",
+        "Aufhänger hochkant",
       ],
     );
 
@@ -1738,7 +1740,7 @@ async function announce() {
     await sleep(100);
     check("choosing one narrows the gallery to it",
       all("[data-template-id]").map((entry) => entry.dataset.templateId),
-      ["lower-third", "end-card", "quote-card", "interview"]);
+      ["lower-third", "end-card", "quote-card", "interview", "title-cards"]);
     chip("all").click();
     await sleep(100);
     check("and going back brings the rest with it", all("[data-template-id]").length, 15);

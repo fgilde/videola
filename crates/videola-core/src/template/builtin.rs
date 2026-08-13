@@ -1431,7 +1431,6 @@ fn interview() -> Template {
 
 const PLACEHOLDER: &str = "med_awaiting_a_slot_answer";
 
-#[allow(clippy::too_many_arguments)]
 /// Three cards of words in a row, and nothing else. What it shows: a gradient that stays, and three
 /// lines that arrive one after another -- for a chapter break, three points, or the front of a talk.
 /// The one thing this set had no answer for at all: every other entry wants footage to be worth
@@ -1502,7 +1501,7 @@ fn title_cards() -> Template {
             "one",
             Localized::new("Erste Karte", "First card"),
             Localized::new(
-                "Das erste der drei Worte. Grosse Schrift, mittig.",
+                "Das erste der drei Worte. Große Schrift, mittig.",
                 "The first of the three lines. Large type, centred.",
             ),
             vec![generator_text("clp_one"), SlotBinding::ProjectTitle],
@@ -1521,9 +1520,9 @@ fn title_cards() -> Template {
         ),
         text_slot(
             "eyebrow",
-            Localized::new("Zeile darueber", "Line above"),
+            Localized::new("Zeile darüber", "Line above"),
             Localized::new(
-                "Klein und gesperrt, ueber jeder Karte -- sie bleibt stehen.",
+                "Klein und gesperrt, über jeder Karte — sie bleibt stehen.",
                 "Small and tracked, above every card -- it stays put.",
             ),
             vec![generator_text("clp_step")],
@@ -1532,7 +1531,7 @@ fn title_cards() -> Template {
             "field",
             Localized::new("Farbe des Hintergrunds", "Background colour"),
             Localized::new(
-                "Faerbt die Flaeche, ueber der die Karten laufen.",
+                "Färbt die Fläche, über der die Karten laufen.",
                 "Colours the field the cards run over.",
             ),
             vec![generator_color("clp_field"), SlotBinding::Background],
@@ -1543,7 +1542,7 @@ fn title_cards() -> Template {
         "title-cards",
         Localized::new("Drei Karten", "Three cards"),
         Localized::new(
-            "Drei Zeilen nacheinander ueber einer Flaeche, ohne eine einzige Aufnahme. Fuer einen \
+            "Drei Zeilen nacheinander über einer Fläche, ohne eine einzige Aufnahme. Für einen \
              Kapitelwechsel, drei Punkte, oder den Anfang eines Vortrags.",
             "Three lines one after another over a colour field, with no footage at all. For a \
              chapter break, three points, or the opening of a talk.",
@@ -1646,9 +1645,9 @@ fn social_hook() -> Template {
     let slots = vec![
         text_slot(
             "hook",
-            Localized::new("Aufhaenger", "Hook"),
+            Localized::new("Aufhänger", "Hook"),
             Localized::new(
-                "Die grosse Zeile oben. Kurz halten -- sie wird laut gesetzt.",
+                "Die große Zeile oben. Kurz halten — sie wird laut gesetzt.",
                 "The big line at the top. Keep it short -- it is set loud.",
             ),
             vec![generator_text("clp_hook"), SlotBinding::ProjectTitle],
@@ -1675,7 +1674,7 @@ fn social_hook() -> Template {
             "accent",
             Localized::new("Farbe der Scheibe", "Disc colour"),
             Localized::new(
-                "Faerbt den Kreis hinter dem Wort.",
+                "Färbt den Kreis hinter dem Wort.",
                 "Colours the disc behind the word.",
             ),
             vec![generator_color("clp_disc")],
@@ -1684,7 +1683,7 @@ fn social_hook() -> Template {
             "field",
             Localized::new("Farbe des Hintergrunds", "Background colour"),
             Localized::new(
-                "Faerbt den Verlauf dahinter.",
+                "Färbt den Verlauf dahinter.",
                 "Colours the gradient behind everything.",
             ),
             vec![generator_color("clp_field"), SlotBinding::Background],
@@ -1693,7 +1692,7 @@ fn social_hook() -> Template {
 
     template(
         "social-hook",
-        Localized::new("Aufhaenger hochkant", "Upright hook"),
+        Localized::new("Aufhänger hochkant", "Upright hook"),
         Localized::new(
             "Hochkant und ohne eine einzige Aufnahme: Verlauf, Scheibe, drei Zeilen. Die Karte, \
              die als Story oder Reel allein hinausgeht.",
@@ -1709,6 +1708,7 @@ fn social_hook() -> Template {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn template(
     id: &str,
     name: Localized,
