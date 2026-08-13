@@ -31,6 +31,7 @@ const CHAPTERS: [string, string][] = [
   ["The API and the MCP server", "api-and-mcp"],
   ["Effects and transitions", "effects-and-transitions"],
   ["Audio", "audio"],
+  ["Running it yourself", "self-hosting"],
   ["Building and releasing", "building-and-releasing"],
   ["Design documents", "design-documents"],
 ];
@@ -47,6 +48,7 @@ const KAPITEL: [string, string][] = [
   ["Die API und der MCP-Server", "api-and-mcp"],
   ["Effekte und Übergänge", "effects-and-transitions"],
   ["Ton", "audio"],
+  ["Selbst betreiben", "self-hosting"],
   ["Bauen und Ausliefern", "building-and-releasing"],
   ["Design-Dokumente", "design-documents"],
 ];

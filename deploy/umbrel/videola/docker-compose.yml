@@ -1,0 +1,45 @@
+# Umbrel runs every app behind its own proxy, which is what puts it on the dashboard and gives it a
+# hostname. The proxy is the only thing that publishes a port; the server itself is reachable inside the
+# app network and nowhere else.
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: videola_server_1
+      APP_PORT: 7331
+
+  server:
+    image: ghcr.io/fgilde/videola:0.7.0
+    restart: on-failure
+    stop_grace_period: 1m
+    environment:
+      # Bound to every interface *inside the container*, because the proxy in front of it is a different
+      # container: 127.0.0.1 would be reachable only from the server's own network namespace.
+      VIDEOLA_HOST: 0.0.0.0
+      VIDEOLA_PORT: 7331
+      VIDEOLA_STORAGE_ROOT: /data
+      # Generated once by Umbrel and kept in the app's own environment. Every /api call needs it as
+      # `Authorization: Bearer`, and the server refuses a reachable address without one -- so this line
+      # is what makes the app start at all rather than a hardening option somebody may skip.
+      VIDEOLA_TOKEN: ${APP_SEED}
+      VIDEOLA_LOCALE: en
+    volumes:
+      # Projects and imported media. The one path worth including in a backup.
+      - ${APP_DATA_DIR}/data:/data
+    healthcheck:
+      # Through the API rather than against the port: a listening socket says the process started, and
+      # what matters is that the core loaded and the storage root is writable, which is what
+      # /api/health answers. The token goes with it because the endpoint is behind the same gate as
+      # everything else -- an unauthenticated health check would be a hole in exactly one place.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:7331/api/health',{headers:{authorization:'Bearer '+process.env.VIDEOLA_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s

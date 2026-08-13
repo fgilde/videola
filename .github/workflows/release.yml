@@ -84,6 +84,50 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Der Server als ein Tarball fuer jeden, der kein Docker fahren will: ein
+  # Proxmox-Container, ein systemd-Dienst auf einem Pi, eine VM beim Hoster. Der
+  # Proxmox-Installer laedt genau dieses Asset aus dem letzten Release, deshalb
+  # haengt es am Release und nicht an einem Branch.
+  #
+  # Gebaut mit demselben Skript, das lokal laeuft (`node deploy/bundle.mjs`) --
+  # ein Rezept, das nur in einem Workflow existiert, ist das Rezept, das kaputt
+  # geht, wenn es gebraucht wird.
+  bundle:
+    needs: [gate, wasm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm
+          path: packages/core/src/wasm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter videola-web build && pnpm --filter videola-server build
+      - name: Serverpaket packen
+        run: node deploy/bundle.mjs
+      # Ans Draft-Release gehaengt, das der desktop-Job anlegt. `gh release upload`
+      # statt einer Action: das Draft existiert schon, und eine Action, die eines
+      # anlegt, wuerde ein zweites erzeugen.
+      - name: Ans Release haengen
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for _ in $(seq 1 60); do
+            gh release view "${{ github.ref_name }}" >/dev/null 2>&1 && break
+            sleep 10
+          done
+          gh release upload "${{ github.ref_name }}" dist/videola-server-*.tar.gz --clobber
+      - uses: actions/upload-artifact@v7
+        with:
+          name: server-bundle
+          path: dist/videola-server-*.tar.gz
+
   wasm:
     runs-on: ubuntu-latest
     steps:

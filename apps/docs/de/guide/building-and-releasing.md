@@ -58,10 +58,17 @@ geprüft werden können, bevor sie jemand sieht.
 | `gate` | vier Ausgaben, ob die Signatur-Secrets für macOS, Android, iOS und den Updater vorhanden sind |
 | `docker` | `ghcr.io/fgilde/videola:<tag>` und `:latest` |
 | `wasm` | das Artefakt, das die drei App-Jobs verbrauchen |
+| `bundle` | `node deploy/bundle.mjs`: die drei Einsprungpunkte, das WASM und der gebaute Editor als ein Tarball, der nur Node 22 braucht |
 | `desktop` | Matrix über Ubuntu, Windows und macOS: `.deb` und AppImage, NSIS-Installer, `.dmg` |
 | `android` | `.apk` und `.aab`, nur mit hinterlegtem Keystore |
 | `ios` | `.ipa` für App Store Connect, nur mit Zertifikat und Provisioning-Profil |
 | `summary` | eine Tabelle mit dem Ergebnis jedes Jobs, mit `if: always()` |
+
+Der `bundle`-Job ist, was den Proxmox-Installer möglich macht: der holt
+`videola-server-<version>.tar.gz` aus dem letzten Release, das Asset muss also am Release hängen und
+nicht an einem Branch. Er lädt mit `gh release upload` auf das Draft, das der `desktop`-Job angelegt hat
+— eine Action, die ein Release anlegt, legte ein zweites an — und wartet vorher, bis dieses Draft
+existiert, denn die beiden Jobs laufen parallel.
 
 `tauri.conf.json` listet alle vier Desktop-Bundler, die Matrix gibt `--bundles` aber trotzdem pro
 Plattform mit: der `nsis`-Bundler ist nicht auf Windows beschränkt, aus der Konfiguration heraus

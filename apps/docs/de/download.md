@@ -22,3 +22,13 @@ Gatekeeper verweigert es dann, bis man es von Hand erlaubt. Android- und iOS-Dat
 Ausgaben, die mit ihren Signaturschlüsseln gebaut wurden — fehlt ein Schlüssel, wird der Schritt
 übersprungen, statt etwas auszuliefern, das sich nicht installieren lässt. Die ganze Tabelle steht
 in [Bauen und Ausliefern](/de/guide/building-and-releasing).
+
+## Auf einem Server
+
+Die vier gepackten Wege auf eigene Hardware — Docker, Unraid, Umbrel und ein Proxmox-Skript, das den
+Container gleich mit anlegt — stehen unter [Selbst betreiben](/de/guide/self-hosting). An jedem Release
+hängt außerdem ein **Serverpaket**, das nichts außer Node 22 braucht: keine Abhängigkeiten zu
+installieren, denn sie sind schon in die Einsprungpunkte gebündelt.
+
+Eines vorweg: der Server weigert sich, ohne Token auf etwas anderem als Loopback zu lauschen. Das ist so
+gewollt, und die Installer erzeugen einen für Sie.

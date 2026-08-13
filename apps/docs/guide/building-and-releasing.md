@@ -78,16 +78,23 @@ The release is created as a **draft**, so the assets can be checked before anyon
 | `ios` | `macos-latest` | `.ipa` exported for App Store Connect, only when a certificate and profile are configured |
 | `summary` | `ubuntu-latest` | a step-summary table of every job's result, with `if: always()` |
 
-### Six targets
+### Seven targets
 
 | Target | How |
 |---|---|
 | Web | Vite build, served as static files; the Docker image is the packaged form (see below) |
+| Server bundle | `node deploy/bundle.mjs` — the three entry points, the WASM and the built editor as one tarball, needing only Node 22 |
 | Windows | Tauri 2, NSIS installer |
 | Linux | Tauri 2, `.deb` and AppImage |
 | macOS | Tauri 2, `.dmg` |
 | Android | Tauri 2 Mobile, `.apk` and `.aab` |
 | iOS | Tauri 2 Mobile, `.ipa` |
+
+The bundle job is what makes the Proxmox installer possible: it fetches
+`videola-server-<version>.tar.gz` from the latest release, so the asset has to be attached to the
+release rather than built from a branch. It uploads with `gh release upload` onto the draft the desktop
+job created — an action that creates a release would create a second one — and waits for that draft to
+exist first, because the two jobs run in parallel.
 
 `tauri.conf.json` lists all four desktop bundlers, but the matrix passes `--bundles` per platform
 anyway. The `nsis` bundler is not restricted to Windows, so taking the target list from the

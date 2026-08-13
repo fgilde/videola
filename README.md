@@ -185,6 +185,23 @@ If `wasm-opt` crashes on your machine, run the `wasm` script from `package.json`
 
 ## Self-hosting
 
+Four packaged ways, all documented in
+[Running it yourself](https://fgilde.github.io/videola/guide/self-hosting):
+
+| Where | How |
+|---|---|
+| Anywhere with Docker | `ghcr.io/fgilde/videola:latest`, port 7331, volume `/data` |
+| Unraid | `deploy/unraid/videola.xml`, a Community Applications template |
+| Umbrel | `deploy/umbrel/videola/`, a manifest and a compose file in the app store's own shape |
+| Proxmox VE | `bash -c "$(curl -fsSL .../deploy/proxmox/videola.sh)"` — makes an unprivileged LXC container, a systemd unit and a token |
+| Anything with Node 22 | `videola-server-<version>.tar.gz` from the release: no dependencies to install |
+
+`apps/server/src/deploy.test.ts` holds all of them against the server itself — the port, the storage
+root, the image name and the token requirement are each read from the code rather than typed out again,
+so a template that drifts fails the build.
+
+From a checkout:
+
 ```
 docker build -f docker/Dockerfile -t videola:dev .
 docker run --rm -p 8080:7331 -e VIDEOLA_TOKEN=$(openssl rand -hex 24) -v videola:/data videola:dev

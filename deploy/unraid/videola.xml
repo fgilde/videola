@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<!--
+  Unraid Community Applications template.
+
+  Copy it into /boot/config/plugins/dockerMan/templates-user/ to install by hand, or point Community
+  Applications at this repository. Every field below is a decision the container already makes: the port
+  is the server's own default, the volume is where the image says its storage root is, and the token is
+  required because the server refuses to listen on a reachable address without one.
+
+  A template that offered a token as optional would be a template that produces an open Videola on
+  somebody's LAN -- which hands out read and write access to the storage root.
+-->
+<Container version="2">
+  <Name>Videola</Name>
+  <Repository>ghcr.io/fgilde/videola:latest</Repository>
+  <Registry>https://ghcr.io/fgilde/videola</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/fgilde/videola/issues</Support>
+  <Project>https://fgilde.github.io/videola/</Project>
+  <Overview>
+    A video editor that runs in the browser: import, cut, keyframe, grade, mix and export, with the
+    project model and the command bus in a Rust core compiled to WebAssembly. This container serves the
+    editor, an HTTP API and an MCP server for agents from one Node process.&#13;
+    &#13;
+    Set a token. Every /api call needs it as an Authorization: Bearer header, and the server refuses to
+    bind anything but loopback without one.&#13;
+    &#13;
+    Projects and media live in the /data volume. That is the directory to include in a backup.
+  </Overview>
+  <Category>MediaApp:Video Productivity:</Category>
+  <WebUI>http://[IP]:[PORT:7331]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/fgilde/videola/main/deploy/unraid/videola.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/fgilde/videola/main/brand/videola-icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config
+    Name="WebUI Port"
+    Target="7331"
+    Default="7331"
+    Mode="tcp"
+    Description="The port the editor and the API answer on."
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">7331</Config>
+  <Config
+    Name="Data"
+    Target="/data"
+    Default="/mnt/user/appdata/videola"
+    Mode="rw"
+    Description="Projects and imported media. The one path worth backing up."
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/videola</Config>
+  <Config
+    Name="API token"
+    Target="VIDEOLA_TOKEN"
+    Default=""
+    Mode=""
+    Description="Required. Every /api call carries it as `Authorization: Bearer &lt;token&gt;`, and the server will not listen on a reachable address without one. Generate one with: openssl rand -hex 24"
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="true"/>
+  <Config
+    Name="Interface language"
+    Target="VIDEOLA_LOCALE"
+    Default="en"
+    Mode=""
+    Description="`en` or `de`. What the server writes into generated names and messages; the editor itself follows the browser."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">en</Config>
+  <Config
+    Name="Open projects at once"
+    Target="VIDEOLA_MAX_PROJECTS"
+    Default="8"
+    Mode=""
+    Description="How many projects the server keeps open in memory. Each one holds its own core instance."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">8</Config>
+</Container>

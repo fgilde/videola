@@ -80,6 +80,13 @@ features:
       eingecheckte Ergebnis nicht mehr zur Quelle passt.
     link: /de/guide/architecture#das-modell-lebt-in-rust
     linkText: Das Modell lebt in Rust
+  - title: Vier Wege auf die eigene Maschine
+    details: >
+      Docker, eine Unraid-Vorlage, eine Umbrel-App und ein Proxmox-Skript, das einen unprivilegierten
+      LXC-Container mit systemd-Unit und erzeugtem Token anlegt. Alle setzen dieselben Variablen, und ein
+      Deployment-Test hält alle vier gegen das, was der Server wirklich tut.
+    link: /de/guide/self-hosting
+    linkText: Selbst betreiben
   - title: Web, Desktop und Docker
     details: >
       Eine Codebasis liefert die Vite-Web-App, eine Tauri-Hülle mit Installern für Windows, Linux
@@ -140,7 +147,9 @@ features:
   dazu Standbilder und Tonspitzen, damit ein Agent sehen kann, was er gerade getan hat.
 - **Installierbar und offline** — Manifest und Service Worker: die Browser-Ausgabe installiert sich
   als Anwendung, öffnet ohne Netz und bietet ein Neuladen an, sobald ein neuer Stand wartet.
-- **Selbst hosten** — ein Node-Prozess liefert Editor, Schnittstelle, MCP und CLI.
+- **Selbst hosten** — ein Node-Prozess liefert Editor, Schnittstelle, MCP und CLI. Installieren mit
+  Docker, der Unraid-Vorlage, der Umbrel-App oder einem Proxmox-Skript, das den Container gleich mit
+  anlegt; an jedem Release hängt ein Serverpaket, das nichts außer Node 22 braucht.
 - **Telefon, Tablet und Schreibtisch** — derselbe Code, die Bereiche wechseln sich ab.
 
 ## Was noch fehlt

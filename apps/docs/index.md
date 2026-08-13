@@ -78,6 +78,13 @@ features:
       output no longer matches the source.
     link: /guide/architecture#the-typescript-facade
     linkText: The facade
+  - title: Four ways to run it on your own machine
+    details: >
+      Docker, an Unraid template, an Umbrel app, and a Proxmox script that makes an unprivileged LXC
+      container with a systemd unit and a generated token. Every one of them sets the same variables,
+      and a deployment test holds all four against what the server actually does.
+    link: /guide/self-hosting
+    linkText: Running it yourself
   - title: Web, desktop and Docker
     details: >
       One codebase produces the Vite web app, a Tauri shell with Windows, Linux and macOS
@@ -137,7 +144,9 @@ features:
   plus stills and audio peaks so an agent can look at what it just did.
 - **Installable and offline** — a manifest and a service worker: the browser build installs as an
   application, opens without a network, and offers a reload when a new build is waiting.
-- **Self-hosting** — one Node process serving the editor, the API, MCP and the CLI.
+- **Self-hosting** — one Node process serving the editor, the API, MCP and the CLI. Install it with
+  Docker, the Unraid template, the Umbrel app, or a Proxmox script that builds the container for you;
+  a server bundle needing nothing but Node 22 is attached to every release.
 - **Phone, tablet and desktop** — the same code, panels taking turns where there is no room.
 
 ## What is not there yet

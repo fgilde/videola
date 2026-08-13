@@ -22,3 +22,13 @@ Gatekeeper will refuse it until you allow it by hand. Android and iOS assets exi
 built with their signing keys; where a key is absent the job is skipped rather than shipping
 something that cannot be installed. [Building and releasing](/guide/building-and-releasing) has the
 whole table.
+
+## On a server
+
+The four packaged ways to run it on your own hardware — Docker, Unraid, Umbrel and a Proxmox script that
+makes the container for you — are in [Running it yourself](/guide/self-hosting). Every release also
+carries a **server bundle** that needs nothing but Node 22: no dependencies to install, because they are
+already bundled into the entry points.
+
+One thing worth knowing before you start: the server refuses to listen on anything but loopback without a
+token. That is deliberate, and the installers generate one for you.
