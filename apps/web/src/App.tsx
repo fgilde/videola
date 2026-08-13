@@ -36,6 +36,7 @@ import {
   type Template,
   type Time,
   type Track,
+  type Transform,
   type TrackKind,
 } from "@videola/core";
 import {
@@ -1218,12 +1219,22 @@ export function App(): ReactElement {
   // hundred pointer moves coalesce into a single entry in the history -- the same bargain the
   // timeline's own drags make.
   const stageKey = useRef<string | undefined>(undefined);
+  // What the clip looked like when the drag began, and the reason this is a ref rather than the
+  // value on screen: `drag.delta` is the whole travel since the pointer went down, and `staged`
+  // is re-read from the document after every dispatch. Applying the whole travel to a transform
+  // that already carries most of it adds the same journey again on every pointer move -- the clip
+  // leaves the frame in three or four events, which is what "it jumps miles away" was.
+  const stageFrom = useRef<{ transform: Transform; centre: StagePoint } | undefined>(undefined);
   const onStageDrag = useCallback(
     (grab: StageGrab, drag: { at: StagePoint; pointer: StagePoint; delta: StagePoint; even: boolean }) => {
       if (staged === undefined) return;
-      stageKey.current ??= `stage-${staged.clip.id}-${grab}-${playhead}`;
-      const { transform, source } = staged;
-      const centre = quadCentre(staged.quad);
+      if (stageKey.current === undefined) {
+        stageKey.current = `stage-${staged.clip.id}-${grab}-${playhead}`;
+        stageFrom.current = { transform: staged.transform, centre: quadCentre(staged.quad) };
+      }
+      const { source } = staged;
+      const transform = stageFrom.current?.transform ?? staged.transform;
+      const centre = stageFrom.current?.centre ?? quadCentre(staged.quad);
       const next =
         grab === "move"
           ? movedBy(transform, drag.delta)
@@ -1757,6 +1768,7 @@ export function App(): ReactElement {
                         onDrag={onStageDrag}
                         onDrop={() => {
                           stageKey.current = undefined;
+                          stageFrom.current = undefined;
                         }}
                       />
                     </>

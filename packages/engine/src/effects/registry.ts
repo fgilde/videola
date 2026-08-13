@@ -11,13 +11,19 @@ import { contrast } from "./contrast";
 import { crossfade } from "./crossfade";
 import { curves } from "./curves";
 import { dip } from "./dip";
+import { filmLook } from "./film-look";
 import { directionalBlur } from "./directional-blur";
+import { glitch } from "./glitch";
+import { grain } from "./grain";
 import { glow } from "./glow";
 import { iris } from "./iris";
 import { lut } from "./lut";
 import { maskEllipse } from "./mask-ellipse";
 import { maskRect } from "./mask-rect";
 import { mosaic } from "./mosaic";
+import { monochrome } from "./monochrome";
+import { push } from "./push";
+import { rgbSplit } from "./rgb-split";
 import { saturation } from "./saturation";
 import { sharpen } from "./sharpen";
 import { slide } from "./slide";
@@ -167,6 +173,11 @@ const MANIFESTS: readonly EffectManifest[] = [
   // Last of the three that grade, because it is the one that answers to a file rather than to a
   // control: the wheels and the curves are what somebody dials, a table is what somebody was given.
   lut,
+  // The two looks somebody reaches for by name rather than by parameter: black and white with the
+  // warm end left in, and the faded print every phone editor calls "film". Both are one shader and
+  // one dial, because what is wanted from them is a look and not three sliders to balance.
+  monochrome,
+  filmLook,
   vignette,
   blur,
   sharpen,
@@ -177,6 +188,11 @@ const MANIFESTS: readonly EffectManifest[] = [
   mosaic,
   directionalBlur,
   glow,
+  // Grain and a colour fringe: the two that make a digital picture stop looking like a spreadsheet
+  // of pixels. Both measure themselves in pixels of the frame, so they look the same at 720p and at
+  // 4K rather than four times finer.
+  grain,
+  rgbSplit,
   chromaKey,
   // Two masks rather than one with a shape parameter: the manifest has no notion of a choice, and
   // a rectangle and an ellipse share four of six parameters but not a line of their falloff. In a
@@ -189,6 +205,11 @@ const MANIFESTS: readonly EffectManifest[] = [
   crossfade,
   wipe,
   slide,
+  // Push is not slide with a second layer: slide lays the new clip over the old, push moves both, as
+  // though two frames of one strip were being pulled past the window. Glitch is the loud one, and it
+  // is loud on purpose.
+  push,
+  glitch,
   iris,
   zoom,
   dip,

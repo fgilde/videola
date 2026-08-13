@@ -732,6 +732,57 @@ async function announce() {
     checkNear("and the whole drag is one step to undo", Number(rowSlider("Position X").value),
       before, 1);
 
+    // The same distance again, reported the way a pointer really reports it: many moves on the way
+    // down the road rather than one jump at the end. `delta` is the whole travel since the button
+    // went down, so applying it to the transform as it stands *now* adds the same journey again on
+    // every move -- four moves put the clip four times as far, and a real drag of forty moves puts it
+    // out of the country. This is the check that was missing, because one move cannot tell the two
+    // arithmetics apart.
+    const stepped = q(".v-stage__box").getBoundingClientRect();
+    const from = { x: stepped.left + stepped.width / 2, y: stepped.top + stepped.height / 2 };
+    pointer("pointerdown", q(".v-stage__box"), { clientX: from.x, clientY: from.y });
+    for (const part of [0.25, 0.5, 0.75, 1]) {
+      pointer("pointermove", q(".v-stage__svg"),
+        { clientX: from.x + travel * part, clientY: from.y });
+      await sleep(40);
+    }
+    pointer("pointerup", q(".v-stage__svg"), { clientX: from.x + travel, clientY: from.y });
+    await sleep(300);
+    checkNear("a drag reported in four moves lands exactly where one move does",
+      Math.round(Number(rowSlider("Position X").value) - before), Math.round(FIXTURE.width / 4), 2);
+    check("and it is still one step to undo", banner(), "");
+    button("Rückgängig").click();
+    await sleep(300);
+    checkNear("back where it started", Number(rowSlider("Position X").value), before, 1);
+
+    // The same arithmetic decides a corner handle, and a size that grows on every pointer move is
+    // the same defect wearing a different hat.
+    const grown = q(".v-stage__box").getBoundingClientRect();
+    const corner = q('[data-grab="3"]');
+    if (corner !== null) {
+      const wide = Number(rowSlider("Breite (Faktor)").value);
+      const spot = corner.getBoundingClientRect();
+      const at = { x: spot.left + spot.width / 2, y: spot.top + spot.height / 2 };
+      pointer("pointerdown", corner, { clientX: at.x, clientY: at.y });
+      for (const part of [0.34, 0.67, 1]) {
+        pointer("pointermove", q(".v-stage__svg"),
+          { clientX: at.x - grown.width * 0.2 * part, clientY: at.y - grown.height * 0.2 * part });
+        await sleep(40);
+      }
+      pointer("pointerup", q(".v-stage__svg"),
+        { clientX: at.x - grown.width * 0.2, clientY: at.y - grown.height * 0.2 });
+      await sleep(300);
+      const scaled = Number(rowSlider("Breite (Faktor)").value);
+      // The size changed by about a fifth, which is the distance the pointer covered -- and not by
+      // three fifths, which is what applying the whole travel once per move would give. Which way it
+      // went is the corner's own business and `stage.test.ts` asserts that; what this run is about is
+      // that three moves and one move mean the same thing.
+      checkNear("dragging a corner in three moves scales by the distance covered, not by three times it",
+        Math.abs(scaled - wide), wide * 0.2, 0.08);
+      button("Rückgängig").click();
+      await sleep(300);
+    }
+
     // And the line the clip travels, once there is one. Two keys on Position X at two instants is
     // a clip that moves, which is the whole condition for a path -- and the path is sampled from
     // the core, so what is drawn is what the export will do.
@@ -1658,7 +1709,7 @@ async function announce() {
     await openShelf("Übergänge durchsuchen");
     check("the transition shelf offers transitions and nothing else",
       all(".v-fx__tile").map((node) => node.dataset.effectId).sort().join(),
-      ["blur-dissolve", "crossfade", "dip", "iris", "slide", "wipe", "zoom"].join());
+      ["blur-dissolve", "crossfade", "dip", "glitch", "iris", "push", "slide", "wipe", "zoom"].join());
     checkAtLeast("and a dissolve halfway through is a real picture",
       pixelsOf(tileOf("crossfade")).length, 4);
     labelled("Schließen").click();

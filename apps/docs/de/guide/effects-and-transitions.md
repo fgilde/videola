@@ -1,6 +1,6 @@
 # Effekte und Übergänge
 
-**Sechzehn Effekte, sieben Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
+**Zwanzig Effekte, neun Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
 in einer Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an
 einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 429
 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
@@ -358,6 +358,10 @@ Eigenschaft der Aufnahme ist und nicht der Ebene — und genau das ist eine Vign
 | Weichzeichnen | Detail | `amount` 0–16 | separabler Gauß, Abstand in Bildpixeln |
 | Schärfen | Detail | `amount` 0–4 | Unschärfemaske gegen die vier Nachbarn |
 | Verpixeln | Detail | `size` 1–128 | eine Farbe pro Kachel; für Gesicht, Kennzeichen, Bildschirm |
+| Filmkorn | Detail | `amount` 0–0,6, `size` 1–12, `seed` 0–100 | gehashtes Rauschen, in den Mitteltönen am stärksten; `seed` statt Uhr, damit ein zweiter Export dasselbe Bild ergibt |
+| Farbversatz | Detail | `distance` 0–40, `angle` 0–360 | Rot nach vorn, Blau nach hinten — bei 3 eine Linsenfranse, bei 30 ein Glitch |
+| Schwarzweiß | Farbe | `amount` 0–1, `tone` −1–1 | Rec.709-Luma, mit warmem Sepia- oder kaltem Ende |
+| Filmlook | Farbe | `fade` 0–1, `warmth` −1–1 | hebt die Schwarzwerte an und nimmt Farbe heraus — der ausgeblichene Druck |
 | Richtungsunschärfe | Detail | `length` 0–200, `angle` −180–180 | ein Zug entlang einer Achse, wie ein schneller Schwenk |
 | Leuchten | Detail | `amount` 0–3, `threshold` 0–1, `radius` 0–32 | verteilt das Helle und behält das Übrige |
 | Chroma-Keying | Stanze | `hue` 0–360, `tolerance`, `softness` | stanzt einen Farbton aus; 120 ist Greenscreen |
@@ -680,6 +684,8 @@ seinen eigenen Effekten, und `progress` läuft über das Fenster des Übergangs 
 | Schieben | `angle` 0–360, `push` 0–1 | der ankommende Clip kommt herein; `push` sagt, wie weit er den abgehenden vor sich her schiebt |
 | Kreisblende | `centerX`, `centerY`, `softness` | ein Kreis öffnet sich auf den ankommenden Clip |
 | Zoomen | `from` 0,05–4 | der ankommende Clip wächst aus der Mitte |
+| Schieben | `angle` 0–360 | beide Clips bewegen sich zusammen, wie zwei Bilder eines Streifens am Fenster vorbei |
+| Bildstörung | `amount` 0–2, `bands` 2–60 | das Bild reißt in Bänder, die Farbe läuft auseinander — in der Mitte am stärksten |
 | Weichzeichnen-Blende | `amount` 0–48 | eine Überblendung, die in der Mitte weich wird und an beiden Enden wieder scharf |
 | Blende über Farbe | `colour` | hinaus durch eine frei gewählte Farbe und wieder herein |
 

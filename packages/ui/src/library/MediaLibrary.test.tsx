@@ -93,7 +93,12 @@ describe("MediaLibrary", () => {
     const { onImport } = show([]);
 
     expect(screen.getByText(/Noch keine Medien/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Medien importieren" }));
+    // Twice on purpose: the toolbar carries it always, and the empty panel says it again where
+    // somebody is actually looking. The second one is the offer, so it is the primary.
+    const offers = screen.getAllByRole("button", { name: "Medien importieren" });
+    expect(offers).toHaveLength(2);
+    expect(offers[1]?.className).toContain("v-button--primary");
+    fireEvent.click(offers[1]!);
 
     expect(onImport).toHaveBeenCalled();
   });

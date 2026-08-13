@@ -105,7 +105,22 @@ export function MediaLibrary({
         )}
       </div>
       {library.length === 0 ? (
-        <p className="v-library__empty">{t("library.empty")}</p>
+        /* An empty library is the first screen of a first session, and a sentence is a poor answer to
+           it. The same actions the toolbar carries, said again where somebody is actually looking --
+           on a phone the toolbar is a row of small buttons above the fold of a panel behind a tab,
+           and "drop a file here" is advice a phone cannot take. */
+        <div className="v-library__blank">
+          <p className="v-library__empty">{t("library.empty")}</p>
+          <button type="button" className="v-button v-button--primary" onClick={onImport}>
+            {t("action.importMedia")}
+          </button>
+          {onCapture !== undefined && (
+            <>
+              <Capture label={t("library.record")} capture onFiles={onCapture} primary />
+              <Capture label={t("library.pickFromGallery")} onFiles={onCapture} primary />
+            </>
+          )}
+        </div>
       ) : (
         <ul className="v-library__list">
           {library.map((asset) => (
@@ -133,14 +148,23 @@ export function MediaLibrary({
 function Capture({
   label,
   capture = false,
+  primary = false,
   onFiles,
 }: {
   label: string;
   capture?: boolean;
+  /** On the empty state, where these are the only thing to do and read as the offer they are. */
+  primary?: boolean;
   onFiles: (files: File[]) => void;
 }): ReactElement {
   return (
-    <label className="v-button v-library__capture">
+    <label
+      className={
+        primary
+          ? "v-button v-button--primary v-library__capture"
+          : "v-button v-library__capture"
+      }
+    >
       {label}
       <input
         type="file"

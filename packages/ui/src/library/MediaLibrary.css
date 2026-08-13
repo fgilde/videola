@@ -43,6 +43,15 @@
   pointer-events: none;
 }
 
+/* The first screen of a first session: the offer, not a sentence about the absence of one. */
+.v-library__blank {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--v-space-2);
+  padding: var(--v-space-3);
+}
+
 .v-library__empty {
   padding: var(--v-space-4) var(--v-space-3);
   color: var(--v-text-muted);
