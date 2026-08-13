@@ -311,6 +311,32 @@
   resize: vertical;
 }
 
+/* A label and the one or two controls that answer it, on one line: the colour beside the weight
+   beside the alignment is three answers about the same title, and three rows would read as three
+   unrelated settings. It wraps, because the panel is a column on a phone. */
+.v-text__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--v-space-2);
+  width: 100%;
+}
+
+.v-text__row select {
+  flex: 1 1 8ch;
+  min-width: 8ch;
+}
+
+.v-text__row .v-param__label {
+  flex: 0 0 auto;
+}
+
+/* The parameter rows inside this panel are the panel's width, not a slider's: they sit under a
+   label that is already the full width, and a slider indented under it reads as a second column. */
+.v-text .v-param {
+  width: 100%;
+}
+
 /* A curve is the one parameter that is a picture rather than a line of controls, so it takes the
    whole width of its card and puts the label and the keyframe switches above the field instead of
    beside it. */

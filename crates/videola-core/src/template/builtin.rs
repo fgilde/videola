@@ -1466,7 +1466,7 @@ fn title_cards() -> Template {
                 ("letterSpacing", json!(0.04)),
                 ("y", json!(0.46)),
                 ("maxWidth", json!(0.8)),
-                ("animateIn", json!("slideUp")),
+                ("animateIn", json!("rise")),
                 ("animateInSeconds", json!(0.45)),
                 ("animateOut", json!("fade")),
                 ("animateOutSeconds", json!(0.35)),
@@ -1603,7 +1603,7 @@ fn social_hook() -> Template {
             ("letterSpacing", json!(0.02)),
             ("y", json!(0.18)),
             ("maxWidth", json!(0.86)),
-            ("animateIn", json!("slideDown")),
+            ("animateIn", json!("fall")),
             ("animateInSeconds", json!(0.4)),
         ],
     ));
@@ -1619,7 +1619,7 @@ fn social_hook() -> Template {
             ("fontWeight", json!(800)),
             ("y", json!(0.5)),
             ("maxWidth", json!(0.42)),
-            ("animateIn", json!("pop")),
+            ("animateIn", json!("grow")),
             ("animateInSeconds", json!(0.35)),
         ],
     ));
@@ -1636,7 +1636,7 @@ fn social_hook() -> Template {
             ("letterSpacing", json!(0.22)),
             ("y", json!(0.84)),
             ("color", json!("#f4d9ff")),
-            ("animateIn", json!("slideUp")),
+            ("animateIn", json!("rise")),
             ("animateInSeconds", json!(0.4)),
             ("animateOut", json!("fade")),
         ],
@@ -2074,6 +2074,12 @@ mod tests {
         "mask-ellipse",
     ];
     const DRAWN_TRANSITIONS: &[&str] = &["crossfade", "wipe", "slide", "zoom", "dip"];
+    // What `generatorMotion` in the engine actually moves, and what the inspector offers. A style
+    // naming anything else falls back silently to standing still: `textStyle` is a trust boundary and
+    // takes the default rather than the word it did not recognise, so a template with a mistyped move
+    // looks exactly like a template with no move at all.
+    const DRAWN_MOVES: &[&str] = &["none", "fade", "rise", "fall", "grow"];
+    const DRAWN_LOOPS: &[&str] = &["none", "pulse"];
     const DRAWN_TRACK_KINDS: &[TrackKind] =
         &[TrackKind::Video, TrackKind::Text, TrackKind::Overlay];
 
@@ -2572,6 +2578,38 @@ mod tests {
                     .all(|track| !track.clips.is_empty()),
                 "{id}: a track came out with nothing on it"
             );
+        }
+    }
+
+    #[test]
+    fn every_move_a_title_makes_is_one_the_renderer_draws() {
+        for template in templates() {
+            let id = &template.manifest.id;
+            for clip in clips(&template.project) {
+                let ClipSource::Generator {
+                    generator: Generator::Text { style, .. },
+                } = &clip.source
+                else {
+                    continue;
+                };
+                for field in ["animateIn", "animateOut"] {
+                    let Some(value) = style.get(field).and_then(Value::as_str) else {
+                        continue;
+                    };
+                    assert!(
+                        DRAWN_MOVES.contains(&value),
+                        "{id}: clip {} asks for {field} \"{value}\", which nothing draws",
+                        clip.id
+                    );
+                }
+                if let Some(value) = style.get("loop").and_then(Value::as_str) {
+                    assert!(
+                        DRAWN_LOOPS.contains(&value),
+                        "{id}: clip {} loops on \"{value}\", which nothing draws",
+                        clip.id
+                    );
+                }
+            }
         }
     }
 

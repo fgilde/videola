@@ -109,4 +109,56 @@ describe("the text panel", () => {
     );
     expect(screen.queryByTestId("text-content")).toBeNull();
   });
+
+  // The half of this panel that did not exist: until it did, a template could ship a rising title
+  // and nobody could make one, change one or take one away.
+  it("offers only the moves the renderer implements", () => {
+    show(textClip("Titel"));
+
+    const moves = [...(screen.getByTestId("text-animate-in") as HTMLSelectElement).options].map(
+      (option) => option.value,
+    );
+
+    expect(moves).toEqual(["none", "fade", "rise", "fall", "grow"]);
+  });
+
+  it("writes the chosen arrival into the style without losing the words", () => {
+    const { sent } = show(textClip("Titel", { y: 0.84 }));
+
+    fireEvent.change(screen.getByTestId("text-animate-in"), { target: { value: "rise" } });
+
+    expect(sent).toHaveLength(1);
+    const command = sent[0] as { generator: { content: string; style: Record<string, unknown> } };
+    expect(command.generator.content).toBe("Titel");
+    expect(command.generator.style).toEqual({ y: 0.84, animateIn: "rise" });
+  });
+
+  // A duration for an animation that does not happen is a question about nothing.
+  it("asks how long the arrival takes only once there is one", () => {
+    const { rerender } = show(textClip("Titel"));
+    expect(screen.queryByLabelText("Dauer (s)")).toBeNull();
+
+    rerender(textClip("Titel", { animateIn: "grow" }));
+
+    expect(screen.getByLabelText("Dauer (s)")).toBeTruthy();
+  });
+
+  it("keeps the rest of the style when one field changes", () => {
+    const { sent } = show(textClip("Titel", { animateIn: "rise", fontSize: 0.2 }));
+
+    fireEvent.change(screen.getByTestId("text-align"), { target: { value: "left" } });
+
+    const command = sent[0] as { generator: { style: Record<string, unknown> } };
+    expect(command.generator.style).toEqual({ animateIn: "rise", fontSize: 0.2, align: "left" });
+  });
+
+  // The renderer draws a title at its own default when the style says nothing, so a control that
+  // showed zero would be reporting a size the picture does not have.
+  it("shows the renderer's own defaults where the style is silent", () => {
+    show(textClip("Titel", {}));
+
+    expect((screen.getByTestId("text-weight") as HTMLSelectElement).value).toBe("700");
+    expect((screen.getByTestId("text-color") as HTMLInputElement).value).toBe("#ffffff");
+    expect((screen.getByTestId("text-animate-in") as HTMLSelectElement).value).toBe("none");
+  });
 });
