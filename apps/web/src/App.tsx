@@ -1327,6 +1327,46 @@ export function App(): ReactElement {
     [adopt, template, closeTemplates],
   );
 
+  // The same bake, laid on top of the project that is already open rather than replacing it: one new
+  // track per track the template carries, in the template's own order, everything on it moved to the
+  // playhead. One key for the lot, so a template that brings four tracks is still one press of undo.
+  //
+  // Baked at the open project's own size and not at the shape the wizard offered: a clip's framing is
+  // relative to the frame it was baked for, so a 9:16 bake dropped into a 16:9 edit would arrive
+  // cropped. The shape belongs to the project, and this one already has a project.
+  const insertTemplate = useCallback(
+    (answers: Readonly<Record<string, SlotAnswer>>) => {
+      if (doc === undefined || template === undefined) return;
+      const holder = doc;
+      setBaking(true);
+      void createTemplateBackend(template, answers, holder.state.settings)
+        .then(
+          (backend) => {
+            const key = `template-insert-${(actionSequence += 1)}`;
+            const at = playhead;
+            // An empty track is skipped rather than added: a template can carry a track it only fills
+            // in when a slot is answered, and inserting nothing should not leave a bare track behind.
+            for (const track of backend.state().timeline.tracks) {
+              if (track.clips.length === 0) continue;
+              holder.dispatch(cmd.trackAdd(track.kind, track.name), key);
+              // The track the core just minted, read back rather than guessed: ids are the core's to
+              // hand out, and `trackAdd` without an index appends.
+              const made = holder.state.timeline.tracks.at(-1);
+              if (made === undefined) continue;
+              for (const clip of track.clips) {
+                holder.dispatch(cmd.clipPaste(made.id, clip, at + clip.start), key);
+              }
+            }
+            closeTemplates();
+            setError(undefined);
+          },
+          (err: unknown) => setTemplateError(templateReason(err, "error.templateBakeFailed")),
+        )
+        .finally(() => setBaking(false));
+    },
+    [closeTemplates, doc, playhead, template],
+  );
+
   const saveAsTemplate = useCallback(() => {
     if (doc === undefined || project === undefined) return;
     try {
@@ -1872,6 +1912,7 @@ export function App(): ReactElement {
           busy={baking}
           onPickMedia={(slot, file) => void pickSlotMedia(slot, file)}
           onFinish={bake}
+          onInsert={doc === undefined ? undefined : (answers) => insertTemplate(answers)}
           onBack={() => {
             setTemplate(undefined);
             setTemplateError(undefined);

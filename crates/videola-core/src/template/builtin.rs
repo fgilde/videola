@@ -1709,13 +1709,17 @@ fn media_slot(id: &str, ordinal: usize, clip: &str) -> Slot {
     )
 }
 
+// Optional, like every other slot a shipped template has. A required media slot is a template that
+// cannot be used until footage exists, and half of what these are for is the graphics: a lower third
+// over an edit already cut, an end card, a quote. An unanswered media slot drops its own clip in the
+// bake, so what comes back is the template minus the footage rather than a hole where a shot goes.
 fn media_slot_named(id: &str, label: Localized, hint: Localized, clip: &str) -> Slot {
     Slot {
         id: id.to_string(),
         kind: SlotKind::Media,
         label,
         hint,
-        required: true,
+        required: false,
         bindings: vec![cover(clip)],
     }
 }
@@ -2255,6 +2259,40 @@ mod tests {
                     assert_eq!((transform.x, transform.y), (0.0, 0.0));
                 }
             }
+        }
+    }
+
+    // Nothing imported yet, or a template chosen for its graphics rather than its footage: every
+    // shipped template has to bake against no answers at all and still come back with something to
+    // look at. What goes is the clips a media slot would have filled; what stays is every generator,
+    // which is the title, the colour field and the end card.
+    #[test]
+    fn every_shipped_template_bakes_with_no_answers_at_all() {
+        for template in templates() {
+            let id = &template.manifest.id;
+            let baked = template
+                .bake(&BTreeMap::new(), None)
+                .unwrap_or_else(|err| panic!("{id}: {err}"));
+
+            assert!(
+                clips(&baked).next().is_some(),
+                "{id}: nothing at all came out"
+            );
+            for clip in clips(&baked) {
+                assert!(
+                    matches!(&clip.source, ClipSource::Generator { .. }),
+                    "{id}: clip {} points at material nobody chose",
+                    clip.id
+                );
+            }
+            assert!(
+                baked
+                    .timeline
+                    .tracks
+                    .iter()
+                    .all(|track| !track.clips.is_empty()),
+                "{id}: a track came out with nothing on it"
+            );
         }
     }
 

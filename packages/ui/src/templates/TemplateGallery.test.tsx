@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { FLICKS_PER_SECOND } from "@videola/core";
-import type { MediaAsset, Template } from "@videola/core";
+import type { MediaAsset, SlotAnswer, Template } from "@videola/core";
 
 import { I18nProvider } from "../i18n/I18nProvider";
 import { TemplateGallery } from "./TemplateGallery";
@@ -331,7 +331,10 @@ interface WizardResult {
   picked: [string, File][];
 }
 
-function showWizard(media: Record<string, MediaAsset> = {}): WizardResult {
+function showWizard(
+  media: Record<string, MediaAsset> = {},
+  overrides: Partial<Parameters<typeof TemplateWizard>[0]> = {},
+): WizardResult {
   const finished: WizardResult["finished"] = [];
   const picked: [string, File][] = [];
   render(
@@ -343,6 +346,7 @@ function showWizard(media: Record<string, MediaAsset> = {}): WizardResult {
         onFinish={(answers, frame) => finished.push({ answers: { ...answers }, frame })}
         onBack={vi.fn()}
         onClose={vi.fn()}
+        {...overrides}
       />
     </I18nProvider>,
   );
@@ -427,6 +431,32 @@ describe("TemplateWizard", () => {
         frame: { width: 1080, height: 1920 },
       },
     ]);
+  });
+
+  // The other answer to the last step: the same result added to the edit already open. It carries the
+  // same answers as the finish, because the two differ in where the result goes and in nothing else.
+  it("offers inserting into an open project, with the answers the finish would have carried", () => {
+    const inserted: Record<string, SlotAnswer>[] = [];
+    const material = asset("chosen", 10);
+    showWizard({ shot: material }, { onInsert: (answers) => inserted.push({ ...answers }) });
+
+    next();
+    fireEvent.change(screen.getByDisplayValue("Zweimal"), { target: { value: "Mein Film" } });
+    fireEvent.click(screen.getByText("Als Spuren einfügen"));
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]?.shot).toEqual({ kind: "media", asset: material });
+    expect(inserted[0]?.title).toEqual({ kind: "text", text: "Mein Film" });
+  });
+
+  // A session with nothing open has nowhere to insert into: the first thing a template does there is
+  // become the project.
+  it("says nothing about inserting where there is no project to insert into", () => {
+    showWizard({ shot: asset("chosen", 10) });
+
+    next();
+
+    expect(screen.queryByText("Als Spuren einfügen")).toBeNull();
   });
 
   it("defaults the title to the template's name and the colour to its background", () => {

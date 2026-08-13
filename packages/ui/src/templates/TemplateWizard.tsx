@@ -31,6 +31,10 @@ export interface TemplateWizardProps {
   busy?: boolean;
   onPickMedia: (slotId: string, file: File) => void;
   onFinish: (answers: Readonly<Record<string, SlotAnswer>>, frame: Frame) => void;
+  /// Put the same result into the project that is already open, as tracks of its own, instead of
+  /// replacing it. Absent where there is nothing open to add to -- the first thing a fresh session
+  /// does with a template is become it.
+  onInsert?: (answers: Readonly<Record<string, SlotAnswer>>, frame: Frame) => void;
   onBack: () => void;
   onClose: () => void;
 }
@@ -89,7 +93,7 @@ export function TemplateWizard(props: TemplateWizardProps): ReactElement {
   const complete = current.every((slot) => !slot.required || answered(slot));
   const last = step === steps.length - 1;
 
-  const finish = (): void => {
+  const gathered = (): Record<string, SlotAnswer> => {
     const answers: Record<string, SlotAnswer> = {};
     for (const slot of template.manifest.slots) {
       if (slot.kind === "media") {
@@ -104,7 +108,7 @@ export function TemplateWizard(props: TemplateWizardProps): ReactElement {
         answers[slot.id] = { kind: "color", color: valueOf(slot) };
       }
     }
-    props.onFinish(answers, frame);
+    return answers;
   };
 
   return (
@@ -261,10 +265,22 @@ export function TemplateWizard(props: TemplateWizardProps): ReactElement {
           <button className="v-button" onClick={props.onClose}>
             {t("template.cancel")}
           </button>
+          {/* Beside the primary and not instead of it: becoming the template is the common answer,
+              adding it to an edit already under way is the other one, and which of the two it is
+              cannot be guessed from the answers. */}
+          {last && props.onInsert !== undefined && (
+            <button
+              className="v-button"
+              disabled={!complete || props.busy === true}
+              onClick={() => props.onInsert?.(gathered(), frame)}
+            >
+              {t("template.insert")}
+            </button>
+          )}
           <button
             className="v-button v-button--primary"
             disabled={!complete || props.busy === true}
-            onClick={() => (last ? finish() : setStep(step + 1))}
+            onClick={() => (last ? props.onFinish(gathered(), frame) : setStep(step + 1))}
           >
             {last ? t("template.finish") : t("template.next")}
           </button>

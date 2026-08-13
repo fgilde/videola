@@ -138,8 +138,10 @@ features:
   travels; the grade is done there.
 - **Another shape in one press** — portrait, square or 4:5, with every clip scaled to cover the new
   frame in the same undo step.
-- **Templates** — thirteen of them across five categories: a gallery, a wizard, and a bake that
-  leaves you with an ordinary project.
+- **Templates** — thirteen of them across five categories, each card a rendered picture rather than a
+  painted promise. Every placeholder is optional, so a template works before a single file has been
+  imported and comes back as its graphics; and the wizard's last step can add it to the project already
+  open, as tracks of its own, in one press of undo.
 - **An API, an MCP server and a CLI** — the whole command catalogue, generated from the Rust enum,
   plus stills and audio peaks so an agent can look at what it just did.
 - **Installable and offline** — a manifest and a service worker: the browser build installs as an

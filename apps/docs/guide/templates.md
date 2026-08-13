@@ -121,9 +121,18 @@ without a word, and the wizard would have asked a question whose answer goes now
 One slot may hold several bindings, and that is the point of the design: Bold Open's title slot fills
 both the words on the screen and the project's name.
 
-**Every text slot is optional.** That is what lets a card show something: the template ships the words
-it was designed with, so an unanswered title is the designer's line rather than an empty rectangle,
-and the wizard starts each field on those words.
+**Every slot is optional**, media included. That is what lets a card show something: the template
+ships the words it was designed with, so an unanswered title is the designer's line rather than an
+empty rectangle, and the wizard starts each field on those words.
+
+A media slot nobody answered takes its own clip with it, and the track with it where that clip was all
+it held. So a template used with no footage at all comes back as its graphics: the titles, the colour
+fields, the end card. That is not a degraded result — half of what these are for is the graphics, and a
+lower third is wanted over an edit that already exists. It is also what makes **Insert as tracks**
+worth having.
+
+A required media slot would have meant a template nobody can use until something has been imported,
+which is exactly backwards on the first run.
 
 There is no audio slot. A music bed would need either a file shipped with every template or an upload
 for every use, and no harness in this repository can hear the result — headless Chrome has no output.
@@ -253,6 +262,29 @@ byte-identical clip positions. A template cannot drift onto another frame rate.
 `template.instantiate` is deliberately **not** a command. Commands are edits with an inverse, and
 "this project came into existence" has none. Baking is a document constructor, like opening a file,
 and everything after it is a command like any other.
+
+Dropping a clip empties the track it was on where it was the only one there, and that track goes too.
+A template that wanted three shots and got none would otherwise hand over three bare lanes — furniture
+to delete rather than part of what was asked for.
+
+### Insert as tracks
+
+The last step of the wizard offers a second answer: **Insert as tracks**, beside *Create project*. The
+same bake, laid over the project that is already open instead of replacing it — one new track per track
+the template carries, in the template's own order, everything on it moved to the playhead.
+
+Two details that are not free:
+
+* **It is commands, not a constructor.** One `track.add` per track and one `clip.paste` per clip, all
+  under a single coalesce key, so a template that brings four tracks is one press of undo. `clip.paste`
+  is the command that already carries a whole clip with its effects and its transitions, which is why
+  no new variant was needed for this.
+* **It bakes at the open project's own size**, not at the shape the wizard offers. A clip's framing is
+  relative to the frame it was baked for, so a 9:16 bake dropped into a 16:9 edit would arrive cropped.
+  The shape belongs to the project, and by then there is a project.
+
+The offer is absent where nothing is open: the first thing a template does in a fresh session is become
+the project.
 
 ## Author mode
 

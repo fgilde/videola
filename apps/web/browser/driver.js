@@ -1765,11 +1765,14 @@ async function announce() {
       wizard.textContent.includes("Braucht mindestens 3,5 s Material."), true);
 
     const advance = () => labelled("Weiter").closest("button");
-    check("and refuses to go on while the placeholder is empty", advance().disabled, true);
+    // Nothing chosen, and the way on is open. Half of what a template is for is the graphics -- a
+    // lower third, an end card, a quote -- and those are wanted before any footage exists. What the
+    // bake does with an unanswered placeholder is drop the clip that would have held it.
+    check("an empty placeholder does not bar the way on", advance().disabled, false);
 
     await chooseFile(fileInput("shot"), FIXTURE.name);
     await until("the choice to register", () => q('[data-chosen="shot"]'));
-    check("material opens the way on", advance().disabled, false);
+    check("material is taken all the same", advance().disabled, false);
     check("choosing material raised nothing", banner(), "");
 
     advance().click();
@@ -1865,6 +1868,40 @@ async function announce() {
     button("An den Anfang").click();
     forward(30);
     await until("the picture again", () => measure(brand).lit > 1000, 20000);
+
+    // A second template on top of the first, without answering anything at all: its graphics arrive
+    // as tracks of their own over an edit already made. This is the whole of "insert" -- the tracks
+    // grow, the clips grow, nothing that was there moves, and one press of undo takes the lot.
+    const tracksBefore = all("[data-track-id]").length;
+    const clipsBefore = all("[data-clip-id]").length;
+    openMenu();
+    inMenu("Aus Vorlage").click();
+    await until("the gallery for the insert", () => q('[data-testid="template-gallery"]'));
+    card("lower-third").click();
+    await until("the wizard for the insert", () => q('[data-testid="template-wizard"]'));
+    // Straight to the last step, answering nothing on the way.
+    for (let step = 0; step < 4 && labelled("Weiter") !== undefined; step += 1) {
+      labelled("Weiter").closest("button").click();
+      await sleep(60);
+    }
+    const insert = labelled("Als Spuren einfügen");
+    check("the last step offers adding the template to the project that is open",
+      insert !== undefined, true);
+    insert.closest("button").click();
+    await until("the wizard to close again", () => q('[data-testid="template-wizard"]') === null,
+      20000);
+    check("inserting raised nothing", banner(), "");
+    checkAtLeast("it brought tracks of its own", all("[data-track-id]").length - tracksBefore, 1);
+    checkAtLeast("with something on them", all("[data-clip-id]").length - clipsBefore, 1);
+    // No empty lane among them: the template wants a shot, nobody gave it one, and a bare track per
+    // unanswered placeholder would be furniture to delete rather than what was asked for.
+    check("and no empty track came with it",
+      all("[data-track-id]").filter((row) => row.querySelector("[data-clip-id]") === null).length, 0);
+    button("Rückgängig").click();
+    await sleep(300);
+    check("one press of undo takes the whole insert",
+      [all("[data-track-id]").length, all("[data-clip-id]").length],
+      [tracksBefore, clipsBefore]);
 
     // And then the gallery again, because that is what the screenshot at the end of the budget has
     // to catch. This whole milestone is a claim about what someone sees before they choose, and the

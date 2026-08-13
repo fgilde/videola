@@ -125,9 +125,19 @@ deren Antwort ins Leere geht.
 Ein Slot darf mehrere Bindungen tragen, und das ist der Sinn des Entwurfs: der Titel-Slot von
 „Kraftvoller Auftakt“ füllt zugleich die Worte im Bild und den Projektnamen.
 
-**Jeder Text-Slot ist optional.** Das ist es, was eine Karte überhaupt etwas zeigen lässt: die Vorlage
-bringt die Worte mit, mit denen sie entworfen wurde, ein unbeantworteter Titel ist also die Zeile
-ihrer Gestalterin und kein leeres Rechteck — und der Assistent startet jedes Feld auf diesen Worten.
+**Jeder Slot ist optional**, Medien eingeschlossen. Das ist es, was eine Karte überhaupt etwas zeigen
+lässt: die Vorlage bringt die Worte mit, mit denen sie entworfen wurde, ein unbeantworteter Titel ist
+also die Zeile ihrer Gestalterin und kein leeres Rechteck — und der Assistent startet jedes Feld auf
+diesen Worten.
+
+Ein unbeantworteter Medien-Slot nimmt seinen Clip mit, und die Spur mit, wenn dieser Clip alles war,
+was sie trug. Eine Vorlage ganz ohne Material kommt also als ihre Grafik zurück: die Titel, die
+Farbflächen, die Endkarte. Das ist kein abgespecktes Ergebnis — die Hälfte dessen, wofür Vorlagen da
+sind, ist die Grafik, und eine Bauchbinde will man über einen Schnitt legen, der schon existiert. Genau
+das macht **Als Spuren einfügen** erst sinnvoll.
+
+Ein Pflicht-Medien-Slot hieße: eine Vorlage, die niemand benutzen kann, bevor etwas importiert ist —
+beim ersten Start also genau verkehrt.
 
 Es gibt keinen Ton-Slot. Eine Musikunterlage bräuchte entweder eine Datei bei jeder Vorlage oder einen
 Upload bei jeder Benutzung, und kein Prüfstand in diesem Verzeichnis kann das Ergebnis hören —
@@ -268,6 +278,29 @@ also bytegleiche Clip-Positionen. Eine Vorlage kann nicht auf eine andere Bildra
 `template.instantiate` ist mit Absicht **kein** Command. Commands sind Änderungen mit einer Umkehrung,
 und „dieses Projekt ist entstanden“ hat keine. Backen ist ein Dokumentkonstruktor wie das Öffnen einer
 Datei, und alles danach ist ein Command wie jeder andere.
+
+Ein entfernter Clip leert die Spur, auf der er allein lag, und diese Spur geht mit. Eine Vorlage, die
+drei Aufnahmen wollte und keine bekam, würde sonst drei nackte Spuren übergeben — Mobiliar zum
+Löschen statt Teil dessen, was bestellt war.
+
+### Als Spuren einfügen
+
+Der letzte Schritt des Assistenten bietet eine zweite Antwort: **Als Spuren einfügen**, neben *Projekt
+erstellen*. Dasselbe Backen, aber über das bereits offene Projekt gelegt statt es zu ersetzen — eine
+neue Spur je Spur der Vorlage, in deren eigener Reihenfolge, alles darauf an den Abspielkopf gerückt.
+
+Zwei Einzelheiten, die nicht umsonst sind:
+
+* **Es sind Commands, kein Konstruktor.** Ein `track.add` je Spur und ein `clip.paste` je Clip, alles
+  unter einem gemeinsamen Coalesce-Schlüssel, damit eine Vorlage mit vier Spuren ein einziges
+  Rückgängig bleibt. `clip.paste` ist der Command, der ohnehin einen ganzen Clip mit Effekten und
+  Übergängen trägt — deshalb brauchte das keine neue Variante.
+* **Gebacken wird in der Größe des offenen Projekts**, nicht im Format, das der Assistent anbietet. Die
+  Rahmung eines Clips ist relativ zum Bild, für das er gebacken wurde; ein 9:16-Backen in einem
+  16:9-Schnitt käme beschnitten an. Das Format gehört dem Projekt, und ein Projekt gibt es hier schon.
+
+Wo nichts offen ist, fehlt das Angebot: in einer frischen Sitzung wird eine Vorlage zuerst das
+Projekt.
 
 ## Autorenmodus
 

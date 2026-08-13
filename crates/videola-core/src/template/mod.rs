@@ -808,6 +808,13 @@ fn drop_clips(project: &mut Project, ids: &BTreeSet<ClipId>) {
     for track in &mut project.timeline.tracks {
         track.clips.retain(|clip| !ids.contains(&clip.id));
     }
+    // And the tracks the dropping emptied. A template whose footage nobody chose would otherwise
+    // hand over its bare lanes as well -- one per shot it wanted -- and an empty track is furniture
+    // to delete rather than part of what was asked for.
+    project
+        .timeline
+        .tracks
+        .retain(|track| !track.clips.is_empty());
 }
 
 fn generator_of<'p>(project: &'p Project, id: &ClipId) -> Option<&'p Generator> {
@@ -1245,7 +1252,9 @@ mod tests {
 
         let baked = template.bake(&BTreeMap::new(), None).unwrap();
 
-        assert!(baked.timeline.tracks[0].clips.is_empty());
+        // And the track with it, because that clip was all it held. A bare lane per shot nobody
+        // chose is furniture to delete rather than part of what the template built.
+        assert!(baked.timeline.tracks.is_empty());
     }
 
     #[test]
