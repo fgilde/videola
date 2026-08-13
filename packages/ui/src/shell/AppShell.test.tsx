@@ -19,8 +19,19 @@ function stubEnvironment(width = 1440): void {
 // Where a control sits, not merely that it exists. jsdom lays nothing out, so "the topbar fits"
 // can only be answered in a real browser -- but "this button is inside the overflow menu rather
 // than on the bar" is a DOM fact, and it is the one that decides whether the bar can fit at all.
+// Every control with this name, wherever it is. A menu bar repeats itself on purpose -- File ▸ Save
+// and the Save button on the bar are the same action in the two places people look for it -- so a
+// lookup that insists on exactly one match is asking the wrong question.
+const named = (name: string): HTMLElement[] => screen.queryAllByRole("button", { name });
 const inMenu = (name: string): boolean =>
-  screen.getByRole("button", { name }).closest(".v-topbar__menu") !== null;
+  named(name).some((node) => node.closest(".v-topbar__menu") !== null);
+const onBar = (name: string): boolean =>
+  named(name).some((node) => node.closest(".v-topbar__menu") === null);
+// The titles of the menu bar, which are <summary> elements and carry no button role.
+const titles = (): string[] =>
+  [...document.querySelectorAll(".v-topbar__menus > details > summary")].map(
+    (node) => node.textContent ?? "",
+  );
 
 function renderPhone(): void {
   render(
@@ -48,7 +59,33 @@ describe("AppShell", () => {
     render(<AppShell>content</AppShell>);
     // The brand is an image, so the product name has to survive as its accessible name.
     expect(screen.getByRole("img", { name: "Videola" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Speichern" })).toBeTruthy();
+    expect(onBar("Speichern")).toBe(true);
+  });
+
+  // The names every editor uses, in the order they are used. This is the whole of "where is import":
+  // somebody who has used any other editor already knows which title to open.
+  it("carries a menu bar rather than one pile of actions", () => {
+    render(<AppShell>content</AppShell>);
+    expect(titles()).toEqual(["Datei", "Bearbeiten", "Einfügen", "Projekt", "Ansicht", "Hilfe"]);
+  });
+
+  it("puts each action under the title somebody would look in", () => {
+    render(<AppShell onImportMedia={() => {}} onAddTrack={() => {}} onKeys={() => {}}>content</AppShell>);
+    // Buttons and summaries both: a group inside a menu is a disclosure, and "Format ändern" is its
+    // label rather than an action of its own.
+    const under = (id: string, name: string): boolean =>
+      [
+        ...(document
+          .querySelector(`[data-testid="menu-${id}"]`)
+          ?.querySelectorAll("button, summary") ?? []),
+      ].some((node) => node.textContent === name);
+
+    expect(under("file", "Medien importieren")).toBe(true);
+    expect(under("file", "Weitergeben …")).toBe(true);
+    expect(under("edit", "Spur hinzufügen")).toBe(true);
+    expect(under("insert", "Bauchbinde")).toBe(true);
+    expect(under("project", "Format ändern")).toBe(true);
+    expect(under("help", "Tastenkürzel")).toBe(true);
   });
 
   it("exposes the resolved layout mode on the root element", () => {
@@ -59,13 +96,10 @@ describe("AppShell", () => {
   it("switches every action label when the language changes", () => {
     render(<AppShell>content</AppShell>);
     act(() => screen.getByRole("button", { name: "Deutsch / English" }).click());
-    expect(screen.getByRole("button", { name: "New project" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import media" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add track" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Redo" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    for (const name of ["New project", "Open", "Import media", "Add track", "Undo", "Redo", "Save"]) {
+      expect(named(name).length).toBeGreaterThan(0);
+    }
+    expect(titles()).toEqual(["File", "Edit", "Insert", "Project", "View", "Help"]);
   });
 
   it("renders its children in the content area", () => {
@@ -77,20 +111,34 @@ describe("AppShell", () => {
     expect(screen.getByText("Zeitleiste kommt hier hin")).toBeTruthy();
   });
 
+  const barButton = (name: string): HTMLElement => {
+    const found = named(name).find((node) => node.closest(".v-topbar__menu") === null);
+    if (found === undefined) throw new Error(`no ${name} on the bar`);
+    return found;
+  };
+
   it("disables undo and redo until an action reports otherwise", () => {
     render(<AppShell>content</AppShell>);
-    expect(screen.getByRole("button", { name: "Rückgängig" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "Wiederholen" }).hasAttribute("disabled")).toBe(true);
+    expect(barButton("Rückgängig").hasAttribute("disabled")).toBe(true);
+    expect(barButton("Wiederholen").hasAttribute("disabled")).toBe(true);
   });
 
   it("enables undo once the caller reports canUndo", () => {
     render(<AppShell canUndo>content</AppShell>);
-    expect(screen.getByRole("button", { name: "Rückgängig" }).hasAttribute("disabled")).toBe(false);
+    expect(barButton("Rückgängig").hasAttribute("disabled")).toBe(false);
   });
 
   it("enables redo once the caller reports canRedo", () => {
     render(<AppShell canRedo>content</AppShell>);
-    expect(screen.getByRole("button", { name: "Wiederholen" }).hasAttribute("disabled")).toBe(false);
+    expect(barButton("Wiederholen").hasAttribute("disabled")).toBe(false);
+  });
+
+  // The same two inside the Edit menu, where they are words rather than symbols: a menu entry that
+  // cannot act has to say so, exactly like the button on the bar.
+  it("greys out undo in the menu while there is nothing to undo", () => {
+    render(<AppShell>content</AppShell>);
+    const entry = named("Rückgängig").find((node) => node.closest(".v-topbar__menu") !== null);
+    expect(entry?.hasAttribute("disabled")).toBe(true);
   });
 
   it("keeps every action reachable at phone width", () => {
@@ -98,7 +146,7 @@ describe("AppShell", () => {
     renderPhone();
     expect(screen.getByTestId("app-shell").dataset.layout).toBe("phone");
     for (const name of ["Neues Projekt", "Öffnen", "Medien importieren", "Spur hinzufügen", "Rückgängig", "Wiederholen", "Speichern", "Exportieren"]) {
-      expect(screen.getByRole("button", { name })).toBeTruthy();
+      expect(named(name).length).toBeGreaterThan(0);
     }
   });
 
@@ -109,27 +157,33 @@ describe("AppShell", () => {
     renderPhone();
     // By tag rather than by role: a <summary> is the native disclosure widget and carries no
     // button role, which is also why the browser harness cannot look it up as one.
-    const onBar = [...document.querySelectorAll(".v-topbar button, .v-topbar summary")]
+    const controls = [...document.querySelectorAll(".v-topbar button, .v-topbar summary")]
       .filter((node) => node.closest(".v-topbar__menu") === null)
       .map((node) => node.getAttribute("aria-label") ?? node.textContent);
-    expect(onBar).toEqual(["Weitere Aktionen", "Rückgängig", "Wiederholen"]);
+    expect(controls).toEqual(["Weitere Aktionen", "Rückgängig", "Wiederholen", "Speichern"]);
   });
 
-  it("moves saving, exporting and the settings into the menu at phone width", () => {
+  it("moves exporting and the settings into the menu at phone width", () => {
     stubEnvironment(390);
     renderPhone();
-    for (const name of ["Speichern", "Exportieren", "Deutsch / English", "Hell"]) {
+    for (const name of ["Exportieren", "Deutsch / English", "Hell"]) {
       expect(inMenu(name)).toBe(true);
+      expect(onBar(name)).toBe(false);
     }
+    // Saving stays on the bar even there: it is the one action nobody should have to look for, and
+    // it is one button wide.
+    expect(onBar("Speichern")).toBe(true);
   });
 
-  // The desktop bar has room for those three, and burying an editor's save button where there is
-  // space for it would be the same mistake in the other direction.
-  it("keeps saving, exporting and the settings on the bar on a desktop", () => {
+  // The desktop bar has room for those two, and burying an editor's save button where there is
+  // space for it would be the same mistake in the other direction. The preferences are in View,
+  // which is where a person looks for them and not a place they had to be found by accident.
+  it("keeps saving and exporting on the bar on a desktop", () => {
     render(<AppShell onSave={() => {}} onExport={() => {}}>content</AppShell>);
-    for (const name of ["Speichern", "Exportieren", "Deutsch / English", "Hell"]) {
-      expect(inMenu(name)).toBe(false);
+    for (const name of ["Speichern", "Exportieren"]) {
+      expect(onBar(name)).toBe(true);
     }
+    expect(inMenu("Deutsch / English")).toBe(true);
     expect(inMenu("Medien importieren")).toBe(true);
   });
 

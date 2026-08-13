@@ -123,7 +123,8 @@ import {
   type ExportFormatChoice,
   type ExportProgress,
   type ExportSelection,
-  type HandOff,
+  HandOffDialog,
+  type HandOffKind,
   type MediaDrop,
   type MediaGrab,
   type SourceRange,
@@ -292,6 +293,7 @@ export function App(): ReactElement {
   const [browsing, setBrowsing] = useState<1 | 2>();
   const [tiles, setTiles] = useState<ReadonlyMap<string, string>>();
   const [gallery, setGallery] = useState(false);
+  const [handingOff, setHandingOff] = useState(false);
   const [catalogue, setCatalogue] = useState<Template[]>([]);
   const [template, setTemplate] = useState<Template>();
   const [slotMedia, setSlotMedia] = useState<Record<string, MediaAsset>>({});
@@ -1581,7 +1583,9 @@ export function App(): ReactElement {
   // The cut, for finishing somewhere else. Neither format carries an effect or a keyframe -- those
   // are every system's own -- so what leaves here is the assembly, which is what a conform needs.
   const handOff = useCallback(
-    (kind: HandOff) => {
+    (kind: HandOffKind) => {
+      if (kind === "captions") return exportCaptions();
+      if (kind === "audiola") return void exportAudiola();
       if (doc === undefined || project === undefined) return;
       const name = project.meta.title || project.meta.id;
       const written =
@@ -1594,8 +1598,9 @@ export function App(): ReactElement {
         kind === "edl" ? "text/plain" : "application/xml",
       );
       setError(undefined);
+      setHandingOff(false);
     },
-    [doc, project],
+    [doc, exportAudiola, exportCaptions, project],
   );
 
   const playPause = useCallback(() => {
@@ -1676,9 +1681,7 @@ export function App(): ReactElement {
           ? undefined
           : () => void pickFiles(CAPTION_ACCEPT).then(importCaptions)
       }
-      onExportCaptions={doc === undefined ? undefined : exportCaptions}
-      onHandOff={doc === undefined ? undefined : handOff}
-      onExportAudiola={doc === undefined ? undefined : () => void exportAudiola()}
+      onHandOff={doc === undefined ? undefined : () => setHandingOff(true)}
       onExport={
         doc === undefined
           ? undefined
@@ -1924,6 +1927,16 @@ export function App(): ReactElement {
             setTemplateError(undefined);
           }}
           onClose={closeTemplates}
+        />
+      )}
+      {handingOff && project !== undefined && (
+        <HandOffDialog
+          available={{
+            captions: captionCues(project).length > 0,
+            audiola: project.timeline.tracks.some((track) => track.clips.length > 0),
+          }}
+          onChoose={handOff}
+          onClose={() => setHandingOff(false)}
         />
       )}
       {exporting && project !== undefined && (

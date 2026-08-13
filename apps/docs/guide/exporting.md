@@ -101,8 +101,15 @@ therefore drives the real thing in headless Chrome:
 ## Handing the cut to another editor
 
 Three files leave here that are not video: an **EDL**, **FCPXML**, and **Final Cut Pro 7 XML** — all
-three in the overflow menu beside the subtitles. A cut assembled in Videola can be finished in DaVinci
-Resolve, Premiere Pro or Final Cut: the assembly travels, and the grade and the effects are done there.
+three behind **File ▸ Hand off**. A cut assembled in Videola can be finished in DaVinci Resolve,
+Premiere Pro or Final Cut: the assembly travels, and the grade and the effects are done there.
+
+They are a dialogue rather than three menu lines on purpose. "Export EDL" is a line that assumes the
+reader already knows what an EDL is, and somebody who does not is left choosing between three
+XML-ish names. Each card says what the file is in a sentence, which program opens it, and what it
+does not carry — and the same dialogue holds the two exports that are a part of the project rather
+than the cut: the subtitles, and the sound for Audiola. A card is switched off with its reason where
+this project has nothing to write.
 
 None carries an effect, a keyframe or a grade, and that is not a gap to be closed later: there is no
 honest way to write a Videola blur as a Resolve one. What all three carry is where every piece of

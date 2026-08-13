@@ -297,7 +297,7 @@ a preview project holds nothing but generators, so there is no decoding and no s
 
 ## Keys
 
-The overflow menu has a sheet of them, and every row on it is a key the editor really answers —
+**Help ▸ Keyboard shortcuts** has a sheet of them, and every row on it is a key the editor really answers —
 `shortcut` in `Timeline.tsx`, `useTransportKeys` in `Transport.tsx` and `commandKey` in
 `useCommandKeys.ts` are the whole roster, and a sheet listing a key nobody handles would send somebody
 looking for a fault in their keyboard.

@@ -153,7 +153,13 @@ export class EffectPreview {
     }
   }
 
-  /** The tile as a picture. PNG, because a mask's transparency is the point and JPEG has none. */
+  /**
+   * The tile as a picture. PNG, because a mask's transparency is the point and JPEG has none.
+   *
+   * The GPU harness awaits this under a stopped frame clock, which is the one thing about it worth a
+   * check: a picture that only arrives while the page is being painted is a shelf that stays empty
+   * in a headless run and in a backgrounded tab.
+   */
   async toBlob(): Promise<Blob> {
     return await this.#canvas.convertToBlob({ type: "image/png" });
   }

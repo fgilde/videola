@@ -1,5 +1,15 @@
 # Schneiden
 
+## Wo was liegt
+
+Sechs Menüs oben: **Datei**, **Bearbeiten**, **Einfügen**, **Projekt**, **Ansicht** und **Hilfe** —
+die Namen, die jeder Editor benutzt, damit „wo ist der Import“ die Antwort hat, die man schon kennt.
+Rückgängig, Wiederholen, Exportieren und Speichern liegen auf der Leiste selbst: die braucht man
+ständig, und ein Menü wäre dafür ein Klick zu viel.
+
+Auf dem Telefon werden dieselben sechs zu einer Aufklappliste mit sechs Gruppen darin. Derselbe
+Baum, eine Ebene tiefer — sechs Titel passen nicht in 390 px, wenn jeder einen Daumen breit ist.
+
 Diese Seite beschreibt, was die Oberfläche heute kann. Was hier nicht steht, gibt es noch nicht.
 
 ![Der Editor mit einem dekodierten Bild in der Vorschau](/editor-desktop.webp)
@@ -174,7 +184,7 @@ Seiten, und ein Standbild an einer Kante ist ein Schnitt mit nichts dazwischen.
 
 ## Derselbe Schnitt in anderem Format
 
-**Format ändern** im Überlaufmenü macht aus einem Querformat-Schnitt einen hochkanten, quadratischen
+**Projekt ▸ Format ändern** macht aus einem Querformat-Schnitt einen hochkanten, quadratischen
 oder 4:5-Schnitt. Der Rahmen bekommt seine neue Größe, und jeder Clip wird im selben Schritt so
 skaliert, dass er ihn **ausfüllt** — ein Formatwechsel, der schwarze Balken an beiden Seiten
 hinterlässt, ist nicht, was damit gemeint war.

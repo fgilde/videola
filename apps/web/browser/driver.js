@@ -207,18 +207,39 @@ async function announce() {
     q(`[data-effect-id="${id}"] button`).click();
     return until("the browser to close", () => (shelf() === null ? true : null));
   }
-  // The project actions moved behind the topbar's overflow disclosure. A <summary> carries no
-  // button role, so it cannot be looked up as one -- and a person has to open it before reaching
-  // anything inside, which is exactly what this does.
-  const openMenu = () => {
-    const menu = q(".v-topbar__more");
-    if (menu !== null) menu.open = true;
-    return menu;
+  // The bar carries a menu per title -- File, Edit, Insert, Project, View, Help -- and one overflow
+  // disclosure on a phone. A <summary> carries no button role, so it cannot be looked up as one, and
+  // a person has to open it before reaching anything inside: that is what this does.
+  //
+  // Without an id it opens whatever menus there are, which is what the phone run wants and what a
+  // check that only needs "the entry is reachable" wants: an entry is under exactly one title, so
+  // opening all six and reading by name finds it wherever it lives.
+  const openMenu = (id) => {
+    const menus = id === undefined ? all(".v-topbar__more") : [q(`[data-testid="menu-${id}"]`)];
+    for (const menu of menus) if (menu !== null) menu.open = true;
+    return menus[0] ?? null;
+  };
+  const closeMenus = () => {
+    for (const menu of all(".v-topbar__more")) menu.open = false;
+    for (const group of all(".v-topbar__group")) group.open = false;
   };
   const inMenu = (text) =>
     all(".v-topbar__menu button").find((node) => node.textContent.trim() === text);
-  // A group inside the overflow menu, opened by its label. Its entries are ordinary buttons, but only
-  // once the group is open: a closed <details> keeps its children out of the layout entirely.
+  // Open, click, close. A person's click closes the menus around it because it is a real pointer
+  // event and `useDismiss` listens for one; `HTMLElement.click()` dispatches no pointerdown, so a
+  // run that only clicks would leave five menus hanging over everything it measured next.
+  const pickMenu = (text) => {
+    openMenu();
+    const entry = inMenu(text);
+    if (entry !== undefined) entry.click();
+    closeMenus();
+    // And the focus with it. Left on a menu entry, the next space bar presses that entry instead of
+    // starting playback -- which is correct of the button and looks like a transport that died.
+    document.activeElement?.blur();
+    return entry;
+  };
+  // A group inside a menu, opened by its label. Its entries are ordinary buttons, but only once the
+  // group is open: a closed <details> keeps its children out of the layout entirely.
   const openGroup = (label) => {
     openMenu();
     const group = all(".v-topbar__group").find(
@@ -226,6 +247,12 @@ async function announce() {
     );
     if (group !== undefined) group.open = true;
     return group;
+  };
+  const menuEntry = (id, prefix) => {
+    openMenu(id);
+    return all(`[data-testid="menu-${id}"] .v-topbar__menu > button`).find((node) =>
+      node.textContent.trim().startsWith(prefix),
+    );
   };
   const groupEntry = (prefix) =>
     all(".v-topbar__group[open] .v-topbar__group-items button").find((node) =>
@@ -787,7 +814,8 @@ async function announce() {
     // The menu is still open with the group open inside it. This is the defect these two groups were
     // selects for: a select in this menu could not be reached at all, because the click that opened
     // its dropdown closed the menu underneath it.
-    check("opening a group leaves the menu itself open", q(".v-topbar__more").open, true);
+    check("opening a group leaves the menu itself open",
+      q('[data-testid="menu-project"]').open, true);
     groupEntry("Hochkant 9:16").click();
     await sleep(500);
     const tall = q(".v-preview__canvas").getBoundingClientRect();
@@ -806,7 +834,7 @@ async function announce() {
     // The overflow menu is closed and the focus given up. Left open with the focus inside it, the
     // space bar later in this run presses whatever has the focus instead of starting playback --
     // which is correct of the transport and would look like a transport that stopped answering.
-    q(".v-topbar__more").open = false;
+    closeMenus();
     document.activeElement?.blur();
 
     // Put the timeline back the way the rest of the run expects to find it: no keys, no path, and
@@ -1306,29 +1334,53 @@ async function announce() {
       document.documentElement.scrollWidth <= innerWidth, true);
     // Every control on the bar, measured rather than counted: three of them, each a thumb wide.
     const barControls = [...document.querySelectorAll(".v-topbar > button, .v-topbar > details > summary")];
-    check("the bar carries the overflow toggle, undo and redo",
+    check("the bar carries the overflow toggle, undo, redo and saving",
       barControls.map((node) => node.getAttribute("aria-label") ?? node.textContent),
-      ["Weitere Aktionen", "Rückgängig", "Wiederholen"]);
+      ["Weitere Aktionen", "Rückgängig", "Wiederholen", "Speichern"]);
     checkAtLeast("each of them a thumb wide",
       Math.min(...barControls.map((node) => node.getBoundingClientRect().width)), 44);
 
-    // Reachable, not merely present: the menu opens and the actions inside it are real buttons
-    // with room to hit, all of it inside a 390 px window.
+    // Reachable, not merely present: the menu opens, and what is inside it is the same six titles a
+    // desktop shows along the bar -- one level deeper, because six titles do not fit 390 px.
     openMenu();
     const menu = q(".v-topbar__menu");
-    // Everything but the entries inside the groups: those are a level down, and a closed group has
-    // none of them on the screen. The groups themselves are checked below.
-    const rows = [...menu.querySelectorAll("button")].filter(
-      (node) => node.closest(".v-topbar__group") === null,
-    );
-    check("the menu holds every action the bar gave up",
-      rows.map((node) => node.getAttribute("aria-label") ?? node.textContent),
-      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren",
-       "Untertitel importieren", "Untertitel exportieren", "EDL exportieren",
-       "FCPXML exportieren (Resolve, Final Cut)", "Premiere-XML exportieren (Final Cut 7)",
-       "Ton als .audiola exportieren",
-       "Spur hinzufügen", "Tastenkürzel", "Über Videola", "Exportieren",
-       "Deutsch / English", "Hell", "Speichern"]);
+    check("the phone menu holds the same six titles the bar has",
+      [...menu.querySelectorAll(":scope > .v-topbar__group > summary")]
+        .map((node) => node.textContent.trim()),
+      ["Datei", "Bearbeiten", "Einfügen", "Projekt", "Ansicht", "Hilfe"]);
+    checkAtLeast("each a thumb tall",
+      Math.min(...[...menu.querySelectorAll(":scope > .v-topbar__group > summary")]
+        .map((node) => node.getBoundingClientRect().height)),
+      44);
+    check("and the open menu stays inside the window",
+      menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
+      true);
+
+    // Every action the bar gave up is under one of those titles, and under the one somebody would
+    // look in. Read with the groups open, because a closed <details> renders none of its children.
+    const openTitles = () => {
+      for (const group of all(".v-topbar__group")) group.open = true;
+    };
+    openTitles();
+    const under = (title) => {
+      const group = [...menu.querySelectorAll(":scope > .v-topbar__group")].find(
+        (node) => node.querySelector("summary").textContent.trim() === title,
+      );
+      return [...group.querySelectorAll(":scope > .v-topbar__group-items > button")]
+        .map((node) => node.getAttribute("aria-label") ?? node.textContent.trim());
+    };
+    check("the file title holds what a file title holds",
+      under("Datei"),
+      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Speichern", "Medien importieren",
+       "Untertitel importieren", "Exportieren", "Weitergeben …"]);
+    check("and the rest sit where they belong",
+      [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
+      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 5,
+       ["Tastenkürzel", "Über Videola"]]);
+    checkAtLeast("with rows a thumb can hit",
+      Math.min(...all(".v-topbar__group[open] .v-topbar__group-items button")
+        .map((node) => node.getBoundingClientRect().height)),
+      44);
     // The one entry in the menu that is a link and not a button, because it navigates: this session
     // is a browser one, so there is a desktop build to fetch and it says where from.
     const getApp = [...menu.querySelectorAll("a")].find((node) => node.textContent === "App holen");
@@ -1336,28 +1388,9 @@ async function announce() {
     check("and the offer points at the download page",
       getApp?.getAttribute("href"), "https://fgilde.github.io/videola/download");
     checkAtLeast("with room to hit it", Math.round(getApp.getBoundingClientRect().height), 44);
-    // The two questions in the menu that are answered by choosing one of several rather than by
-    // pressing: each is a group of entries folded away behind its own label.
-    check("what to put down and what shape to use are groups of their own",
-      [...menu.querySelectorAll(".v-topbar__group > summary")].map((node) => node.textContent.trim()),
-      ["Einfügen", "Format ändern"]);
-    check("and the open menu stays inside the window",
-      menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
-      true);
-    checkAtLeast("with rows a thumb can hit",
-      Math.min(...[...rows, ...menu.querySelectorAll(".v-topbar__group > summary")]
-        .map((n) => n.getBoundingClientRect().height)),
-      44);
-    // Opened on the narrow window, where the menu is at its longest: the entries are a thumb tall
-    // there too, and the whole thing still ends inside the window rather than past the bottom of it.
-    openGroup("Einfügen");
-    const entries = [...menu.querySelectorAll(".v-topbar__group[open] .v-topbar__group-items button")];
-    check("a group opens five things to put down", entries.length, 5);
-    checkAtLeast("its entries are a thumb tall as well",
-      Math.min(...entries.map((node) => node.getBoundingClientRect().height)), 44);
-    check("and the menu ends inside the window with the group open",
+    check("the menu still ends inside the window with every title open",
       menu.getBoundingClientRect().bottom <= innerHeight, true);
-    q(".v-topbar__more").open = false;
+    closeMenus();
     check("the timeline is what the editor opens on", q('[data-testid="library"]'), null);
     check(
       "the editor fits the window, and the picture and the panel get all of it",
@@ -1680,9 +1713,10 @@ async function announce() {
   async function runTemplates() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
     openMenu();
-    check("the project actions are in the overflow menu, not on the bar",
+    check("a template is reached from the menus rather than from the bar",
       inMenu("Aus Vorlage") !== undefined, true);
-    inMenu("Aus Vorlage").click();
+    closeMenus();
+    pickMenu("Aus Vorlage");
     const gallery = await until("the gallery", () => q('[data-testid="template-gallery"]'));
 
     const cards = [...gallery.querySelectorAll("[data-template-id]")];
@@ -1875,8 +1909,7 @@ async function announce() {
     // The about dialogue, which is where the version somebody reports a bug against comes from. It
     // used to be a constant in the source and was two releases behind; it is compiled in from the
     // release manifest now, so what is checked here is that the dialogue shows a real one.
-    openMenu();
-    inMenu("Über Videola").click();
+    pickMenu("Über Videola");
     const about = await until("the about dialogue", () => q('[data-testid="about"]'));
     check("it is a real modal, so escape and the focus trap are the browser's", about.open, true);
     check("and says which build this is",
@@ -1892,7 +1925,7 @@ async function announce() {
       about.getBoundingClientRect().bottom <= innerHeight &&
         about.getBoundingClientRect().right <= innerWidth,
       true);
-    labelled("Schließen").click();
+    about.querySelector(".v-about__close").click();
     await until("it to close", () => q('[data-testid="about"]') === null);
 
     // A second template on top of the first, without answering anything at all: its graphics arrive
@@ -1900,8 +1933,7 @@ async function announce() {
     // grow, the clips grow, nothing that was there moves, and one press of undo takes the lot.
     const tracksBefore = all("[data-track-id]").length;
     const clipsBefore = all("[data-clip-id]").length;
-    openMenu();
-    inMenu("Aus Vorlage").click();
+    pickMenu("Aus Vorlage");
     await until("the gallery for the insert", () => q('[data-testid="template-gallery"]'));
     card("lower-third").click();
     await until("the wizard for the insert", () => q('[data-testid="template-wizard"]'));
@@ -1933,8 +1965,7 @@ async function announce() {
     // to catch. This whole milestone is a claim about what someone sees before they choose, and the
     // only way to judge it is to look at it. Every picture is rendered by now, so this costs a
     // click.
-    openMenu();
-    inMenu("Aus Vorlage").click();
+    pickMenu("Aus Vorlage");
     await until("the gallery once more", () => q('[data-testid="template-gallery"]'));
     await until("its pictures still there", () => all(".v-template__still").length === 15, 30000);
     check("nothing was reported by the end", banner(), "");
@@ -2004,8 +2035,7 @@ async function announce() {
     check("the second import raised nothing", banner(), "");
 
     // A second video track to drop onto. tracks[0] is the lower one, so this one draws above it.
-    openMenu();
-    inMenu("Spur hinzufügen").click();
+    pickMenu("Spur hinzufügen");
     await until("the second track", () => all(".v-timeline__header").length === 2);
     check("nothing moved onto it by itself",
       [...all(".v-track")].map((row) => row.querySelectorAll("[data-clip-id]").length), [0, 2]);
@@ -2166,23 +2196,22 @@ async function announce() {
   }
 
   // A title and a countdown, put down from the menu. Only the built application can show this:
-  // the entry is a group in the overflow, the track it lands on is chosen by reading the project,
+  // the entry is under Insert, the track it lands on is chosen by reading the project,
   // and a countdown is the one generator whose picture depends on when it is asked for.
   //
   // It undoes itself, so what follows works on the project it was handed.
   async function inserted() {
     const before = all("[data-clip-id]").length;
     const lay = async (prefix) => {
-      openGroup("Einfügen");
-      groupEntry(prefix).click();
-      q(".v-topbar__more").open = false;
+      menuEntry("insert", prefix).click();
+      closeMenus();
       document.activeElement?.blur();
       await sleep(200);
     };
 
     check("the menu offers something to put down that is not a medium",
-      openGroup("Einfügen") !== undefined, true);
-    q(".v-topbar__more").open = false;
+      menuEntry("insert", "Bauchbinde") !== undefined, true);
+    closeMenus();
     await lay("Bauchbinde");
     check("a title lands on the timeline", all("[data-clip-id]").length, before + 1);
     check("on a track named for what it carries",

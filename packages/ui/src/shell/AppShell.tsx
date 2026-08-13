@@ -52,6 +52,7 @@ function Frame({
       <TopBar
         {...actions}
         compact={layout === "phone"}
+        roomy={layout === "desktop"}
         layout={preference}
         onLayout={layoutPreference === undefined ? chosen.setPreference : undefined}
       />

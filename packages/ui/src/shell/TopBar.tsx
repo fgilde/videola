@@ -16,10 +16,8 @@ export type HandOff = "edl" | "fcpxml" | "xmeml";
 
 export interface TopBarActions {
   onAbout?: () => void;
-  /** Write the cut out for another editor: an EDL, FCPXML, or Final Cut Pro 7 XML. */
-  onHandOff?: (kind: HandOff) => void;
-  /** Write the sound out as an `.audiola`, so the mix can be finished in Audiola. */
-  onExportAudiola?: () => void;
+  /** Open the dialogue that explains what each interchange file is before writing one. */
+  onHandOff?: () => void;
   onKeys?: () => void;
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
@@ -31,7 +29,6 @@ export interface TopBarActions {
   onSave?: () => void;
   onImportMedia?: () => void;
   onImportCaptions?: () => void;
-  onExportCaptions?: () => void;
   onAddTrack?: () => void;
   /**
    * Put a title, a shape or a countdown on the timeline at the playhead. The text a fresh title
@@ -49,96 +46,156 @@ export interface TopBarActions {
 export interface TopBarProps extends TopBarActions {
   /**
    * A phone. Undo and redo stay on the bar because they are the two a finger reaches for
-   * constantly; everything else joins the menu, because ten controls do not fit 390 px at
-   * 44 px each and a bar that scrolls sideways hides half of itself in its resting state.
+   * constantly; everything else joins one menu, because six menu titles do not fit 390 px.
    */
   compact?: boolean;
+  /**
+   * A desktop, where the bar has room for the wordmark and the export button beside six menu titles.
+   * A tablet has not: six titles are 450 px of German, and the bar has to fit 834 without pushing the
+   * page wider than the window -- which is what it did, and what took the panels under it with it.
+   */
+  roomy?: boolean;
   /** Which layout is in force, and somewhere to change it. Absent where a host pinned one. */
   layout?: LayoutPreference;
   onLayout?: (next: LayoutPreference) => void;
 }
 
-export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBarProps): ReactElement {
+/**
+ * The bar, and the menus a person looks in.
+ *
+ * Six titles rather than one pile. Everything used to live behind a single overflow disclosure, and
+ * a list of fifteen unrelated actions is a list nobody reads twice — "where is reframe" had no
+ * answer except "somewhere in there". The names are the ones every editor on this planet uses, so
+ * the answer to "where is import" is the answer somebody already knows.
+ *
+ * On a phone the same six become groups inside one disclosure, because six titles do not fit 390 px
+ * at a thumb's width each. Same tree, same order, one level deeper.
+ */
+export function TopBar({
+  compact = false,
+  roomy = true,
+  layout,
+  onLayout,
+  ...actions
+}: TopBarProps): ReactElement {
   const { t } = useI18n();
 
-  const project = (
-    <>
-      <Action label={t("action.new")} onClick={actions.onNew} />
-      <Action label={t("action.templates")} onClick={actions.onTemplates} />
-      <Action label={t("action.open")} onClick={actions.onOpen} />
-      <Action label={t("action.importMedia")} onClick={actions.onImportMedia} />
-      {/* Beside importing media, because both are "bring a file into this project". They live in
-          the overflow rather than on the bar for the reason everything else does: ten controls do
-          not fit a phone at 44 px each. */}
-      <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
-      <Action label={t("action.exportCaptions")} onClick={actions.onExportCaptions} />
-      {/* Beside the subtitles, because both are "write something out that is not a video". Three
-          entries rather than a group: they are three file formats and not three answers to one
-          question -- an EDL is what an old system conforms from, FCPXML is what Resolve opens, and
-          Final Cut Pro 7 XML is what Premiere imports. */}
-      <Action label={t("action.exportEdl")} onClick={() => actions.onHandOff?.("edl")} />
-      <Action label={t("action.exportFcpxml")} onClick={() => actions.onHandOff?.("fcpxml")} />
-      {/* Beside FCPXML, because the two answer the same question for different editors: Resolve opens
-          FCPXML, Premiere imports this one as a real sequence. */}
-      <Action label={t("action.exportXmeml")} onClick={() => actions.onHandOff?.("xmeml")} />
-      {/* Beside them, because it is the same kind of thing: an edit leaving for another tool. An
-          `.audiola` is opened by dropping it on the window, so there is no entry for that. */}
-      <Action label={t("action.exportAudiola")} onClick={actions.onExportAudiola} />
-      <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
-      {/* Grouped rather than five rows of their own: they are five answers to "what shall I put
-          down", and five buttons in a row read as five unrelated actions. */}
-      {actions.onInsert !== undefined && (
-        <Submenu label={t("insert.label")}>
+  const menus: readonly { id: string; label: string; items: ReactNode }[] = [
+    {
+      id: "file",
+      label: t("menu.file"),
+      items: (
+        <>
+          <Action label={t("action.new")} onClick={actions.onNew} />
+          <Action label={t("action.templates")} onClick={actions.onTemplates} />
+          <Action label={t("action.open")} onClick={actions.onOpen} />
+          <Action label={t("action.save")} onClick={actions.onSave} />
+          <Rule />
+          <Action label={t("action.importMedia")} onClick={actions.onImportMedia} />
+          <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
+          <Rule />
+          {/* The two ways out, in the order they are wanted: a finished video, and the cut for
+              somebody else to finish. What each interchange file is belongs in the dialogue rather
+              than in three menu lines that assume the reader knows what an EDL is. */}
+          <Action label={t("action.export")} onClick={actions.onExport} />
+          <Action label={t("action.handOff")} onClick={actions.onHandOff} />
+        </>
+      ),
+    },
+    {
+      id: "edit",
+      label: t("menu.edit"),
+      items: (
+        <>
+          <Action label={t("action.undo")} onClick={actions.canUndo === true ? actions.onUndo : undefined} />
+          <Action label={t("action.redo")} onClick={actions.canRedo === true ? actions.onRedo : undefined} />
+          <Rule />
+          <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
+        </>
+      ),
+    },
+    {
+      id: "insert",
+      label: t("menu.insert"),
+      items: (
+        <>
           {INSERT_KINDS.map((kind) => (
             <Action
               key={kind}
               label={t(`insert.${kind}`)}
-              onClick={() => actions.onInsert?.(kind, t("insert.newTitle"))}
+              onClick={
+                actions.onInsert === undefined
+                  ? undefined
+                  : () => actions.onInsert?.(kind, t("insert.newTitle"))
+              }
             />
           ))}
-        </Submenu>
-      )}
-      {/* Grouped for the same reason: four answers to one question, and a menu with "Hochkant 9:16"
-          three rows under "Querformat 16:9" reads as four unrelated actions. */}
-      {actions.onReframe !== undefined && (
-        <Submenu label={t("reframe.label")}>
-          {ASPECTS.map((aspect) => (
-            <Action
-              key={aspect.id}
-              label={t(`reframe.${aspect.id}`)}
-              onClick={() => actions.onReframe?.(aspect.id)}
-            />
-          ))}
-        </Submenu>
-      )}
-      {/* Last in the menu, where an "about" belongs, and above the offer to fetch a build -- which
-          is only here at all in a browser, where there is something to fetch. */}
-      <Action label={t("action.keys")} onClick={actions.onKeys} />
-      <Action label={t("about.label")} onClick={actions.onAbout} />
-      {actions.getAppHref !== undefined && (
-        <a className="v-button" href={actions.getAppHref} target="_blank" rel="noreferrer">
-          {t("action.getApp")}
-        </a>
-      )}
-    </>
-  );
-  // Three ranks in three lines: the export is something the project does, the two switches are
-  // preferences, and saving is the one action the whole bar is arranged around.
-  const output = (
-    <>
-      <Action label={t("action.export")} onClick={actions.onExport} />
-      <SettingsMenu labelled={compact} layout={layout} onLayout={onLayout} />
-      <Action label={t("action.save")} onClick={actions.onSave} primary />
-    </>
-  );
+        </>
+      ),
+    },
+    {
+      id: "project",
+      label: t("menu.project"),
+      items: (
+        <>
+          {/* Grouped rather than four rows of their own: they are four answers to one question, and
+              "Hochkant 9:16" three rows under "Querformat 16:9" reads as four unrelated actions. */}
+          <Submenu label={t("reframe.label")}>
+            {ASPECTS.map((aspect) => (
+              <Action
+                key={aspect.id}
+                label={t(`reframe.${aspect.id}`)}
+                onClick={
+                  actions.onReframe === undefined ? undefined : () => actions.onReframe?.(aspect.id)
+                }
+              />
+            ))}
+          </Submenu>
+        </>
+      ),
+    },
+    {
+      id: "view",
+      label: t("menu.view"),
+      items: <SettingsMenu labelled layout={layout} onLayout={onLayout} />,
+    },
+    {
+      id: "help",
+      label: t("menu.help"),
+      items: (
+        <>
+          <Action label={t("action.keys")} onClick={actions.onKeys} />
+          <Action label={t("about.label")} onClick={actions.onAbout} />
+          {actions.getAppHref !== undefined && (
+            <a className="v-button" href={actions.getAppHref} target="_blank" rel="noreferrer">
+              {t("action.getApp")}
+            </a>
+          )}
+        </>
+      ),
+    },
+  ];
 
   return (
     <header className="v-topbar">
-      {!compact && <img className="v-topbar__brand" src={wordmark} alt={t("app.title")} />}
-      <Overflow label={t("action.more")}>
-        {project}
-        {compact && output}
-      </Overflow>
+      {roomy && <img className="v-topbar__brand" src={wordmark} alt={t("app.title")} />}
+      {compact ? (
+        <Disclosure label={t("action.more")} icon>
+          {menus.map((menu) => (
+            <Submenu key={menu.id} label={menu.label}>
+              {menu.items}
+            </Submenu>
+          ))}
+        </Disclosure>
+      ) : (
+        <nav className="v-topbar__menus" aria-label={t("menu.label")}>
+          {menus.map((menu) => (
+            <Disclosure key={menu.id} label={menu.label} testId={`menu-${menu.id}`}>
+              {menu.items}
+            </Disclosure>
+          ))}
+        </nav>
+      )}
       <span className="v-topbar__spacer" />
       <IconButton
         icon="undo"
@@ -152,8 +209,11 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
         onClick={actions.onRedo}
         disabled={actions.canRedo !== true}
       />
-      {!compact && <span className="v-topbar__rule" aria-hidden="true" />}
-      {!compact && output}
+      <span className="v-topbar__rule" aria-hidden="true" />
+      {/* The two the whole bar is arranged around, on it rather than in a menu: exporting is what
+          the work is for, and saving is the one action nobody should have to look for. */}
+      {roomy && <Action label={t("action.export")} onClick={actions.onExport} />}
+      <Action label={t("action.save")} onClick={actions.onSave} primary />
     </header>
   );
 }
@@ -179,13 +239,19 @@ function Action({
   );
 }
 
+// A line between two ranks of a menu. `aria-hidden`, because a separator announced as one is noise
+// in a list a screen reader is already reading top to bottom.
+function Rule(): ReactElement {
+  return <span className="v-topbar__sep" aria-hidden="true" />;
+}
+
 /**
- * A group of entries inside the overflow menu, folded away behind its own label.
+ * A group of entries inside a menu, folded away behind its own label.
  *
- * These two were selects, and a select inside this menu could not be used at all: the menu closes on
- * any click within it, so the click that opened the dropdown closed the menu under it. Hence the
- * stopped propagation here -- opening a group is not choosing an entry -- while the entries inside
- * still bubble and close the whole thing.
+ * These were selects, and a select inside a menu could not be used at all: the menu closes on any
+ * click within it, so the click that opened the dropdown closed the menu under it. Hence the stopped
+ * propagation here -- opening a group is not choosing an entry -- while the entries inside still
+ * bubble and close the whole thing.
  *
  * Nested <details> rather than a hover-out flyout: the same disclosure one level down, so the open
  * state, the keyboard and the accessible name stay the browser's, and it works with a finger, where
@@ -207,7 +273,17 @@ function Submenu({ label, children }: { label: string; children: ReactNode }): R
 // its own accessible name. A button plus useState plus aria-expanded would be a reimplementation
 // of all three. Closing on a click inside is the one thing it does not do by itself, because the
 // element cannot know that an item was chosen rather than a label read.
-function Overflow({ label, children }: { label: string; children: ReactNode }): ReactElement {
+function Disclosure({
+  label,
+  children,
+  icon = false,
+  testId,
+}: {
+  label: string;
+  children: ReactNode;
+  icon?: boolean;
+  testId?: string;
+}): ReactElement {
   const ref = useRef<HTMLDetailsElement>(null);
   const close = (): void => {
     if (ref.current !== null) ref.current.open = false;
@@ -215,9 +291,12 @@ function Overflow({ label, children }: { label: string; children: ReactNode }): 
   useDismiss(ref, close);
 
   return (
-    <details className="v-topbar__more" ref={ref}>
-      <summary className="v-button v-button--icon" aria-label={label}>
-        <Icon name="menu" />
+    <details className="v-topbar__more" ref={ref} data-testid={testId}>
+      <summary
+        className={icon ? "v-button v-button--icon" : "v-button v-topbar__title"}
+        aria-label={icon ? label : undefined}
+      >
+        {icon ? <Icon name="menu" /> : label}
       </summary>
       <div className="v-topbar__menu" onClick={close}>
         {children}

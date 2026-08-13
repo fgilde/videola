@@ -103,9 +103,16 @@ Ein grüner Unit-Test beweist nichts über eine Videodatei.
 ## Den Schnitt an einen anderen Editor geben
 
 Drei Dateien verlassen Videola, die kein Video sind: eine **EDL**, **FCPXML** und **Final Cut Pro 7
-XML** — alle drei im Überlaufmenü neben den Untertiteln. Ein hier gebauter Schnitt kann in DaVinci
-Resolve, Premiere Pro oder Final Cut fertiggestellt werden: die Montage reist, die Farbe und die
-Effekte entstehen dort.
+XML** — alle drei unter **Datei ▸ Weitergeben**. Ein hier gebauter Schnitt kann in DaVinci Resolve,
+Premiere Pro oder Final Cut fertiggestellt werden: die Montage reist, die Farbe und die Effekte
+entstehen dort.
+
+Das ist mit Absicht ein Dialog und keine drei Menüzeilen. „EDL exportieren“ setzt voraus, dass man
+weiß, was eine EDL ist, und wer das nicht weiß, wählt zwischen drei XML-ähnlichen Namen. Jede Karte
+sagt in einem Satz, was die Datei ist, welches Programm sie öffnet und was sie nicht mitnimmt — und
+derselbe Dialog trägt die zwei Exporte, die zum Projekt gehören statt zum Schnitt: die Untertitel und
+den Ton für Audiola. Wo dieses Projekt nichts zu schreiben hat, ist die Karte abgeschaltet und sagt
+warum.
 
 Keine der drei trägt einen Effekt, einen Keyframe oder eine Farbkorrektur, und das ist keine Lücke,
 die später geschlossen wird: es gibt keinen ehrlichen Weg, eine Videola-Weichzeichnung als eine von

@@ -19,6 +19,43 @@
   z-index: 10;
 }
 
+/* The row of menu titles. A nav rather than a toolbar role: these are six disclosures, and a
+   toolbar promises arrow-key traversal between its controls that <details> does not give. */
+.v-topbar__menus {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* A title reads as a word, not as a button, until it is under the pointer or open -- which is what
+   a menu bar looks like everywhere it exists. */
+.v-topbar__title {
+  background: none;
+  border-color: transparent;
+  font-weight: 500;
+}
+
+.v-topbar__title:hover:not(:disabled) {
+  background: var(--v-surface-hover);
+  border-color: transparent;
+}
+
+.v-topbar__more[open] > .v-topbar__title {
+  background: var(--v-surface-hover);
+  border-color: var(--v-border);
+}
+
+/* Each menu opens under its own title rather than at the left edge of the bar. */
+.v-topbar__menus .v-topbar__menu {
+  left: 0;
+}
+
+.v-topbar__sep {
+  height: 1px;
+  margin: var(--v-space-1) 0;
+  background: var(--v-border);
+}
+
 .v-topbar__more > summary {
   /* A summary is a list-item box by default, and the marker sits inside the button. */
   display: flex;
@@ -32,12 +69,17 @@
   display: none;
 }
 
-/* Out of the bar's flow, or the widest item in the menu would set the width of the bar itself. */
+/* Out of the bar's flow, or the widest item in the menu would set the width of the bar itself.
+   Positioned against the disclosure it belongs to, which is why that one is relative. */
+.v-topbar__more {
+  position: relative;
+}
+
 .v-topbar__menu {
   position: absolute;
   z-index: 20;
   top: calc(100% + var(--v-space-1));
-  left: var(--v-space-3);
+  left: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;

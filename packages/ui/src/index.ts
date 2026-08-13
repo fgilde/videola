@@ -26,6 +26,7 @@ export * from "./timeline/MarkerList";
 export * from "./timeline/geometry";
 export * from "./source/SourceBar";
 export * from "./export/ExportDialog";
+export * from "./export/HandOffDialog";
 export * from "./templates/TemplateGallery";
 export * from "./templates/TemplateWizard";
 export * from "./templates/outline";

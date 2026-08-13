@@ -326,7 +326,7 @@ also nichts zu dekodieren und nichts aus dem Speicher zu lesen.
 
 ## Tasten
 
-Im Überlaufmenü liegt eine Übersicht, und jede Zeile darauf ist eine Taste, die der Editor wirklich
+Unter **Hilfe ▸ Tastenkürzel** liegt eine Übersicht, und jede Zeile darauf ist eine Taste, die der Editor wirklich
 beantwortet — `shortcut` in `Timeline.tsx`, `useTransportKeys` in `Transport.tsx` und `commandKey` in
 `useCommandKeys.ts` sind die ganze Liste. Eine Übersicht, die eine Taste nennt, die niemand behandelt, schickt jemanden auf die Suche
 nach einem Fehler in seiner Tastatur.

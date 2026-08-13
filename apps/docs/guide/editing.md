@@ -1,5 +1,15 @@
 # Editing
 
+## Where things are
+
+Six menus along the top: **File**, **Edit**, **Insert**, **Project**, **View** and **Help** — the
+names every editor uses, so "where is import" has the answer somebody already knows. Undo, redo,
+export and save sit on the bar itself, because those are reached for constantly and a menu is one
+click too many for them.
+
+On a phone the same six become one disclosure with six groups inside it. Same tree, one level
+deeper, because six titles do not fit 390 px at a thumb's width each.
+
 This page describes what the editing surface does today. Anything not listed here does not exist
 yet.
 
@@ -166,7 +176,7 @@ freeze at an edge is a cut with nothing between its two halves.
 
 ## The same edit in another shape
 
-**Change shape** in the overflow menu turns a widescreen cut into a portrait, square or 4:5 one. The
+**Project ▸ Change shape** turns a widescreen cut into a portrait, square or 4:5 one. The
 frame takes its new size and every clip is scaled to **cover** it in the same step, because a reframe
 that left black bars down both sides is not what anybody meant by one.
 

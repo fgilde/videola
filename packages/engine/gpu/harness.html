@@ -2593,6 +2593,24 @@ function playbackOver(canvas, source, times) {
 }
 
 async function playbackChecks() {
+  // The one thing a tile has to do besides being drawn: become a picture. It used to come straight
+  // off the WebGL canvas, and where the frame clock is stopped -- this harness, a headless run, a
+  // tab in the background -- that request waits for a commit that never comes. The shelf sat empty
+  // with nothing in the console, which is the worst shape a failure can take.
+  //
+  // The await is the check. If `toBlob` hangs, this whole harness times out rather than reporting,
+  // and the size is what says a picture came back rather than an empty file.
+  await (async () => {
+    const preview = new R.EffectPreview(TILE, TILE);
+    tile(preview, R.effect("brightness"), R.referencePicture(TILE, TILE));
+    const written = await preview.toBlob();
+    test("a tile becomes a picture even with the frame clock stopped", () => {
+      check("it is a PNG", written.type, "image/png");
+      check("with bytes in it", written.size > 200, true);
+    });
+    preview.dispose();
+  })();
+
   test("a late frame holds the picture the clip already had", () => {
     const { compositor, scene } = rig(4, 4, "#ff0000", [{}]);
     const blue = solid([0, 0, 255, 255]);
