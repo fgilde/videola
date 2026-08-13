@@ -1,6 +1,6 @@
 # Vorlagen
 
-**Gebaut.** Eine Galerie mit dreizehn Vorlagen in fünf Kategorien, jede Karte ein Bild, das aus der
+**Gebaut.** Eine Galerie mit fünfzehn Vorlagen in fünf Kategorien, jede Karte ein Bild, das aus der
 Vorlage selbst gerendert wurde; ein Assistent, der zeigt, was er baut, während man ihn ausfüllt; und
 eine `.videolat`-Datei, die man weitergeben kann. Was am Ende herauskommt, ist ein gewöhnliches
 Projekt: derselbe Editor, dieselben Commands, derselbe Undo-Stapel. Es gibt keinen Vorlagen-Modus,
@@ -37,6 +37,8 @@ Typografie, Farbe und Bewegung — und genau daran erkennt man, ob sie etwas tau
 | Vorher / Nachher | Produkte | eine Kante wandert über das Bild, 6 s | eine Maske, deren *Position* gekeyframt ist: beide Bilder sind die ganze Zeit da, und die Kante dazwischen ist die Geschichte |
 | Gespräch | Titel und Abspann | zwei Einstellungen, ein harter Schnitt, Name und Funktion, 8 s | das Einfachste hier und das, was die meisten Schnitte wirklich sind: gar kein Übergang, und eine Leiste, die einmal kommt und geht |
 | Vorlauf | Auftakt | drei, zwei, eins, dann das Material, 3,4 s | der `countdown`-Generator: eine Zahl, die der Renderer selbst herunterzählt, statt drei Textclips, die jemand in Schritt halten muss |
+| Drei Karten | Titel und Abspann | drei Zeilen nacheinander, ganz ohne Aufnahme, 6,7 s | eine Vorlage, die nichts Importiertes braucht: drei Karten auf einer Spur, genau um ihre Überblendung überlappt, über einer Fläche, die bleibt |
+| Aufhänger hochkant | Hochkant | Aufhänger, Scheibe, Handlungsaufruf, 6 s | der `shape`-Generator auf halbe Bildgröße skaliert, mit Schrift darum statt darauf — die ganze Karte sind Generatoren |
 
 Zusammen benutzen sie **jeden Übergang, den der Renderer hat**. Das ist ein Test und kein Zufall:
 eine Galerie lohnt sich nur, wenn die Karten nicht dieselbe Karte sind.

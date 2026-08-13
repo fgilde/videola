@@ -141,7 +141,7 @@ features:
   Datei, die Premiere Pro als echte Sequenz importiert. Die Montage reist; die Farbe entsteht dort.
 - **Anderes Format in einem Druck** — hochkant, quadratisch oder 4:5, jeder Clip im selben
   Undo-Schritt auf den neuen Rahmen skaliert.
-- **Vorlagen** — dreizehn in fünf Kategorien, jede Karte ein gerendertes Bild statt eines gemalten
+- **Vorlagen** — fünfzehn in fünf Kategorien, jede Karte ein gerendertes Bild statt eines gemalten
   Versprechens. Jeder Platzhalter ist optional, eine Vorlage funktioniert also, bevor eine einzige
   Datei importiert ist, und kommt dann als ihre Grafik zurück; und der letzte Schritt des Assistenten
   kann sie dem offenen Projekt als eigene Spuren hinzufügen — in einem Rückgängig.

@@ -138,7 +138,7 @@ features:
   file Premiere Pro imports as a real sequence. The assembly travels; the grade is done there.
 - **Another shape in one press** — portrait, square or 4:5, with every clip scaled to cover the new
   frame in the same undo step.
-- **Templates** — thirteen of them across five categories, each card a rendered picture rather than a
+- **Templates** — fifteen of them across five categories, each card a rendered picture rather than a
   painted promise. Every placeholder is optional, so a template works before a single file has been
   imported and comes back as its graphics; and the wizard's last step can add it to the project already
   open, as tracks of its own, in one press of undo.

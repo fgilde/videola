@@ -1,6 +1,6 @@
 # Templates
 
-**Built.** A gallery with thirteen templates in five categories, each card a picture rendered from the
+**Built.** A gallery with fifteen templates in five categories, each card a picture rendered from the
 template itself; a wizard that shows what it is building while you fill it in; and a `.videolat` file
 you can hand to someone else. What comes out at the end is an ordinary project: the same editor, the
 same commands, the same undo stack. There is no template mode to leave.
@@ -36,6 +36,8 @@ typography, colour and movement — and that is exactly what tells you whether i
 | Before and After | Products | an edge travels across the frame, 6 s | a mask whose *position* is keyframed, so both pictures are on screen the whole time and the edge between them is the story |
 | Interview | Titles and credits | two angles, one hard cut, a name and a role, 8 s | the plainest thing here and the one most edits actually are: no transition at all, and a plate that arrives once and leaves |
 | Countdown | Opening | three, two, one, then the footage, 3.4 s | the `countdown` generator: one number the renderer counts down itself, rather than three text clips somebody has to keep in step |
+| Three cards | Titles and credits | three lines one after another, no footage at all, 6.7 s | a template that needs nothing imported: three cards on one track, overlapped by exactly their dissolve, over a field that stays |
+| Upright hook | Upright | a hook, a disc, a call to action, 6 s | the `shape` generator scaled to half the frame, with type around it rather than on it — the whole card is generators |
 
 Between them they use **every transition the renderer implements**. That is a test, not a
 coincidence: a gallery is only worth having if the cards are not the same card.

@@ -37,6 +37,8 @@ pub fn templates() -> Vec<Template> {
         countdown_open(),
         before_after(),
         interview(),
+        title_cards(),
+        social_hook(),
     ]
 }
 
@@ -1430,6 +1432,283 @@ fn interview() -> Template {
 const PLACEHOLDER: &str = "med_awaiting_a_slot_answer";
 
 #[allow(clippy::too_many_arguments)]
+/// Three cards of words in a row, and nothing else. What it shows: a gradient that stays, and three
+/// lines that arrive one after another -- for a chapter break, three points, or the front of a talk.
+/// The one thing this set had no answer for at all: every other entry wants footage to be worth
+/// anything, and a title sequence does not have any.
+fn title_cards() -> Template {
+    let lane = {
+        let mut lane = video_track("trk_field", "V1");
+        let mut field = gradient_clip("clp_field", 0.0, 6.7, "#141a2c", "#070a12", 200.0);
+        field.effects.push(vignette("eff_vignette", 0.4, 0.85));
+        lane.clips.push(field);
+        lane
+    };
+
+    // One track and three clips rather than three tracks: they follow one another, and a card
+    // overlapping the next would be two lines on the screen at once.
+    let mut cards = text_track("trk_cards", "T1");
+    for (index, (id, words, at)) in [
+        ("clp_one", "ERSTENS", 0.2),
+        ("clp_two", "ZWEITENS", 2.2),
+        ("clp_three", "DRITTENS", 4.2),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut card = text_clip(
+            id,
+            at,
+            2.3,
+            words,
+            &[
+                ("fontSize", json!(0.11)),
+                ("fontWeight", json!(800)),
+                ("letterSpacing", json!(0.04)),
+                ("y", json!(0.46)),
+                ("maxWidth", json!(0.8)),
+                ("animateIn", json!("slideUp")),
+                ("animateInSeconds", json!(0.45)),
+                ("animateOut", json!("fade")),
+                ("animateOutSeconds", json!(0.35)),
+            ],
+        );
+        // The first card arrives on its own move; the two after it land over a field already there,
+        // so they dissolve out of their predecessor instead.
+        if index > 0 {
+            card.transition_in = Some(crossfade(0.3));
+        }
+        cards.clips.push(card);
+    }
+
+    let mut counter = text_track("trk_step", "T2");
+    counter.clips.push(text_clip(
+        "clp_step",
+        0.2,
+        6.3,
+        "Kapitel",
+        &[
+            ("fontSize", json!(0.032)),
+            ("fontWeight", json!(600)),
+            ("letterSpacing", json!(0.34)),
+            ("y", json!(0.16)),
+            ("color", json!("#8fa2c8")),
+            ("animateIn", json!("fade")),
+        ],
+    ));
+
+    let slots = vec![
+        text_slot(
+            "one",
+            Localized::new("Erste Karte", "First card"),
+            Localized::new(
+                "Das erste der drei Worte. Grosse Schrift, mittig.",
+                "The first of the three lines. Large type, centred.",
+            ),
+            vec![generator_text("clp_one"), SlotBinding::ProjectTitle],
+        ),
+        text_slot(
+            "two",
+            Localized::new("Zweite Karte", "Second card"),
+            Localized::new("Das zweite Wort.", "The second line."),
+            vec![generator_text("clp_two")],
+        ),
+        text_slot(
+            "three",
+            Localized::new("Dritte Karte", "Third card"),
+            Localized::new("Das dritte Wort.", "The third line."),
+            vec![generator_text("clp_three")],
+        ),
+        text_slot(
+            "eyebrow",
+            Localized::new("Zeile darueber", "Line above"),
+            Localized::new(
+                "Klein und gesperrt, ueber jeder Karte -- sie bleibt stehen.",
+                "Small and tracked, above every card -- it stays put.",
+            ),
+            vec![generator_text("clp_step")],
+        ),
+        color_slot_named(
+            "field",
+            Localized::new("Farbe des Hintergrunds", "Background colour"),
+            Localized::new(
+                "Faerbt die Flaeche, ueber der die Karten laufen.",
+                "Colours the field the cards run over.",
+            ),
+            vec![generator_color("clp_field"), SlotBinding::Background],
+        ),
+    ];
+
+    template(
+        "title-cards",
+        Localized::new("Drei Karten", "Three cards"),
+        Localized::new(
+            "Drei Zeilen nacheinander ueber einer Flaeche, ohne eine einzige Aufnahme. Fuer einen \
+             Kapitelwechsel, drei Punkte, oder den Anfang eines Vortrags.",
+            "Three lines one after another over a colour field, with no footage at all. For a \
+             chapter break, three points, or the opening of a talk.",
+        ),
+        TITLES,
+        vec!["titel", "titles", "kapitel", "chapter"],
+        vec![LANDSCAPE, PORTRAIT, SQUARE],
+        1.0,
+        slots,
+        project_with(LANDSCAPE, "#070a12", vec![lane, cards, counter]),
+    )
+}
+
+/// Upright, loud, and made of nothing but generators: the card that goes out on its own as a story or
+/// a reel. What it shows: a gradient, a disc behind the middle word so it reads over anything, a hook
+/// at the top and a call to action along the bottom.
+fn social_hook() -> Template {
+    let lane = {
+        let mut lane = video_track("trk_field", "V1");
+        lane.clips.push(gradient_clip(
+            "clp_field",
+            0.0,
+            6.0,
+            "#2a1140",
+            "#0a0413",
+            145.0,
+        ));
+        lane
+    };
+
+    let mut disc = overlay_track("trk_disc", "O1");
+    let mut badge = generator_clip(
+        "clp_disc",
+        0.4,
+        5.4,
+        Generator::Shape {
+            shape: "circle".into(),
+            color: "#ff3d7f".into(),
+        },
+    );
+    // Half the frame, in the middle. A disc drawn at full size would be the whole picture, and the
+    // two lines of type would be sitting on it rather than around it.
+    badge.transform.scale_x = 0.52;
+    badge.transform.scale_y = 0.52;
+    // No transition on it: it is the first clip of its track, so there is nothing to transition from,
+    // and a shape generator carries no move of its own. What arrives is the type on top of it.
+    disc.clips.push(badge);
+
+    let mut words = text_track("trk_words", "T1");
+    words.clips.push(text_clip(
+        "clp_hook",
+        0.2,
+        5.6,
+        "DAS MUSST DU SEHEN",
+        &[
+            ("fontSize", json!(0.075)),
+            ("fontWeight", json!(800)),
+            ("letterSpacing", json!(0.02)),
+            ("y", json!(0.18)),
+            ("maxWidth", json!(0.86)),
+            ("animateIn", json!("slideDown")),
+            ("animateInSeconds", json!(0.4)),
+        ],
+    ));
+
+    let mut middle = text_track("trk_middle", "T2");
+    middle.clips.push(text_clip(
+        "clp_middle",
+        0.9,
+        4.9,
+        "3 Tipps",
+        &[
+            ("fontSize", json!(0.09)),
+            ("fontWeight", json!(800)),
+            ("y", json!(0.5)),
+            ("maxWidth", json!(0.42)),
+            ("animateIn", json!("pop")),
+            ("animateInSeconds", json!(0.35)),
+        ],
+    ));
+
+    let mut call = text_track("trk_call", "T3");
+    call.clips.push(text_clip(
+        "clp_call",
+        1.6,
+        4.2,
+        "Folgen fuer mehr",
+        &[
+            ("fontSize", json!(0.04)),
+            ("fontWeight", json!(700)),
+            ("letterSpacing", json!(0.22)),
+            ("y", json!(0.84)),
+            ("color", json!("#f4d9ff")),
+            ("animateIn", json!("slideUp")),
+            ("animateInSeconds", json!(0.4)),
+            ("animateOut", json!("fade")),
+        ],
+    ));
+
+    let slots = vec![
+        text_slot(
+            "hook",
+            Localized::new("Aufhaenger", "Hook"),
+            Localized::new(
+                "Die grosse Zeile oben. Kurz halten -- sie wird laut gesetzt.",
+                "The big line at the top. Keep it short -- it is set loud.",
+            ),
+            vec![generator_text("clp_hook"), SlotBinding::ProjectTitle],
+        ),
+        text_slot(
+            "middle",
+            Localized::new("Wort auf der Scheibe", "Word on the disc"),
+            Localized::new(
+                "Zwei oder drei Worte, mehr passt nicht darauf.",
+                "Two or three words; more will not sit on it.",
+            ),
+            vec![generator_text("clp_middle")],
+        ),
+        text_slot(
+            "call",
+            Localized::new("Handlungsaufruf", "Call to action"),
+            Localized::new(
+                "Die gesperrte Zeile unten.",
+                "The tracked line along the bottom.",
+            ),
+            vec![generator_text("clp_call")],
+        ),
+        color_slot_named(
+            "accent",
+            Localized::new("Farbe der Scheibe", "Disc colour"),
+            Localized::new(
+                "Faerbt den Kreis hinter dem Wort.",
+                "Colours the disc behind the word.",
+            ),
+            vec![generator_color("clp_disc")],
+        ),
+        color_slot_named(
+            "field",
+            Localized::new("Farbe des Hintergrunds", "Background colour"),
+            Localized::new(
+                "Faerbt den Verlauf dahinter.",
+                "Colours the gradient behind everything.",
+            ),
+            vec![generator_color("clp_field"), SlotBinding::Background],
+        ),
+    ];
+
+    template(
+        "social-hook",
+        Localized::new("Aufhaenger hochkant", "Upright hook"),
+        Localized::new(
+            "Hochkant und ohne eine einzige Aufnahme: Verlauf, Scheibe, drei Zeilen. Die Karte, \
+             die als Story oder Reel allein hinausgeht.",
+            "Upright and with no footage at all: a gradient, a disc, three lines. The card that \
+             goes out on its own as a story or a reel.",
+        ),
+        SOCIAL,
+        vec!["social", "reel", "story", "hochkant"],
+        vec![PORTRAIT, SQUARE, LANDSCAPE],
+        1.6,
+        slots,
+        project_with(PORTRAIT, "#0a0413", vec![lane, disc, words, middle, call]),
+    )
+}
+
 fn template(
     id: &str,
     name: Localized,

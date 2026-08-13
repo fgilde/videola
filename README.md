@@ -99,7 +99,7 @@ placement scaled by the axis it is measured on, so a lower third stays one.
 **Templates.** `.videolat` is the same container as `.videola` with one extra entry, so a template
 *is* a project with questions attached. Pick one from the gallery, answer the wizard, and the result
 is an ordinary editable project — or add it to the project already open, as tracks of its own, in one
-press of undo. Thirteen ship across five categories, none carrying footage: each is anchored on a
+press of undo. Fifteen ship across five categories, none carrying footage: each is anchored on a
 generator, and the gallery card is baked through the same code path a real answer takes rather than
 drawn. Every placeholder is optional, so a template works before a single file has been imported and
 comes back as its graphics.

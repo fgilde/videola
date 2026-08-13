@@ -1686,7 +1686,7 @@ async function announce() {
     const gallery = await until("the gallery", () => q('[data-testid="template-gallery"]'));
 
     const cards = [...gallery.querySelectorAll("[data-template-id]")];
-    check("the gallery shows every template that ships", cards.length, 13);
+    check("the gallery shows every template that ships", cards.length, 15);
     check(
       "and each one under its own name",
       cards.map((entry) => entry.querySelector(".v-template__name").textContent),
@@ -1712,7 +1712,7 @@ async function announce() {
     // WASM bake, the generators and WebGL all working, which is exactly the claim a card makes.
     await until(
       "every card to have its picture",
-      () => all(".v-template__still").length === 13,
+      () => all(".v-template__still").length === 15,
       120000,
     );
     const stills = all(".v-template__still");
@@ -1741,7 +1741,7 @@ async function announce() {
       ["lower-third", "end-card", "quote-card", "interview"]);
     chip("all").click();
     await sleep(100);
-    check("and going back brings the rest with it", all("[data-template-id]").length, 13);
+    check("and going back brings the rest with it", all("[data-template-id]").length, 15);
 
     check("an untouched project is not worth saving as a template",
       labelled("Projekt als Vorlage speichern"), undefined);
@@ -1934,7 +1934,7 @@ async function announce() {
     openMenu();
     inMenu("Aus Vorlage").click();
     await until("the gallery once more", () => q('[data-testid="template-gallery"]'));
-    await until("its pictures still there", () => all(".v-template__still").length === 13, 30000);
+    await until("its pictures still there", () => all(".v-template__still").length === 15, 30000);
     check("nothing was reported by the end", banner(), "");
   }
 
