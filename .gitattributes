@@ -1,1 +1,10 @@
 packages/core/src/generated/** text eol=lf
+
+# A shell script with CRLF endings fails on Linux before it runs a line: the kernel reads the shebang
+# up to the carriage return and reports `/usr/bin/env bash^M: bad interpreter`. These two are fetched
+# with curl and run on a Proxmox host, so the ending is not a matter of taste.
+*.sh text eol=lf
+# Same reason one step removed: Docker reads the Dockerfile and compose files, and a stray carriage
+# return ends up inside an environment value rather than at the end of a line.
+docker/Dockerfile text eol=lf
+deploy/**/*.yml text eol=lf

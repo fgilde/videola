@@ -23,6 +23,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const read = (path: string): string => readFileSync(join(root, path), "utf8");
 
+// Spelled by code point so the check itself cannot be broken by an editor doing what it is told.
+const CARRIAGE_RETURN = String.fromCharCode(13);
+
 const DOCKERFILE = read("docker/Dockerfile");
 const COMPOSE = read("deploy/umbrel/videola/docker-compose.yml");
 const MANIFEST = read("deploy/umbrel/videola/umbrel-app.yml");
@@ -89,6 +92,23 @@ describe("what every deployment agrees on", () => {
     const bundle = read("deploy/bundle.mjs");
     expect(bundle).toContain("videola_core_bg.wasm");
     expect(bundle).toContain('["apps/web/dist", "web"]');
+  });
+
+  // A shell script with CRLF endings fails on Linux before it runs a line: the kernel reads the shebang
+  // up to the carriage return and reports `bad interpreter`. Both of these are fetched with curl and run
+  // on a Proxmox host, so this is checked on the bytes rather than trusted to a text editor.
+  it("keeps every script and compose file free of carriage returns", () => {
+    for (const path of [
+      "deploy/proxmox/videola.sh",
+      "deploy/proxmox/install.sh",
+      "deploy/umbrel/videola/docker-compose.yml",
+      "deploy/umbrel/videola/umbrel-app.yml",
+      "docker/Dockerfile",
+    ]) {
+      expect(read(path).includes(CARRIAGE_RETURN), path).toBe(false);
+    }
+    // And the rule that keeps it that way, so a checkout on Windows cannot reintroduce it.
+    expect(read(".gitattributes")).toContain("*.sh text eol=lf");
   });
 
   // Both scripts stop at the first failure and treat an unset variable as one. A helper script that
