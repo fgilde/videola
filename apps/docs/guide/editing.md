@@ -823,9 +823,37 @@ a second title dropped at the playhead of the track the first one is on would de
 track has to be made, both commands go under one coalesce key — one press of undo takes the whole
 insert back, and a project with an empty track nobody asked for is never a state to land on.
 
-A title starts with placeholder words and the inspector's text field changes them. Its **style** is
-written when the clip is added and no command edits it afterwards, which is a real limit: to restyle a
-title, insert the shape you wanted.
+A title starts with placeholder words, and the inspector's **Text** panel changes everything about
+it: the words, the colour, the weight, the alignment, the type size, the text width and where it sits
+in the frame.
+
+### How a title arrives and leaves
+
+Under the same panel, **Movement**: an arrival, a departure and a continuous beat.
+
+| Move | What it does |
+|---|---|
+| Fade | in or out of nothing |
+| From below | rises the last few percent of the frame's height while fading in |
+| From above | the same, downwards |
+| Grow | opens from 85 % to full size |
+| Pulse | a continuous ±4 % breath, at a beat you set |
+
+The arrival runs at the head of the clip and the departure at its tail, so **the length of the move is
+a number and the placement is the clip**: drag the clip longer and the middle gets longer, not the
+movement. The seconds field appears only once a move is chosen, because a duration for an animation
+that does not happen is a question about nothing.
+
+These are presets, not keyframes, and deliberately so. A keyframe is resolved in the Rust core, and a
+second interpolation living next to it in the renderer would be exactly the divergence the core exists
+to prevent — so what moves here is the quad the glyphs are rasterised onto, evaluated in the one place
+the preview and the export both go through. A title that is *also* keyframed animates and follows its
+preset: the preset is applied on top of whatever the core resolved.
+
+The renderer draws five moves and one loop, and nothing else. A style naming anything outside that
+list falls back to standing still rather than reaching the canvas — which looks exactly like a title
+with no movement at all, so a test walks every shipped template and refuses a move the renderer does
+not implement, naming the clip and the word.
 
 The countdown is the one generator whose picture depends on when it is asked for. It is painted once
 per whole second of the clip's own material — so a trimmed head skips the front of the count and a

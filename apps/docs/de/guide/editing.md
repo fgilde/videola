@@ -881,9 +881,38 @@ angelegt werden, gehen beide Befehle unter einem Coalesce-Key: ein Druck auf Rü
 ganze Einfügen zurück, und ein Projekt mit einer leeren Spur, die niemand wollte, ist kein Zustand,
 in dem man landen kann.
 
-Ein Titel beginnt mit Platzhalterworten, das Textfeld im Inspektor ändert sie. Sein **Aussehen** wird
-beim Anlegen geschrieben, und kein Befehl ändert es danach — eine echte Grenze: um einen Titel
-umzustylen, legt man die Form hin, die man wollte.
+Der Text-Bereich der Eigenschaften ändert alles an einem Titel: die Worte, die Farbe, die
+Schriftstärke, die Ausrichtung, die Schriftgröße, die Textbreite und die Höhe im Bild.
+
+### Wie ein Titel kommt und geht
+
+Im selben Bereich steht **Bewegung**: ein Auftritt, ein Abgang und eine Dauerbewegung.
+
+| Bewegung | Was sie tut |
+|---|---|
+| Einblenden | aus dem Nichts, und wieder hinein |
+| Von unten | steigt die letzten Prozent der Bildhöhe auf und blendet dabei ein |
+| Von oben | dasselbe, abwärts |
+| Aufziehen | öffnet von 85 % auf volle Größe |
+| Pulsieren | ein dauerndes Atmen um ±4 %, im Takt, den Sie setzen |
+
+Der Auftritt läuft am Anfang des Clips, der Abgang an seinem Ende. **Die Länge der Bewegung ist eine
+Zahl, ihre Lage ist der Clip**: zieht man den Clip länger, wird die Mitte länger, nicht die Bewegung.
+Das Dauerfeld erscheint erst, wenn eine Bewegung gewählt ist — eine Dauer für eine Animation, die
+nicht stattfindet, ist eine Frage über nichts.
+
+Das sind Voreinstellungen und keine Keyframes, mit Absicht: Keyframes löst der Rust-Kern auf, und
+eine zweite Interpolation daneben im Renderer wäre genau die Abweichung, gegen die es den Kern gibt.
+Bewegt wird das Viereck, auf das die Glyphen gerastert sind — an der einen Stelle, durch die Vorschau
+und Export beide gehen. Ein Titel, der *zusätzlich* keyframed ist, bewegt sich und folgt seiner
+Voreinstellung: die Voreinstellung kommt auf das, was der Kern aufgelöst hat.
+
+Der Renderer zeichnet fünf Bewegungen und eine Schleife, sonst nichts. Ein Stil, der etwas anderes
+nennt, fällt auf Stillstand zurück, statt auf die Leinwand zu kommen — und das sieht aus wie ein Titel
+ganz ohne Bewegung. Deshalb läuft ein Test über jede ausgelieferte Vorlage und verweigert jede
+Bewegung, die der Renderer nicht kennt, mit Clip und Wort in der Meldung.
+
+
 
 Der Vorlauf ist der einzige Generator, dessen Bild davon abhängt, wann danach gefragt wird. Gezeichnet
 wird er einmal pro ganzer Sekunde des eigenen Materials des Clips — ein beschnittener Anfang
