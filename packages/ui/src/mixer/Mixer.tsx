@@ -22,10 +22,15 @@ import type { EffectParamDescriptor } from "../inspector/Inspector";
 import { AddEffect } from "../primitives/AddEffect";
 import { IconButton } from "../primitives/Icon";
 import { LevelMeter, type ReadLevel } from "./LevelMeter";
+import { Reduction } from "./Reduction";
 import "./Mixer.css";
 
 /** What `readLevel` is asked for the master bus; every other key is a track id. */
 export const MASTER_BUS = "master";
+
+// Which inserts have a gain reduction to report. The two are the same native node held at different
+// settings, and no other insert applies a gain that depends on what is going through it.
+const REDUCES = new Set(["compressor", "limiter"]);
 
 // The accepted maximum for a track gain, as the core states it in `track.setVolume`.
 const MAX_GAIN = 4;
@@ -56,6 +61,11 @@ export interface MixerProps {
    * behind it rather than a row of bars stuck at silence.
    */
   readLevel?: (bus: string, nowMs: number) => { peak: number; rms: number; hold: number } | undefined;
+  /**
+   * How hard one compressor is working, by effect id, in decibels below zero. Absent where the host has
+   * no audio graph to ask: the bar is then not drawn, rather than drawn at zero.
+   */
+  readReduction?: (effect: string) => number | undefined;
   /**
    * False while the transport is stopped. The meters then paint silence and stop asking -- see
    * `LevelMeter`, where the loop that never ends turns out to be the expensive kind of never.
@@ -96,6 +106,7 @@ export function Mixer({
   loudness,
   measuring,
   readLevel,
+  readReduction,
   metering = true,
   playhead = 0,
   effects = [],
@@ -118,7 +129,7 @@ export function Mixer({
     () => effectParamsAt?.(playhead) ?? NO_PARAMS,
     [effectParamsAt, playhead, project],
   );
-  const chain = { offered: effects, resolved, playhead, send: dispatch, onSeek };
+  const chain = { offered: effects, resolved, playhead, send: dispatch, onSeek, readReduction, metering };
   const meter = (bus: string): ReadLevel | undefined =>
     readLevel === undefined ? undefined : (now) => readLevel(bus, now);
 
@@ -480,6 +491,12 @@ interface ChainContext {
   playhead: Time;
   send: Send;
   onSeek?: (time: Time) => void;
+  /**
+   * How hard a compressor is working, by effect id. Absent where the host has no graph to ask -- the
+   * bar is then not drawn at all rather than drawn at zero, which would be a reading.
+   */
+  readReduction?: (effect: string) => number | undefined;
+  metering?: boolean;
 }
 
 // One insert chain, for a track bus or for the master. The two differ only in what they are pointed
@@ -490,10 +507,12 @@ function Chain({
   playhead,
   send,
   onSeek,
+  readReduction,
+  metering,
   target,
   authored,
 }: ChainContext & { target: EffectTarget; authored: readonly Effect[] }): ReactElement | null {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const addable = offered.filter(
     (manifest) => !authored.some((entry) => entry.effectType === manifest.id),
   );
@@ -510,6 +529,15 @@ function Chain({
         return (
           <div key={entry.id} className="v-mixer__effect">
             <h4 className="v-mixer__effectName">{manifest.name[locale]}</h4>
+            {/* Only for a node that has an answer: `reduction` belongs to the compressor and the
+                limiter, and a bar under an equaliser would be a reading of nothing. */}
+            {readReduction !== undefined && REDUCES.has(manifest.id) && (
+              <Reduction
+                read={() => readReduction(entry.id)}
+                active={metering}
+                label={t("mixer.reduction", { name: manifest.name[locale] })}
+              />
+            )}
             {manifest.params.map((param) => (
               <ChainParam
                 key={param.key}

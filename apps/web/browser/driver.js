@@ -998,6 +998,29 @@ async function announce() {
     await sleep(200);
     check("and undoing takes the layout back with the controls", stripSlider("Hinten"), undefined);
 
+    // The gain reduction of a compressor: the one reading about it that its settings do not determine.
+    // Added here rather than in a unit test because it comes off a live node in a running graph, and
+    // jsdom has neither.
+    const busStrip = q(".v-mixer__strip");
+    // The picker by its own name rather than "the last select in the strip": a strip carries the pan,
+    // the layout and the inserts, and counting them is a check that breaks when one is added.
+    const picker = () =>
+      [...busStrip.querySelectorAll("select")].find(
+        (node) => node.getAttribute("aria-label") === "Effekt hinzufügen");
+    setValue(picker(), "compressor");
+    await until("the compressor row", () => q('[data-testid="reduction"]'), 10000);
+    check("a compressor on a bus gets a reduction bar", q('[data-testid="reduction"]') !== null, true);
+    check("and an equaliser does not", (() => {
+      setValue(picker(), "eq");
+      return all('[data-testid="reduction"]').length;
+    })(), 1);
+    check("adding inserts raised nothing", banner(), "");
+    // Both undone, so the strips below are the strips this run was handed.
+    button("Rückgängig").click();
+    button("Rückgängig").click();
+    await sleep(200);
+    check("and both come off again", q('[data-testid="reduction"]'), null);
+
     checkAtMost("the mixer shows whole strips and not the tops of them",
       q(".v-mixer__strips").scrollHeight - q(".v-mixer__strips").clientHeight, 0);
     // And the same claim from the other side, on the control that sits last in a strip -- the one

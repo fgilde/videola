@@ -414,6 +414,8 @@
   "mixer.rearShort": "Rear",
   "mixer.rear": "{name} front to back",
   "mixer.lfeShort": "LFE",
+  "mixer.reductionShort": "GR",
+  "mixer.reduction": "{name} gain reduction",
   "mixer.lfe": "{name} to the LFE channel",
   "mixer.layout": "Channels",
   "mixer.layout.2": "Stereo",

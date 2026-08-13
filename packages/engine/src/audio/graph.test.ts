@@ -1169,6 +1169,61 @@ describe("a clip that is switched off", () => {
   });
 });
 
+// How hard a compressor is working is the one number about it that cannot be derived from its settings:
+// it depends on what is going through it. Read from the node, so this is a measurement rather than a
+// second implementation of the compressor's own curve.
+describe("what a compressor reports", () => {
+  const squashing = (threshold: number): Effect[] =>
+    [
+      {
+        id: "eff_comp",
+        effectType: "compressor",
+        enabled: true,
+        params: {
+          threshold: { kind: "float", value: threshold },
+          ratio: { kind: "float", value: 20 },
+          attack: { kind: "float", value: 0 },
+          release: { kind: "float", value: 0.25 },
+        },
+        keyframes: {},
+      },
+    ] as unknown as Effect[];
+
+  async function rolling(effects: Effect[], level: number): Promise<AudioGraph> {
+    const ctx = context(1);
+    const graph = new AudioGraph(ctx, signal(ctx, () => level));
+    await graph.prepare(project([track("trk_0", [clip()], { effects })]));
+    graph.startAt(ctx.currentTime, 0);
+    await drain(ctx);
+    return graph;
+  }
+
+  it("reports a reduction while it is working on a loud signal", async () => {
+    const graph = await rolling(squashing(-40), 1);
+
+    const reduction = graph.reductions().get("eff_comp");
+    expect(reduction).toBeDefined();
+    // Negative decibels: the node reports how much gain it is taking away, and a full-scale signal
+    // against a threshold of -40 with a ratio of 20 is taking a lot.
+    expect(reduction!).toBeLessThan(-1);
+  });
+
+  it("reports nothing once nothing is scheduled", async () => {
+    const graph = await rolling(squashing(-40), 1);
+    graph.stop();
+
+    // The same rule the level meters follow: a meter left standing at the last value it saw would be
+    // reporting a compressor working on sound that stopped.
+    expect(graph.reductions().size).toBe(0);
+  });
+
+  it("has nothing to report for a track with no compressor on it", async () => {
+    const graph = await rolling([], 1);
+
+    expect(graph.reductions().size).toBe(0);
+  });
+});
+
 describe("an offline effect on a clip", () => {
   // Hiss, deterministic, so there is something to take away and something to measure.
   const hiss: AudioBufferSource = {

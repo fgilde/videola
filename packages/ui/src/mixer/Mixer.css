@@ -195,3 +195,38 @@
   margin: 0;
   color: var(--v-text-muted);
 }
+
+/* The gain reduction of one insert: a label, a bar that grows downwards, and the number. Downwards
+   because that is what it is -- gain being taken away -- and every desk in the world draws it that way. */
+.v-reduction {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--v-space-1);
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}
+
+.v-reduction__track {
+  block-size: 8px;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  background: var(--v-bg);
+  /* The bar hangs from the top edge, so a still one is empty rather than centred. */
+  display: flex;
+  align-items: flex-start;
+}
+
+.v-reduction__bar {
+  inline-size: 100%;
+  block-size: 0%;
+  border-radius: var(--v-radius-sm);
+  background: var(--v-warning, var(--v-accent));
+  transition: none;
+}
+
+.v-reduction__value {
+  font-variant-numeric: tabular-nums;
+  min-inline-size: 4.5ch;
+  text-align: end;
+}

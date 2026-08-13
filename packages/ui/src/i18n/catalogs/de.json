@@ -414,6 +414,8 @@
   "mixer.rearShort": "Hinten",
   "mixer.rear": "{name} vorne nach hinten",
   "mixer.lfeShort": "LFE",
+  "mixer.reductionShort": "GR",
+  "mixer.reduction": "{name}: Pegelabsenkung",
   "mixer.lfe": "{name} auf den LFE-Kanal",
   "mixer.layout": "Kanäle",
   "mixer.layout.2": "Stereo",

@@ -255,6 +255,14 @@ export class Playback {
 
   // Not routed through `onTime`: the clock ticks on the picture's schedule, and the caller has to
   // say how long its own last frame took because that is what the hold marker falls by.
+  /**
+   * How hard every compressor in the graph is working, by effect id. Straight through to the graph,
+   * which reads it off the node: the one number about a compressor that its settings do not determine.
+   */
+  reductions(): ReadonlyMap<string, number> {
+    return this.#graph.reductions();
+  }
+
   levels(elapsed = 0): ReadonlyMap<string, Level> {
     return this.#graph.levels(elapsed);
   }

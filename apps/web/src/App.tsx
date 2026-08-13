@@ -813,6 +813,22 @@ export function App(): ReactElement {
   // The frame's own timestamp is what tells "the same frame" from "the next one" -- every meter is
   // asked with the number requestAnimationFrame handed it, so the first ask does the reading and
   // the rest are answered out of it.
+  // One read per animation frame for the whole desk, like the levels beside it: the map is the graph's
+  // answer for this instant, and asking per strip would ask the audio thread once per compressor.
+  const readReduction = useMemo(() => {
+    let taken = 0;
+    let held: ReadonlyMap<string, number> = new Map();
+    return (effect: string): number | undefined => {
+      if (playback === undefined) return undefined;
+      const now = performance.now();
+      if (now - taken > 8) {
+        held = playback.reductions();
+        taken = now;
+      }
+      return held.get(effect);
+    };
+  }, [playback]);
+
   const readLevel = useMemo(() => {
     let taken = 0;
     let levels: ReadonlyMap<string, Level> = new Map();
@@ -1760,6 +1776,7 @@ export function App(): ReactElement {
                   loudness={reading?.of === project ? reading.lufs : undefined}
                   measuring={measuring}
                   readLevel={readLevel}
+                  readReduction={readReduction}
                   metering={playing}
                   playhead={playhead}
                   effects={audioEffectManifests()}

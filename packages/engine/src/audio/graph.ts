@@ -71,6 +71,10 @@ export class AudioGraph {
   #meters = new Map<string, AnalyserNode>();
   #levels = new Map<string, Level>();
   #window = new Float32Array(METER_WINDOW);
+  // The compressors and limiters currently in the graph, by effect id. Rebuilt with the graph on every
+  // seek, like every other node: a reading from a node nothing is routed through is a reading of the
+  // past.
+  #compressors = new Map<string, DynamicsCompressorNode>();
   // How many channels the mix is laid out over, from the project rather than from the context: an
   // offline render of a 5.1 project on a stereo device still has to *place* every track in six
   // channels, and what the machine can play is the browser's problem after that.
@@ -132,6 +136,7 @@ export class AudioGraph {
 
   startAt(contextTime: number, projectTime: Time): void {
     this.stop();
+    this.#compressors.clear();
     // Built before the buses, because a bus needs somewhere to send to and that is now the head of
     // the mastering chain rather than the master fader itself.
     const masterIn = this.#chain(this.#masterEffects, this.#master, contextTime, projectTime);
@@ -190,6 +195,23 @@ export class AudioGraph {
     }
     this.#levels = next;
     return next;
+  }
+
+  /**
+   * How hard every compressor in the graph is working right now, in decibels below zero, by effect id.
+   *
+   * Read from the node rather than computed: `DynamicsCompressorNode.reduction` is the amount of gain
+   * the node is applying at this instant, and it is the one number about a compressor that cannot be
+   * derived from its settings -- what it does depends on what is going through it.
+   *
+   * Empty while nothing is scheduled. A meter left standing at the last value it saw would report a
+   * compressor working on sound that stopped, which is the same rule the level meters follow.
+   */
+  reductions(): ReadonlyMap<string, number> {
+    const found = new Map<string, number>();
+    if (this.#playing.length === 0) return found;
+    for (const [id, node] of this.#compressors) found.set(id, node.reduction);
+    return found;
   }
 
   setMasterVolume(volume: number): void {
@@ -388,6 +410,10 @@ export class AudioGraph {
       }
       built.node.connect(head);
       this.#live.push(built.node);
+      // Kept by effect id so a strip can ask how hard its own compressor is working. Only the nodes
+      // that *have* an answer are held: `reduction` is a property of `DynamicsCompressorNode` and of
+      // nothing else, and a map with a zero in it for every gain and filter would be a reading.
+      if (isCompressor(built.node)) this.#compressors.set(effect.id, built.node);
       head = built.node;
     }
     return head;
@@ -650,4 +676,11 @@ interface Placed {
   head: AudioNode;
   out: AudioNode;
   nodes: readonly AudioNode[];
+}
+
+// A compressor and a limiter are the same native node held at different settings, and it is the only
+// node here with a `reduction` to read. Asked of the node rather than of the effect type, so a manifest
+// that later builds one under a third name needs no change here.
+function isCompressor(node: AudioNode): node is DynamicsCompressorNode {
+  return "reduction" in node && typeof (node as DynamicsCompressorNode).reduction === "number";
 }

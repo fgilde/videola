@@ -238,6 +238,24 @@ Measured, not asserted: against a tone in bursts with hiss over it, the noise **
 band** drops by more than 9 dB while the tone stays within 2 dB of where it was. No filter can make
 that claim, which is the whole reason this exists beside them.
 
+## Gain reduction
+
+Every compressor and limiter on a bus carries a bar under its own settings: how hard it is working right
+now, in decibels below zero, growing downwards because that is what it is — gain being taken away.
+
+It is read from `DynamicsCompressorNode.reduction` on the live node, which makes it the one control in
+the chain that reads the *graph* rather than the project. It is also the one number about a compressor
+that its settings do not determine: what it does depends on what is going through it.
+
+Asked once per animation frame for the whole desk and written straight to the element's own height, with
+only the printed number going through React — a reading that changes sixty times a second must not put
+every slider in the strip through a render. Nothing is scheduled, nothing is reported: a bar left
+standing would say a compressor is working on sound that stopped, which is the same rule the level
+meters follow.
+
+Only the two inserts that have an answer get one. An equaliser applies a gain that its own settings
+determine, and a bar under it would be a reading of nothing.
+
 ## Beats
 
 The metronome symbol on a strip puts a marker on every beat of that track.
@@ -434,8 +452,6 @@ Named rather than hinted at, because a control that does nothing is worse than n
 - **Filter shapes other than a peaking band.** The equaliser cannot be a high- or low-pass, because a
   filter type is a choice and the effect manifests carry floats only. `ParamValue` already has a
   `choice` kind; the shelves arrive with the widget that can edit one.
-- **Gain-reduction metering.** The strips show what a bus is sending; how hard its compressor is
-  working is a second reading, and `DynamicsCompressorNode.reduction` is where it would come from.
 - **Layouts beyond 5.1.** 7.1 and Atmos are more channels and, for the second, a renderer of another kind. `AUDIO_LAYOUTS` in the core is where a third entry would go.
 - **Bus automation in the timeline's keyframe lane.** A duck's corners are editable on the strip
   that wrote them, with the same controls the inspector uses; the lane below a clip draws clip

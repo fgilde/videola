@@ -392,6 +392,12 @@
   position: fixed;
   z-index: 10;
   display: grid;
+  /* Set by the component from the window it was measured against; the value here is what a menu gets
+     before that measurement, which is one frame at most and never painted. */
+  max-height: 100vh;
+  overflow-y: auto;
+  /* A list that scrolls must not scroll the timeline behind it once it reaches its end. */
+  overscroll-behavior: contain;
   min-width: 200px;
   padding: var(--v-space-1);
   background: var(--v-bg-elevated);

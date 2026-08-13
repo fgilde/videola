@@ -258,6 +258,26 @@ Gemessen und nicht behauptet: gegen einen Ton in Stößen mit Rauschen darüber 
 eigenen Band des Tons** um mehr als 9 dB, während der Ton innerhalb von 2 dB bleibt, wo er war. Kein
 Filter kann das behaupten — und genau darum steht das hier neben ihnen.
 
+## Pegelabsenkung
+
+Jeder Kompressor und Limiter auf einem Bus trägt unter seinen Einstellungen einen Balken: wie hart er
+gerade arbeitet, in Dezibel unter Null, nach unten wachsend — denn das ist es, was er tut, Verstärkung
+wegnehmen.
+
+Gelesen wird sie von `DynamicsCompressorNode.reduction` am lebenden Knoten, womit dies das einzige
+Bedienelement der Kette ist, das den *Graphen* liest und nicht das Projekt. Es ist auch die einzige Zahl
+über einen Kompressor, die seine Einstellungen nicht bestimmen: was er tut, hängt davon ab, was durch
+ihn geht.
+
+Einmal pro Bild für das ganze Pult gefragt und direkt in die Höhe des Elements geschrieben; nur die
+gedruckte Zahl geht durch React — ein Wert, der sich sechzigmal pro Sekunde ändert, darf nicht jeden
+Regler des Streifens durch ein Rendern schicken. Ist nichts geplant, wird nichts gemeldet: ein
+stehengebliebener Balken behauptete, ein Kompressor arbeite an Ton, der aufgehört hat — dieselbe Regel,
+der die Pegelanzeigen folgen.
+
+Nur die zwei Inserts, die eine Antwort haben, bekommen einen. Ein Equalizer wendet eine Verstärkung an,
+die seine eigenen Einstellungen bestimmen, ein Balken darunter wäre die Anzeige von nichts.
+
 ## Beats
 
 Das Metronom-Symbol auf einem Streifen setzt auf jeden Schlag dieser Spur einen Marker.

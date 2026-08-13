@@ -17,6 +17,7 @@ export * from "./preview/Transport";
 export * from "./inspector/Inspector";
 export * from "./inspector/TextPanel";
 export * from "./mixer/Mixer";
+export * from "./mixer/Reduction";
 export * from "./scopes/Scopes";
 export * from "./inspector/ParamRow";
 export * from "./inspector/CurveRow";
