@@ -152,15 +152,17 @@ function extraEntries(api: Api): Entry[] {
         name: "project_handOff",
         description:
           "Write the cut out for another editor. `edl` is a CMX3600 edit decision list -- one video " +
-          "and one audio channel, which is all the format has -- and `fcpxml` carries every track " +
-          "and is what DaVinci Resolve, Premiere Pro and Final Cut open. Neither carries an effect, " +
-          "a keyframe or a grade: those are every system's own. What travels is the assembly.",
+          "and one audio channel, which is all the format has. `fcpxml` carries every track and is " +
+          "what DaVinci Resolve and Final Cut open. `xmeml` is Final Cut Pro 7 XML, a different " +
+          "format despite the name, and the one Premiere Pro imports as a real sequence. None " +
+          "carries an effect, a keyframe or a grade: those are every system's own. What travels is " +
+          "the assembly.",
         inputSchema: object(
           {
             project: handleField(),
             format: {
               type: "string",
-              enum: ["edl", "fcpxml"],
+              enum: ["edl", "fcpxml", "xmeml"],
               description: "Which file to write.",
             },
           },

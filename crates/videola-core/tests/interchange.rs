@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use videola_core::command::{Command, Dispatch};
-use videola_core::interchange::{to_edl, to_fcpxml};
+use videola_core::interchange::{to_edl, to_fcpxml, to_xmeml};
 use videola_core::model::{ClipSource, MediaId, Project, ProjectSettings, Rate, Time, TrackKind};
 use videola_core::Document;
 
@@ -267,4 +267,135 @@ fn fcpxml_of_an_empty_timeline_is_still_a_document() {
     let xml = to_fcpxml(doc(Rate::from_fps(25)).project());
     assert!(xml.contains("<spine>"));
     assert!(xml.contains("duration=\"0/25s\""), "{xml}");
+}
+
+// ------------------------------------------------------------------ Final Cut Pro 7 XML
+
+// The format Premiere Pro imports as a sequence. Counted in whole frames rather than rationals, which
+// is the one thing about it that differs from FCPXML everywhere at once.
+
+#[test]
+fn an_xmeml_declares_the_version_premiere_reads() {
+    let xml = to_xmeml(&project_with_two_tracks());
+
+    assert!(xml.starts_with(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE xmeml>
+"
+    ));
+    assert!(xml.contains("<xmeml version=\"5\">"));
+    assert!(xml.contains("<name>Reel &amp; Cut</name>"));
+}
+
+#[test]
+fn an_xmeml_states_the_rate_as_a_timebase_and_a_flag() {
+    let whole = to_xmeml(&project_with_two_tracks());
+    assert!(whole.contains("<timebase>25</timebase>"));
+    assert!(whole.contains("<ntsc>FALSE</ntsc>"));
+
+    let mut fractional = doc(Rate::new(30000, 1001));
+    let track = add_track(&mut fractional, TrackKind::Video, "V1");
+    add_clip(&mut fractional, &track, "med_a", 0, SECOND);
+    let dropped = to_xmeml(fractional.project());
+
+    // 30000/1001 is "thirty frames a second, running slow", which this format says in two elements.
+    assert!(dropped.contains("<timebase>30</timebase>"));
+    assert!(dropped.contains("<ntsc>TRUE</ntsc>"));
+    assert!(dropped.contains("<displayformat>DF</displayformat>"));
+}
+
+#[test]
+fn a_clip_is_four_frame_numbers_where_it_sits_and_what_it_shows() {
+    let xml = to_xmeml(&project_with_two_tracks());
+
+    // The second clip on the picture track: two seconds in at 25 fps is frame 50, three seconds long
+    // is 75 frames, and `end` is exclusive.
+    assert!(xml.contains(
+        "<start>50</start>
+            <end>125</end>"
+    ));
+    assert!(xml.contains(
+        "<in>0</in>
+            <out>75</out>"
+    ));
+    assert!(xml.contains("<duration>75</duration>"));
+}
+
+#[test]
+fn a_trimmed_clip_says_which_part_of_the_file_it_shows() {
+    let mut doc = doc(Rate::from_fps(25));
+    let track = add_track(&mut doc, TrackKind::Video, "V1");
+    add_clip(&mut doc, &track, "med_a", 0, 4 * SECOND);
+    let clip = doc.project().timeline.tracks[0].clips[0].id.clone();
+    // Trimmed a second off the front, which is what moves the in point into the file: the clip now
+    // shows the file from one second in and sits from there on.
+    doc.dispatch(Dispatch::new(Command::ClipTrim {
+        clip,
+        edge: videola_core::command::TrimEdge::Start,
+        delta: Time::from_flicks(SECOND),
+    }))
+    .unwrap();
+
+    let xml = to_xmeml(doc.project());
+
+    // A second into the file, three seconds of it left: source frames 25 to 100, and the clip sits
+    // from frame 25 because trimming the front moves the clip rather than the material.
+    assert!(xml.contains(
+        "<in>25</in>
+            <out>100</out>"
+    ));
+    assert!(xml.contains(
+        "<start>25</start>
+            <end>100</end>"
+    ));
+}
+
+#[test]
+fn a_file_is_declared_once_and_referenced_after_that() {
+    let mut doc = doc(Rate::from_fps(25));
+    let track = add_track(&mut doc, TrackKind::Video, "V1");
+    add_clip(&mut doc, &track, "med_a", 0, SECOND);
+    add_clip(&mut doc, &track, "med_a", 2 * SECOND, SECOND);
+
+    let xml = to_xmeml(doc.project());
+
+    assert_eq!(xml.matches("<pathurl>med_a</pathurl>").count(), 1);
+    assert_eq!(xml.matches("<file id=\"file-1\"/>").count(), 1);
+    assert_eq!(xml.matches("<file id=\"file-1\">").count(), 1);
+}
+
+#[test]
+fn sound_lands_in_the_audio_half_and_says_which_stream_it_takes() {
+    let xml = to_xmeml(&project_with_two_tracks());
+    let audio = xml.find("<audio>").expect("an audio section");
+    let video = xml.find("<video>").expect("a video section");
+
+    assert!(video < audio);
+    assert!(xml.contains("<mediatype>audio</mediatype>"));
+    assert!(xml.contains("<mediatype>video</mediatype>"));
+    // The audio clip is the one at a second in: frame 25 on a 25 fps timeline.
+    assert!(xml[audio..].contains("<start>25</start>"));
+}
+
+#[test]
+fn a_clip_with_no_material_is_left_out_rather_than_written_offline() {
+    let mut doc = doc(Rate::from_fps(25));
+    let track = add_track(&mut doc, TrackKind::Video, "V1");
+    doc.dispatch(Dispatch::new(Command::ClipAdd {
+        track: videola_core::model::TrackId::from(track.clone()),
+        source: ClipSource::Generator {
+            generator: videola_core::model::Generator::Solid {
+                color: "#112233".into(),
+            },
+        },
+        start: Time::from_flicks(0),
+        duration: Time::from_flicks(SECOND),
+    }))
+    .unwrap();
+    add_clip(&mut doc, &track, "med_a", SECOND, SECOND);
+
+    let xml = to_xmeml(doc.project());
+
+    assert!(!xml.contains("GENERATED"));
+    assert_eq!(xml.matches("<clipitem").count(), 1);
 }

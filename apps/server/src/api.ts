@@ -215,18 +215,20 @@ export class Api {
   }
 
   /**
-   * The cut as another editor reads it: `edl` for a CMX3600 list, `fcpxml` for what Resolve, Premiere
-   * and Final Cut open. Neither carries an effect or a keyframe — an agent that has assembled a cut
-   * here can hand the assembly on, and the finishing happens in the other system.
+   * The cut as another editor reads it: `edl` for a CMX3600 list, `fcpxml` for what Resolve and Final
+   * Cut open, `xmeml` for Final Cut Pro 7 XML, which is what Premiere Pro imports as a sequence. None
+   * carries an effect or a keyframe — an agent that has assembled a cut here can hand the assembly
+   * on, and the finishing happens in the other system.
    */
   handOff(id: string, kind: string): string {
     const backend = this.#session(id).backend;
     if (kind === "edl") return backend.toEdl();
     if (kind === "fcpxml") return backend.toFcpxml();
+    if (kind === "xmeml") return backend.toXmeml();
     // Refused rather than defaulted. An agent asking for AAF and receiving FCPXML would have a file
     // that opens somewhere and is not what it asked for, which is the worst of the three outcomes;
     // the schema's enum is a description of what exists, not something that enforces it.
-    throw new Error(`no such interchange format: ${kind} (edl, fcpxml)`);
+    throw new Error(`no such interchange format: ${kind} (edl, fcpxml, xmeml)`);
   }
 
   describe(id: string): string {

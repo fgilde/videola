@@ -134,8 +134,8 @@ features:
 - **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.
 - **The tool next door** — read and write `.audiola`, so a mix from [Audiola](https://www.audiola.de)
   arrives as audio tracks and the sound of a cut leaves for it.
-- **Hand the cut on** — an EDL or FCPXML for DaVinci Resolve, Premiere or Final Cut. The assembly
-  travels; the grade is done there.
+- **Hand the cut on** — an EDL, FCPXML for Resolve and Final Cut, or Final Cut Pro 7 XML, which is the
+  file Premiere Pro imports as a real sequence. The assembly travels; the grade is done there.
 - **Another shape in one press** — portrait, square or 4:5, with every clip scaled to cover the new
   frame in the same undo step.
 - **Templates** — thirteen of them across five categories, each card a rendered picture rather than a

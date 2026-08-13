@@ -80,10 +80,13 @@ audio tracks here; the sound of a cut built here leaves as something that opens 
 counterpart on the other side — a mastering chain, an effect chain — is named rather than invented,
 and every field the manifest carried comes back untouched.
 
-**Handing the cut on.** An EDL and FCPXML 1.9 leave here for DaVinci Resolve, Premiere Pro or Final
-Cut: the assembly travels, the grade and the effects are done there. Neither carries an effect, and
-there is no honest way to write a Videola blur as a Resolve one. FCPXML rounds nothing — a flick
-divides evenly by every rate anyone uses, so every instant is a whole number of ticks.
+**Handing the cut on.** Three files leave here for another editor: an EDL, FCPXML 1.9, and Final Cut
+Pro 7 XML — the assembly travels, the grade and the effects are done there. None carries an effect, and
+there is no honest way to write a Videola blur as a Resolve one. FCPXML rounds nothing: a flick divides
+evenly by every rate anyone uses, so every instant is a whole number of ticks. `xmeml` is the other
+door, and not a synonym for the first: Premiere Pro's FCPXML support has always been partial, while its
+importer has taken a Final Cut 7 sequence for as long as it has existed. Resolve → FCPXML,
+Premiere → `xmeml`, both written rather than guessed.
 
 **Export.** MP4 with H.264 and AAC, or WebM with VP9 and Opus where the browser cannot encode
 H.264. It runs in a worker through the same compositor as the preview, with progress and a cancel
@@ -95,9 +98,11 @@ placement scaled by the axis it is measured on, so a lower third stays one.
 
 **Templates.** `.videolat` is the same container as `.videola` with one extra entry, so a template
 *is* a project with questions attached. Pick one from the gallery, answer the wizard, and the result
-is an ordinary editable project. Twelve ship across five categories, none carrying footage — each is
-anchored on a generator, and the gallery card is baked through the same code path a real answer
-takes rather than drawn.
+is an ordinary editable project — or add it to the project already open, as tracks of its own, in one
+press of undo. Thirteen ship across five categories, none carrying footage: each is anchored on a
+generator, and the gallery card is baked through the same code path a real answer takes rather than
+drawn. Every placeholder is optional, so a template works before a single file has been imported and
+comes back as its graphics.
 
 **Compound clips.** Fold a selection into one clip and the picture does not change — proven against
 the whole frame buffer at tolerance zero, the draw list at sixteen instants, and the audio render

@@ -1,9 +1,13 @@
 //! The two files other editors read.
 //!
-//! Videola's own container round-trips losslessly and is the only one it opens. These two go the
+//! Videola's own container round-trips losslessly and is the only one it opens. These three go the
 //! other way: a cut leaves here and is finished somewhere else, in DaVinci Resolve, Premiere or
-//! Final Cut. Neither carries an effect, a keyframe or a grade — they carry where each piece of
+//! Final Cut. None carries an effect, a keyframe or a grade — they carry where each piece of
 //! material sits, which is what a conform needs and the whole of what these formats agree on.
+//!
+//! Which of the three to reach for: an EDL is what an old system conforms from, FCPXML is what
+//! Resolve and Final Cut open, and `xmeml` — Final Cut Pro 7 XML, a different format with a
+//! confusingly similar name — is what Premiere Pro imports as a real sequence.
 //!
 //! Written here rather than in TypeScript for the reason the reader and the writer are: a timecode
 //! is integer arithmetic over a rational rate, and doing it a second time in a second language is
@@ -11,9 +15,11 @@
 
 mod edl;
 mod fcpxml;
+mod xmeml;
 
 pub use edl::to_edl;
 pub use fcpxml::to_fcpxml;
+pub use xmeml::to_xmeml;
 
 use crate::model::{Rate, Time, FLICKS_PER_SECOND};
 

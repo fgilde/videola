@@ -429,6 +429,18 @@ describe("handing a cut to another editor", () => {
     expect(xml).toContain("<gap name=\"GENERATED\"");
   });
 
+  it("writes Final Cut Pro 7 XML, which is the one Premiere imports", async () => {
+    const project = await withAClip();
+    const xml = (await call("project_handOff", { project, format: "xmeml" })).text;
+
+    expect(xml).toContain("<!DOCTYPE xmeml>");
+    expect(xml).toContain('<xmeml version="5">');
+    // The clip here is a generator, and this format has no gap element: what it cannot carry it
+    // leaves out rather than writing an offline clip somebody has to hunt for.
+    expect(xml).not.toContain("GENERATED");
+    expect(xml).toContain("<timebase>");
+  });
+
   // Refused rather than defaulted: an agent asking for AAF and receiving FCPXML would hold a file
   // that opens somewhere and is not the one it asked for.
   it("refuses a format it does not write, and says which it has", async () => {
@@ -437,7 +449,7 @@ describe("handing a cut to another editor", () => {
 
     expect(answer.text).not.toContain("<fcpxml");
     expect(answer.text).toContain("no such interchange format");
-    expect(answer.text).toContain("edl, fcpxml");
+    expect(answer.text).toContain("edl, fcpxml, xmeml");
   });
 });
 

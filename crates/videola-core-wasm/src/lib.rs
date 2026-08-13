@@ -151,6 +151,13 @@ impl WasmDocument {
         videola_core::interchange::to_fcpxml(self.host.project())
     }
 
+    /// The same cut as Final Cut Pro 7 XML, which is the file Premiere Pro imports as a sequence.
+    /// A different format from FCPXML despite the name, and the wider of the two doors.
+    #[wasm_bindgen(js_name = toXmeml)]
+    pub fn to_xmeml(&self) -> String {
+        videola_core::interchange::to_xmeml(self.host.project())
+    }
+
     pub fn warnings(&self) -> std::result::Result<JsValue, JsError> {
         to_js_value(self.host.warnings())
     }

@@ -11,10 +11,13 @@ import type { LayoutPreference } from "../layout/detectLayoutMode";
 import { SettingsMenu } from "./SettingsMenu";
 import wordmark from "./videola-wordmark.png";
 
+/** The three files a cut can leave in. Which one to reach for is the other editor's decision. */
+export type HandOff = "edl" | "fcpxml" | "xmeml";
+
 export interface TopBarActions {
   onAbout?: () => void;
-  /** Write the cut out for another editor: an EDL or FCPXML. */
-  onHandOff?: (kind: "edl" | "fcpxml") => void;
+  /** Write the cut out for another editor: an EDL, FCPXML, or Final Cut Pro 7 XML. */
+  onHandOff?: (kind: HandOff) => void;
   /** Write the sound out as an `.audiola`, so the mix can be finished in Audiola. */
   onExportAudiola?: () => void;
   onKeys?: () => void;
@@ -69,11 +72,15 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
           not fit a phone at 44 px each. */}
       <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
       <Action label={t("action.exportCaptions")} onClick={actions.onExportCaptions} />
-      {/* Beside the subtitles, because both are "write something out that is not a video". Two
-          entries rather than a select: they are two file formats and not two answers to one
-          question -- an EDL is what an old system conforms from, FCPXML is what a new one opens. */}
+      {/* Beside the subtitles, because both are "write something out that is not a video". Three
+          entries rather than a group: they are three file formats and not three answers to one
+          question -- an EDL is what an old system conforms from, FCPXML is what Resolve opens, and
+          Final Cut Pro 7 XML is what Premiere imports. */}
       <Action label={t("action.exportEdl")} onClick={() => actions.onHandOff?.("edl")} />
       <Action label={t("action.exportFcpxml")} onClick={() => actions.onHandOff?.("fcpxml")} />
+      {/* Beside FCPXML, because the two answer the same question for different editors: Resolve opens
+          FCPXML, Premiere imports this one as a real sequence. */}
+      <Action label={t("action.exportXmeml")} onClick={() => actions.onHandOff?.("xmeml")} />
       {/* Beside them, because it is the same kind of thing: an edit leaving for another tool. An
           `.audiola` is opened by dropping it on the window, so there is no entry for that. */}
       <Action label={t("action.exportAudiola")} onClick={actions.onExportAudiola} />

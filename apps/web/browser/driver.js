@@ -1325,7 +1325,8 @@ async function announce() {
       rows.map((node) => node.getAttribute("aria-label") ?? node.textContent),
       ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren",
        "Untertitel importieren", "Untertitel exportieren", "EDL exportieren",
-       "FCPXML exportieren (Resolve, Premiere)", "Ton als .audiola exportieren",
+       "FCPXML exportieren (Resolve, Final Cut)", "Premiere-XML exportieren (Final Cut 7)",
+       "Ton als .audiola exportieren",
        "Spur hinzufügen", "Tastenkürzel", "Über Videola", "Exportieren",
        "Deutsch / English", "Hell", "Speichern"]);
     // The one entry in the menu that is a link and not a button, because it navigates: this session
@@ -1868,6 +1869,29 @@ async function announce() {
     button("An den Anfang").click();
     forward(30);
     await until("the picture again", () => measure(brand).lit > 1000, 20000);
+
+    // The about dialogue, which is where the version somebody reports a bug against comes from. It
+    // used to be a constant in the source and was two releases behind; it is compiled in from the
+    // release manifest now, so what is checked here is that the dialogue shows a real one.
+    openMenu();
+    inMenu("Über Videola").click();
+    const about = await until("the about dialogue", () => q('[data-testid="about"]'));
+    check("it is a real modal, so escape and the focus trap are the browser's", about.open, true);
+    check("and says which build this is",
+      /^Ausgabe \d+\.\d+\.\d+$/.test(about.querySelector(".v-about__version").textContent.trim()),
+      true);
+    const links = [...about.querySelectorAll(".v-about__links a")];
+    check("with the site, the documentation, the source and the licence", links.length, 4);
+    checkAtLeast("each a row a finger can hit",
+      Math.min(...links.map((link) => link.getBoundingClientRect().height)), 44);
+    check("every one of them leaving without handing this window over",
+      links.every((link) => link.target === "_blank" && link.rel.includes("noreferrer")), true);
+    check("and the whole dialogue inside the window",
+      about.getBoundingClientRect().bottom <= innerHeight &&
+        about.getBoundingClientRect().right <= innerWidth,
+      true);
+    labelled("Schließen").click();
+    await until("it to close", () => q('[data-testid="about"]') === null);
 
     // A second template on top of the first, without answering anything at all: its graphics arrive
     // as tracks of their own over an edit already made. This is the whole of "insert" -- the tracks

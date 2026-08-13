@@ -123,6 +123,7 @@ import {
   type ExportFormatChoice,
   type ExportProgress,
   type ExportSelection,
+  type HandOff,
   type MediaDrop,
   type MediaGrab,
   type SourceRange,
@@ -181,7 +182,9 @@ function isAudiolaFile(file: File): boolean {
 const AUTOSAVE_MS = 30_000;
 
 // Stamped into every .videola this build writes.
-const APP_VERSION = "0.6.0";
+// Compiled in from the desktop build's manifest by the bundler, so there is one version in the
+// repository rather than a constant somebody has to remember. See `vite.config.ts`.
+const APP_VERSION = __VIDEOLA_VERSION__;
 // The size the preview is shrunk to before it is counted. Sixteen by nine, so the waveform's
 // columns line up with the picture's, and small enough that the read is 147 kB rather than eight
 // megabytes -- see the note on the timer below.
@@ -1578,13 +1581,16 @@ export function App(): ReactElement {
   // The cut, for finishing somewhere else. Neither format carries an effect or a keyframe -- those
   // are every system's own -- so what leaves here is the assembly, which is what a conform needs.
   const handOff = useCallback(
-    (kind: "edl" | "fcpxml") => {
+    (kind: HandOff) => {
       if (doc === undefined || project === undefined) return;
       const name = project.meta.title || project.meta.id;
-      const written = kind === "edl" ? doc.toEdl() : doc.toFcpxml();
+      const written =
+        kind === "edl" ? doc.toEdl() : kind === "fcpxml" ? doc.toFcpxml() : doc.toXmeml();
+      // The extension is the format's own: `.xml` for Final Cut Pro 7 XML, because that is what
+      // Premiere's import filter looks for -- an `.xmeml` would not be offered in its dialogue.
       downloadBlob(
         new TextEncoder().encode(written),
-        `${name}.${kind === "edl" ? "edl" : "fcpxml"}`,
+        `${name}.${kind === "edl" ? "edl" : kind === "fcpxml" ? "fcpxml" : "xml"}`,
         kind === "edl" ? "text/plain" : "application/xml",
       );
       setError(undefined);

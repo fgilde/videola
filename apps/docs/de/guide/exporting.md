@@ -102,21 +102,38 @@ Ein grüner Unit-Test beweist nichts über eine Videodatei.
 
 ## Den Schnitt an einen anderen Editor geben
 
-Zwei Dateien verlassen Videola, die kein Video sind: eine **EDL** und **FCPXML**, beide im
-Überlaufmenü neben den Untertiteln. Ein hier gebauter Schnitt kann in DaVinci Resolve, Premiere Pro
-oder Final Cut fertiggestellt werden — die Montage reist, die Farbe und die Effekte entstehen dort.
+Drei Dateien verlassen Videola, die kein Video sind: eine **EDL**, **FCPXML** und **Final Cut Pro 7
+XML** — alle drei im Überlaufmenü neben den Untertiteln. Ein hier gebauter Schnitt kann in DaVinci
+Resolve, Premiere Pro oder Final Cut fertiggestellt werden: die Montage reist, die Farbe und die
+Effekte entstehen dort.
 
-Keine der beiden trägt einen Effekt, einen Keyframe oder eine Farbkorrektur, und das ist keine Lücke,
+Keine der drei trägt einen Effekt, einen Keyframe oder eine Farbkorrektur, und das ist keine Lücke,
 die später geschlossen wird: es gibt keinen ehrlichen Weg, eine Videola-Weichzeichnung als eine von
-Resolve zu schreiben. Was beide tragen, ist, wo jedes Stück Material sitzt — und das ist, was ein
+Resolve zu schreiben. Was alle drei tragen, ist, wo jedes Stück Material sitzt — und das ist, was ein
 Conform braucht.
 
-| | EDL (CMX3600) | FCPXML 1.9 |
-|---|---|---|
-| Spuren | eine Bild-, eine Tonspur | jede Spur, auf Lanes |
-| Namen | Relink über den Clipnamen | Relink über das Asset, nach Inhalts-Hash benannt |
-| Gelesen von | praktisch allem | Resolve, Premiere, Final Cut |
-| Zeiten | Timecode, `HH:MM:SS:FF` | exakte Brüche |
+| | EDL (CMX3600) | FCPXML 1.9 | Final Cut Pro 7 XML (`xmeml` 5) |
+|---|---|---|---|
+| Spuren | eine Bild-, eine Tonspur | jede Spur, auf Lanes | jede Spur, Bild und Ton getrennt |
+| Namen | Relink über den Clipnamen | Relink über das Asset, nach Inhalts-Hash benannt | Relink über den Dateinamen |
+| Gelesen von | praktisch allem | Resolve, Final Cut | **Premiere Pro**, Resolve |
+| Zeiten | Timecode, `HH:MM:SS:FF` | exakte Brüche | ganze Bilder |
+
+**Welche man nimmt.** FCPXML und `xmeml` sind zwei verschiedene Formate mit verwirrend ähnlichen
+Namen, und welches ein Editor liest, ist keine Geschmacksfrage. Resolve öffnet FCPXML 1.x gut. Die
+FCPXML-Unterstützung von Premiere Pro war immer nur teilweise da, während **Datei ▸ Importieren** eine
+`xmeml`-Sequenz nimmt, seit Premiere beruflich Final-Cut-Projekte gelesen hat — das ist die Datei, die
+als echte Sequenz mit echten Clips ankommt und nicht als Fehlerliste. Also: Resolve → FCPXML,
+Premiere → Final Cut Pro 7 XML, und Videola schreibt beides, statt zu raten. Gespeichert wird als
+`.xml`, denn das ist die Endung, die der Importdialog von Premiere anbietet.
+
+`xmeml` zählt in ganzen Bildern, das ist die Entscheidung des Formats und der eine Punkt, in dem es
+sich überall zugleich von FCPXML unterscheidet: jeder Zeitpunkt wird eine Bildnummer, kaufmännisch
+gerundet, ein Schnitt landet also auf dem Bild, auf dem er gesetzt wurde. `start` und `end` sagen, wo
+ein Clip liegt, `in` und `out`, welchen Teil der Datei er zeigt, und `end` ist exklusiv. Eine Datei
+wird einmal deklariert und danach über ihre Kennung referenziert, ein viermal benutztes Medium ist also
+ein Eintrag im Projektfenster. Ein Lücken-Element hat das Format nicht, ein Clip ohne Material — ein
+Titel, eine Farbfläche — bleibt daher weg statt als Clip zu reisen, der auf nichts zeigt.
 
 Die EDL sagt in einem Kommentar, welche Spuren sie nicht mitnehmen konnte, statt zwei Ebenen
 stillschweigend fallen zu lassen. Ihr Timecode ist immer Non-Drop, und wo das Projekt auf einer
@@ -130,9 +147,9 @@ dahinter — ein Titel, eine Farbe, ein verschachtelter Clip — reist als Lück
 nicht als Asset, das auf nichts zeigt; letzteres öffnet im anderen System als Offline-Clip, den jemand
 suchen muss.
 
-Beide entstehen im Rust-Kern, neben dem Leser und dem Schreiber und aus demselben Grund: ein Timecode
-ist Ganzzahl-Arithmetik über eine gebrochene Rate, und eine zweite Umsetzung in TypeScript wäre eine
-zweite Antwort auf dieselbe Frage. `project_handOff` bietet beide einem Agenten an — und lehnt ein
+Alle drei entstehen im Rust-Kern, neben dem Leser und dem Schreiber und aus demselben Grund: ein
+Timecode ist Ganzzahl-Arithmetik über eine gebrochene Rate, und eine zweite Umsetzung in TypeScript
+wäre eine zweite Antwort auf dieselbe Frage. `project_handOff` bietet alle drei einem Agenten an — und lehnt ein
 Format ab, das es nicht schreibt, statt auf eines auszuweichen: nach AAF zu fragen und FCPXML zu
 bekommen ist die schlechteste der drei möglichen Antworten.
 

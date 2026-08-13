@@ -137,6 +137,7 @@ function wrap(handle: WasmDocument): DocumentBackend {
       Array.from(WasmDocument.curveShape(left, right, samples)),
     toEdl: () => handle.toEdl(),
     toFcpxml: () => handle.toFcpxml(),
+    toXmeml: () => handle.toXmeml(),
     toAudiola: (media) => {
       const written = handle.toAudiola(media);
       return { bytes: written.bytes, leftOut: written.leftOut };

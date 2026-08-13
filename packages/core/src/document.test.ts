@@ -36,6 +36,7 @@ function fakeBackend(): DocumentBackend {
     // has nothing to say about them beyond being asked.
     toEdl: () => "",
     toFcpxml: () => "",
+    toXmeml: () => "",
     toAudiola: () => ({ bytes: new Uint8Array(), leftOut: 0 }),
     sourceTimesAt: () => new Map(),
     effectParamsAt: () => new Map(),

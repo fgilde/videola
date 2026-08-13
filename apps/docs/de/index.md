@@ -137,8 +137,8 @@ features:
 - **Export** — MP4 oder WebM in einem Worker, mit Fortschritt und einem Abbruch, der wirklich stoppt.
 - **Das Werkzeug nebenan** — `.audiola` lesen und schreiben: eine Mischung aus
   [Audiola](https://www.audiola.de) kommt als Tonspuren herein, und der Ton eines Schnitts geht dorthin.
-- **Den Schnitt weitergeben** — EDL oder FCPXML für DaVinci Resolve, Premiere oder Final Cut. Die
-  Montage reist; die Farbe entsteht dort.
+- **Den Schnitt weitergeben** — EDL, FCPXML für Resolve und Final Cut, oder Final Cut Pro 7 XML — die
+  Datei, die Premiere Pro als echte Sequenz importiert. Die Montage reist; die Farbe entsteht dort.
 - **Anderes Format in einem Druck** — hochkant, quadratisch oder 4:5, jeder Clip im selben
   Undo-Schritt auf den neuen Rahmen skaliert.
 - **Vorlagen** — dreizehn in fünf Kategorien, jede Karte ein gerendertes Bild statt eines gemalten

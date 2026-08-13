@@ -64,6 +64,8 @@ export class VideolaDocument {
 
   toFcpxml = (): string => this.#backend.toFcpxml();
 
+  toXmeml = (): string => this.#backend.toXmeml();
+
   /** The sounding part of this project as an `.audiola`, and the count of what had no sound to give. */
   toAudiola = (media: MediaBytes): { bytes: Uint8Array; leftOut: number } =>
     this.#backend.toAudiola(media);

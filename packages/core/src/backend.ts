@@ -68,6 +68,8 @@ export interface DocumentBackend {
   toEdl(): string;
   /** The same cut as FCPXML, which Resolve, Premiere and Final Cut all read. */
   toFcpxml(): string;
+  /** The same cut as Final Cut Pro 7 XML — `xmeml`, the file Premiere Pro imports as a sequence. */
+  toXmeml(): string;
   /**
    * The sounding part of this project as an `.audiola`, so it opens in Audiola. `leftOut` counts the
    * clips with no sound to hand a mixer — a title, a compound, silent material — because a placeholder
