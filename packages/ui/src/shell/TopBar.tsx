@@ -78,46 +78,31 @@ export function TopBar({ compact = false, layout, onLayout, ...actions }: TopBar
           `.audiola` is opened by dropping it on the window, so there is no entry for that. */}
       <Action label={t("action.exportAudiola")} onClick={actions.onExportAudiola} />
       <Action label={t("action.addTrack")} onClick={actions.onAddTrack} />
-      {/* A select for the same reason the reframe below is one: five answers to "what shall I put
-          down", and five buttons in a row would read as five unrelated actions. It resets to its
-          label after every pick, because it names a thing to do and not a state the project is in. */}
+      {/* Grouped rather than five rows of their own: they are five answers to "what shall I put
+          down", and five buttons in a row read as five unrelated actions. */}
       {actions.onInsert !== undefined && (
-        <select
-          className="v-topbar__reframe"
-          aria-label={t("insert.label")}
-          value=""
-          onChange={(event) => {
-            if (event.target.value !== "") {
-              actions.onInsert?.(event.target.value as InsertKind, t("insert.newTitle"));
-            }
-          }}
-        >
-          <option value="">{t("insert.label")}</option>
+        <Submenu label={t("insert.label")}>
           {INSERT_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {t(`insert.${kind}`)}
-            </option>
+            <Action
+              key={kind}
+              label={t(`insert.${kind}`)}
+              onClick={() => actions.onInsert?.(kind, t("insert.newTitle"))}
+            />
           ))}
-        </select>
+        </Submenu>
       )}
-      {/* A select and not four entries: they are four answers to one question, and a menu with
-          "Hochkant 9:16" three rows under "Querformat 16:9" reads as four unrelated actions. */}
+      {/* Grouped for the same reason: four answers to one question, and a menu with "Hochkant 9:16"
+          three rows under "Querformat 16:9" reads as four unrelated actions. */}
       {actions.onReframe !== undefined && (
-        <select
-          className="v-topbar__reframe"
-          aria-label={t("reframe.label")}
-          value=""
-          onChange={(event) => {
-            if (event.target.value !== "") actions.onReframe?.(event.target.value);
-          }}
-        >
-          <option value="">{t("reframe.label")}</option>
+        <Submenu label={t("reframe.label")}>
           {ASPECTS.map((aspect) => (
-            <option key={aspect.id} value={aspect.id}>
-              {t(`reframe.${aspect.id}`)}
-            </option>
+            <Action
+              key={aspect.id}
+              label={t(`reframe.${aspect.id}`)}
+              onClick={() => actions.onReframe?.(aspect.id)}
+            />
           ))}
-        </select>
+        </Submenu>
       )}
       {/* Last in the menu, where an "about" belongs, and above the offer to fetch a build -- which
           is only here at all in a browser, where there is something to fetch. */}
@@ -184,6 +169,30 @@ function Action({
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * A group of entries inside the overflow menu, folded away behind its own label.
+ *
+ * These two were selects, and a select inside this menu could not be used at all: the menu closes on
+ * any click within it, so the click that opened the dropdown closed the menu under it. Hence the
+ * stopped propagation here -- opening a group is not choosing an entry -- while the entries inside
+ * still bubble and close the whole thing.
+ *
+ * Nested <details> rather than a hover-out flyout: the same disclosure one level down, so the open
+ * state, the keyboard and the accessible name stay the browser's, and it works with a finger, where
+ * there is nothing to hover with.
+ */
+function Submenu({ label, children }: { label: string; children: ReactNode }): ReactElement {
+  return (
+    <details className="v-topbar__group">
+      <summary className="v-button" onClick={(event) => event.stopPropagation()}>
+        <span>{label}</span>
+        <Icon name="chevronRight" />
+      </summary>
+      <div className="v-topbar__group-items">{children}</div>
+    </details>
   );
 }
 

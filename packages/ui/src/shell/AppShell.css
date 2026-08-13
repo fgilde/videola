@@ -47,6 +47,10 @@
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-lg);
   box-shadow: var(--v-shadow);
+  /* Its own scroll rather than a menu that runs past the bottom of the window: this list is long on
+     purpose, and longer again on a phone, where the output actions join it. */
+  max-height: calc(100vh - 2 * var(--v-touch-target));
+  overflow-y: auto;
 }
 
 .v-topbar__menu .v-button {
@@ -65,6 +69,40 @@
 .v-topbar__menu .v-button--primary {
   background: var(--v-accent);
   color: var(--v-accent-contrast);
+}
+
+/* A group inside the menu: its label is a row like any other, its entries are indented under it and
+   marked with a rule, so an open group reads as belonging to its label rather than as more menu. */
+.v-topbar__group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.v-topbar__group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.v-topbar__group[open] > summary {
+  color: var(--v-text);
+  background: var(--v-surface-hover);
+}
+
+.v-topbar__group[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.v-topbar__group-items {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--v-space-1);
+  margin: var(--v-space-1) 0 var(--v-space-2) var(--v-space-3);
+  padding-left: var(--v-space-2);
+  border-left: 1px solid var(--v-border);
 }
 
 .v-topbar__brand {

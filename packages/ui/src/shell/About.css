@@ -1,8 +1,11 @@
 /* A native dialog, so the browser owns the focus trap, the Escape key and the backdrop. What is
    styled here is only what it looks like. */
 .v-about {
-  width: min(420px, calc(100vw - 2 * var(--v-space-4)));
-  padding: var(--v-space-5);
+  width: min(460px, calc(100vw - 2 * var(--v-space-4)));
+  /* No padding of its own: the head carries its own plate to the edges, and a band inset by the
+     dialogue's padding is a band with a gap around it. */
+  padding: 0;
+  overflow: hidden;
   background: var(--v-bg-elevated);
   color: var(--v-text);
   border: 1px solid var(--v-border);
@@ -12,54 +15,113 @@
 
 .v-about::backdrop {
   background: rgb(0 0 0 / 55%);
+  backdrop-filter: blur(2px);
+}
+
+/* The wordmark carries its own near-black plate, so the band behind it is that same near-black
+   fading into the accent -- which makes the edge of the artwork deliberate instead of a seam. */
+.v-about__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-3);
+  padding: var(--v-space-4) var(--v-space-5);
+  background: linear-gradient(135deg, #05060a 0%, #05060a 55%, color-mix(in srgb, var(--v-accent) 45%, #05060a) 100%);
+  border-bottom: 1px solid var(--v-border);
 }
 
 .v-about__brand {
   display: block;
   width: 168px;
+  max-width: 100%;
   height: auto;
-  /* The wordmark carries its own near-black plate; repeating it as a rounded chip makes that edge
-     deliberate instead of a seam, the same correction the top bar makes. */
-  padding: 5px 10px;
-  background: #05060a;
-  border-radius: var(--v-radius-md);
 }
 
 .v-about__version {
-  margin: var(--v-space-3) 0 0;
+  flex: none;
+  padding: 2px var(--v-space-2);
+  background: rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
   font-family: var(--v-font-mono);
-  font-size: var(--v-text-sm);
-  color: var(--v-text-muted);
+  font-size: var(--v-text-xs);
+  white-space: nowrap;
+  color: #f3f5fa;
 }
 
 .v-about__what {
-  margin: var(--v-space-2) 0 0;
+  margin: 0;
+  padding: var(--v-space-4) var(--v-space-5) 0;
   font-size: var(--v-text-sm);
   line-height: var(--v-leading);
-  color: var(--v-text);
+  color: var(--v-text-muted);
 }
 
 .v-about__links {
-  display: grid;
-  gap: var(--v-space-1);
-  margin: var(--v-space-4) 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--v-text-sm);
+  display: flex;
+  flex-direction: column;
+  margin: var(--v-space-4) var(--v-space-5) 0;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  overflow: hidden;
 }
 
 .v-about__links a {
-  color: var(--v-accent);
-}
-
-.v-about__get {
-  display: inline-flex;
-  margin-top: var(--v-space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-2);
+  /* A thumb's worth of row, like every other hit target in the app. */
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-3);
+  background: var(--v-surface);
+  color: var(--v-text);
+  font-size: var(--v-text-sm);
   text-decoration: none;
 }
 
+.v-about__links a + a {
+  border-top: 1px solid var(--v-border);
+}
+
+.v-about__links a:hover {
+  background: var(--v-surface-hover);
+  color: var(--v-accent);
+}
+
+.v-about__links svg {
+  flex: none;
+  color: var(--v-text-muted);
+}
+
+.v-about__links a:hover svg {
+  color: var(--v-accent);
+  transform: translateX(2px);
+}
+
+.v-about__get {
+  display: flex;
+  justify-content: center;
+  margin: var(--v-space-3) var(--v-space-5) 0;
+  text-decoration: none;
+}
+
+/* The foot is a strip of its own, so the close button sits on something instead of floating under
+   the last line of text. */
+.v-about__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-3);
+  flex-wrap: wrap;
+  margin-top: var(--v-space-4);
+  padding: var(--v-space-3) var(--v-space-5);
+  background: var(--v-surface);
+  border-top: 1px solid var(--v-border);
+}
+
 .v-about__copyright {
-  margin: var(--v-space-4) 0 0;
+  margin: 0;
   font-size: var(--v-text-xs);
   color: var(--v-text-muted);
 }
@@ -69,6 +131,5 @@
 }
 
 .v-about__close {
-  margin-top: var(--v-space-4);
-  width: 100%;
+  flex: none;
 }

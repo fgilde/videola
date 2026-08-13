@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
+import { Icon } from "../primitives/Icon";
 import wordmark from "./videola-wordmark.png";
 import "./About.css";
 
@@ -32,55 +33,57 @@ export function About({ version, desktop, onClose }: AboutProps): ReactElement {
 
   return (
     <dialog className="v-about" ref={ref} onClose={onClose} data-testid="about">
-      <img className="v-about__brand" src={wordmark} alt={t("app.title")} />
-      <p className="v-about__version">{t("about.version", { version })}</p>
+      <header className="v-about__head">
+        <img className="v-about__brand" src={wordmark} alt={t("app.title")} />
+        <span className="v-about__version">{t("about.version", { version })}</span>
+      </header>
+
       <p className="v-about__what">{t("about.what")}</p>
 
-      <ul className="v-about__links">
-        <li>
-          <a href={SITE} target="_blank" rel="noreferrer">
-            {t("about.site")}
+      {/* Rows rather than a bare bulleted list: each of these is somewhere to go, and a row the whole
+          width of the dialogue is a row a finger can hit. The chevron is what says so. */}
+      <nav className="v-about__links">
+        {[
+          { href: SITE, label: t("about.site") },
+          { href: `${SITE}guide/getting-started`, label: t("about.docs") },
+          { href: REPO, label: t("about.source") },
+          { href: `${REPO}/blob/main/LICENSE`, label: t("about.licence") },
+        ].map((link) => (
+          <a key={link.href} href={link.href} target="_blank" rel="noreferrer">
+            <span>{link.label}</span>
+            <Icon name="chevronRight" />
           </a>
-        </li>
-        <li>
-          <a href={`${SITE}guide/getting-started`} target="_blank" rel="noreferrer">
-            {t("about.docs")}
-          </a>
-        </li>
-        <li>
-          <a href={REPO} target="_blank" rel="noreferrer">
-            {t("about.source")}
-          </a>
-        </li>
-        <li>
-          <a href={`${REPO}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
-            {t("about.licence")}
-          </a>
-        </li>
-      </ul>
+        ))}
+      </nav>
 
       {/* Only where there is something to fetch. In the desktop build this would be an offer to
           install what is already running. */}
       {!desktop && (
-        <a className="v-about__get v-button v-button--primary" href={`${SITE}download`} target="_blank" rel="noreferrer">
+        <a
+          className="v-about__get v-button v-button--primary"
+          href={`${SITE}download`}
+          target="_blank"
+          rel="noreferrer"
+        >
           {t("about.getApp")}
         </a>
       )}
 
-      <p className="v-about__copyright">
-        © 2026{" "}
-        <a href="https://florian.gilde.org" target="_blank" rel="noreferrer">
-          Florian Gilde
-        </a>
-        {" · "}
-        <a href="https://www.gilde.org" target="_blank" rel="noreferrer">
-          gilde.org
-        </a>
-      </p>
-
-      <button type="button" className="v-button v-about__close" onClick={() => ref.current?.close()}>
-        {t("about.close")}
-      </button>
+      <footer className="v-about__foot">
+        <p className="v-about__copyright">
+          © 2026{" "}
+          <a href="https://florian.gilde.org" target="_blank" rel="noreferrer">
+            Florian Gilde
+          </a>
+          {" · "}
+          <a href="https://www.gilde.org" target="_blank" rel="noreferrer">
+            gilde.org
+          </a>
+        </p>
+        <button type="button" className="v-button v-about__close" onClick={() => ref.current?.close()}>
+          {t("about.close")}
+        </button>
+      </footer>
     </dialog>
   );
 }

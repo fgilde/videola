@@ -217,6 +217,20 @@ async function announce() {
   };
   const inMenu = (text) =>
     all(".v-topbar__menu button").find((node) => node.textContent.trim() === text);
+  // A group inside the overflow menu, opened by its label. Its entries are ordinary buttons, but only
+  // once the group is open: a closed <details> keeps its children out of the layout entirely.
+  const openGroup = (label) => {
+    openMenu();
+    const group = all(".v-topbar__group").find(
+      (node) => node.querySelector("summary").textContent.trim() === label,
+    );
+    if (group !== undefined) group.open = true;
+    return group;
+  };
+  const groupEntry = (prefix) =>
+    all(".v-topbar__group[open] .v-topbar__group-items button").find((node) =>
+      node.textContent.trim().startsWith(prefix),
+    );
   const position = () => q('[aria-label="Position"]').textContent.slice(0, 11);
   const banner = () =>
     [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent).join(" | ");
@@ -768,11 +782,13 @@ async function announce() {
     // into is the one thing that cannot agree with a number nobody looked at.
     const wide = q(".v-preview__canvas").getBoundingClientRect();
     check("the picture starts out wider than it is tall", wide.width > wide.height, true);
-    openMenu();
-    const shape = [...q(".v-topbar__menu").querySelectorAll("select")]
-      .find((node) => node.getAttribute("aria-label") === "Format ändern");
-    check("the shape of the edit can be changed from the menu", shape !== undefined, true);
-    setValue(shape, "portrait");
+    check("the shape of the edit can be changed from the menu",
+      openGroup("Format ändern") !== undefined, true);
+    // The menu is still open with the group open inside it. This is the defect these two groups were
+    // selects for: a select in this menu could not be reached at all, because the click that opened
+    // its dropdown closed the menu underneath it.
+    check("opening a group leaves the menu itself open", q(".v-topbar__more").open, true);
+    groupEntry("Hochkant 9:16").click();
     await sleep(500);
     const tall = q(".v-preview__canvas").getBoundingClientRect();
     check("and it turns upright", tall.height > tall.width, true);
@@ -787,9 +803,9 @@ async function announce() {
     checkNear("undone in one step, frame and clips together",
       q(".v-preview__canvas").getBoundingClientRect().width / q(".v-preview__canvas").getBoundingClientRect().height,
       wide.width / wide.height, 0.05);
-    // The overflow menu is closed and the focus given up. Left open with the focus in a select, the
-    // space bar later in this run opens that select instead of starting playback -- which is correct
-    // of the transport and would look like a transport that stopped answering.
+    // The overflow menu is closed and the focus given up. Left open with the focus inside it, the
+    // space bar later in this run presses whatever has the focus instead of starting playback --
+    // which is correct of the transport and would look like a transport that stopped answering.
     q(".v-topbar__more").open = false;
     document.activeElement?.blur();
 
@@ -1300,8 +1316,13 @@ async function announce() {
     // with room to hit, all of it inside a 390 px window.
     openMenu();
     const menu = q(".v-topbar__menu");
+    // Everything but the entries inside the groups: those are a level down, and a closed group has
+    // none of them on the screen. The groups themselves are checked below.
+    const rows = [...menu.querySelectorAll("button")].filter(
+      (node) => node.closest(".v-topbar__group") === null,
+    );
     check("the menu holds every action the bar gave up",
-      [...menu.querySelectorAll("button")].map((node) => node.getAttribute("aria-label") ?? node.textContent),
+      rows.map((node) => node.getAttribute("aria-label") ?? node.textContent),
       ["Neues Projekt", "Aus Vorlage", "Öffnen", "Medien importieren",
        "Untertitel importieren", "Untertitel exportieren", "EDL exportieren",
        "FCPXML exportieren (Resolve, Premiere)", "Ton als .audiola exportieren",
@@ -1314,16 +1335,27 @@ async function announce() {
     check("and the offer points at the download page",
       getApp?.getAttribute("href"), "https://fgilde.github.io/videola/download");
     checkAtLeast("with room to hit it", Math.round(getApp.getBoundingClientRect().height), 44);
-    // The two questions in the menu that are answered by choosing rather than by pressing.
-    check("the shape of the edit is one of them",
-      [...menu.querySelectorAll("select")].map((node) => node.getAttribute("aria-label")),
-      ["Einfügen", "Format ändern", "Layout"]);
+    // The two questions in the menu that are answered by choosing one of several rather than by
+    // pressing: each is a group of entries folded away behind its own label.
+    check("what to put down and what shape to use are groups of their own",
+      [...menu.querySelectorAll(".v-topbar__group > summary")].map((node) => node.textContent.trim()),
+      ["Einfügen", "Format ändern"]);
     check("and the open menu stays inside the window",
       menu.getBoundingClientRect().right <= innerWidth && menu.getBoundingClientRect().left >= 0,
       true);
     checkAtLeast("with rows a thumb can hit",
-      Math.min(...[...menu.querySelectorAll("button")].map((n) => n.getBoundingClientRect().height)),
+      Math.min(...[...rows, ...menu.querySelectorAll(".v-topbar__group > summary")]
+        .map((n) => n.getBoundingClientRect().height)),
       44);
+    // Opened on the narrow window, where the menu is at its longest: the entries are a thumb tall
+    // there too, and the whole thing still ends inside the window rather than past the bottom of it.
+    openGroup("Einfügen");
+    const entries = [...menu.querySelectorAll(".v-topbar__group[open] .v-topbar__group-items button")];
+    check("a group opens five things to put down", entries.length, 5);
+    checkAtLeast("its entries are a thumb tall as well",
+      Math.min(...entries.map((node) => node.getBoundingClientRect().height)), 44);
+    check("and the menu ends inside the window with the group open",
+      menu.getBoundingClientRect().bottom <= innerHeight, true);
     q(".v-topbar__more").open = false;
     check("the timeline is what the editor opens on", q('[data-testid="library"]'), null);
     check(
@@ -2071,27 +2103,24 @@ async function announce() {
   }
 
   // A title and a countdown, put down from the menu. Only the built application can show this:
-  // the entry is a select in the overflow, the track it lands on is chosen by reading the project,
+  // the entry is a group in the overflow, the track it lands on is chosen by reading the project,
   // and a countdown is the one generator whose picture depends on when it is asked for.
   //
   // It undoes itself, so what follows works on the project it was handed.
   async function inserted() {
     const before = all("[data-clip-id]").length;
-    const insertSelect = () => {
-      openMenu();
-      return [...q(".v-topbar__menu").querySelectorAll("select")]
-        .find((node) => node.getAttribute("aria-label") === "Einfügen");
-    };
-    const lay = async (value) => {
-      setValue(insertSelect(), value);
+    const lay = async (prefix) => {
+      openGroup("Einfügen");
+      groupEntry(prefix).click();
       q(".v-topbar__more").open = false;
       document.activeElement?.blur();
       await sleep(200);
     };
 
-    check("the menu offers something to put down that is not a medium", insertSelect() !== undefined, true);
+    check("the menu offers something to put down that is not a medium",
+      openGroup("Einfügen") !== undefined, true);
     q(".v-topbar__more").open = false;
-    await lay("lowerThird");
+    await lay("Bauchbinde");
     check("a title lands on the timeline", all("[data-clip-id]").length, before + 1);
     check("on a track named for what it carries",
       all(".v-timeline__headerKind").map((node) => node.textContent.trim()).includes("Text"), true);
@@ -2099,11 +2128,11 @@ async function announce() {
 
     // The second one may not overwrite the first. `clip.add` replaces what it covers, so the track
     // is chosen by looking for room -- which here means a second text track rather than a lost title.
-    await lay("banner");
+    await lay("Titel");
     check("a second title at the same instant does not eat the first",
       all("[data-clip-id]").length, before + 2);
 
-    await lay("countdown");
+    await lay("Vorlauf");
     check("a countdown lands as well", all("[data-clip-id]").length, before + 3);
     // On an overlay and not on the text track the titles took: a countdown is a picture over the
     // picture, and the kind of track is decided in the core rather than by whoever pressed the entry.
