@@ -40,7 +40,28 @@ const DEFAULT_PORT = configFromEnv({}).port;
 // The image's, which the Dockerfile states and the two Docker platforms have to match.
 const IMAGE_STORAGE = /VIDEOLA_STORAGE_ROOT=(\S+)/.exec(DOCKERFILE)?.[1];
 
+// Every path the web build reads at build time, which the image has to carry: a file the bundler opens
+// and the Dockerfile does not copy is a container that fails to build, and it fails in the release,
+// not here. The one there is today is the version manifest.
+const WEB_CONFIG = read("apps/web/vite.config.ts");
+
 describe("what every deployment agrees on", () => {
+  it("copies into the image every file the web build reads", () => {
+    const read = [...WEB_CONFIG.matchAll(/new URL\("([^"]+)"/g)].map((match) =>
+      // Relative to `apps/web`, which is where the config sits; the Dockerfile copies from the root.
+      match[1].replace(/^\.\.\//, "apps/"),
+    );
+
+    expect(read.length).toBeGreaterThan(0);
+    for (const path of read) {
+      const covered = path
+        .split("/")
+        .map((_, index, parts) => parts.slice(0, index + 1).join("/"))
+        .some((prefix) => DOCKERFILE.includes(`COPY ${prefix} `));
+      expect(covered, `the Dockerfile does not copy ${path}`).toBe(true);
+    }
+  });
+
   it("uses the port the server itself defaults to", () => {
     expect(DEFAULT_PORT).toBe(7331);
     for (const [name, text] of [

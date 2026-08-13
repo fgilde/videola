@@ -14,12 +14,20 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
-# apps/desktop and apps/docs are workspace members but stay out of the context:
-# pnpm 11 accepts a lockfile listing an importer that is absent from disk, and
-# neither the Tauri shell nor the documentation site contributes anything here.
+# apps/desktop and apps/docs are workspace members but stay out of the context
+# apart from the one file below: pnpm 11 accepts a lockfile listing an importer
+# that is absent from disk, and neither the Tauri shell nor the documentation
+# site contributes anything else here.
 COPY packages ./packages
 COPY apps/web ./apps/web
 COPY apps/server ./apps/server
+# One file out of apps/desktop, and only because it is where the version lives:
+# the web build reads it so the editor stamps the release it came from into every
+# project it writes. Copying the manifest is cheaper than a second place to bump.
+COPY apps/desktop/src-tauri/tauri.conf.json ./apps/desktop/src-tauri/tauri.conf.json
+# One file out of apps/desktop, and only because it is where the version lives:
+# the web build reads it so the editor stamps the release it came from into every
+# project it writes. Copying the manifest is cheaper than a second place to bump.
 COPY --from=wasm /src/packages/core/src/wasm ./packages/core/src/wasm
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter videola-web build && pnpm --filter videola-server build
