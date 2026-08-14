@@ -196,7 +196,9 @@ async function announce() {
     // not a broken shelf. The count goes into the message so a real failure says how far it got.
     const drawn = () => all(".v-fx__tile").filter((node) => node.querySelector("img")).length;
     return until(
-      () => `every tile to be drawn (${drawn()} of ${all(".v-fx__tile").length})`,
+      () =>
+        `every tile to be drawn (${drawn()} of ${all(".v-fx__tile").length}` +
+        `, host reports ${shelf()?.dataset.tiles ?? "no shelf"})`,
       () => (all(".v-fx__tile").length > 0 && drawn() === all(".v-fx__tile").length ? shelf() : null),
       180000,
     );

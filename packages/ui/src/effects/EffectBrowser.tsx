@@ -80,6 +80,11 @@ export function EffectBrowser({
         aria-label={t("fx.title")}
         tabIndex={-1}
         data-testid="effect-browser"
+        // What the host handed over, so a shelf with no pictures says which of the three things
+        // happened: the drawing never finished ("pending"), it finished with nothing, or it finished
+        // with pictures whose keys do not match these offers. A grid of blank tiles cannot be told
+        // apart from the outside, which is what made this hard to chase.
+        data-tiles={tiles === undefined ? "pending" : String(tiles.size)}
       >
         <div className="v-fx__head">
           <h2 className="v-fx__title">{t("fx.title")}</h2>
