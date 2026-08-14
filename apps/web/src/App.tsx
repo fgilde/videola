@@ -1996,6 +1996,20 @@ export function App(): ReactElement {
               : selectedClip.effects.map((authored) => authored.effectType)
           }
           tiles={tiles}
+          // A look is one press, so it is one step: every effect of the chain goes on under the same
+          // key. `effect.add` treats a repeated type as a no-op, so a look laid on twice is the same
+          // clip, and a look over another one adds only what the first did not have.
+          onLook={
+            browsing === 2 || selectedClip === undefined
+              ? undefined
+              : (effects) => {
+                  const key = `look-${selectedClip.id}-${(actionSequence += 1)}`;
+                  for (const id of effects) {
+                    edit(cmd.effectAdd(on.clip(selectedClip.id), id), key);
+                  }
+                  setBrowsing(undefined);
+                }
+          }
           onAdd={addFromBrowser}
           onClose={() => setBrowsing(undefined)}
         />

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "../i18n/I18nProvider";
+import { LOOKS } from "./looks";
 import { EffectBrowser, type EffectOffer } from "./EffectBrowser";
 
 // Deliberately out of the order they are meant to be read in: a fixture that arrives sorted lets a
@@ -186,5 +187,48 @@ describe("EffectBrowser", () => {
     show();
     expect(headings()).toEqual(["Colour", "Sharpness and blur", "Transitions"]);
     expect(screen.getByRole("button", { name: "Set as transition" })).toBeTruthy();
+  });
+
+  // The shortcut past the categories, and the reason it is a list rather than a set: the chain runs top
+  // to bottom, so the order in the table is the order on the clip.
+  it("hands a whole look over in one call, in the order it is written", () => {
+    const chains: string[][] = [];
+    render(
+      <I18nProvider>
+        <EffectBrowser
+          offers={OFFERS}
+          taken={[]}
+          tiles={undefined}
+          onAdd={vi.fn()}
+          onLook={(effects) => chains.push([...effects])}
+          onClose={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(document.querySelector('[data-look="vintage"]')!);
+
+    expect(chains).toEqual([["film-look", "vignette", "grain"]]);
+  });
+
+  // A shelf showing transitions has nothing to chain: a clip has one transition.
+  it("says nothing about looks where the host offers none", () => {
+    render(
+      <I18nProvider>
+        <EffectBrowser offers={OFFERS} taken={[]} tiles={undefined} onAdd={vi.fn()} onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+
+    expect(document.querySelector("[data-look]")).toBeNull();
+  });
+
+  // That every id in the table is an effect that exists is checked where both sides meet: this package
+  // does not depend on the engine on purpose -- an offer is satisfied structurally -- so the registry is
+  // not visible from here. The application harness presses a look and counts what landed on the clip.
+  it("keeps every look to at least two effects, which is what makes it a chain", () => {
+    for (const look of LOOKS) {
+      expect(look.effects.length, look.id).toBeGreaterThan(1);
+      expect(new Set(look.effects).size, `${look.id} repeats an effect`).toBe(look.effects.length);
+    }
   });
 });

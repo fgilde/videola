@@ -537,5 +537,6 @@
   "action.handOff": "Hand off …",
   "timeline.panZoom": "Slow push (Ken Burns)",
   "timeline.fade": "Fade in and out",
-  "text.presets": "Title presets"
+  "text.presets": "Title presets",
+  "fx.looks": "Looks"
 }

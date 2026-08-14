@@ -34,6 +34,7 @@ const CHAPTERS: [string, string][] = [
   ["Running it yourself", "self-hosting"],
   ["Building and releasing", "building-and-releasing"],
   ["Design documents", "design-documents"],
+  ["What is planned", "roadmap"],
 ];
 
 const KAPITEL: [string, string][] = [
@@ -51,6 +52,7 @@ const KAPITEL: [string, string][] = [
   ["Selbst betreiben", "self-hosting"],
   ["Bauen und Ausliefern", "building-and-releasing"],
   ["Design-Dokumente", "design-documents"],
+  ["Was geplant ist", "roadmap"],
 ];
 
 export default defineConfig({

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 
 import { useI18n, type Locale } from "../i18n/useI18n";
+import { LOOKS } from "./looks";
 import "./EffectBrowser.css";
 
 /**
@@ -33,6 +34,12 @@ export interface EffectBrowserProps {
    */
   tiles: ReadonlyMap<string, string> | undefined;
   onAdd: (id: string) => void;
+  /**
+   * A named arrangement of several of these at once. Its own callback rather than a loop over `onAdd`,
+   * because the host puts the whole chain on under one key: a look is one press and has to be one
+   * press of undo. Absent where the shelf is showing transitions, which do not chain.
+   */
+  onLook?: (effects: readonly string[]) => void;
   onClose: () => void;
 }
 
@@ -46,6 +53,7 @@ export function EffectBrowser({
   taken,
   tiles,
   onAdd,
+  onLook,
   onClose,
 }: EffectBrowserProps): ReactElement {
   const { t, locale } = useI18n();
@@ -100,6 +108,29 @@ export function EffectBrowser({
             {t("fx.close")}
           </button>
         </div>
+
+        {/* Above the categories, because it is the shortcut past them: somebody who knows they want
+            "Vintage" should not have to know that vintage is a fade, a vignette and grain in that
+            order. Only where effects chain -- a clip has one transition, so there is nothing to
+            arrange. */}
+        {onLook !== undefined && query === "" && (
+          <div className="v-fx__looks">
+            <h3 className="v-fx__category">{t("fx.looks")}</h3>
+            <div className="v-fx__lookRow">
+              {LOOKS.map((look) => (
+                <button
+                  key={look.id}
+                  type="button"
+                  className="v-button v-fx__look"
+                  data-look={look.id}
+                  onClick={() => onLook(look.effects)}
+                >
+                  {look.name[locale]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {found === 0 ? (
           <p className="v-fx__empty">{t("fx.noMatch", { query })}</p>

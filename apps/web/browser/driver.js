@@ -1708,6 +1708,24 @@ async function announce() {
     pointer("pointerup", q("[data-clip-id]"));
     await until("the inspector", () => effectPicker());
 
+    // Where the two sides meet: the look table lives in the interface package, which cannot see the
+    // effect registry on purpose, so this is the only place that can say a look names effects that
+    // exist. Pressed before the tiles are waited for, because it needs nothing drawn.
+    browseFor("Effekte durchsuchen").click();
+    await until("the shelf for the looks", () => shelf());
+    const looks = all("[data-look]");
+    checkAtLeast("the shelf offers looks as a shortcut past the categories", looks.length, 8);
+    const chainBefore = all(".v-inspector__effect").length;
+    looks.find((node) => node.dataset.look === "vintage").click();
+    await until("the shelf to close after a look", () => (shelf() === null ? true : null));
+    check("a look puts its whole chain on the clip",
+      all(".v-inspector__effect").length - chainBefore, 3);
+    check("and it raised nothing, so every id in it is an effect that exists", banner(), "");
+    button("Rückgängig").click();
+    await sleep(300);
+    check("one press of undo takes the whole look off again",
+      all(".v-inspector__effect").length, chainBefore);
+
     await openShelf("Übergänge durchsuchen");
     check("the transition shelf offers transitions and nothing else",
       all(".v-fx__tile").map((node) => node.dataset.effectId).sort().join(),

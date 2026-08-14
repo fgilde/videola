@@ -537,5 +537,6 @@
   "action.handOff": "Weitergeben …",
   "timeline.panZoom": "Sanfte Fahrt (Ken Burns)",
   "timeline.fade": "Weich ein- und ausblenden",
-  "text.presets": "Titel-Vorlagen"
+  "text.presets": "Titel-Vorlagen",
+  "fx.looks": "Looks (Effektketten)"
 }

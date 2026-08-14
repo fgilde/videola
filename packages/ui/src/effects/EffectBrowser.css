@@ -147,3 +147,19 @@
   color: var(--v-text-muted);
   font-size: var(--v-text-sm);
 }
+
+/* The shortcut past the categories: eight names, wrapping, above a grid of twenty-three tiles. */
+.v-fx__looks {
+  display: grid;
+  gap: var(--v-space-2);
+}
+
+.v-fx__lookRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-1);
+}
+
+.v-fx__look {
+  font-size: var(--v-text-sm);
+}
