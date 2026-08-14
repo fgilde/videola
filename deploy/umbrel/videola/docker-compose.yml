@@ -10,7 +10,7 @@ services:
       APP_PORT: 7331
 
   server:
-    image: ghcr.io/fgilde/videola:0.9.0
+    image: ghcr.io/fgilde/videola:0.9.1
     restart: on-failure
     stop_grace_period: 1m
     environment:
