@@ -920,6 +920,18 @@ wird er einmal pro ganzer Sekunde des eigenen Materials des Clips — ein beschn
 Cache-Schlüssel ist die Zahl auf dem Schirm, nicht der Zeitpunkt. Genau das hält ein Textlayout von
 jedem Bild fern.
 
+### Eine sanfte Fahrt über ein Standbild
+
+**Sanfte Fahrt (Ken Burns)** im Kontextmenü eines Clips schreibt die Bewegung, die ein Foto von sich
+aus nicht hat: ein Fünftel Bildgröße über die ganze Clip-Länge, dabei ein wenig aus der Mitte.
+
+Geschrieben werden **Keyframes, kein Modus** — zwei auf der Größe, zwei auf der Position, in einem
+Schritt der Historie. Das ist die Entscheidung dahinter: ein „Ken Burns"-Schalter wäre ein zweiter Weg,
+auf dem sich ein Clip bewegt, aufgelöst irgendwo neben dem Kern, und niemand könnte die Hälfte davon
+zurücknehmen. Vier Keys sind eine Änderung, die man ziehen, umtakten, weich machen oder löschen kann
+wie eine selbst gesetzte. Der letzte Key liegt einen Flick innerhalb des Clips und nicht an seinem
+Ende: das Ende ist exklusiv, ein Key dort wird nie gefragt.
+
 ## Untertitel
 
 Videola liest und schreibt **SRT** und **WebVTT**. Lass eine `.srt` oder `.vtt` auf den Editor

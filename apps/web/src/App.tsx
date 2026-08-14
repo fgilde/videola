@@ -735,6 +735,51 @@ export function App(): ReactElement {
     [doc, reportError],
   );
 
+  /**
+   * A slow push across a clip: the move a still picture cannot make on its own.
+   *
+   * Written as keyframes rather than as a mode, which is the whole design decision here. A "Ken Burns"
+   * switch would be a second way for a clip to move, resolved somewhere other than the core, and
+   * nobody could take half of it back. Four keys — a scale pair and a position pair — are an edit
+   * somebody can drag, retime, ease or delete like any other, and the core interpolates them the way
+   * it interpolates everything.
+   *
+   * A fifth of a frame over the whole clip, drifting a little off centre: enough to read as movement
+   * on a photograph, not enough to look like a zoom. The last key sits one flick inside the clip
+   * rather than at its end, because the end is exclusive and a key there is never evaluated.
+   */
+  const panZoom = useCallback(
+    (clip: ClipId) => {
+      if (doc === undefined) return;
+      const found = doc.state.timeline.tracks
+        .flatMap((track) => track.clips)
+        .find((candidate) => candidate.id === clip);
+      if (found === undefined || found.duration <= 1) return;
+      try {
+        const key = `panzoom-${clip}-${(actionSequence += 1)}`;
+        const target = { kind: "clip" as const, clip };
+        const last = found.start + found.duration - 1;
+        const drift = Math.round(doc.state.settings.width * 0.03);
+        for (const [name, from, to] of [
+          ["scaleX", 1, 1.2],
+          ["scaleY", 1, 1.2],
+          ["x", 0, -drift],
+          ["y", 0, -Math.round(drift * 0.4)],
+        ] as const) {
+          edit(
+            cmd.keyframeAdd(target, null, name, found.start, { kind: "float", value: from }, "ease"),
+            key,
+          );
+          edit(cmd.keyframeAdd(target, null, name, last, { kind: "float", value: to }, "ease"), key);
+        }
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, edit, reportError],
+  );
+
   // Where the markers become an edit. Every clip a marker passes through is cut, on every track
   // that is not locked, in one step of the history -- which is what makes cutting to a beat one
   // press rather than one press per bar.
@@ -1872,6 +1917,7 @@ export function App(): ReactElement {
                   onDetectCuts={detectCuts}
                   detecting={scanning}
                   onFreeze={freeze}
+                  onPanZoom={panZoom}
                   onSelectionChange={setSelection}
                   grab={grab}
                   onDropMedia={dropMedia}

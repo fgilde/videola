@@ -67,6 +67,31 @@ function Harness({ doc, startAt = 0 }: { doc: VideolaDocument; startAt?: number 
         // Against the live document, the way the application runs it: a freeze is two cuts and the
         // second one names a clip the first minted.
         onFreeze={(clip, at, hold) => freezeFrame(doc, clip, at, hold)}
+        // The application's own arithmetic, because what this checks is the entry and the keys it
+        // leaves behind rather than where the numbers come from.
+        onPanZoom={(clip) => {
+          const found = doc.state.timeline.tracks
+            .flatMap((track) => track.clips)
+            .find((candidate) => candidate.id === clip);
+          if (found === undefined) return;
+          const last = found.start + found.duration - 1;
+          for (const [name, from, to] of [
+            ["scaleX", 1, 1.2],
+            ["scaleY", 1, 1.2],
+            ["x", 0, -30],
+            ["y", 0, -12],
+          ] as const) {
+            const target = { kind: "clip" as const, clip };
+            doc.dispatch(
+              cmd.keyframeAdd(target, null, name, found.start, { kind: "float", value: from }, "ease"),
+              "panzoom",
+            );
+            doc.dispatch(
+              cmd.keyframeAdd(target, null, name, last, { kind: "float", value: to }, "ease"),
+              "panzoom",
+            );
+          }
+        }}
       />
     </I18nProvider>
   );
@@ -916,6 +941,33 @@ describe("freezing a frame", () => {
     expect(held?.keyframes.speed?.every((key) => key.value.kind === "float" && key.value.value === 0)).toBe(
       true,
     );
+  });
+
+  // The move a still picture cannot make on its own, and the reason it is keyframes rather than a
+  // mode: what it leaves behind is an edit somebody can drag, retime or delete.
+  it("writes a slow push as four pairs of keyframes, in one step", async () => {
+    const doc = await longClip();
+    render(<Harness doc={doc} startAt={0} />);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 100, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sanfte Fahrt (Ken Burns)" }));
+
+    const clip = pieces(doc)[0];
+    for (const name of ["scaleX", "scaleY", "x", "y"]) {
+      expect(clip?.keyframes[name]?.length, name).toBe(2);
+    }
+    // The last key sits inside the clip rather than at its end, which is exclusive and never asked.
+    const scale = clip?.keyframes.scaleX ?? [];
+    expect(scale[0]?.time).toBe(clip?.start);
+    expect(scale[1]?.time).toBeLessThan((clip?.start ?? 0) + (clip?.duration ?? 0));
+    // Close rather than equal: a scale is an f32 in the core, and 1.2 does not survive the round trip
+    // as the same double it went in as.
+    const grown = scale[1]?.value;
+    expect(grown?.kind).toBe("float");
+    expect(grown?.kind === "float" ? grown.value : 0).toBeCloseTo(1.2, 5);
+
+    act(() => void doc.undo());
+    expect(pieces(doc)[0]?.keyframes.scaleX).toBeUndefined();
   });
 
   it("is one step to undo", async () => {

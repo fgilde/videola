@@ -147,6 +147,8 @@ export interface TimelineProps {
    * prop is a snapshot, and the second cut would name a clip the first one had already retired.
    */
   onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
+  /** Write a slow push across the clip: two keyframes on the scale, two on the position. */
+  onPanZoom?: (clip: ClipId) => void;
   onSelectionChange?: (clips: readonly ClipId[]) => void;
   /**
    * A medium the media library has under a pointer. The timeline judges the whole gesture from
@@ -173,6 +175,7 @@ export function Timeline({
   onDetectCuts,
   detecting = false,
   onFreeze,
+  onPanZoom,
   onSelectionChange,
   grab,
   onDropMedia,
@@ -848,6 +851,7 @@ export function Timeline({
           onPaste={paste}
           onPasteLook={pasteLook}
           onFreeze={onFreeze}
+          onPanZoom={onPanZoom}
           onDetectCuts={onDetectCuts}
           detecting={detecting}
         />
@@ -870,6 +874,7 @@ interface MenuProps {
   onPaste: () => void;
   onPasteLook: () => void;
   onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
+  onPanZoom?: (clip: ClipId) => void;
   onDetectCuts?: (clip: ClipId) => void;
   detecting?: boolean;
 }
@@ -948,6 +953,14 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
         props.detecting === true ||
         clip.source.kind !== "media",
       onSelect: close(() => props.onDetectCuts?.(clip.id)),
+    },
+    {
+      // The move every photo wants and no still has: a slow push across the clip, written as
+      // keyframes rather than as a mode -- so it can be dragged, retimed or taken apart afterwards
+      // like anything else somebody set by hand. Named after the documentaries that made it a habit.
+      label: t("timeline.panZoom"),
+      disabled: props.onPanZoom === undefined,
+      onSelect: close(() => props.onPanZoom?.(clip.id)),
     },
     {
       // Two seconds, which is what a beat on a face is. It has to fit inside the clip with material

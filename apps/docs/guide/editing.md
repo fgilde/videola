@@ -860,6 +860,18 @@ per whole second of the clip's own material — so a trimmed head skips the fron
 speed ramp stretches it — and the cache is keyed on the number standing on screen rather than on the
 instant, which is what keeps a text layout off every frame.
 
+### A slow push over a still
+
+**Slow push (Ken Burns)** in a clip's context menu writes the move a photograph cannot make on its
+own: a fifth of a frame of scale over the whole clip, drifting a little off centre.
+
+It writes **keyframes, not a mode** — two on the scale, two on the position, in one step of the
+history. That is the whole design decision: a "Ken Burns" switch would be a second way for a clip to
+move, resolved somewhere other than the core, and nobody could take half of it back. Four keys are an
+edit anybody can drag, retime, ease or delete like one they set by hand. The last key sits one flick
+inside the clip rather than at its end, because the end is exclusive and a key there is never asked
+for.
+
 ## Subtitles
 
 Videola reads and writes **SRT** and **WebVTT**. Drop an `.srt` or a `.vtt` on the editor, or reach

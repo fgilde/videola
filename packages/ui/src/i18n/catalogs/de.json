@@ -534,5 +534,6 @@
   "menu.project": "Projekt",
   "menu.view": "Ansicht",
   "menu.help": "Hilfe",
-  "action.handOff": "Weitergeben …"
+  "action.handOff": "Weitergeben …",
+  "timeline.panZoom": "Sanfte Fahrt (Ken Burns)"
 }

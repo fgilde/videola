@@ -534,5 +534,6 @@
   "menu.project": "Project",
   "menu.view": "View",
   "menu.help": "Help",
-  "action.handOff": "Hand off …"
+  "action.handOff": "Hand off …",
+  "timeline.panZoom": "Slow push (Ken Burns)"
 }
