@@ -536,5 +536,6 @@
   "menu.help": "Help",
   "action.handOff": "Hand off …",
   "timeline.panZoom": "Slow push (Ken Burns)",
-  "timeline.fade": "Fade in and out"
+  "timeline.fade": "Fade in and out",
+  "text.presets": "Title presets"
 }

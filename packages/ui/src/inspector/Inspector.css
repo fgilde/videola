@@ -314,6 +314,20 @@
 /* A label and the one or two controls that answer it, on one line: the colour beside the weight
    beside the alignment is three answers about the same title, and three rows would read as three
    unrelated settings. It wraps, because the panel is a column on a phone. */
+/* A wall of names, wrapping: twelve titles are twelve names, and a column of twelve rows would push
+   everything else in this panel off the screen. */
+.v-text__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-1);
+  width: 100%;
+}
+
+.v-text__preset {
+  flex: 0 1 auto;
+  font-size: var(--v-text-xs);
+}
+
 .v-text__row {
   display: flex;
   flex-wrap: wrap;

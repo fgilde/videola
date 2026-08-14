@@ -884,6 +884,21 @@ in dem man landen kann.
 Der Text-Bereich der Eigenschaften ändert alles an einem Titel: die Worte, die Farbe, die
 Schriftstärke, die Ausrichtung, die Schriftgröße, die Textbreite und die Höhe im Bild.
 
+### Fertige Titel
+
+Zwölf im Text-Bereich — Klartext, Bauchbinde, Schlagzeile, Eilmeldung, Neon, Zitat, Untertitel,
+Konturschrift, Abspannzeile, Aufkleber, Hochkant-Aufhänger, Notiz. Ein Druck ersetzt den ganzen Stil.
+
+Ersetzt und nicht gemischt, mit Absicht: eine Vorlage, die nur die Farbe setzt, ließe Laufweite,
+Kasten und Schatten der vorigen stehen — und das Zweite, das man probiert, sähe nach keinem der beiden
+Looks aus.
+
+Das sind **Daten, kein Code** — eine Tabelle mit Stilen, die der Renderer ohnehin liest. Deshalb können
+es hundert werden. Nichts wird geladen und nichts von jemandem lizenziert: der Look ist Arithmetik über
+eine Schrift, die das System schon hat. Ein Test läuft über die Tabelle und verweigert jede Bewegung,
+die der Renderer nicht zeichnet, und jede Farbe, die keine ist — beides fiele still zurück und sähe aus
+wie eine Vorlage, die nichts tut.
+
 ### Wie ein Titel kommt und geht
 
 Im selben Bereich steht **Bewegung**: ein Auftritt, ein Abgang und eine Dauerbewegung.

@@ -4,6 +4,7 @@ import { cmd, textGenerator, type Clip, type Command, type JsonValue } from "@vi
 
 import { useI18n } from "../i18n/useI18n";
 import { ParamRow } from "./ParamRow";
+import { TEXT_PRESETS } from "./textPresets";
 
 /** What the renderer implements. A move outside this list falls back and the title stands still. */
 const MOVES = ["none", "fade", "rise", "fall", "grow"] as const;
@@ -52,7 +53,7 @@ export function TextPanel({
   clip: Clip;
   send: (command: Command, coalesceKey?: string) => void;
 }): ReactElement | null {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const generator = textGenerator(clip);
   const content = generator?.content ?? "";
   const [draft, setDraft] = useState(content);
@@ -107,6 +108,27 @@ export function TextPanel({
         <button type="button" className="v-button" disabled={draft === content} onClick={commit}>
           {t("text.apply")}
         </button>
+
+        {/* Ready-made titles, which is the fastest way from "I want a title" to a title that looks
+            like somebody made it. The whole style is replaced rather than merged: a preset that only
+            set the colour would leave the last one's tracking and shadow behind, and the second thing
+            anybody tried would be neither of the two looks they picked. */}
+        <label className="v-param__label">{t("text.presets")}</label>
+        <div className="v-text__presets">
+          {TEXT_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className="v-button v-text__preset"
+              data-preset={preset.id}
+              onClick={() =>
+                send(cmd.clipSetGenerator(clip.id, { ...generator, style: { ...preset.style } }))
+              }
+            >
+              {preset.name[locale]}
+            </button>
+          ))}
+        </div>
 
         <div className="v-text__row">
           <label className="v-param__label" htmlFor={`text-color-${clip.id}`}>

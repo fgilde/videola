@@ -827,6 +827,21 @@ A title starts with placeholder words, and the inspector's **Text** panel change
 it: the words, the colour, the weight, the alignment, the type size, the text width and where it sits
 in the frame.
 
+### Ready-made titles
+
+Twelve of them in the **Text** panel — plain, lower third, headline, breaking news, neon, quotation,
+caption, outlined, credit line, sticker, upright hook, note. One press replaces the whole style.
+
+Replaced rather than merged, deliberately: a preset that set only the colour would leave the previous
+one's tracking, box and shadow behind, and the second thing anybody tried would look like neither of
+the two they picked.
+
+They are **data, not code** — a table of styles the renderer already reads — which is why there can be
+a hundred. Nothing is downloaded and nothing is licensed from anybody: the look is arithmetic over a
+font the system already has. A test walks the table and refuses a move the renderer does not draw or a
+colour that is not a colour, because both would fall back silently and look like a preset that does
+nothing.
+
 ### How a title arrives and leaves
 
 Under the same panel, **Movement**: an arrival, a departure and a continuous beat.

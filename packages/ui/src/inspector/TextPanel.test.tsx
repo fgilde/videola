@@ -6,6 +6,7 @@ import type { Clip, Command } from "@videola/core";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { makeClip } from "../timeline/Timeline.test";
 import { TextPanel } from "./TextPanel";
+import { TEXT_PRESETS } from "./textPresets";
 
 function field(): HTMLTextAreaElement {
   return screen.getByTestId("text-content") as HTMLTextAreaElement;
@@ -69,7 +70,7 @@ describe("the text panel", () => {
   it("keeps the clip's own style when only the words change", () => {
     const { sent } = show(textClip("Before", { y: 0.5, color: "#ff0000" }));
     fireEvent.change(screen.getByTestId("text-content"), { target: { value: "After" } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Uebernehmen" }));
     expect(sent[0]).toMatchObject({
       generator: { style: { y: 0.5, color: "#ff0000" } },
     });
@@ -90,7 +91,9 @@ describe("the text panel", () => {
     fireEvent.change(field(), { target: { value: "Same" } });
     fireEvent.blur(field());
     expect(sent).toEqual([]);
-    expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Uebernehmen" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   // An undo leaves the clip's id alone and changes only its words, which is exactly the case a
@@ -160,5 +163,49 @@ describe("the text panel", () => {
     expect((screen.getByTestId("text-weight") as HTMLSelectElement).value).toBe("700");
     expect((screen.getByTestId("text-color") as HTMLInputElement).value).toBe("#ffffff");
     expect((screen.getByTestId("text-animate-in") as HTMLSelectElement).value).toBe("none");
+  });
+
+  // The gallery half: a name, one press, a title that looks like somebody made it. Data rather than
+  // code, which is why there can be many -- and why what has to be checked is the data.
+  it("applies a preset as a whole style, keeping the words", () => {
+    const { sent } = show(textClip("Mein Titel", { animateIn: "rise", fontSize: 0.3 }));
+
+    fireEvent.click(document.querySelector('[data-preset="lower-third"]')!);
+
+    const command = sent[0] as { generator: { content: string; style: Record<string, unknown> } };
+    expect(command.generator.content).toBe("Mein Titel");
+    // Replaced, not merged: the old size is gone rather than sitting under the new look.
+    expect(command.generator.style.fontSize).toBe(0.045);
+    expect(command.generator.style.background).toBe("#101828cc");
+  });
+
+  it("offers every shipped preset by name", () => {
+    show(textClip("Titel"));
+
+    const names = [...document.querySelectorAll("[data-preset]")].map((node) => node.textContent);
+
+    expect(names).toContain("Bauchbinde");
+    expect(names).toContain("Eilmeldung");
+    expect(names.length).toBeGreaterThanOrEqual(12);
+  });
+
+  // Every preset goes through the same trust boundary a project file does, and the renderer takes the
+  // default for anything it does not recognise -- so a mistyped move in this table would look exactly
+  // like a title with no movement, silently, in a preset somebody picked for its movement.
+  it("names only moves and colours the renderer can draw", () => {
+    for (const preset of TEXT_PRESETS) {
+      for (const field of ["animateIn", "animateOut"] as const) {
+        const move = preset.style[field];
+        if (move !== undefined) {
+          expect(["none", "fade", "rise", "fall", "grow"], `${preset.id}.${field}`).toContain(move);
+        }
+      }
+      const loop = preset.style.loop;
+      if (loop !== undefined) expect(["none", "pulse"]).toContain(loop);
+      for (const [key, value] of Object.entries(preset.style)) {
+        if (typeof value !== "string" || value === "" || !/colou?r|background/i.test(key)) continue;
+        expect(String(value), `${preset.id}.${key}`).toMatch(/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+      }
+    }
   });
 });
