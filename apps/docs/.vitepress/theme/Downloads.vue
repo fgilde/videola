@@ -69,6 +69,9 @@ const TEXT = {
     browser: "Oder im Browser bleiben",
     browserBody:
       "Videola läuft vollständig im Browser: Projekte liegen in der Ablage des Browsers, nichts wird hochgeladen. Der Editor ist derselbe.",
+    demo: "Live ausprobieren",
+    demoBody:
+      "Eine laufende Ausgabe, ohne Installation und ohne Konto. Was Sie dort anlegen, bleibt in Ihrem Browser — geteilt wird nur die Adresse.",
     loading: "Aktuelle Ausgabe wird gelesen …",
     failed: "Die Liste der Dateien war nicht erreichbar.",
     failedLink: "Zu den Releases auf GitHub",
@@ -86,6 +89,9 @@ const TEXT = {
     browser: "Or stay in the browser",
     browserBody:
       "Videola runs entirely in the browser: projects live in the browser's own storage and nothing is uploaded. The editor is the same one.",
+    demo: "Try it live",
+    demoBody:
+      "A running build, with no installation and no account. What you make there stays in your own browser — only the address is shared.",
     loading: "Reading the current release …",
     failed: "The file list could not be reached.",
     failedLink: "Releases on GitHub",
@@ -109,6 +115,8 @@ const assets = ref<Asset[] | undefined>(undefined);
 const version = ref<string | undefined>(undefined);
 const failed = ref(false);
 const mine = ref<string | undefined>(undefined);
+const DEMO = "https://video.nksoft.de/";
+
 const t = computed(() => TEXT[props.lang]);
 
 // Read once, on the client. The release is not baked into the page: a page built in March would go
@@ -204,6 +212,10 @@ const megabytes = (bytes: number): string =>
       <section class="dl__aside">
         <h2 class="dl__heading">{{ t.browser }}</h2>
         <p>{{ t.browserBody }}</p>
+        <!-- Under the browser section, because it is the same answer with nothing to download: a
+             running build somebody can open and judge in a minute. -->
+        <a class="dl__demo" :href="DEMO" target="_blank" rel="noreferrer">{{ t.demo }}</a>
+        <p class="dl__demoNote">{{ t.demoBody }}</p>
       </section>
       <section class="dl__aside">
         <h2 class="dl__heading">{{ t.docker }}</h2>

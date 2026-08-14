@@ -268,3 +268,31 @@
     transform: none;
   }
 }
+
+/* The live build, under the browser section: a link that reads as an offer rather than as prose, but
+   not as loud as the download button above it -- somebody who came here to download should not have to
+   read past a second primary. */
+.dl__demo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--vp-c-brand-1);
+  border-radius: 8px;
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dl__demo:hover {
+  background: color-mix(in srgb, var(--vp-c-brand-1) 12%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vp-c-brand-1) 18%, transparent);
+}
+
+.dl__demoNote {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--vp-c-text-2);
+}

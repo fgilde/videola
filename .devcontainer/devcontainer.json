@@ -1,0 +1,21 @@
+{
+  "name": "Videola",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": { "version": "latest", "profile": "default" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "postCreateCommand": ".devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": { "terminal.integrated.defaultProfile.linux": "bash" }
+    }
+  },
+  "forwardPorts": [5173, 7331],
+  "portsAttributes": {
+    "5173": { "label": "editor (vite)", "onAutoForward": "notify" },
+    "7331": { "label": "server (editor, API, MCP)", "onAutoForward": "silent" }
+  },
+  "hostRequirements": { "cpus": 4, "memory": "8gb" }
+}

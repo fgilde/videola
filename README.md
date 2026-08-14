@@ -2,6 +2,25 @@
 
 # Videola
 
+[![Release](https://img.shields.io/github/v/release/fgilde/videola?label=release&color=6b5bff)](https://github.com/fgilde/videola/releases/latest)
+[![CI](https://github.com/fgilde/videola/actions/workflows/ci.yml/badge.svg)](https://github.com/fgilde/videola/actions/workflows/ci.yml)
+[![Licence: GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
+[![Try it live](https://img.shields.io/badge/try%20it-live-2ea043)](https://video.nksoft.de/)
+[![Documentation](https://img.shields.io/badge/docs-videola.app-informational)](https://videola.app/)
+[![Container](https://img.shields.io/badge/ghcr.io-videola-0db7ed)](https://github.com/fgilde/videola/pkgs/container/videola)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/codespaces-open-24292e?logo=github)](https://codespaces.new/fgilde/videola)
+
+Badges that report something and nothing else: what the newest release is, whether the tests are green
+on `main`, what you may do with the code, where to try it without installing anything, where it is
+written up, and where the image lives.
+
+The Codespaces badge is not decoration. This repository wants Rust, wasm-pack, Node 22, pnpm at a
+pinned version and a browser before anything runs at all, and `.devcontainer` installs all five — so
+"open it and build it" is one click rather than an afternoon.
+
+A coverage percentage is deliberately absent: six harnesses here render pixels and decode audio, and
+one number laid over them would say less than any one of them does on its own.
+
 Videola is a browser-based video editor. The chain runs end to end: drop a video in, cut it on the
 timeline, add effects and keyframes, mix the audio, and export a file a player opens — on a desktop,
 a tablet or a phone. There is an HTTP API and an MCP server for AI agents, and templates that bake

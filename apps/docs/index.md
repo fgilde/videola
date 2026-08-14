@@ -13,6 +13,9 @@ hero:
       text: Downloads
       link: /download
     - theme: alt
+      text: Try it live
+      link: https://video.nksoft.de/
+    - theme: alt
       text: What it does
       link: /guide/features
     - theme: alt

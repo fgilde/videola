@@ -8,3 +8,5 @@ packages/core/src/generated/** text eol=lf
 # return ends up inside an environment value rather than at the end of a line.
 docker/Dockerfile text eol=lf
 deploy/**/*.yml text eol=lf
+# The container's own script runs on Linux, so it must not carry CR bytes either.
+.devcontainer/*.sh text eol=lf
