@@ -1,6 +1,6 @@
 # Effekte und Übergänge
 
-**Zwanzig Effekte, neun Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
+**Dreiundzwanzig Effekte, elf Übergänge, zwei Masken, drei Messgeräte und eine Textmaschine — ausgewählt
 in einer Bibliothek, die jeden einzelnen bei der Arbeit zeigt.** Jede Farbe auf dieser Seite ist an
 einem echten Treiber gemessen und nicht behauptet: `pnpm --filter @videola/engine test:gpu` fährt 429
 Pixelprüfungen durch headless Chrome, und jede Aussage hier unten ist eine davon.
@@ -360,6 +360,9 @@ Eigenschaft der Aufnahme ist und nicht der Ebene — und genau das ist eine Vign
 | Verpixeln | Detail | `size` 1–128 | eine Farbe pro Kachel; für Gesicht, Kennzeichen, Bildschirm |
 | Filmkorn | Detail | `amount` 0–0,6, `size` 1–12, `seed` 0–100 | gehashtes Rauschen, in den Mitteltönen am stärksten; `seed` statt Uhr, damit ein zweiter Export dasselbe Bild ergibt |
 | Farbversatz | Detail | `distance` 0–40, `angle` 0–360 | Rot nach vorn, Blau nach hinten — bei 3 eine Linsenfranse, bei 30 ein Glitch |
+| Farbton | Farbe | `angle` −180–180 | dreht das ganze Farbrad, in YIQ gedreht, damit nichts umschlägt |
+| Farbreduktion | Farbe | `levels` 2–32 | rastert jeden Kanal auf wenige Stufen; aus Aufnahme wird Zeichnung |
+| Spiegeln | Detail | `axis` 0–1, `vertical`, `flip` | klappt eine Hälfte des Bildes auf die andere, um eine verschiebbare Achse |
 | Schwarzweiß | Farbe | `amount` 0–1, `tone` −1–1 | Rec.709-Luma, mit warmem Sepia- oder kaltem Ende |
 | Filmlook | Farbe | `fade` 0–1, `warmth` −1–1 | hebt die Schwarzwerte an und nimmt Farbe heraus — der ausgeblichene Druck |
 | Richtungsunschärfe | Detail | `length` 0–200, `angle` −180–180 | ein Zug entlang einer Achse, wie ein schneller Schwenk |
@@ -684,6 +687,8 @@ seinen eigenen Effekten, und `progress` läuft über das Fenster des Übergangs 
 | Schieben | `angle` 0–360, `push` 0–1 | der ankommende Clip kommt herein; `push` sagt, wie weit er den abgehenden vor sich her schiebt |
 | Kreisblende | `centerX`, `centerY`, `softness` | ein Kreis öffnet sich auf den ankommenden Clip |
 | Zoomen | `from` 0,05–4 | der ankommende Clip wächst aus der Mitte |
+| Schwenk | `angle` 0–360, `amount` 0–600 | beide Clips schmieren entlang der Richtung, in der Mitte am stärksten — der Schnitt liegt darin |
+| Helligkeitsblende | `softness` 0,01–1, `invert` | der neue Clip kommt durch die dunklen Stellen des alten herein, oder durch die hellen |
 | Schieben | `angle` 0–360 | beide Clips bewegen sich zusammen, wie zwei Bilder eines Streifens am Fenster vorbei |
 | Bildstörung | `amount` 0–2, `bands` 2–60 | das Bild reißt in Bänder, die Farbe läuft auseinander — in der Mitte am stärksten |
 | Weichzeichnen-Blende | `amount` 0–48 | eine Überblendung, die in der Mitte weich wird und an beiden Enden wieder scharf |

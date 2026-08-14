@@ -210,11 +210,34 @@ export function TopBar({
         disabled={actions.canRedo !== true}
       />
       <span className="v-topbar__rule" aria-hidden="true" />
+      {/* On the bar as well as in View, because it is the one preference somebody uses before they
+          know where the menus are -- and two letters is the whole control. */}
+      <LocaleSwitch />
       {/* The two the whole bar is arranged around, on it rather than in a menu: exporting is what
           the work is for, and saving is the one action nobody should have to look for. */}
       {roomy && <Action label={t("action.export")} onClick={actions.onExport} />}
       <Action label={t("action.save")} onClick={actions.onSave} primary />
     </header>
+  );
+}
+
+/**
+ * Two letters, and the language they are not. On the bar rather than only under View: somebody who
+ * opened this in the wrong language is looking for exactly this control and cannot read the menu
+ * titles to find it.
+ */
+function LocaleSwitch(): ReactElement {
+  const { locale, setLocale } = useI18n();
+  return (
+    <button
+      type="button"
+      className="v-button v-topbar__lang"
+      aria-label="Deutsch / English"
+      data-testid="locale-switch"
+      onClick={() => setLocale(locale === "de" ? "en" : "de")}
+    >
+      <span className="v-topbar__locale">{locale.toUpperCase()}</span>
+    </button>
   );
 }
 

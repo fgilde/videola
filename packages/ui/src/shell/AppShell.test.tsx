@@ -95,7 +95,8 @@ describe("AppShell", () => {
 
   it("switches every action label when the language changes", () => {
     render(<AppShell>content</AppShell>);
-    act(() => screen.getByRole("button", { name: "Deutsch / English" }).click());
+    // The one on the bar, which is the one somebody who cannot read the menu titles will find.
+    act(() => screen.getByTestId("locale-switch").click());
     for (const name of ["New project", "Open", "Import media", "Add track", "Undo", "Redo", "Save"]) {
       expect(named(name).length).toBeGreaterThan(0);
     }
@@ -160,16 +161,21 @@ describe("AppShell", () => {
     const controls = [...document.querySelectorAll(".v-topbar button, .v-topbar summary")]
       .filter((node) => node.closest(".v-topbar__menu") === null)
       .map((node) => node.getAttribute("aria-label") ?? node.textContent);
-    expect(controls).toEqual(["Weitere Aktionen", "Rückgängig", "Wiederholen", "Speichern"]);
+    expect(controls).toEqual(["Weitere Aktionen", "Rückgängig", "Wiederholen",
+      "Deutsch / English", "Speichern"]);
   });
 
   it("moves exporting and the settings into the menu at phone width", () => {
     stubEnvironment(390);
     renderPhone();
-    for (const name of ["Exportieren", "Deutsch / English", "Hell"]) {
+    for (const name of ["Exportieren", "Hell"]) {
       expect(inMenu(name)).toBe(true);
       expect(onBar(name)).toBe(false);
     }
+    // The language is in both places on purpose: under View like every other preference, and on the
+    // bar because it is the one a person reaches for before they can read the menu titles.
+    expect(inMenu("Deutsch / English")).toBe(true);
+    expect(onBar("Deutsch / English")).toBe(true);
     // Saving stays on the bar even there: it is the one action nobody should have to look for, and
     // it is one button wide.
     expect(onBar("Speichern")).toBe(true);

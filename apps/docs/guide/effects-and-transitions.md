@@ -1,6 +1,6 @@
 # Effects and transitions
 
-**Twenty effects, nine transitions, two masks, three measuring instruments and a text engine —
+**Twenty-three effects, eleven transitions, two masks, three measuring instruments and a text engine —
 chosen from a browser that shows you each one at work.** Every colour on this page was measured
 against a real driver rather than asserted: `pnpm --filter @videola/engine test:gpu` runs 429 pixel
 checks through headless Chrome, and each claim below is one of them.
@@ -336,6 +336,8 @@ layer, which is what a vignette is.
 | Colour temperature | colour | `amount` −1–1 | red against blue, green anchored |
 | Curves | colour | `luma`, `red`, `green`, `blue`, each a list of points | drags single tones up or down |
 | Colour wheels | colour | `liftTint`/`liftAmount`, `gammaTint`/`gammaAmount`, `gainTint`/`gainAmount` | black point, midtones and white point |
+| Hue | colour | `angle` −180–180 | turns the whole colour wheel, rotated in YIQ so it cannot wrap |
+| Posterize | colour | `levels` 2–32 | snaps each channel to a few steps; footage becomes something drawn |
 | Black and white | colour | `amount` 0–1, `tone` −1–1 | Rec.709 luma, with the warm sepia or cold end left in |
 | Film look | colour | `fade` 0–1, `warmth` −1–1 | lifts the blacks off zero and pulls some colour out — the faded print |
 | Vignette | colour | `amount` 0–1, `size` 0–1.4 | darkens towards the corners |
@@ -343,6 +345,7 @@ layer, which is what a vignette is.
 | Sharpen | detail | `amount` 0–4 | unsharp mask against the four neighbours |
 | Mosaic | detail | `size` 1–128 | one colour per cell; for a face, a plate, a screen |
 | Film grain | detail | `amount` 0–0.6, `size` 1–12, `seed` 0–100 | hashed noise, strongest in the mid-tones; `seed` rather than a clock, so a re-export is the same picture |
+| Mirror | detail | `axis` 0–1, `vertical`, `flip` | folds one half of the frame onto the other, about a movable axis |
 | RGB split | detail | `distance` 0–40, `angle` 0–360 | red one way, blue the other — a lens fringe at 3, a glitch at 30 |
 | Directional blur | detail | `length` 0–200, `angle` −180–180 | a smear along one axis, the way a fast pan looks |
 | Glow | detail | `amount` 0–3, `threshold` 0–1, `radius` 0–32 | spreads what is bright and keeps what is not |
@@ -650,6 +653,8 @@ effects, and `progress` runs from nothing to everything across the transition's 
 | Iris | `centerX`, `centerY`, `softness` | a circle opens onto the incoming clip |
 | Zoom | `from` 0.05–4 | the incoming clip grows out of the middle |
 | Blur dissolve | `amount` 0–48 | a dissolve that goes soft in the middle and sharp again at both ends |
+| Whip pan | `angle` 0–360, `amount` 0–600 | both clips streak along the heading, hardest in the middle, and the cut sits inside the smear |
+| Luma dissolve | `softness` 0.01–1, `invert` | the new clip arrives through the dark parts of the outgoing picture, or the bright ones |
 | Push | `angle` 0–360 | both clips move together, like two frames of one strip pulled past the window |
 | Glitch | `amount` 0–2, `bands` 2–60 | the picture tears into bands and the colour separates, hardest in the middle |
 | Dip to colour | `colour` | out through a colour of your choosing and back in |

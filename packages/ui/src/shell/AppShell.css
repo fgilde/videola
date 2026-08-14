@@ -173,6 +173,12 @@
   background: var(--v-border);
 }
 
+/* Two letters, so the button is square rather than a word-shaped gap in the row. */
+.v-topbar__lang {
+  min-width: var(--v-touch-target);
+  padding-inline: var(--v-space-2);
+}
+
 .v-topbar__locale {
   font-size: var(--v-text-xs);
   font-weight: var(--v-weight-strong);

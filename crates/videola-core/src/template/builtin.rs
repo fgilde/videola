@@ -2076,6 +2076,9 @@ mod tests {
         "film-look",
         "grain",
         "rgb-split",
+        "hue",
+        "posterize",
+        "mirror",
     ];
     const DRAWN_TRANSITIONS: &[&str] = &[
         "crossfade",
@@ -2087,6 +2090,8 @@ mod tests {
         "blur-dissolve",
         "push",
         "glitch",
+        "whip-pan",
+        "luma-dissolve",
     ];
     // The ones a shipped template is expected to put on a card. Not the whole list above, and the
     // difference is a decision rather than a gap: a gallery of fifteen cards showing off all nine

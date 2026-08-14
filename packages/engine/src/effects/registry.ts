@@ -15,15 +15,20 @@ import { filmLook } from "./film-look";
 import { directionalBlur } from "./directional-blur";
 import { glitch } from "./glitch";
 import { grain } from "./grain";
+import { hue } from "./hue";
 import { glow } from "./glow";
 import { iris } from "./iris";
 import { lut } from "./lut";
+import { lumaDissolve } from "./luma-dissolve";
 import { maskEllipse } from "./mask-ellipse";
 import { maskRect } from "./mask-rect";
 import { mosaic } from "./mosaic";
 import { monochrome } from "./monochrome";
+import { mirror } from "./mirror";
+import { posterize } from "./posterize";
 import { push } from "./push";
 import { rgbSplit } from "./rgb-split";
+import { whipPan } from "./whip-pan";
 import { saturation } from "./saturation";
 import { sharpen } from "./sharpen";
 import { slide } from "./slide";
@@ -178,6 +183,9 @@ const MANIFESTS: readonly EffectManifest[] = [
   // one dial, because what is wanted from them is a look and not three sliders to balance.
   monochrome,
   filmLook,
+  // Which colour, and how many: a rotation of the whole wheel, and the same wheel cut into steps.
+  hue,
+  posterize,
   vignette,
   blur,
   sharpen,
@@ -193,6 +201,7 @@ const MANIFESTS: readonly EffectManifest[] = [
   // 4K rather than four times finer.
   grain,
   rgbSplit,
+  mirror,
   chromaKey,
   // Two masks rather than one with a shape parameter: the manifest has no notion of a choice, and
   // a rectangle and an ellipse share four of six parameters but not a line of their falloff. In a
@@ -210,6 +219,10 @@ const MANIFESTS: readonly EffectManifest[] = [
   // is loud on purpose.
   push,
   glitch,
+  // The two that hide a cut rather than announce it: a smear nobody can compare two frames through,
+  // and an order taken from the outgoing picture's own brightness.
+  whipPan,
+  lumaDissolve,
   iris,
   zoom,
   dip,

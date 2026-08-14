@@ -1385,9 +1385,9 @@ async function announce() {
       document.documentElement.scrollWidth <= innerWidth, true);
     // Every control on the bar, measured rather than counted: three of them, each a thumb wide.
     const barControls = [...document.querySelectorAll(".v-topbar > button, .v-topbar > details > summary")];
-    check("the bar carries the overflow toggle, undo, redo and saving",
+    check("the bar carries the overflow toggle, undo, redo, the language and saving",
       barControls.map((node) => node.getAttribute("aria-label") ?? node.textContent),
-      ["Weitere Aktionen", "Rückgängig", "Wiederholen", "Speichern"]);
+      ["Weitere Aktionen", "Rückgängig", "Wiederholen", "Deutsch / English", "Speichern"]);
     checkAtLeast("each of them a thumb wide",
       Math.min(...barControls.map((node) => node.getBoundingClientRect().width)), 44);
 
@@ -1709,7 +1709,8 @@ async function announce() {
     await openShelf("Übergänge durchsuchen");
     check("the transition shelf offers transitions and nothing else",
       all(".v-fx__tile").map((node) => node.dataset.effectId).sort().join(),
-      ["blur-dissolve", "crossfade", "dip", "glitch", "iris", "push", "slide", "wipe", "zoom"].join());
+      ["blur-dissolve", "crossfade", "dip", "glitch", "iris", "luma-dissolve", "push", "slide",
+       "whip-pan", "wipe", "zoom"].join());
     checkAtLeast("and a dissolve halfway through is a real picture",
       pixelsOf(tileOf("crossfade")).length, 4);
     labelled("Schließen").click();
