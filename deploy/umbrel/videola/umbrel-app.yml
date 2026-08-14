@@ -22,7 +22,7 @@ description: >-
   listen on anything but loopback without one, because an open Videola hands out read and write access
   to its storage.
 developer: gilde.org
-website: https://fgilde.github.io/videola/
+website: https://videola.app/
 submitter: gilde.org
 submission: https://github.com/fgilde/videola
 repo: https://github.com/fgilde/videola

@@ -161,7 +161,38 @@ export class EffectPreview {
    * in a headless run and in a backgrounded tab.
    */
   async toBlob(): Promise<Blob> {
-    return await this.#canvas.convertToBlob({ type: "image/png" });
+    // Read the pixels and encode them off a 2D canvas, rather than asking the WebGL canvas for its
+    // own drawing buffer. `convertToBlob` on this canvas never settles inside the editor -- measured,
+    // three hypotheses deep: not an empty result, not a key mismatch, not a lost context (a race
+    // against the loss event never fired) and not the frame clock (the same call resolves in the GPU
+    // harness under a stopped one). What is left is the call itself in a page that already holds the
+    // preview's context, and a promise that neither resolves nor rejects is not something to wait on.
+    //
+    // Two turns on the way: GL hands rows back bottom-up, and this buffer is premultiplied while
+    // `ImageData` is not. Skipping the second darkens every soft edge a mask makes, towards black,
+    // in proportion to how transparent it is.
+    const width = this.#gl.drawingBufferWidth;
+    const height = this.#gl.drawingBufferHeight;
+    const pixels = this.readPixels();
+    const straight = new Uint8ClampedArray(pixels.length);
+    const stride = width * 4;
+    for (let row = 0; row < height; row += 1) {
+      const from = row * stride;
+      const to = (height - 1 - row) * stride;
+      for (let at = 0; at < stride; at += 4) {
+        const alpha = pixels[from + at + 3] ?? 0;
+        const scale = alpha === 0 ? 0 : 255 / alpha;
+        straight[to + at] = (pixels[from + at] ?? 0) * scale;
+        straight[to + at + 1] = (pixels[from + at + 1] ?? 0) * scale;
+        straight[to + at + 2] = (pixels[from + at + 2] ?? 0) * scale;
+        straight[to + at + 3] = alpha;
+      }
+    }
+    const scratch = new OffscreenCanvas(width, height);
+    const context = scratch.getContext("2d");
+    if (context === null) throw new Error("error.webglUnavailable");
+    context.putImageData(new ImageData(straight, width, height), 0, 0);
+    return await scratch.convertToBlob({ type: "image/png" });
   }
 
   /** Rows bottom-up, the way GL stores them -- the same reading as `Compositor.readPixels`. */

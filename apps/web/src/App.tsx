@@ -206,7 +206,7 @@ const ROTATE_STEP = 15;
 
 // Where the documentation and the builds live. One constant, because the about dialogue and the
 // offer in the menu must not disagree about it.
-const SITE = "https://fgilde.github.io/videola/";
+const SITE = "https://videola.app/";
 
 // The keyframe track that carries a motion path, spelled the way the core spells it.
 const POSITION_TRACK = "position";
@@ -1265,7 +1265,13 @@ export function App(): ReactElement {
         if (dropped) return revokeTiles(tiles);
         setTiles(tiles);
       },
-      (err: unknown) => reportError("error.actionFailed", err),
+      (err: unknown) => {
+        reportError("error.actionFailed", err);
+        // An empty map rather than the pending state it was in: a shelf that reports "still drawing"
+        // for a drawing that already failed is a shelf nobody can tell apart from a slow one, and it
+        // is what made this failure take three releases to pin down.
+        if (!dropped) setTiles(new Map());
+      },
     );
     return () => {
       dropped = true;

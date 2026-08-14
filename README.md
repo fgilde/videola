@@ -191,7 +191,7 @@ If `wasm-opt` crashes on your machine, run the `wasm` script from `package.json`
 ## Self-hosting
 
 Four packaged ways, all documented in
-[Running it yourself](https://fgilde.github.io/videola/guide/self-hosting):
+[Running it yourself](https://videola.app/guide/self-hosting):
 
 | Where | How |
 |---|---|

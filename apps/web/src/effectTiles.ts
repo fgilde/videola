@@ -34,8 +34,15 @@ export async function effectTiles(
   const tiles = new Map<string, string>();
   try {
     for (const manifest of effectManifests()) {
-      preview.render(manifest, source, outgoing);
-      tiles.set(manifest.id, URL.createObjectURL(await preview.toBlob()));
+      // One tile at a time, and one tile's failure is one tile. A single throw used to take the whole
+      // grid with it and leave twenty-three blank frames with nothing said; a shelf that is missing
+      // one picture and shows twenty-two is a shelf somebody can still work from.
+      try {
+        preview.render(manifest, source, outgoing);
+        tiles.set(manifest.id, URL.createObjectURL(await preview.toBlob()));
+      } catch (error) {
+        console.error(`no tile for ${manifest.id}`, error);
+      }
     }
   } finally {
     preview.dispose();

@@ -1439,7 +1439,7 @@ async function announce() {
     const getApp = [...menu.querySelectorAll("a")].find((node) => node.textContent === "App holen");
     check("a browser session is offered the desktop build", getApp !== undefined, true);
     check("and the offer points at the download page",
-      getApp?.getAttribute("href"), "https://fgilde.github.io/videola/download");
+      getApp?.getAttribute("href"), "https://videola.app/download");
     checkAtLeast("with room to hit it", Math.round(getApp.getBoundingClientRect().height), 44);
     check("the menu still ends inside the window with every title open",
       menu.getBoundingClientRect().bottom <= innerHeight, true);

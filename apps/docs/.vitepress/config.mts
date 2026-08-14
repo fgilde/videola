@@ -54,10 +54,12 @@ const KAPITEL: [string, string][] = [
 ];
 
 export default defineConfig({
-  // Served from https://fgilde.github.io/videola/, so every asset URL needs the repository
+  // Served from https://videola.app/ -- its own domain, so the site is at the root. It was under
+  // /videola/ while it lived on github.io, and every stylesheet and every link carried that prefix:
+  // a base left behind after a domain change is a site with no CSS and links one directory too deep.
   // segment in front of it; without it the CSS and JS bundles resolve against the user page
   // root and 404.
-  base: "/videola/",
+  base: "/",
   title: "Videola",
   cleanUrls: true,
   lastUpdated: true,

@@ -19,7 +19,7 @@
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
   <Support>https://github.com/fgilde/videola/issues</Support>
-  <Project>https://fgilde.github.io/videola/</Project>
+  <Project>https://videola.app/</Project>
   <Overview>
     A video editor that runs in the browser: import, cut, keyframe, grade, mix and export, with the
     project model and the command bus in a Rust core compiled to WebAssembly. This container serves the

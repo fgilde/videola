@@ -38,7 +38,7 @@ describe("the about dialogue", () => {
   it("links the site, the documentation, the source and the licence", () => {
     show(false);
     const links = hrefs().join(" ");
-    expect(links).toContain("fgilde.github.io/videola/");
+    expect(links).toContain("videola.app/");
     expect(links).toContain("guide/getting-started");
     expect(links).toContain("github.com/fgilde/videola");
     expect(links).toContain("LICENSE");

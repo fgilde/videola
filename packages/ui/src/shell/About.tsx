@@ -13,7 +13,7 @@ export interface AboutProps {
   onClose: () => void;
 }
 
-const SITE = "https://fgilde.github.io/videola/";
+const SITE = "https://videola.app/";
 const REPO = "https://github.com/fgilde/videola";
 
 /**
