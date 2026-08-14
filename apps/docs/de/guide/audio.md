@@ -207,6 +207,22 @@ bestehen, indem er still wird: bei 1 kHz Grenzfrequenz lässt die Tiefensperre d
 einem Zehntel seiner Stärke und den 6-kHz-Ton über sieben Zehnteln, und die Höhensperre dasselbe
 andersherum.
 
+## Bass, Höhen und der Brummfilter
+
+Drei Inserts, die nach dem fragen, was jemand tatsächlich will, statt nach einer Frequenz.
+
+**Bass** und **Höhen** sind Kuhschwanzfilter: sie heben oder senken alles jenseits einer Ecke — genau
+das heißt „mehr Bass“ und „weniger Zischeln“. Das Glockenfilter des Equalizers kann das nicht: eine
+Glocke ist ein Hügel um eine Frequenz, ein Kuhschwanz eine Stufe hinter ihr. Zwei Effekte statt eines
+mit Typschalter, aus dem Grund, der beim Equalizer steht: ein Manifest trägt Fließkommazahlen, ein Typ
+ist eine Auswahl, und eine Auswahlliste im Kanalzug ist eine andere Arbeit.
+
+**Der Brummfilter** ist eine schmale Kerbe auf der Netzfrequenz: 50 Hz in Europa, 60 in Amerika. Sein
+Bereich endet mit Absicht bei 70 Hz — das ist keine Einschränkung, sondern der Punkt: ein Filter, den
+man in die Stimme hochziehen kann, wäre eine Tiefensperre mit irreführendem Namen. Bei der
+voreingestellten Schärfe von 30 ist die Kerbe etwa zwei Hertz breit: sie nimmt das Brummen und lässt
+den Ton daneben stehen — genau das, was eine Tiefensperre, hoch genug für das Brummen, nicht kann.
+
 ## Rauschunterdrückung
 
 **Gebaut.** Ein Schalter in den Eigenschaften des Clips, neben seiner Lautstärke, und die Stärke

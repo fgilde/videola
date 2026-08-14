@@ -128,6 +128,107 @@ const highCut: AudioEffectManifest = {
   },
 };
 
+// The two shelves the peaking band above could not be, and the reason they are two effects rather than
+// one with a type knob: a manifest carries floats, a type is a choice, and a select on a strip is a
+// different piece of work. A shelf lifts or drops everything past its corner rather than a band around
+// it, which is what "more bass" and "less hiss" actually mean.
+const bass: AudioEffectManifest = {
+  id: "bass",
+  name: { de: "Bass", en: "Bass" },
+  params: [
+    {
+      key: "gain",
+      name: { de: "Anhebung (dB)", en: "Gain (dB)" },
+      default: 0,
+      min: -18,
+      max: 18,
+    },
+    {
+      key: "frequency",
+      name: { de: "Ecke", en: "Corner" },
+      // Where a voice stops being a voice and starts being the room it stood in.
+      default: 200,
+      min: 40,
+      max: 1000,
+    },
+  ],
+  build(ctx) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowshelf";
+    return {
+      node: filter,
+      knobs: new Map([
+        ["gain", filter.gain],
+        ["frequency", filter.frequency],
+      ]),
+    };
+  },
+};
+
+const treble: AudioEffectManifest = {
+  id: "treble",
+  name: { de: "Höhen", en: "Treble" },
+  params: [
+    {
+      key: "gain",
+      name: { de: "Anhebung (dB)", en: "Gain (dB)" },
+      default: 0,
+      min: -18,
+      max: 18,
+    },
+    {
+      key: "frequency",
+      name: { de: "Ecke", en: "Corner" },
+      // Above the consonants: lifting from here is air, dropping from here is hiss.
+      default: 6000,
+      min: 1000,
+      max: 16000,
+    },
+  ],
+  build(ctx) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highshelf";
+    return {
+      node: filter,
+      knobs: new Map([
+        ["gain", filter.gain],
+        ["frequency", filter.frequency],
+      ]),
+    };
+  },
+};
+
+// Mains hum: one narrow notch, at 50 Hz in Europe and 60 in America, and a Q high enough that the
+// note beside it survives. A low cut would take the hum and the bottom of the voice with it, which is
+// why this is its own effect rather than a setting on that one.
+const hum: AudioEffectManifest = {
+  id: "hum",
+  name: { de: "Brummfilter", en: "Hum filter" },
+  params: [
+    {
+      key: "frequency",
+      name: { de: "Netzfrequenz", en: "Mains frequency" },
+      default: 50,
+      min: 40,
+      max: 70,
+    },
+    // Narrowness. Thirty is about a semitone wide at 50 Hz: wide enough to catch a hum that drifts,
+    // narrow enough that the bass note next to it is still there.
+    { key: "q", name: { de: "Schärfe", en: "Sharpness" }, default: 30, min: 1, max: 100 },
+  ],
+  build(ctx) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "notch";
+    return {
+      node: filter,
+      knobs: new Map([
+        ["frequency", filter.frequency],
+        ["q", filter.Q],
+      ]),
+    };
+  },
+};
+
 // The knee stays at the platform's default. It is a fifth slider on a strip that already has four,
 // and the two settings anyone reaches for -- how loud before it acts and how hard -- are here.
 const compressor: AudioEffectManifest = {
@@ -185,7 +286,19 @@ const limiter: AudioEffectManifest = {
   },
 };
 
-const MANIFESTS: readonly AudioEffectManifest[] = [gain, eq, lowCut, highCut, compressor, limiter];
+const MANIFESTS: readonly AudioEffectManifest[] = [
+  gain,
+  eq,
+  // The three that shape a voice by name rather than by frequency, which is how somebody who is not a
+  // sound engineer asks for it: more bass, fewer highs, and the hum out.
+  bass,
+  treble,
+  hum,
+  lowCut,
+  highCut,
+  compressor,
+  limiter,
+];
 
 /**
  * An effect that is not a node: it rewrites the samples once, before anything is scheduled.

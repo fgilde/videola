@@ -29,10 +29,16 @@ ab. Jeder dieser Punkte ist also ein Knoten und eine Zeile im Panel, kein neuer 
 
 | Effekt | Knoten | Warum er auf der Liste steht |
 |---|---|---|
+| ~~Dreiband-EQ~~ | ausgeliefert: Bass- und Höhen-Kuhschwanz plus Kerbe auf der Netzfrequenz | die Abhilfe für eine dröhnende Stimme, und in jedem Editor vorhanden |
 | Hall | `ConvolverNode` mit erzeugter Impulsantwort | der eine Effekt, der eine in einem Raum aufgenommene Stimme klingen lässt, als sollte sie dort sein |
-| Dreiband-EQ | drei `BiquadFilterNode` | die Abhilfe für eine dröhnende Stimme, und in jedem Editor vorhanden |
 | Tonhöhe / Tempo-Kopplung | Abspielrate plus `preservesPitch` | eine Temporampe, die aus einer Stimme kein Eichhörnchen macht |
 | Rauschsperre | Verstärkungsverlauf aus der eigenen Messung | die billige Hälfte der Rauschunterdrückung, die es schon gibt |
+
+**Was die Schnittstelle ihnen noch schuldet.** Ein Ton-Effekt ist heute genau ein nativer Knoten, und
+Hall wie Rauschsperre brauchen zwei: einen nassen und einen trockenen Weg zum Mischen, eine Messung und
+eine Verstärkung zum Steuern. Bass, Höhen und Brummfilter kamen zuerst, weil jeder von ihnen ein Knoten
+ist. `AudioEffectNode` um einen Eingang und einen Ausgang zu erweitern ist die kleine, echte Arbeit vor
+den anderen beiden — und sie gehört in den Graphen, nicht in die Effekte, die sie brauchen.
 
 Die Impulsantwort wird erzeugt und nicht mitgeliefert, aus dem Grund weiter oben: ein abfallender
 Rauschstoß, geformt von der Raumgröße, sind drei Zeilen und schulden niemandem etwas.

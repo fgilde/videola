@@ -27,10 +27,16 @@ compressor, so each of these is a node and a panel row rather than a new mechani
 
 | Effect | Node | Why it is on the list |
 |---|---|---|
+| ~~Three-band EQ~~ | shipped: bass and treble shelves, and a notch at the mains frequency | the fix for a boomy voice, and the thing every editor has |
 | Reverb | `ConvolverNode` with a generated impulse | the one effect that makes a voice recorded in a room sound like it was meant to be there |
-| Three-band EQ | three `BiquadFilterNode`s | the fix for a boomy voice, and the thing every editor has |
 | Pitch / speed lock | playback rate plus `preservesPitch` | a speed ramp that does not turn a voice into a chipmunk |
 | Noise gate | a gain schedule off the meter's own reading | the cheap half of the noise reduction that already exists |
+
+**What the interface still owes them.** An audio effect is one native node today, and both the reverb
+and the gate need two: a wet path and a dry one to mix, a reading and a gain to schedule. Bass, treble
+and the hum filter shipped first precisely because each is one node. Extending `AudioEffectNode` to an
+input and an output is the small, real piece of work in front of the other two, and it belongs in the
+graph rather than in the effects that want it.
 
 The impulse is generated rather than shipped, for the reason above: a decaying noise burst shaped by
 room size is three lines and owes nobody anything.

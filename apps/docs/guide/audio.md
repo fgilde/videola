@@ -190,6 +190,22 @@ Both are measured through the real renderer against two tones in one signal, so 
 going quiet: at a cutoff of 1 kHz the low cut leaves the 200 Hz tone at under a tenth of its strength
 and the 6 kHz one at over seven tenths, and the high cut does the same the other way round.
 
+## Bass, treble and the hum filter
+
+Three inserts that ask for what somebody actually wants rather than for a frequency.
+
+**Bass** and **Treble** are shelves: they lift or drop everything past a corner, which is what "more
+bass" and "less hiss" mean. The peaking band of the equaliser cannot do it — a band is a hill around a
+frequency, a shelf is a step past one. Two effects rather than one with a type switch, for the reason
+written beside the equaliser: a manifest carries floats, a type is a choice, and a select on a strip is
+a different piece of work.
+
+**The hum filter** is a narrow notch at the mains frequency: 50 Hz in Europe, 60 in America. Its range
+stops at 70 Hz on purpose, and that is not a limitation but the point — a filter that could be dragged
+up into the voice would be a low cut with a misleading name. At the default sharpness of 30 the notch
+is about two hertz wide: it takes the hum and leaves the note beside it, which is exactly what a low
+cut set high enough to catch hum cannot do.
+
 ## Noise reduction
 
 **Built.** A switch on the clip's own properties, beside its volume, and a strength beside that. It is

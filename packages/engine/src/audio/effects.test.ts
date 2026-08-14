@@ -49,6 +49,14 @@ function signal(ctx: BaseAudioContext, shape: (seconds: number) => number): Audi
 }
 
 // Half amplitude each, so the pair never clips before a filter has had a look at it.
+// Mains hum under a voice: fifty hertz, and a note well above it that has to survive.
+const HUM_HZ = 50;
+const humAndNote = (ctx: BaseAudioContext): AudioBufferSource =>
+  signal(
+    ctx,
+    (t) => 0.5 * Math.sin(2 * Math.PI * HUM_HZ * t) + 0.5 * Math.sin(2 * Math.PI * LOW_HZ * t),
+  );
+
 const twoTones = (ctx: BaseAudioContext): AudioBufferSource =>
   signal(
     ctx,
@@ -662,5 +670,80 @@ describe("a keyframed effect parameter", () => {
     // way to the high tone. Held, the low one is still the one in it.
     const late: [number, number] = [sample(0.88), sample(0.98)];
     expect(toneStrength(out, LOW_HZ, ...late)).toBeLessThan(toneStrength(out, HIGH_HZ, ...late));
+  });
+
+  // The three that shape a voice by name rather than by frequency. A shelf is not the peaking band
+  // above with different numbers: it lifts or drops everything past its corner, so what has to be
+  // checked is exactly that -- the far side moves and the near side does not.
+  it("lifts everything below its corner and leaves what is above it", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      twoTones(ctx),
+      project([
+        track("trk_1", [clip()], {
+          effects: [effect("bass", { frequency: (LOW_HZ + HIGH_HZ) / 2, gain: 12 })],
+        }),
+      ]),
+    );
+    const flatCtx = context(1);
+    const flat = await render(flatCtx, twoTones(flatCtx), project([track("trk_1", [clip()])]));
+
+    const window: [number, number] = [sample(0.2), sample(0.9)];
+    expect(toneStrength(out, LOW_HZ, ...window)).toBeGreaterThan(
+      toneStrength(flat, LOW_HZ, ...window) * 2,
+    );
+    expect(toneStrength(out, HIGH_HZ, ...window)).toBeLessThan(
+      toneStrength(flat, HIGH_HZ, ...window) * 1.5,
+    );
+  });
+
+  it("lifts everything above its corner and leaves what is below it", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      twoTones(ctx),
+      project([
+        track("trk_1", [clip()], {
+          effects: [effect("treble", { frequency: (LOW_HZ + HIGH_HZ) / 2, gain: 12 })],
+        }),
+      ]),
+    );
+    const flatCtx = context(1);
+    const flat = await render(flatCtx, twoTones(flatCtx), project([track("trk_1", [clip()])]));
+
+    const window: [number, number] = [sample(0.2), sample(0.9)];
+    expect(toneStrength(out, HIGH_HZ, ...window)).toBeGreaterThan(
+      toneStrength(flat, HIGH_HZ, ...window) * 2,
+    );
+    expect(toneStrength(out, LOW_HZ, ...window)).toBeLessThan(
+      toneStrength(flat, LOW_HZ, ...window) * 1.5,
+    );
+  });
+
+  // A notch takes one note out and leaves the one beside it, which is the whole reason it exists
+  // rather than a low cut: a cut set high enough to catch mains hum takes the bottom of the voice too.
+  //
+  // Checked at a sharpness of 6 rather than at the default 30. At 30 the notch is about two hertz wide
+  // -- which is what mains hum wants and what makes this effect useful -- and a two hertz notch on a
+  // tone measured over a fifth of a second is narrower than the measurement can resolve. The default is
+  // for the hum; this number is for the check.
+  it("takes the hum out and leaves the note beside it standing", async () => {
+    const ctx = context(1);
+    const out = await render(
+      ctx,
+      humAndNote(ctx),
+      project([track("trk_1", [clip()], { effects: [effect("hum", { frequency: HUM_HZ, q: 6 })] })]),
+    );
+    const flatCtx = context(1);
+    const flat = await render(flatCtx, humAndNote(flatCtx), project([track("trk_1", [clip()])]));
+
+    const window: [number, number] = [sample(0.2), sample(0.9)];
+    expect(toneStrength(out, HUM_HZ, ...window)).toBeLessThan(
+      toneStrength(flat, HUM_HZ, ...window) * 0.5,
+    );
+    expect(toneStrength(out, LOW_HZ, ...window)).toBeGreaterThan(
+      toneStrength(flat, LOW_HZ, ...window) * 0.8,
+    );
   });
 });
