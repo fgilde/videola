@@ -780,6 +780,46 @@ export function App(): ReactElement {
     [doc, edit, reportError],
   );
 
+  /**
+   * Up at the head, down at the tail: the gesture for the clip at the beginning and the one at the
+   * end, which have nothing to dissolve with.
+   *
+   * Four keys on the opacity, and half a second each way — or a quarter of the clip where the clip is
+   * shorter than two seconds, because a fade longer than the shot it is on never reaches full and
+   * reads as a clip that was never turned up. Keyframes again, for the reason the push is keyframes:
+   * what somebody would have written by hand, written for them, and taken apart the same way.
+   */
+  const fadeEnds = useCallback(
+    (clip: ClipId) => {
+      if (doc === undefined) return;
+      const found = doc.state.timeline.tracks
+        .flatMap((track) => track.clips)
+        .find((candidate) => candidate.id === clip);
+      if (found === undefined || found.duration <= 2) return;
+      try {
+        const key = `fade-${clip}-${(actionSequence += 1)}`;
+        const target = { kind: "clip" as const, clip };
+        const ramp = Math.min(Math.round(FLICKS_PER_SECOND / 2), Math.floor(found.duration / 4));
+        const last = found.start + found.duration - 1;
+        for (const [time, value] of [
+          [found.start, 0],
+          [found.start + ramp, 1],
+          [last - ramp, 1],
+          [last, 0],
+        ] as const) {
+          edit(
+            cmd.keyframeAdd(target, null, "opacity", time, { kind: "float", value }, "ease"),
+            key,
+          );
+        }
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, edit, reportError],
+  );
+
   // Where the markers become an edit. Every clip a marker passes through is cut, on every track
   // that is not locked, in one step of the history -- which is what makes cutting to a beat one
   // press rather than one press per bar.
@@ -1918,6 +1958,7 @@ export function App(): ReactElement {
                   detecting={scanning}
                   onFreeze={freeze}
                   onPanZoom={panZoom}
+                  onFade={fadeEnds}
                   onSelectionChange={setSelection}
                   grab={grab}
                   onDropMedia={dropMedia}

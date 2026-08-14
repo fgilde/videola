@@ -149,6 +149,8 @@ export interface TimelineProps {
   onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
   /** Write a slow push across the clip: two keyframes on the scale, two on the position. */
   onPanZoom?: (clip: ClipId) => void;
+  /** Fade the clip up at its head and down at its tail, as four keyframes on the opacity. */
+  onFade?: (clip: ClipId) => void;
   onSelectionChange?: (clips: readonly ClipId[]) => void;
   /**
    * A medium the media library has under a pointer. The timeline judges the whole gesture from
@@ -176,6 +178,7 @@ export function Timeline({
   detecting = false,
   onFreeze,
   onPanZoom,
+  onFade,
   onSelectionChange,
   grab,
   onDropMedia,
@@ -852,6 +855,7 @@ export function Timeline({
           onPasteLook={pasteLook}
           onFreeze={onFreeze}
           onPanZoom={onPanZoom}
+          onFade={onFade}
           onDetectCuts={onDetectCuts}
           detecting={detecting}
         />
@@ -875,6 +879,7 @@ interface MenuProps {
   onPasteLook: () => void;
   onFreeze?: (clip: ClipId, at: Time, hold: Time) => void;
   onPanZoom?: (clip: ClipId) => void;
+  onFade?: (clip: ClipId) => void;
   onDetectCuts?: (clip: ClipId) => void;
   detecting?: boolean;
 }
@@ -961,6 +966,14 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
       label: t("timeline.panZoom"),
       disabled: props.onPanZoom === undefined,
       onSelect: close(() => props.onPanZoom?.(clip.id)),
+    },
+    {
+      // Beside it, because it is the same kind of thing: a gesture everybody makes by hand, written
+      // as the keyframes they would have written. A transition does this between two clips; this is
+      // for the one at the beginning and the one at the end, which have nothing to dissolve with.
+      label: t("timeline.fade"),
+      disabled: props.onFade === undefined,
+      onSelect: close(() => props.onFade?.(clip.id)),
     },
     {
       // Two seconds, which is what a beat on a face is. It has to fit inside the clip with material

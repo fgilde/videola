@@ -932,6 +932,16 @@ zurücknehmen. Vier Keys sind eine Änderung, die man ziehen, umtakten, weich ma
 wie eine selbst gesetzte. Der letzte Key liegt einen Flick innerhalb des Clips und nicht an seinem
 Ende: das Ende ist exklusiv, ein Key dort wird nie gefragt.
 
+### Den ersten Clip aufblenden und den letzten abblenden
+
+**Weich ein- und ausblenden** im selben Menü schreibt vier Keys auf die Deckkraft: eine halbe Sekunde
+auf am Anfang, eine halbe Sekunde ab am Ende — oder ein Viertel des Clips, wenn er kürzer als zwei
+Sekunden ist. Eine Blende, die länger ist als die Aufnahme, auf der sie liegt, erreicht nie volle
+Deckkraft und sieht aus wie ein Bild, das nie aufgedreht wurde.
+
+Ein Übergang macht das *zwischen* zwei Clips. Das hier ist für die beiden, die nichts zum Überblenden
+haben: den ersten und den letzten.
+
 ## Untertitel
 
 Videola liest und schreibt **SRT** und **WebVTT**. Lass eine `.srt` oder `.vtt` auf den Editor

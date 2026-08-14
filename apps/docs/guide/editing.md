@@ -872,6 +872,16 @@ edit anybody can drag, retime, ease or delete like one they set by hand. The las
 inside the clip rather than at its end, because the end is exclusive and a key there is never asked
 for.
 
+### Fading the first clip up and the last one down
+
+**Fade in and out** in the same menu writes four keys on the opacity: up over half a second at the
+head, down over half a second at the tail — or a quarter of the clip where the clip is shorter than
+two seconds, because a fade longer than the shot it is on never reaches full and reads as a picture
+that was never turned up.
+
+A transition does this *between* two clips. This is for the two that have nothing to dissolve with:
+the first and the last.
+
 ## Subtitles
 
 Videola reads and writes **SRT** and **WebVTT**. Drop an `.srt` or a `.vtt` on the editor, or reach

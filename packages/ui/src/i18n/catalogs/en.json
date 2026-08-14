@@ -535,5 +535,6 @@
   "menu.view": "View",
   "menu.help": "Help",
   "action.handOff": "Hand off …",
-  "timeline.panZoom": "Slow push (Ken Burns)"
+  "timeline.panZoom": "Slow push (Ken Burns)",
+  "timeline.fade": "Fade in and out"
 }

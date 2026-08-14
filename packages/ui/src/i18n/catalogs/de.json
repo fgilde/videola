@@ -535,5 +535,6 @@
   "menu.view": "Ansicht",
   "menu.help": "Hilfe",
   "action.handOff": "Weitergeben …",
-  "timeline.panZoom": "Sanfte Fahrt (Ken Burns)"
+  "timeline.panZoom": "Sanfte Fahrt (Ken Burns)",
+  "timeline.fade": "Weich ein- und ausblenden"
 }

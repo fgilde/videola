@@ -69,6 +69,26 @@ function Harness({ doc, startAt = 0 }: { doc: VideolaDocument; startAt?: number 
         onFreeze={(clip, at, hold) => freezeFrame(doc, clip, at, hold)}
         // The application's own arithmetic, because what this checks is the entry and the keys it
         // leaves behind rather than where the numbers come from.
+        onFade={(clip) => {
+          const found = doc.state.timeline.tracks
+            .flatMap((track) => track.clips)
+            .find((candidate) => candidate.id === clip);
+          if (found === undefined) return;
+          const ramp = Math.min(Math.round(SECOND / 2), Math.floor(found.duration / 4));
+          const last = found.start + found.duration - 1;
+          for (const [time, value] of [
+            [found.start, 0],
+            [found.start + ramp, 1],
+            [last - ramp, 1],
+            [last, 0],
+          ] as const) {
+            doc.dispatch(
+              cmd.keyframeAdd({ kind: "clip", clip }, null, "opacity", time,
+                { kind: "float", value }, "ease"),
+              "fade",
+            );
+          }
+        }}
         onPanZoom={(clip) => {
           const found = doc.state.timeline.tracks
             .flatMap((track) => track.clips)
@@ -941,6 +961,28 @@ describe("freezing a frame", () => {
     expect(held?.keyframes.speed?.every((key) => key.value.kind === "float" && key.value.value === 0)).toBe(
       true,
     );
+  });
+
+  // The clip at the beginning and the one at the end have nothing to dissolve with, and this is what
+  // everybody writes by hand for them.
+  it("fades the head up and the tail down in one step", async () => {
+    const doc = await longClip();
+    render(<Harness doc={doc} startAt={0} />);
+
+    fireEvent.contextMenu(clipAt(0), { clientX: 100, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Weich ein- und ausblenden" }));
+
+    const clip = pieces(doc)[0];
+    const keys = clip?.keyframes.opacity ?? [];
+    expect(keys).toHaveLength(4);
+    expect(keys.map((entry) => (entry.value.kind === "float" ? entry.value.value : -1)))
+      .toEqual([0, 1, 1, 0]);
+    // Inside the clip at both ends, and in order.
+    expect(keys[0]?.time).toBe(clip?.start);
+    expect(keys[3]?.time).toBeLessThan((clip?.start ?? 0) + (clip?.duration ?? 0));
+
+    act(() => void doc.undo());
+    expect(pieces(doc)[0]?.keyframes.opacity).toBeUndefined();
   });
 
   // The move a still picture cannot make on its own, and the reason it is keyframes rather than a
