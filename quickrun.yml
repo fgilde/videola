@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://fgilde.github.io/QuickRun/quickrun.schema.json
+name: videola
+description: "The web editor from the pnpm workspace. The Rust crates build on demand."
+
+requires:
+  - tool: node
+    version: ">=20.0"
+    install: https://nodejs.org
+  - tool: pnpm
+    version: ">=11.0"
+    install: https://pnpm.io/installation
+  - tool: cargo
+    install: https://rustup.rs
+    optional: true
+
+setup:
+  - run: pnpm install --frozen-lockfile
+
+tasks:
+  - name: web
+    run: pnpm --filter ./apps/web dev
+    readyWhen: {http: "http://localhost:5173"}
+    open: true
