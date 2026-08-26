@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://fgilde.github.io/QuickRun/quickrun.schema.json
 name: videola
-description: "The web editor from the pnpm workspace. The Rust crates build on demand."
+description: "The web editor from the pnpm workspace. The WASM core is generated, not committed, so it is built first."
 
 requires:
   - tool: node
@@ -11,10 +11,14 @@ requires:
     install: https://pnpm.io/installation
   - tool: cargo
     install: https://rustup.rs
-    optional: true
+  - tool: wasm-pack
+    install: https://rustwasm.github.io/wasm-pack/installer/
 
 setup:
   - run: pnpm install --frozen-lockfile
+  # packages/core/src/wasm ist gitignored (.gitignore:36) und wird von wasm-backend.ts
+  # statisch importiert - ohne diesen Schritt laedt die Seite nicht.
+  - run: pnpm wasm
 
 tasks:
   - name: web
