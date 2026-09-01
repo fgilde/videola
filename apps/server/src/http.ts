@@ -6,6 +6,7 @@ import { extname } from "node:path";
 import type { Command } from "@videola/core";
 
 import { Api, ApiError } from "./api";
+import type { NewDestination } from "./destinations";
 import { COMMAND_CATALOG } from "./generated/commandCatalog";
 import { Storage } from "./paths";
 
@@ -157,6 +158,39 @@ async function route(
   if (match(segments, ["api", "schema"]) && method === "GET") {
     return { status: 200, body: { commands: COMMAND_CATALOG } };
   }
+  // Where finished videos go. A destination is set up once and used from then on, which is why it
+  // lives beside the projects rather than inside one: a channel is not a property of an edit.
+  if (match(segments, ["api", "destinations"])) {
+    if (method === "GET") return { status: 200, body: { destinations: await api.destinations() } };
+    if (method === "POST") {
+      return { status: 201, body: await api.addDestination(newDestination(asObject(await body()))) };
+    }
+    return notFound();
+  }
+  if (segments[0] === "api" && segments[1] === "destinations" && segments[2] !== undefined) {
+    const destination = segments[2];
+    if (segments[3] === undefined && method === "DELETE") {
+      await api.removeDestination(destination);
+      return { status: 200, body: { removed: destination } };
+    }
+    // The video itself as the body, its title and description in the query: an encoder's output is
+    // megabytes and does not belong in a JSON envelope, and the two fields beside it are a line each.
+    if (segments[3] === "publish" && method === "POST") {
+      const title = url.searchParams.get("title");
+      if (title === null || title.trim() === "") {
+        throw new ApiError(400, "badRequest", "a published video needs a ?title=");
+      }
+      const description = url.searchParams.get("description");
+      const published = await api.publishTo(destination, {
+        bytes: await readBytes(request, maxBodyBytes),
+        title,
+        ...(description === null ? {} : { description }),
+        contentType: request.headers["content-type"] ?? "video/mp4",
+      });
+      return { status: 200, body: published };
+    }
+    return notFound();
+  }
   if (match(segments, ["api", "projects"])) {
     if (method === "GET") return { status: 200, body: { projects: api.list() } };
     if (method === "POST") return { status: 201, body: await createProject(api, await body()) };
@@ -273,6 +307,33 @@ async function importMedia(
     throw new ApiError(400, "badRequest", "give either ?path= or both ?name= and ?mime=");
   }
   return api.importBytes(id, name, mime, await readBytes(request, maxBodyBytes));
+}
+
+// Everything a destination needs, out of an untrusted object. Unknown fields are dropped rather than
+// carried: what is written here is read back by the publisher and put into somebody's account.
+function newDestination(payload: Record<string, unknown>): NewDestination {
+  const kind = payload["kind"];
+  const name = payload["name"];
+  if (typeof kind !== "string" || typeof name !== "string") {
+    throw new ApiError(400, "badRequest", "a destination needs a kind and a name");
+  }
+  const note = payload["note"];
+  return {
+    kind: kind as NewDestination["kind"],
+    name,
+    ...(typeof note === "string" ? { note } : {}),
+    secrets: strings(payload["secrets"]),
+    settings: strings(payload["settings"]),
+  };
+}
+
+function strings(given: unknown): Record<string, string> {
+  if (typeof given !== "object" || given === null) return {};
+  const found: Record<string, string> = {};
+  for (const [key, value] of Object.entries(given as Record<string, unknown>)) {
+    if (typeof value === "string") found[key] = value;
+  }
+  return found;
 }
 
 function commandsOf(payload: Record<string, unknown>): readonly Command[] {

@@ -20,8 +20,26 @@ let root = "";
 let server: Server;
 let base = "";
 
-async function start(options: Partial<HttpOptions> = {}): Promise<void> {
-  const api = new Api({ storageRoot: root, maxProjects: 4 });
+let sent: { url: string; body: unknown }[] = [];
+
+async function start(options: Partial<HttpOptions> = {}, watched = false): Promise<void> {
+  // A publish is an HTTP conversation with somebody else's server. Watched, it is a conversation with
+  // this array -- which is the only way a check can say what a publish would do to a real account.
+  const http = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    sent.push({ url: String(input), body: init?.body });
+    if (String(input).includes("oauth2")) {
+      return new Response(JSON.stringify({ access_token: "at" }), { status: 200 });
+    }
+    if (String(input).includes("uploadType=resumable")) {
+      return new Response("{}", { status: 200, headers: { location: "https://upload.test/s" } });
+    }
+    return new Response(JSON.stringify({ id: "vid_1" }), { status: 200 });
+  }) as typeof fetch;
+  const api = new Api({
+    storageRoot: root,
+    maxProjects: 4,
+    ...(watched ? { fetch: http } : {}),
+  });
   server = createServer(createRequestListener({ api, ...options }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -29,6 +47,7 @@ async function start(options: Partial<HttpOptions> = {}): Promise<void> {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "videola-http-"));
+  sent = [];
 });
 
 afterEach(async () => {
@@ -403,5 +422,124 @@ describe("a still over HTTP", () => {
 
   it("is unknown for an unknown project before it renders anything", async () => {
     expect((await json("/api/projects/prj_nope/frame?at=0")).status).toBe(404);
+  });
+});
+
+describe("destinations", () => {
+  beforeEach(() => start({}, true));
+
+  async function youtube(): Promise<string> {
+    const { body } = await json("/api/destinations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "youtube",
+        name: "Mein Kanal",
+        secrets: { clientId: "id", clientSecret: "shh", refreshToken: "r" },
+        settings: { privacyStatus: "unlisted" },
+      }),
+    });
+    return body.id as string;
+  }
+
+  it("takes a destination and lists it again", async () => {
+    const id = await youtube();
+
+    const { body } = await json("/api/destinations");
+
+    expect(body.destinations).toHaveLength(1);
+    expect(body.destinations[0].id).toBe(id);
+    expect(body.destinations[0].name).toBe("Mein Kanal");
+  });
+
+  // The rule the whole feature stands on. Anything that answers a request may say a destination holds
+  // a refresh token; nothing may say what it is.
+  it("never reads a secret back out", async () => {
+    await youtube();
+
+    const listed = await json("/api/destinations");
+
+    expect(JSON.stringify(listed.body)).not.toContain("shh");
+    expect(listed.body.destinations[0].holds).toEqual(["clientId", "clientSecret", "refreshToken"]);
+  });
+
+  it("refuses one it could not publish with, at the moment it is set up", async () => {
+    const { status, body } = await json("/api/destinations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "youtube", name: "Halb", secrets: { clientId: "id" } }),
+    });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("badDestination");
+    expect(String(body.error.message)).toContain("clientSecret");
+  });
+
+  it("sends the video where it was told to, with the title beside it", async () => {
+    const id = await youtube();
+
+    const response = await fetch(
+      `${base}/api/destinations/${id}/publish?title=Sommer&description=Ein%20Test`,
+      { method: "POST", headers: { "content-type": "video/mp4" }, body: MP4 },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id: "vid_1",
+      url: "https://www.youtube.com/watch?v=vid_1",
+    });
+    // The refresh token was spent on a token, and the metadata carried what the query said.
+    expect(sent[0]?.url).toContain("oauth2");
+    expect(String(sent[1]?.body)).toContain("Sommer");
+    expect(String(sent[1]?.body)).toContain("Ein Test");
+    // Unlisted, because the destination said so, and not the safe default.
+    expect(String(sent[1]?.body)).toContain('"privacyStatus":"unlisted"');
+  });
+
+  it("will not publish a video with no title, and will not publish nothing", async () => {
+    const id = await youtube();
+
+    expect((await json(`/api/destinations/${id}/publish`, { method: "POST", body: MP4 })).status)
+      .toBe(400);
+    const empty = await fetch(`${base}/api/destinations/${id}/publish?title=Leer`, {
+      method: "POST",
+      body: new Uint8Array(),
+    });
+    expect(empty.status).toBe(400);
+  });
+
+  it("is a 404 for a destination that is not there, and forgets one that is", async () => {
+    const id = await youtube();
+
+    expect(
+      (await fetch(`${base}/api/destinations/dst_nope/publish?title=X`, { method: "POST", body: MP4 }))
+        .status,
+    ).toBe(404);
+    expect((await json(`/api/destinations/${id}`, { method: "DELETE" })).status).toBe(200);
+    expect((await json("/api/destinations")).body.destinations).toEqual([]);
+  });
+
+  // The platform's own failure is not this server's failure, and a 401 from YouTube must not read as
+  // "your Videola token expired".
+  it("reports a refusal from the platform as a bad gateway, in its own words", async () => {
+    const id = await youtube();
+    sent = [];
+    const failing = new Api({
+      storageRoot: root,
+      fetch: (async () =>
+        new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 })) as typeof fetch,
+    });
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    server = createServer(createRequestListener({ api: failing }));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    const response = await fetch(`${base}/api/destinations/${id}/publish?title=X`, {
+      method: "POST",
+      body: MP4,
+    });
+
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(await response.json())).toContain("invalid_grant");
   });
 });

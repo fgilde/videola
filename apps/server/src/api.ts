@@ -8,7 +8,9 @@ import { describeMedia } from "@videola/media";
 import type { Command, DispatchResult, LoadWarning, Project } from "@videola/core";
 import type { DocumentBackend } from "@videola/core";
 
+import { Destinations, type NewDestination, type PublicDestination } from "./destinations";
 import { measurePeaks, RenderError, renderStills, type AudioPeaks, type RenderCode } from "./frames";
+import { publish, type Fetch, type PublishResult } from "./publish";
 import { describeProject, validateProject, type Finding } from "./inspect";
 import { PathOutsideRoot, Storage, writeAtomic } from "./paths";
 import { openBackend } from "./wasm";
@@ -66,6 +68,8 @@ export interface ApiOptions {
   readonly storageRoot: string;
   readonly maxProjects?: number;
   readonly locale?: string;
+  /** For the checks: what a publish would send, without sending it. */
+  readonly fetch?: Fetch;
 }
 
 // The one place that turns a request into core calls, shared verbatim by the HTTP routes and the
@@ -76,15 +80,71 @@ export class Api {
   #storage: Storage;
   #maxProjects: number;
   #locale: string;
+  #destinations: Destinations;
+  #http: Fetch;
 
   constructor(options: ApiOptions) {
     this.#storage = new Storage(options.storageRoot);
     this.#maxProjects = options.maxProjects ?? 8;
     this.#locale = options.locale ?? "en";
+    this.#destinations = new Destinations(this.#storage);
+    // Injected so a check can watch what would go over the wire, and so that a server nobody has
+    // given credentials to still has a testable publish path.
+    this.#http = options.fetch ?? fetch;
   }
 
   storage(): Storage {
     return this.#storage;
+  }
+
+  /** Where finished videos can be sent. Secrets go in through `addDestination` and never come out. */
+  destinations(): Promise<PublicDestination[]> {
+    return this.#destinations.list();
+  }
+
+  async addDestination(given: NewDestination): Promise<PublicDestination> {
+    try {
+      return await this.#destinations.add(given);
+    } catch (error) {
+      // A destination that could not publish is a request that was wrong, not a server that broke --
+      // and the caller has to be told which field is missing, at the moment they are setting it up
+      // rather than at the moment they are waiting for a video to go online.
+      throw new ApiError(400, "badDestination", String((error as Error).message ?? error));
+    }
+  }
+
+  async removeDestination(id: string): Promise<void> {
+    if (!(await this.#destinations.remove(id))) {
+      throw new ApiError(404, "noSuchDestination", `no destination ${id}`);
+    }
+  }
+
+  /**
+   * Send a finished video to one of them.
+   *
+   * The bytes come from the caller rather than from an export started here, and that is the seam
+   * this feature turns on: the encoder is in the browser, where the material and the WebCodecs are.
+   * A server that re-encoded would be a second renderer, and two renderers is the one thing this
+   * program has spent its whole life refusing.
+   */
+  async publishTo(
+    id: string,
+    video: { bytes: Uint8Array; title: string; description?: string; contentType?: string },
+  ): Promise<PublishResult> {
+    const destination = await this.#destinations.find(id);
+    if (destination === undefined) {
+      throw new ApiError(404, "noSuchDestination", `no destination ${id}`);
+    }
+    if (video.bytes.length === 0) {
+      throw new ApiError(400, "nothingToPublish", "there is no video in this request");
+    }
+    try {
+      return await publish({ destination, ...video }, this.#http);
+    } catch (error) {
+      // The platform's own words, and its own status kept out of it: a 401 from YouTube is not a 401
+      // from this server, and returning one would tell the caller to fetch a new Videola token.
+      throw new ApiError(502, "publishFailed", String((error as Error).message ?? error));
+    }
   }
 
   async create(): Promise<ProjectView> {

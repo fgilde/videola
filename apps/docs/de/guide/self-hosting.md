@@ -126,6 +126,54 @@ ReadWritePaths=/var/lib/videola
 Ein beschreibbarer Pfad und nichts anderes, was die Maschine anbietet. Ein Videoeditor hat mit einem
 Gerät, einem Kernelmodul oder dem Heimatverzeichnis eines anderen nichts zu schaffen.
 
+## Veröffentlichungsziele
+
+Der letzte Schritt eines fertigen Videos ist selten „eine Datei im Download-Ordner". Ein Ziel ist ein
+Ort, an den es geht — ein YouTube-Kanal, ein Vimeo-Konto oder irgendeine Adresse, die eine Datei
+annimmt — einmal eingerichtet und danach benutzt.
+
+| Art | Was sie braucht | Was sie tut |
+|---|---|---|
+| `youtube` | `clientId`, `clientSecret`, `refreshToken` | ein fortsetzbarer Upload über die Data API |
+| `vimeo` | `accessToken` | ein tus-Upload ins Konto |
+| `webhook` | `url` | schickt die Datei als Formular, mit Kopfzeilen Ihrer Wahl |
+
+```bash
+curl -X POST localhost:7331/api/destinations \
+  -H "authorization: Bearer $VIDEOLA_TOKEN" -H "content-type: application/json" \
+  -d '{"kind":"youtube","name":"Mein Kanal",
+       "secrets":{"clientId":"…","clientSecret":"…","refreshToken":"…"},
+       "settings":{"privacyStatus":"unlisted"}}'
+
+curl -X POST "localhost:7331/api/destinations/dst_…/publish?title=Sommer" \
+  -H "authorization: Bearer $VIDEOLA_TOKEN" -H "content-type: video/mp4" \
+  --data-binary @sommer.mp4
+```
+
+**Geheimnisse gehen hinein und kommen nie zurück.** `GET /api/destinations` sagt, dass ein Ziel einen
+Refresh-Token hält; nichts sagt, welcher es ist. Ein Token, den man auslesen kann, ist ein Token, der
+über eine Bildschirmfreigabe, ein Protokoll oder einen Browserverlauf abhandenkommt. Ihn zu wechseln
+heißt, ihn neu zu schreiben — ein Klick, und die Alternative wäre eine ganze Klasse von Unfällen.
+
+**Privat, solange Sie nichts anderes sagen.** Ein YouTube-Upload ist `private`, ein Vimeo-Upload für
+niemanden sichtbar, bis die Einstellungen des Ziels ein anderes Wort enthalten. Ein Versehen, das einen
+Rohschnitt der Welt zeigt, nimmt kein Rückgängig zurück.
+
+**Woher die Token kommen.** Hier gibt es keinen Browser-Tanz: dieser Server hat keinen Ort für eine
+Rückleitung, und es wäre ein zweiter Weg zu derselben Zeichenkette. Führen Sie Googles eigenen Ablauf
+für installierte Anwendungen einmal aus — `oauth2l`, ein fünfzeiliges Skript oder der Ablauf aus einer
+ihrer Kurzanleitungen — und fügen Sie die drei Werte ein. Vimeo stellt auf der Kontoseite einen
+persönlichen Token mit Upload-Recht aus, das ist ein Feld.
+
+**Warum der Server und nicht der Browser.** Der Upload braucht ein Client-Geheimnis, und ein Geheimnis
+im Browser ist keines. Der Encoder bleibt, wo das Material ist: der Editor exportiert im Tab, schickt
+die Bytes hierher, und diese Seite spricht mit der Plattform.
+
+**Was noch fehlt.** Ein abgebrochener Upload beginnt von vorn, statt fortzusetzen: dafür müsste die
+Sitzungsadresse die Anfrage überleben, und das ist eine Warteschlange und ein anderes Feature. Es gibt
+keinen Zeitplan, kein Vorschaubild und keine Playlist. Eine Art hinzuzufügen ist eine Funktion in
+`publish.ts` und eine Zeile in der Tabelle dessen, was sie braucht.
+
 ## Das Serverpaket
 
 `videola-server-<version>.tar.gz` hängt an jedem Release: die drei Einsprungpunkte, das WASM, in dem der

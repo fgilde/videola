@@ -124,6 +124,54 @@ ReadWritePaths=/var/lib/videola
 One writable path, and nothing else the machine offers. A video editor has no business with a device, a
 kernel module or somebody else's home directory.
 
+## Publishing destinations
+
+A finished video's last step is usually not "a file in the downloads folder". A destination is a place
+to send it — a YouTube channel, a Vimeo account, or any URL that takes a file — set up once and used
+from then on.
+
+| Kind | What it needs | What it does |
+|---|---|---|
+| `youtube` | `clientId`, `clientSecret`, `refreshToken` | a resumable upload through the Data API |
+| `vimeo` | `accessToken` | a tus upload to the account |
+| `webhook` | `url` | posts the file as a multipart form, with any headers you name |
+
+```bash
+curl -X POST localhost:7331/api/destinations \
+  -H "authorization: Bearer $VIDEOLA_TOKEN" -H "content-type: application/json" \
+  -d '{"kind":"youtube","name":"My channel",
+       "secrets":{"clientId":"…","clientSecret":"…","refreshToken":"…"},
+       "settings":{"privacyStatus":"unlisted"}}'
+
+curl -X POST "localhost:7331/api/destinations/dst_…/publish?title=Summer" \
+  -H "authorization: Bearer $VIDEOLA_TOKEN" -H "content-type: video/mp4" \
+  --data-binary @summer.mp4
+```
+
+**Secrets go in and never come out.** `GET /api/destinations` says that a destination holds a refresh
+token; nothing says what it is. A token that can be read back is a token that leaks through a screen
+share, a log or a browser history — rotating one means writing it again, which is a click, and the
+alternative is a class of accident this program will not make possible.
+
+**Private unless you say otherwise.** A YouTube upload is `private` and a Vimeo one is visible to
+nobody until the destination's settings say another word. A mistake that publishes a rough cut to the
+world cannot be taken back by an undo.
+
+**Where the tokens come from.** There is no browser dance here: this server has nowhere to put a
+redirect, and it would be a second way to get the same string. Run Google's own installed-app flow
+once — their `oauth2l`, a five-line script, or the flow any of their quickstarts prints — and paste
+the three values it gives you. Vimeo issues a personal access token with an upload scope from the
+account page, which is one field.
+
+**Why the server and not the browser.** The upload needs a client secret, and a secret in a browser is
+not a secret. The encoder stays where the material is: the editor exports in the tab, sends the bytes
+here, and this end talks to the platform.
+
+**What is not there yet.** An interrupted upload starts again rather than resuming: the session URL
+would have to outlive the request, which is a job queue and a different feature. There is no schedule,
+no thumbnail upload and no playlist. Adding a kind is one function in `publish.ts` and one row in the
+table of what it requires.
+
 ## The server bundle
 
 `videola-server-<version>.tar.gz` is attached to every release: the three entry points, the WASM the
