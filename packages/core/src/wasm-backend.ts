@@ -102,9 +102,22 @@ export async function readAudiolaFile(bytes: Uint8Array): Promise<AudiolaFile> {
   return { tracks: described.tracks, notes: described.notes, media };
 }
 
-export async function readTemplateFile(bytes: Uint8Array): Promise<Template> {
+/**
+ * A template file, and the material it brought with it.
+ *
+ * Not always empty: what the author did not turn into a question travels inside the `.videolat` --
+ * an intro, a logo, a watermark. The caller has to put those bytes wherever it keeps media before it
+ * bakes, or the template names material nobody has.
+ */
+export async function readTemplateFile(
+  bytes: Uint8Array,
+): Promise<{ template: Template; media: ReadonlyMap<string, Uint8Array> }> {
   await ensureReady();
-  return WasmDocument.readTemplate(bytes) as Template;
+  const found = WasmDocument.readTemplate(bytes) as {
+    template: Template;
+    media: Map<string, Uint8Array>;
+  };
+  return { template: found.template, media: found.media };
 }
 
 // The project a gallery card is drawn from: the template baked against a stand-in for every piece
@@ -155,8 +168,12 @@ function wrap(handle: WasmDocument): DocumentBackend {
     // the declared type to what the implementation already guarantees.
     save: (options: SaveOptions, media: MediaBytes) =>
       handle.save(options, media) as Uint8Array<ArrayBuffer>,
-    saveAsTemplate: (options: SaveOptions, id: string, marked?: readonly ClipId[]) =>
-      handle.saveAsTemplate(options, id, marked ?? null) as Uint8Array<ArrayBuffer>,
+    saveAsTemplate: (
+      options: SaveOptions,
+      id: string,
+      marked: readonly ClipId[] | undefined,
+      media: MediaBytes,
+    ) => handle.saveAsTemplate(options, id, marked ?? null, media) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
     mediaBytes: (id: string) => handle.mediaBytes(id) as Uint8Array<ArrayBuffer> | undefined,

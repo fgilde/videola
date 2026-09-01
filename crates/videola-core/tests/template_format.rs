@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 
 use videola_core::format::{reader, writer, MemoryMediaStore, SaveOptions};
@@ -77,9 +77,59 @@ fn a_shipped_template_survives_the_container_it_will_be_shared_in() {
         .find(|entry| entry.manifest.id == "soft-slideshow")
         .expect("the soft slideshow is in the shipped set");
 
-    let reopened = reader::read_template(Cursor::new(to_videolat(&original))).unwrap();
+    let (reopened, carried) = reader::read_template(Cursor::new(to_videolat(&original))).unwrap();
 
     assert_eq!(reopened, original);
+    // A shipped template is generators end to end, so there is nothing for it to carry.
+    assert!(carried.is_empty());
+}
+
+// The other half of that, and the whole point of a custom template: what the author did not turn into
+// a question travels inside the file. An intro, a logo, a watermark are part of the recipe, and a
+// template that asked for its own intro on every use would not be a template.
+#[test]
+fn a_template_carries_the_material_its_author_kept() {
+    let mut project = Project::default();
+    // Content-addressed, because the reader checks exactly that: an entry whose bytes do not hash
+    // back to its name is a forged one and is dropped with a warning rather than trusted.
+    let bytes = b"the intro's bytes".to_vec();
+    let mut asset = MediaAsset::new(
+        MediaId::from_bytes(&bytes),
+        "intro.mp4".into(),
+        "video/mp4".into(),
+        MediaKind::Video,
+        bytes.len() as u64,
+    );
+    asset.duration = Some(Time::from_seconds(2.0));
+    asset.width = Some(1920);
+    asset.height = Some(1080);
+    project.library.push(asset.clone());
+    let mut track = Track::new(TrackKind::Video, "V1".into());
+    track.clips.push(Clip::new_media(
+        asset.id.clone(),
+        Time::ZERO,
+        Time::from_seconds(2.0),
+    ));
+    project.timeline.tracks.push(track);
+    // Marked: nothing. Every clip is part of the recipe, so the material has to go with it.
+    let template = Template::from_project(&project, "mine", Some(&BTreeSet::new())).unwrap();
+    let mut store = MemoryMediaStore::default();
+    store.insert(asset.id.clone(), bytes.clone());
+
+    let mut sink = Cursor::new(Vec::new());
+    writer::write_template(&mut sink, &template, &store, &save_options()).unwrap();
+    let (reopened, carried) = reader::read_template(Cursor::new(sink.into_inner())).unwrap();
+
+    assert_eq!(
+        reopened
+            .project
+            .library
+            .iter()
+            .map(|entry| entry.id.clone())
+            .collect::<Vec<_>>(),
+        vec![asset.id.clone()]
+    );
+    assert_eq!(carried.get(&asset.id), Some(&bytes));
 }
 
 // The point of reusing the `.videola` container: the same bytes still open as a project. A template
@@ -193,7 +243,7 @@ fn a_project_saved_as_a_template_comes_back_and_bakes_with_new_material() {
     project.timeline.tracks.push(track);
 
     let template = Template::from_project(&project, "wanderung", None).unwrap();
-    let reopened = reader::read_template(Cursor::new(to_videolat(&template))).unwrap();
+    let (reopened, _carried) = reader::read_template(Cursor::new(to_videolat(&template))).unwrap();
     let replacement = asset("replacement");
     let mut answers = answers_for(&reopened);
     answers.insert(

@@ -306,6 +306,20 @@ Projekt.
 
 ## Autorenmodus
 
+**Dieses Projekt als Vorlage speichern**, aus der Galerie, öffnet einen Dialog mit allem, was das
+Projekt hat — jede Aufnahme mit ihrem Dateinamen, jeder Titel mit seiner ersten Zeile, jede Farbfläche
+mit ihrer Farbe — und einem Häkchen daneben. Angehakt heißt: der Assistent fragt danach. Nicht
+angehakt heißt: es ist Teil der Vorlage, bei einer Aufnahme samt Datei.
+
+Das ist die ganze Entscheidung, und deshalb ist es ein Dialog und kein Knopf: die Markierung war
+vorher die Auswahl im Editor, und die sagt, an welchen Clips jemand gerade arbeitet — dass das
+dasselbe ist wie „welche davon ist eine Frage“, ist Zufall. Medien und Titel starten angehakt, Farben
+nicht: das ist, was jemand fast immer meint, der aus einem fertigen Schnitt eine Vorlage macht.
+
+Ein Beispiel, weil es der Grund für die Sache ist: Intro, dann dein Clip, darüber ein Wasserzeichen.
+Hake den Clip in der Mitte an, sonst nichts. Heraus kommt eine Vorlage, die nach einer Aufnahme fragt;
+Intro und Wasserzeichen stecken in der Datei und reisen mit, wohin sie auch geht.
+
 **Projekt als Vorlage speichern**, aus der Galerie heraus. Das Material bleibt zurück, und die
 **Auswahl im Editor ist die Markierung** — Clips in der Zeitleiste auszuwählen ist ohnehin schon die
 Art, „diese hier“ zu sagen, und eine zweite Art, einen Clip zu markieren, wäre eine zweite Sache zum
@@ -313,10 +327,15 @@ Erklären. Nichts ausgewählt heißt „entscheide du“.
 
 Was Markieren entscheiden kann und was nicht, ehrlich:
 
-* **Medienclips sind Platzhalter, ob markiert oder nicht.** Das Material reist nicht mit einer Vorlage
-  mit, eine Aufnahme, die keine Frage wäre, zeigte also auf Material, das keine Kopie der Datei
-  enthält — sie zeichnete überhaupt nichts. Es gibt kein „lass diese Aufnahme, wie sie ist“, das nicht
-  heißt, die Aufnahme mitzuliefern.
+* **Ein Medium ist nur dann eine Frage, wenn es markiert wurde — sonst reist sein Material mit.** Das
+  ist die Umkehrung, die eine Vorlage zu einer eigenen macht: Intro, Logo, Wasserzeichen und Endkarte
+  sind das Rezept, jedes Mal dasselbe, und eine Vorlage, die bei jeder Benutzung nach ihrem eigenen
+  Intro fragt, ist keine Vorlage. Ein unmarkiertes Medium bleibt also im Projekt, und seine Bytes gehen
+  mit in die `.videolat`; ein markiertes wird ein Slot und wird entfernt — diese Aufnahme gehört der
+  Autorin, und keine Kopie der Vorlage soll sie tragen.
+
+  Ist gar nichts markiert, ist jedes Medium eine Frage. Das ist gemeint, wenn jemand ein Projekt
+  übergibt und sagt „entscheide du“ — und daraus bestehen die mitgelieferten Vorlagen.
 * **Textgeneratoren sind eine echte Wahl.** Ein nicht markierter Titel behält schlicht seine Worte,
   denn ein Generator ist sein eigenes Material. Ohne Markierung wird jeder Titel zum Feld — was
   jemand will, der eine Titelsequenz weitergibt.

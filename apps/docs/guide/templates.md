@@ -290,6 +290,20 @@ the project.
 
 ## Author mode
 
+**Save this project as a template**, from the gallery, opens a dialogue that lists every element the
+project has — every shot by its file name, every title by its first line, every colour field by its
+colour — with a tick beside each one. Ticked means the wizard will ask for it. Unticked means it is
+part of the template, and for a shot that includes the file itself.
+
+That is the whole decision, and it is why this is a dialogue rather than a button: the marking used to
+be the editor's selection, which says which clips somebody is working on and matches "which of these
+is a question" only by accident. Media and titles start ticked, colours start unticked — what somebody
+making a template out of a finished edit almost always means.
+
+A worked example, because it is the reason this exists: an intro, then your clip, then a watermark
+across the whole thing. Tick the clip in the middle and nothing else. What comes out asks for one
+shot; the intro and the watermark are inside the file and arrive with it wherever it goes.
+
 **Save this project as a template**, from the gallery. The material stays behind, and the editor's
 **selection is the marking** — selecting clips in the timeline is already how someone says "these
 ones", and a second way to mark a clip would be a second thing to explain. Nothing selected means
@@ -297,10 +311,15 @@ ones", and a second way to mark a clip would be a second thing to explain. Nothi
 
 What marking can and cannot decide, honestly:
 
-* **Media clips are placeholders whether they were marked or not.** The footage does not travel with
-  a template, so a shot that was not a question would point at material no copy of the file carries —
-  it would draw nothing at all. There is no version of "leave this shot as it is" that does not mean
-  shipping the shot.
+* **A medium is a question only if it was marked, and its material travels when it was not.** This is
+  the reversal that makes a template somebody's own: an intro, a logo, a watermark and an end card are
+  the recipe — the same every time it is cooked — and a template that asked for its own intro on every
+  use would not be a template. So an unmarked medium stays in the project and its bytes go into the
+  `.videolat` beside it; a marked one becomes a slot and is stripped, because that footage is the
+  author's and no copy of the template should carry it.
+
+  With nothing marked at all, every medium is a question. That is what somebody means by handing over
+  a project and saying "decide for me", and it is what the shipped templates are made of.
 * **Text generators are a real choice.** An unmarked title simply keeps its words, because a generator
   is its own material. With nothing marked, every title becomes a field, which is what someone
   sharing a title sequence wants.

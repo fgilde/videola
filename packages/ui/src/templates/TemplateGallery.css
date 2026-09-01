@@ -440,3 +440,66 @@
 .v-templates__spacer {
   flex: 1;
 }
+
+/* The author's dialogue: a list of everything this project has, each row a decision. Narrower than
+   the gallery because it is a form and not a grid of pictures. */
+.v-templates--author {
+  width: min(38rem, calc(100vw - 2 * var(--v-space-4)));
+}
+
+.v-author__name {
+  display: grid;
+  gap: var(--v-space-1);
+}
+
+.v-author__name input {
+  width: 100%;
+}
+
+.v-author__list {
+  display: grid;
+  gap: var(--v-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* The whole row is the control, so the decision is a thumb's worth of target and not a checkbox. */
+.v-author__row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--v-space-2);
+  min-height: var(--v-touch-target);
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  cursor: pointer;
+}
+
+.v-author__row:hover {
+  border-color: var(--v-accent);
+}
+
+.v-author__kind {
+  font-size: var(--v-text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--v-tracking-wide);
+  color: var(--v-text-muted);
+}
+
+.v-author__label {
+  font-size: var(--v-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What the tick means, in words, on every row: a checkbox alone says "on" and not "asked for". */
+.v-author__state {
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}

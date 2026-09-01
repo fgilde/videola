@@ -337,10 +337,13 @@ describe("saving a project as a template", () => {
         locale: "de",
       },
       "mine",
+      undefined,
+      new Map(),
     );
-    const template = await readTemplateFile(bytes);
+    const { template } = await readTemplateFile(bytes);
 
-    // The recipe travels, the footage does not.
+    // Nothing marked, so every medium is a question -- and a question's material stays with whoever
+    // made it. What a marked-media template does instead is the core's own test.
     expect(template.project.library).toEqual([]);
     expect(template.manifest.slots.filter((slot) => slot.kind === "media")).toHaveLength(1);
 
@@ -377,8 +380,12 @@ describe("saving a project as a template", () => {
       locale: "de",
     };
 
-    const everything = await readTemplateFile(doc.saveAsTemplate(options, "all"));
-    const only = await readTemplateFile(doc.saveAsTemplate(options, "one", [head!]));
+    const { template: everything } = await readTemplateFile(
+      doc.saveAsTemplate(options, "all", undefined, new Map()),
+    );
+    const { template: only } = await readTemplateFile(
+      doc.saveAsTemplate(options, "one", [head!], new Map()),
+    );
 
     const textSlots = (template: Template): number =>
       template.manifest.slots.filter((slot) => slot.kind === "text").length;

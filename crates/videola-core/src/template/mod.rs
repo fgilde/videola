@@ -386,7 +386,19 @@ impl Template {
         let mut color_slots = Vec::new();
 
         for (index, media) in used_media(project).into_iter().enumerate() {
-            let bindings = clips_using(project, &media)
+            let clips = clips_using(project, &media);
+            // Marked means "this one is the question". A medium nobody marked stays in the template
+            // and travels with it: an intro, a logo, a watermark, a bed -- the parts of a recipe that
+            // are the same every time it is cooked. Without that, a template for "my intro, then your
+            // clip" would ask for the intro again on every use, which is not a template.
+            //
+            // With nothing marked at all the old rule holds: every medium is a question. That is what
+            // somebody means by handing over a project and saying "decide for me".
+            let asked = marked.is_none_or(|chosen| clips.iter().any(|clip| chosen.contains(clip)));
+            if !asked {
+                continue;
+            }
+            let bindings = clips
                 .into_iter()
                 .map(|clip| SlotBinding::ClipMedia {
                     clip,
@@ -403,7 +415,10 @@ impl Template {
                     &format!("Shot {}", index + 1),
                 ),
                 hint: Localized::same(&original_name(project, &media)),
-                required: true,
+                // Optional, like every slot a shipped template has: a template that cannot be opened
+                // before something has been imported is backwards on the first run, and half of what
+                // these are for is the graphics. An unanswered media slot drops its own clip.
+                required: false,
                 bindings,
             });
         }
@@ -475,9 +490,17 @@ impl Template {
             bindings: vec![SlotBinding::Background],
         });
 
-        // The material stays with whoever made it: a template is a recipe, and shipping the
-        // footage would make every copy of it as big as the project it came from.
-        stripped.library.clear();
+        // What was asked for goes; what was kept stays. A medium that became a question is material
+        // the author is not shipping -- theirs, and as big as the project it came from. A medium that
+        // stayed is part of the recipe and travels with it, bytes and all.
+        let questions: BTreeSet<MediaId> = slots
+            .iter()
+            .flat_map(|slot| slot.media_clips())
+            .filter_map(|clip| media_of(project, clip))
+            .collect();
+        stripped
+            .library
+            .retain(|asset| !questions.contains(&asset.id));
 
         let mut template = Self {
             manifest: TemplateManifest {
@@ -899,6 +922,20 @@ fn used_media(project: &Project) -> Vec<MediaId> {
         }
     }
     seen
+}
+
+/// Which medium a clip reads, where it reads one at all.
+fn media_of(project: &Project, clip: &ClipId) -> Option<MediaId> {
+    project
+        .timeline
+        .tracks
+        .iter()
+        .flat_map(|track| &track.clips)
+        .find(|candidate| &candidate.id == clip)
+        .and_then(|found| match &found.source {
+            ClipSource::Media { media } => Some(media.clone()),
+            _ => None,
+        })
 }
 
 fn clips_using(project: &Project, media: &MediaId) -> Vec<ClipId> {
@@ -1921,21 +1958,59 @@ mod tests {
         assert_eq!(content, "Fusszeile");
     }
 
-    // The one thing marking cannot decide. The footage does not travel with a template, so a media
-    // clip that was not a question would point at material no copy of the file carries.
-    #[test]
-    fn a_media_clip_is_a_question_whether_it_was_marked_or_not() {
+    fn project_with_a_shot() -> (Project, MediaAsset) {
         let mut project = project_with_two_titles();
         let asset = asset(5.0, 1920, 1080);
         project.library.push(asset.clone());
         let mut track = Track::new(TrackKind::Video, "V1".into());
-        let mut clip = Clip::new_media(asset.id, Time::ZERO, Time::from_seconds(2.0));
+        let mut clip = Clip::new_media(asset.id.clone(), Time::ZERO, Time::from_seconds(2.0));
         clip.id = ClipId::from("clp_shot".to_string());
         track.clips.push(clip);
         project.timeline.tracks.push(track);
+        (project, asset)
+    }
+
+    // An intro, a logo, a watermark: the parts of a recipe that are the same every time it is cooked.
+    // A template that asked for its own intro on every use would not be a template, so a medium
+    // nobody marked stays in the project and its bytes travel with the file.
+    #[test]
+    fn an_unmarked_medium_stays_in_the_template_rather_than_becoming_a_question() {
+        let (project, asset) = project_with_a_shot();
         let marked = BTreeSet::from([ClipId::from("clp_head".to_string())]);
 
         let template = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+
+        assert!(slot_ids(&template, SlotKind::Media).is_empty());
+        assert_eq!(
+            template
+                .project
+                .library
+                .iter()
+                .map(|entry| entry.id.clone())
+                .collect::<Vec<_>>(),
+            vec![asset.id]
+        );
+    }
+
+    // And the other half: what was marked is the question, and its material is the author's own --
+    // stripped, so no copy of the template carries somebody else's footage.
+    #[test]
+    fn a_marked_medium_becomes_a_question_and_leaves_its_material_behind() {
+        let (project, _) = project_with_a_shot();
+        let marked = BTreeSet::from([ClipId::from("clp_shot".to_string())]);
+
+        let template = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+
+        assert_eq!(slot_ids(&template, SlotKind::Media), vec!["media1"]);
+        assert!(template.project.library.is_empty());
+    }
+
+    // Nothing marked is what somebody means by handing over a project and saying "decide for me".
+    #[test]
+    fn with_nothing_marked_every_medium_is_still_a_question() {
+        let (project, _) = project_with_a_shot();
+
+        let template = Template::from_project(&project, "mine", None).unwrap();
 
         assert_eq!(slot_ids(&template, SlotKind::Media), vec!["media1"]);
         assert!(template.project.library.is_empty());

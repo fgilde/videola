@@ -108,9 +108,10 @@ export class VideolaDocument {
   saveAsTemplate(
     options: SaveOptions,
     id: string,
-    marked?: readonly ClipId[],
+    marked: readonly ClipId[] | undefined,
+    media: MediaBytes,
   ): Uint8Array<ArrayBuffer> {
-    return this.#backend.saveAsTemplate(options, id, marked);
+    return this.#backend.saveAsTemplate(options, id, marked, media);
   }
 
   #absorb(result: DispatchResult): DispatchResult {

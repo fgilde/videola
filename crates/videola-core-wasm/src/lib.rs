@@ -86,7 +86,24 @@ impl WasmDocument {
     /// A `.videolat` from disk.
     #[wasm_bindgen(js_name = readTemplate)]
     pub fn read_template(bytes: &[u8]) -> std::result::Result<JsValue, JsError> {
-        to_js_value(&inner::read_template(bytes).map_err(to_js)?)
+        let (template, media) = inner::read_template(bytes).map_err(to_js)?;
+        let found = js_sys::Object::new();
+        let set = |key: &str, value: &JsValue| -> std::result::Result<(), JsError> {
+            js_sys::Reflect::set(&found, &key.into(), value)
+                .map(|_| ())
+                .map_err(|_| JsError::new("could not build the result object"))
+        };
+        set("template", &to_js_value(&template)?)?;
+        // A Map rather than an object: the values are Uint8Arrays, and serde would walk every byte.
+        let carried = js_sys::Map::new();
+        for (id, bytes) in media {
+            carried.set(
+                &id.as_str().into(),
+                &js_sys::Uint8Array::from(bytes.as_slice()).into(),
+            );
+        }
+        set("media", &carried.into())?;
+        Ok(found.into())
     }
 
     /// Template plus answers becomes a document like any other: the same undo stack, the same
@@ -275,8 +292,8 @@ impl WasmDocument {
             .map_err(to_js)
     }
 
-    /// This project as a `.videolat`. Every medium it uses becomes a slot and stays behind, which
-    /// is why there is no media map here.
+    /// This project as a `.videolat`. Marked media become slots and their material stays with the
+    /// author; everything else travels with the template, which is why this takes a media map.
     ///
     /// `marked` is the editor's selection: the clips the author wants to turn into questions. Null
     /// means "decide for me". Media clips are questions either way -- the footage does not travel,
@@ -287,11 +304,13 @@ impl WasmDocument {
         options: JsValue,
         id: String,
         marked: JsValue,
+        media: js_sys::Map,
     ) -> std::result::Result<Vec<u8>, JsError> {
         let marked: Option<BTreeSet<ClipId>> = serde_wasm_bindgen::from_value(marked)?;
         let parsed: SaveOptions = serde_wasm_bindgen::from_value(options)?;
+        let supplied = supplied_media(&media)?;
         self.host
-            .save_as_template(parsed, &id, marked.as_ref())
+            .save_as_template(parsed, &id, marked.as_ref(), supplied)
             .map_err(to_js)
     }
 }

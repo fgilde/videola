@@ -237,23 +237,29 @@ impl DocumentHost {
         Ok(sink.into_inner())
     }
 
-    // `Template::from_project` leaves the material behind, so the library it writes is empty and
-    // the store never has to hand anything over -- no media parameter, and no way for this call to
-    // fail on bytes the host would have had to re-read.
+    // A template keeps the media nobody marked -- an intro, a logo, a watermark -- so it needs the
+    // same store a save does. What was marked became a question and was stripped, and its bytes are
+    // never asked for: the writer reads the library the template kept and nothing else.
     pub fn save_as_template(
         &self,
         options: SaveOptions,
         id: &str,
         marked: Option<&BTreeSet<ClipId>>,
+        supplied: BTreeMap<MediaId, Vec<u8>>,
     ) -> Result<Vec<u8>> {
+        media_within_cap(supplied.values().map(|bytes| bytes.len() as u64).sum())?;
         let template = Template::from_project(self.document.project(), id, marked)?;
+        let store = SaveStore {
+            supplied,
+            held: &self.media,
+        };
         let mut sink = Cursor::new(Vec::new());
-        writer::write_template(&mut sink, &template, &MemoryMediaStore::default(), &options)?;
+        writer::write_template(&mut sink, &template, &store, &options)?;
         Ok(sink.into_inner())
     }
 }
 
-pub fn read_template(bytes: &[u8]) -> Result<Template> {
+pub fn read_template(bytes: &[u8]) -> Result<(Template, BTreeMap<MediaId, Vec<u8>>)> {
     reader::read_template(Cursor::new(bytes))
 }
 

@@ -538,5 +538,16 @@
   "timeline.panZoom": "Slow push (Ken Burns)",
   "timeline.fade": "Fade in and out",
   "text.presets": "Title presets",
-  "fx.looks": "Looks"
+  "fx.looks": "Looks",
+  "author.title": "Save as a template",
+  "author.intro": "Choose what somebody making a project from this template should replace. What you leave unticked stays part of the template — an intro, a logo, a watermark travel with the file.",
+  "author.name": "Template name",
+  "author.nothing": "This project has nothing a template could ask about yet.",
+  "author.kind.media": "Shot",
+  "author.kind.text": "Text",
+  "author.kind.colour": "Colour",
+  "author.asked": "asked for",
+  "author.kept": "kept",
+  "author.hint": "Ticked means the wizard asks for it. Unticked means it is in the template — for a shot, that includes the file itself.",
+  "author.save": "Write the template"
 }

@@ -91,14 +91,19 @@ export interface DocumentBackend {
   // so unlike `save` there is nothing for the caller to gather first.
   /**
    * This project as a `.videolat`. `marked` is the author's own choice of which clips become
-   * questions -- the editor's selection. Omitted means "decide for me": every title becomes one.
-   * Media clips are questions either way; the footage does not travel with a template, so a shot
-   * that was not a question would point at material no copy of the file carries.
+   * questions -- the editor's selection. Omitted means "decide for me": every medium and every title
+   * becomes one.
+   *
+   * What was marked is a question and its material stays with the author. What was not marked travels
+   * with the template, bytes and all: an intro, a logo, a watermark are part of the recipe, and a
+   * template that asked for its own intro on every use would not be a template. That is why this
+   * takes the same media map a save does.
    */
   saveAsTemplate(
     options: SaveOptions,
     id: string,
-    marked?: readonly ClipId[],
+    marked: readonly ClipId[] | undefined,
+    media: MediaBytes,
   ): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;
   // What the core itself holds for a medium: the entry a `.videola` brought with it, or the bytes

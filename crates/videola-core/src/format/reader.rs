@@ -58,7 +58,13 @@ pub struct LoadedProject {
 
 /// A `.videolat` read as what it is. Refuses an archive without a `template.json` rather than
 /// handing back something that looks like a template with no questions in it.
-pub fn read_template<R: Read + Seek>(source: R) -> Result<Template> {
+/// A template, and the material it carries.
+///
+/// The media map is not always empty any more: what the author did not turn into a question travels
+/// inside the file -- an intro, a logo, a watermark -- and dropping those bytes here would leave the
+/// template naming material nobody has. Every medium that became a question was stripped on the way
+/// in, so what comes back is only ever the author's own recipe.
+pub fn read_template<R: Read + Seek>(source: R) -> Result<(Template, BTreeMap<MediaId, Vec<u8>>)> {
     let loaded = read(source)?;
     let Some(manifest) = loaded.template else {
         return Err(CoreError::NotAProject(
@@ -70,7 +76,7 @@ pub fn read_template<R: Read + Seek>(source: R) -> Result<Template> {
         project: loaded.project,
     };
     template.normalize()?;
-    Ok(template)
+    Ok((template, loaded.media))
 }
 
 pub fn read<R: Read + Seek>(source: R) -> Result<LoadedProject> {

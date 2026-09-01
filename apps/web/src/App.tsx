@@ -112,6 +112,7 @@ import {
   Scopes,
   SourceBar,
   Stage,
+  TemplateAuthor,
   TemplateGallery,
   TemplateWizard,
   Timeline,
@@ -295,6 +296,7 @@ export function App(): ReactElement {
   const [tiles, setTiles] = useState<ReadonlyMap<string, string>>();
   const [gallery, setGallery] = useState(false);
   const [handingOff, setHandingOff] = useState(false);
+  const [authoring, setAuthoring] = useState(false);
   const [catalogue, setCatalogue] = useState<Template[]>([]);
   const [template, setTemplate] = useState<Template>();
   const [slotMedia, setSlotMedia] = useState<Record<string, MediaAsset>>({});
@@ -1403,9 +1405,17 @@ export function App(): ReactElement {
   const openTemplateFile = useCallback(async (file: File) => {
     try {
       const opened = await readTemplateFile(new Uint8Array(await file.arrayBuffer()));
+      // What the author kept travels inside the file, so it has to reach storage before the bake --
+      // otherwise the template names an intro whose bytes nobody has, and the clip draws nothing.
+      // Written under the content hash like every other medium, so a template carrying a file that is
+      // already here writes the same bytes over themselves and costs one copy.
+      for (const [id, bytes] of opened.media) {
+        const hash = mediaHash(id);
+        if (hash !== undefined) await putMedia(hash, bytes as Uint8Array<ArrayBuffer>);
+      }
       setSlotMedia({});
       setTemplateError(undefined);
-      setTemplate(opened);
+      setTemplate(opened.template);
     } catch {
       setTemplateError("error.templateOpenFailed");
     }
@@ -1474,29 +1484,45 @@ export function App(): ReactElement {
     [closeTemplates, doc, playhead, template],
   );
 
-  const saveAsTemplate = useCallback(() => {
-    if (doc === undefined || project === undefined) return;
-    try {
-      const now = new Date().toISOString();
-      const bytes = doc.saveAsTemplate(
-        {
-          appVersion: APP_VERSION,
-          created: now,
-          modified: now,
-          locale: navigator.language,
-        },
-        project.meta.id,
-        // The selection is the marking. Selecting clips in the timeline is already how someone
-        // says "these ones", and a second way to mark a clip would be a second thing to explain.
-        // Nothing selected means "decide for me", which is what the button said before this.
-        selection.length > 0 ? selection : undefined,
-      );
-      downloadBlob(bytes, `${project.meta.title || project.meta.id}.videolat`);
-      setTemplateError(undefined);
-    } catch (err) {
-      setTemplateError(templateReason(err, "error.templateSaveFailed"));
-    }
-  }, [doc, project, selection]);
+  /**
+   * This project as a template, with the author's own answer to "what is the question here".
+   *
+   * `marked` comes from the dialogue rather than from the selection now: the selection says which
+   * clips somebody is working on, and the two are only the same by accident. What is marked becomes a
+   * question and its material stays behind; what is not marked travels inside the file, which is what
+   * lets a template carry its own intro, logo or watermark.
+   */
+  const writeTemplate = useCallback(
+    async (marked: readonly string[], name: string) => {
+      if (doc === undefined || project === undefined) return;
+      try {
+        if (name !== "" && name !== project.meta.title) {
+          doc.dispatch(cmd.projectSetTitle(name));
+        }
+        const now = new Date().toISOString();
+        // Every medium the project holds: the writer takes what the template kept and asks for
+        // nothing else, so handing it the lot costs one read of what is already on disk.
+        const media = await mediaForProject(doc.state);
+        const bytes = doc.saveAsTemplate(
+          {
+            appVersion: APP_VERSION,
+            created: now,
+            modified: now,
+            locale: navigator.language,
+          },
+          doc.state.meta.id,
+          marked,
+          media,
+        );
+        downloadBlob(bytes, `${name || doc.state.meta.id}.videolat`);
+        setAuthoring(false);
+        setTemplateError(undefined);
+      } catch (err) {
+        setTemplateError(templateReason(err, "error.templateSaveFailed"));
+      }
+    },
+    [doc, project],
+  );
 
   // A caption file becomes a track of its own, through the same `clip.add` every other clip goes
   // through -- so an SRT someone was handed passes the loader's own gate rather than a second one
@@ -2026,7 +2052,7 @@ export function App(): ReactElement {
           }}
           onOpenTemplate={(file) => void openTemplateFile(file)}
           // Only offered once there is something worth turning into a recipe.
-          onSaveCurrent={hasClips(project) ? saveAsTemplate : undefined}
+          onSaveCurrent={hasClips(project) ? () => setAuthoring(true) : undefined}
           onClose={closeTemplates}
         />
       )}
@@ -2046,6 +2072,13 @@ export function App(): ReactElement {
             setTemplateError(undefined);
           }}
           onClose={closeTemplates}
+        />
+      )}
+      {authoring && project !== undefined && (
+        <TemplateAuthor
+          project={project}
+          onSave={(marked, name) => void writeTemplate(marked, name)}
+          onClose={() => setAuthoring(false)}
         />
       )}
       {handingOff && project !== undefined && (

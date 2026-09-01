@@ -538,5 +538,16 @@
   "timeline.panZoom": "Sanfte Fahrt (Ken Burns)",
   "timeline.fade": "Weich ein- und ausblenden",
   "text.presets": "Titel-Vorlagen",
-  "fx.looks": "Looks (Effektketten)"
+  "fx.looks": "Looks (Effektketten)",
+  "author.title": "Als Vorlage speichern",
+  "author.intro": "Wählen Sie, was jemand ersetzen soll, der aus dieser Vorlage ein Projekt macht. Was Sie nicht ankreuzen, bleibt Teil der Vorlage — Intro, Logo, Wasserzeichen wandern mitsamt Datei mit.",
+  "author.name": "Name der Vorlage",
+  "author.nothing": "Dieses Projekt hat noch nichts, wonach eine Vorlage fragen könnte.",
+  "author.kind.media": "Aufnahme",
+  "author.kind.text": "Text",
+  "author.kind.colour": "Farbe",
+  "author.asked": "wird gefragt",
+  "author.kept": "bleibt drin",
+  "author.hint": "Angekreuzt heißt: der Assistent fragt danach. Nicht angekreuzt heißt: es steckt in der Vorlage — bei einer Aufnahme samt Datei.",
+  "author.save": "Vorlage schreiben"
 }
