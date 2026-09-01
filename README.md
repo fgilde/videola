@@ -3,6 +3,7 @@
 # Videola
 
 [![Release](https://img.shields.io/github/v/release/fgilde/videola?label=release&color=6b5bff)](https://github.com/fgilde/videola/releases/latest)
+[![QuickRun](https://quickrun.org/badge.svg)](https://quickrun.org/run?repo=fgilde/videola)
 [![CI](https://github.com/fgilde/videola/actions/workflows/ci.yml/badge.svg)](https://github.com/fgilde/videola/actions/workflows/ci.yml)
 [![Licence: GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
 [![Try it live](https://img.shields.io/badge/try%20it-live-2ea043)](https://video.nksoft.de/)
