@@ -100,6 +100,19 @@ export class VideoSource {
   // costs nothing and there is no second path that could disagree with the first.
   async seek(t: Time): Promise<void> {
     await this.frameAt(t);
+    // A seek wants the decoder positioned, not a frame held: nothing is going to draw this one.
+    this.release();
+  }
+
+  /**
+   * Every frame this source handed out is drawn, and may be evicted again.
+   *
+   * Called once per rendered frame by whoever gathered the pictures. Not called per picture: two
+   * clips of one medium share this source, and releasing after the first would let the second decode
+   * take the first one's picture out from under the same draw.
+   */
+  release(): void {
+    this.#cache.unpinAll();
   }
 
   close(): void {
@@ -213,11 +226,15 @@ export class VideoSource {
     this.#decoded += 1;
   }
 
+  // Pinned on the way out, and this is the whole of the fix for a preview that showed one layer's
+  // picture a tick late: a frame handed to a caller must survive whatever the next decode does to the
+  // budget. `release` is what ends the pin, and the caller that draws is the one that calls it.
   #cached(t: Time): VideoFrame | undefined {
     const index = heldIndexAt(this.#held, timeToSeconds(t));
     const held = this.#held[index];
     if (held === undefined) return undefined;
     const frame = this.#cache.get(held.key);
+    if (frame !== undefined) this.#cache.pin(held.key);
     // The cache evicts under budget pressure without telling anyone, so a miss is how this side
     // learns the frame is gone.
     if (frame === undefined) this.#held.splice(index, 1);

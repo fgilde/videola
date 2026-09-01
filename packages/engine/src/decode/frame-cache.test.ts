@@ -135,4 +135,45 @@ describe("FrameCache", () => {
     expect(oversized.closed()).toBe(false);
     expect(cache.get("huge")).toBe(oversized.frame);
   });
+
+  // What the preview needs and did not have: a frame handed out during one tick must still be open
+  // when that tick renders. Two clips of one medium at two instants ask this cache in the same tick,
+  // and without a pin the second decode evicts the first one's picture between the hand-out and the
+  // draw -- which is the stale layer somebody sees with several media on the timeline.
+  it("keeps a pinned frame while the budget is spent on others", () => {
+    const cache = new FrameCache(bytesOf(64, 64) * 2);
+    const first = fakeFrame(64, 64);
+    cache.put("a", first.frame);
+    cache.pin("a");
+
+    cache.put("b", fakeFrame(64, 64).frame);
+    cache.put("c", fakeFrame(64, 64).frame);
+
+    expect(first.closed()).toBe(false);
+    expect(cache.get("a")).toBe(first.frame);
+  });
+
+  it("lets go again once the tick that pinned it is over", () => {
+    const cache = new FrameCache(bytesOf(64, 64) * 2);
+    const first = fakeFrame(64, 64);
+    cache.put("a", first.frame);
+    cache.pin("a");
+    cache.put("b", fakeFrame(64, 64).frame);
+
+    cache.unpinAll();
+    cache.put("c", fakeFrame(64, 64).frame);
+
+    expect(first.closed()).toBe(true);
+    expect(cache.get("a")).toBeUndefined();
+  });
+
+  // A pin is not a leak: the budget is a budget again the moment the frames are released, and until
+  // then it can only be exceeded by what one drawn frame needs.
+  it("pins nothing it does not hold", () => {
+    const cache = new FrameCache(bytesOf(64, 64) * 2);
+
+    cache.pin("nothing");
+
+    expect(cache.framesHeld()).toBe(0);
+  });
 });

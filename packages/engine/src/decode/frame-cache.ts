@@ -12,6 +12,7 @@ export const DEFAULT_FRAME_BUDGET_BYTES = 256 * 1024 * 1024;
 export class FrameCache {
   #budget: number;
   #frames = new Map<string, Entry>();
+  #pinned = new Set<string>();
   #bytes = 0;
 
   constructor(budgetBytes: number = DEFAULT_FRAME_BUDGET_BYTES) {
@@ -38,7 +39,30 @@ export class FrameCache {
     this.#evict();
   }
 
+  /**
+   * Keep this frame until the tick that asked for it has drawn.
+   *
+   * The preview gathers one picture per visible clip and then renders once. Between the two, another
+   * clip's decode can push this one out of the budget -- and because the cache is the only thing that
+   * closes frames, what the compositor gets handed is a closed frame it has to skip. On screen that is
+   * a layer showing the picture it had a moment ago, which is exactly what several media on a timeline
+   * used to look like.
+   *
+   * Pinned frames are skipped by eviction, so the budget can be exceeded while a tick is in flight --
+   * by what one drawn frame needs, and no longer than that, because the tick releases them.
+   */
+  pin(key: string): void {
+    if (this.#frames.has(key)) this.#pinned.add(key);
+  }
+
+  /** The tick is over. Frames are ordinary cache entries again, and the budget applies to them. */
+  unpinAll(): void {
+    this.#pinned.clear();
+    this.#evict();
+  }
+
   clear(): void {
+    this.#pinned.clear();
     for (const key of [...this.#frames.keys()]) this.#discard(key);
   }
 
@@ -57,8 +81,18 @@ export class FrameCache {
   // caller holds the reference `put` just accepted, and handing back something already closed
   // would be worse than exceeding a budget by one frame. Size the budget above one 4K frame.
   #evict(): void {
-    for (const key of this.#frames.keys()) {
+    const keys = [...this.#frames.keys()];
+    // Never the newest: `put` has just handed that frame to a caller holding the reference, and a
+    // cache that closes it under them is worse than a cache one frame over its budget. It used to be
+    // covered by the size guard below, which stopped at one entry -- until a pinned frame became that
+    // one entry and the eviction walked straight over the picture that had just arrived.
+    const newest = keys[keys.length - 1];
+    for (const key of keys) {
       if (this.#bytes <= this.#budget || this.#frames.size === 1) return;
+      // A pinned frame is being drawn right now. Skipping it can leave the cache over budget for the
+      // length of one tick, which is the trade this pin exists to make: a picture that is late is a
+      // picture, and a picture that was closed under the compositor is a hole.
+      if (key === newest || this.#pinned.has(key)) continue;
       this.#discard(key);
     }
   }
@@ -66,6 +100,7 @@ export class FrameCache {
   #discard(key: string): void {
     const entry = this.#frames.get(key);
     if (entry === undefined) return;
+    this.#pinned.delete(key);
     this.#frames.delete(key);
     this.#bytes -= entry.bytes;
     entry.frame.close();

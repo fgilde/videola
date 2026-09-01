@@ -39,6 +39,15 @@ export interface AudioTransport extends ClockSource {
 export interface FrameSource {
   open(hash: string): Promise<void>;
   frameAt(t: Time): Promise<VideoFrame | undefined>;
+  /**
+   * Every frame handed out since the last release has been drawn and may be evicted again.
+   *
+   * Optional because a source that keeps nothing owes nothing. `VideoSource` holds its frames in a
+   * budgeted cache, and a picture already handed to a caller has to survive the decode that follows
+   * it -- otherwise the compositor is handed a closed frame and keeps the layer's previous picture,
+   * which is what a timeline with several media looked like.
+   */
+  release?(): void;
   close(): void;
 }
 
@@ -329,9 +338,10 @@ export class Playback {
     }
   }
 
-  // The frames are gathered and handed over with nothing awaited in between. The cache is free to
-  // close any of them the next time it decodes, and only this source can make it decode, so the
-  // map cannot rot between the last frame arriving and the upload.
+  // Held from the moment they are handed over until the moment they are drawn, and released after.
+  // Both halves matter: this gather asks every visible clip at once, and the smear below it decodes
+  // again afterwards -- so without the hold, the picture of the first clip is gone by the time the
+  // last one arrives, and the compositor draws the layer as it stood a tick ago.
   async #present(at: Time): Promise<void> {
     const project = this.#project;
     const compositor = this.#compositor;
@@ -347,6 +357,17 @@ export class Playback {
     // holding the picture before it rather than leaving the clip out of the frame.
     const smear = await this.#smear(project, at, frames);
     compositor.render(project, at, frames, params, transforms, this.#luts.tables(), smear);
+    // Drawn. The pictures are ordinary cache entries again and the budget applies to them; a tick
+    // that threw before this point releases on the next one, because the release is per source and
+    // not per frame.
+    await this.#releaseSources();
+  }
+
+  async #releaseSources(): Promise<void> {
+    for (const opening of this.#sources.values()) {
+      const source = await opening;
+      source?.release?.();
+    }
   }
 
   /**

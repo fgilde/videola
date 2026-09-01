@@ -191,6 +191,10 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
       smear,
     );
     await pass.video.add(timeToSeconds(frame.at - origin), step);
+    // Encoded, so the pictures may be evicted again. Held until here rather than until the gather
+    // returned: the smear above decodes after the pictures, and its decodes are what would otherwise
+    // take one of them out of the budget between the gather and this frame.
+    pass.sources.release();
     index += 1;
     pass.onProgress?.(index, request.frames.length);
   }
@@ -332,6 +336,11 @@ export class SourcePool {
       this.#open.set(clip, undefined);
     }
     return this.#open.get(clip);
+  }
+
+  /** Every picture this pass handed out has been drawn. Same bargain the preview makes. */
+  release(): void {
+    for (const source of this.#open.values()) source?.release?.();
   }
 
   close(): void {

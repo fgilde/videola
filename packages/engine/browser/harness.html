@@ -428,6 +428,36 @@ async function main() {
     check("and exactly as long", info.duration / SECOND, 1, 0.02);
   });
 
+  // Two clips of one medium at two instants, in one tick, on a budget that holds one frame. This is
+  // the shape a timeline with several media has, and what it used to do: the second decode evicted the
+  // first clip's picture before anything drew it, the compositor was handed a closed frame, and that
+  // layer kept the picture it had a moment ago. Frames are pinned from the hand-out until `release`,
+  // so both are open here and both are the picture that was asked for.
+  await test("two pictures asked for in one tick are both still open", async () => {
+    const source = new R.VideoSource("preview", PROXY_WIDTH * PROXY_HEIGHT * 4);
+    try {
+      await source.open(hash);
+      const [first, second] = await Promise.all([
+        source.frameAt(0),
+        source.frameAt(SECOND / 2),
+      ]);
+
+      check("the first picture arrived", first !== undefined, true);
+      check("and the second", second !== undefined, true);
+      // A closed VideoFrame reports zero, which is how this side can tell without touching the GPU.
+      check("neither was closed under the other", [first.codedWidth > 0, second.codedWidth > 0],
+        [true, true]);
+      check("and they are two different instants", first.timestamp !== second.timestamp, true);
+
+      // Released, and the budget applies again: one frame's worth of budget holds one frame.
+      source.release();
+      await source.frameAt(SECOND / 4);
+      checkAtMost("a released cache is back inside its budget", source.framesHeld, 1);
+    } finally {
+      source.close();
+    }
+  });
+
   // The resolution is what tells the two apart. A check that only asked "did it decode" would pass
   // whichever file was opened.
   await test("the preview decodes the proxy and the master the original", async () => {

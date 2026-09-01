@@ -190,9 +190,12 @@ class FakeSources {
     for (const resolve of waiting) resolve(frame());
   }
 
+  released: string[] = [];
+
   create = (): FrameSource => {
     let hash = "";
     return {
+      release: (): void => void this.released.push(hash),
       open: async (opening: string): Promise<void> => {
         hash = opening;
         this.opened.push(opening);
@@ -387,6 +390,32 @@ describe("Playback", () => {
     await settle();
 
     expect(sources.asks).toEqual([]);
+  });
+
+  // Two clips of one medium at two instants, which is the shape that showed a stale layer: the
+  // pictures are held from the moment they are handed over until the frame is drawn, and let go after.
+  // Without the release this would grow without bound; without the hold, the second decode takes the
+  // first clip's picture out of the budget before anything draws it.
+  it("lets the pictures go only once the frame they belong to has been drawn", async () => {
+    const { playback, sources } = rig(
+      times((at) => [
+        ["clp_1", at],
+        ["clp_2", at + 5 * SECOND],
+      ]),
+    );
+    await playback.load(project([clip("clp_1"), clip("clp_2")]));
+
+    playback.seek(SECOND);
+    await settle();
+
+    // Both clips asked, one source, and exactly one release for the frame they were drawn in.
+    expect(sources.asks.map((ask) => ask.at)).toEqual([SECOND, 6 * SECOND]);
+    expect(sources.released).toEqual([HASH]);
+
+    sources.released = [];
+    playback.seek(2 * SECOND);
+    await settle();
+    expect(sources.released).toEqual([HASH]);
   });
 
   it("opens one source per medium, however many clips share it", async () => {

@@ -64,6 +64,8 @@ export async function renderStills(request: StillRequest): Promise<Blob[]> {
         luts.tables(),
       );
       stills.push(await canvas.convertToBlob({ type: "image/png" }));
+      // Drawn and written; the pictures go back to being ordinary cache entries.
+      pass.sources.release();
     }
     return stills;
   } finally {
