@@ -106,6 +106,10 @@ describe("what every deployment agrees on", () => {
     // the manifest's version to the user, and `latest` would make that number a guess.
     expect(COMPOSE).toContain(`${image}:${TAURI.version}`);
     expect(MANIFEST).toContain(`version: "${TAURI.version}"`);
+    // The pin above is a version without a leading v, and the tag is v-prefixed -- so the release has
+    // to publish both names. It did not for a while, and the Umbrel package pointed at a tag that
+    // was never pushed.
+    expect(read(".github/workflows/release.yml")).toContain('version="${REF#v}"');
   });
 
   it("names the web root and the wasm the bundle carries", () => {
