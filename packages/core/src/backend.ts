@@ -103,6 +103,13 @@ export interface DocumentBackend {
     options: SaveOptions,
     id: string,
     marked: readonly ClipId[] | undefined,
+    /**
+     * Clips whose question keeps the length the template drew it at. Everything else takes the length
+     * of the material it is answered with, and the timeline around it follows -- which is what makes
+     * "my intro, then my video, then my end card" a template rather than a template for one
+     * particular eleven-second video.
+     */
+    fixed: readonly ClipId[] | undefined,
     media: MediaBytes,
   ): Uint8Array<ArrayBuffer>;
   importMedia(name: string, mime: string, kind: MediaKind, bytes: Uint8Array): ImportMediaResult;

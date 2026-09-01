@@ -338,6 +338,7 @@ describe("saving a project as a template", () => {
       },
       "mine",
       undefined,
+      undefined,
       new Map(),
     );
     const { template } = await readTemplateFile(bytes);
@@ -353,12 +354,15 @@ describe("saving a project as a template", () => {
     );
 
     expect(clips(baked)[0]?.source).toEqual({ kind: "media", media: replacement.id });
-    expect(clips(baked)[0]?.duration).toBe(4 * SECOND);
+    // Twenty seconds of material in a slot drawn at four, and the clip is twenty: a template made out
+    // of somebody's own edit asks for their video, not for a video of exactly the length that
+    // happened to be there when they made it. The core's own tests hold the ripple around it.
+    expect(clips(baked)[0]?.duration).toBe(20 * SECOND);
   });
 
-  // Author mode: the editor's selection is the marking. Nothing selected means every title becomes
-  // a question; a selection narrows it to those clips. What it cannot narrow is the footage -- the
-  // material does not travel, so a media clip that were not a question would draw nothing.
+  // Author mode: the marking decides. Nothing marked means every title and every medium becomes a
+  // question; a marking narrows it to those clips, and a medium left out of it travels inside the
+  // file with its bytes -- an intro, a logo, a watermark.
   it("turns the marked clips into questions and leaves the rest alone", async () => {
     const doc = new VideolaDocument(await createWasmBackend());
     doc.dispatch({ type: "track.add", kind: "text", name: "T1", index: null });
@@ -381,10 +385,10 @@ describe("saving a project as a template", () => {
     };
 
     const { template: everything } = await readTemplateFile(
-      doc.saveAsTemplate(options, "all", undefined, new Map()),
+      doc.saveAsTemplate(options, "all", undefined, undefined, new Map()),
     );
     const { template: only } = await readTemplateFile(
-      doc.saveAsTemplate(options, "one", [head!], new Map()),
+      doc.saveAsTemplate(options, "one", [head!], undefined, new Map()),
     );
 
     const textSlots = (template: Template): number =>

@@ -54,13 +54,19 @@ function clip(id: string, source: unknown): unknown {
   };
 }
 
-function show(): { saved: { marked: readonly string[]; name: string }[] } {
-  const saved: { marked: readonly string[]; name: string }[] = [];
+interface Saved {
+  marked: readonly string[];
+  fixed: readonly string[];
+  name: string;
+}
+
+function show(): { saved: Saved[] } {
+  const saved: Saved[] = [];
   render(
     <I18nProvider>
       <TemplateAuthor
         project={project()}
-        onSave={(marked, name) => saved.push({ marked: [...marked], name })}
+        onSave={(marked, fixed, name) => saved.push({ marked: [...marked], fixed: [...fixed], name })}
         onClose={vi.fn()}
       />
     </I18nProvider>,
@@ -108,6 +114,37 @@ describe("the template author", () => {
     expect(saved).toHaveLength(1);
     expect([...saved[0]!.marked].sort()).toEqual(["clp_shot", "clp_title"]);
     expect(saved[0]!.name).toBe("Reise-Vorlage");
+  });
+
+  // The question that makes a template a template rather than a template for one particular video:
+  // how long the shot somebody drops in is allowed to be. Only asked about a shot, and only about one
+  // that is a question at all.
+  it("asks about the length of a shot, and only of a shot", () => {
+    show();
+
+    expect(document.querySelector('[data-length="clp_shot"]')).toBeTruthy();
+    expect(document.querySelector('[data-length="clp_title"]')).toBeNull();
+    expect(document.querySelector('[data-length="clp_field"]')).toBeNull();
+
+    // Not a question, not a length: unticking the shot takes the row with it.
+    fireEvent.click(box("clp_shot"));
+    expect(document.querySelector('[data-length="clp_shot"]')).toBeNull();
+  });
+
+  it("lets the material decide by default, and takes a fixed length when asked", () => {
+    const { saved } = show();
+
+    fireEvent.change(screen.getByTestId("author-name"), { target: { value: "Reise" } });
+    fireEvent.click(screen.getByTestId("author-save"));
+    expect(saved[0]?.fixed).toEqual([]);
+
+    fireEvent.change(document.querySelector('[data-length="clp_intro"]')!, {
+      target: { value: "fixed" },
+    });
+    fireEvent.click(screen.getByTestId("author-save"));
+    expect(saved[1]?.fixed).toEqual(["clp_intro"]);
+    // And the other shot still follows its material.
+    expect(saved[1]?.marked).toContain("clp_shot");
   });
 
   // Every row says in words what the tick means, because a checkbox on its own says "on" and the

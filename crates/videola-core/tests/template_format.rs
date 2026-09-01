@@ -112,7 +112,7 @@ fn a_template_carries_the_material_its_author_kept() {
     ));
     project.timeline.tracks.push(track);
     // Marked: nothing. Every clip is part of the recipe, so the material has to go with it.
-    let template = Template::from_project(&project, "mine", Some(&BTreeSet::new())).unwrap();
+    let template = Template::from_project(&project, "mine", Some(&BTreeSet::new()), None).unwrap();
     let mut store = MemoryMediaStore::default();
     store.insert(asset.id.clone(), bytes.clone());
 
@@ -242,7 +242,7 @@ fn a_project_saved_as_a_template_comes_back_and_bakes_with_new_material() {
     track.clips.push(clip);
     project.timeline.tracks.push(track);
 
-    let template = Template::from_project(&project, "wanderung", None).unwrap();
+    let template = Template::from_project(&project, "wanderung", None, None).unwrap();
     let (reopened, _carried) = reader::read_template(Cursor::new(to_videolat(&template))).unwrap();
     let replacement = asset("replacement");
     let mut answers = answers_for(&reopened);

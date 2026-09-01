@@ -584,5 +584,8 @@
   "publish.running": "Uploading …",
   "publish.done": "Uploaded: {name}",
   "publish.failed": "The upload failed: {reason}",
-  "action.destinations": "Publishing destinations …"
+  "action.destinations": "Publishing destinations …",
+  "author.length": "Length",
+  "author.length.material": "follows the material",
+  "author.length.fixed": "as in the template"
 }

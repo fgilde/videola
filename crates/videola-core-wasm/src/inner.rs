@@ -245,10 +245,11 @@ impl DocumentHost {
         options: SaveOptions,
         id: &str,
         marked: Option<&BTreeSet<ClipId>>,
+        fixed: Option<&BTreeSet<ClipId>>,
         supplied: BTreeMap<MediaId, Vec<u8>>,
     ) -> Result<Vec<u8>> {
         media_within_cap(supplied.values().map(|bytes| bytes.len() as u64).sum())?;
-        let template = Template::from_project(self.document.project(), id, marked)?;
+        let template = Template::from_project(self.document.project(), id, marked, fixed)?;
         let store = SaveStore {
             supplied,
             held: &self.media,

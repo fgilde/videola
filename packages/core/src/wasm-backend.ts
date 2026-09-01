@@ -172,8 +172,16 @@ function wrap(handle: WasmDocument): DocumentBackend {
       options: SaveOptions,
       id: string,
       marked: readonly ClipId[] | undefined,
+      fixed: readonly ClipId[] | undefined,
       media: MediaBytes,
-    ) => handle.saveAsTemplate(options, id, marked ?? null, media) as Uint8Array<ArrayBuffer>,
+    ) =>
+      handle.saveAsTemplate(
+        options,
+        id,
+        marked ?? null,
+        fixed ?? null,
+        media,
+      ) as Uint8Array<ArrayBuffer>,
     importMedia: (name: string, mime: string, kind: MediaKind, media: Uint8Array) =>
       handle.importMedia(name, mime, kind, media) as ImportMediaResult,
     mediaBytes: (id: string) => handle.mediaBytes(id) as Uint8Array<ArrayBuffer> | undefined,

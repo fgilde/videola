@@ -584,5 +584,8 @@
   "publish.running": "Wird hochgeladen …",
   "publish.done": "Hochgeladen: {name}",
   "publish.failed": "Der Upload ist fehlgeschlagen: {reason}",
-  "action.destinations": "Veröffentlichungsziele …"
+  "action.destinations": "Veröffentlichungsziele …",
+  "author.length": "Länge",
+  "author.length.material": "folgt dem Material",
+  "author.length.fixed": "wie in der Vorlage"
 }

@@ -124,6 +124,25 @@ pub struct Slot {
     pub label: Localized,
     pub hint: Localized,
     pub required: bool,
+    /**
+     * Whether the clips this slot fills take the length of the material rather than the length the
+     * template drew them at.
+     *
+     * A shipped template says no, and that is not timidity: a slideshow cutting on a beat is the
+     * template, and a shot that ran twice as long would be a different one. A template somebody made
+     * out of their own edit almost always says yes -- "my intro, then my video, then my end card" is
+     * not a template if the video has to be exactly eleven seconds long.
+     *
+     * Stretching ripples: everything that starts after the clip moves along with it, and a clip that
+     * covered it end to end -- a watermark, a music bed, a logo -- is stretched to cover it still.
+     * Both of those are what somebody means by "and the rest follows", and neither is expressible as
+     * a property of one clip.
+     *
+     * Absent in a file written before this existed, which reads as no and is what those templates
+     * were authored against.
+     */
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stretch: bool,
     pub bindings: Vec<SlotBinding>,
 }
 
@@ -378,6 +397,10 @@ impl Template {
         project: &Project,
         id: &str,
         marked: Option<&BTreeSet<ClipId>>,
+        // Clips whose slot keeps the length the template drew it at, rather than taking the length
+        // of the material. Absent means every question stretches, which is what somebody making a
+        // template out of their own edit means -- see `Slot::stretch`.
+        fixed: Option<&BTreeSet<ClipId>>,
     ) -> Result<Self> {
         let mut stripped = project.clone();
         let mut slots = Vec::new();
@@ -398,6 +421,7 @@ impl Template {
             if !asked {
                 continue;
             }
+            let clips_for_slot = clips.clone();
             let bindings = clips
                 .into_iter()
                 .map(|clip| SlotBinding::ClipMedia {
@@ -419,6 +443,11 @@ impl Template {
                 // before something has been imported is backwards on the first run, and half of what
                 // these are for is the graphics. An unanswered media slot drops its own clip.
                 required: false,
+                // And elastic unless the author said otherwise: "my intro, then my video, then my
+                // end card" is not a template if the video has to be exactly as long as the one that
+                // happened to be there when it was made.
+                stretch: !fixed
+                    .is_some_and(|held| clips_for_slot.iter().any(|clip| held.contains(clip))),
                 bindings,
             });
         }
@@ -441,6 +470,7 @@ impl Template {
                         ),
                         hint: Localized::same(&first_line(content)),
                         required: false,
+                        stretch: false,
                         bindings: vec![SlotBinding::GeneratorText { clip }],
                     });
                 }
@@ -461,6 +491,7 @@ impl Template {
                             "The colour of this field.",
                         ),
                         required: false,
+                        stretch: false,
                         bindings: vec![SlotBinding::GeneratorColor { clip }],
                     });
                 }
@@ -475,6 +506,7 @@ impl Template {
             label: Localized::new("Titel", "Title"),
             hint: Localized::new("Benennt das Projekt.", "Names the project."),
             required: false,
+            stretch: false,
             bindings: vec![SlotBinding::ProjectTitle],
         });
         color_slots.push("background".into());
@@ -487,6 +519,7 @@ impl Template {
                 "The colour behind everything else.",
             ),
             required: false,
+            stretch: false,
             bindings: vec![SlotBinding::Background],
         });
 
@@ -770,8 +803,76 @@ fn fill_media(project: &mut Project, slot: &Slot, asset: &MediaAsset, frame: Fra
         let rate = speed_for(clip, available)?;
         clip.speed.rate = rate;
         clip.transform = fit_transform(&clip.transform, &fit, (width, height), frame);
+        let grown = if slot.stretch {
+            spare_length(clip, available)
+        } else {
+            None
+        };
+        if let Some(longer) = grown {
+            stretch_clip(project, &id, longer);
+        }
     }
     Ok(())
+}
+
+/// How much longer this clip would be if it took the whole of the material, or nothing.
+///
+/// Nothing where the material is shorter than the slot: that half of the bargain does not change, and
+/// `speed_for` has already slowed the clip to fill the space rather than leaving a hole in it.
+fn spare_length(clip: &Clip, available: Option<Time>) -> Option<Time> {
+    let usable = available? - clip.in_point;
+    (usable > clip.duration).then_some(usable)
+}
+
+/**
+ * One clip grows, and the timeline around it follows.
+ *
+ * Two rules, and both of them are what somebody means by "and the rest follows":
+ *
+ * * Anything that starts at or after the end of this clip moves along by what it gained -- on every
+ *   track, because an end card on a title track and a chord on a sound track are as much "after" as
+ *   the next shot on the same lane.
+ * * Anything that covered this clip end to end is stretched to cover it still. That is a watermark, a
+ *   logo, a music bed: nothing in the model says which clip is one, and nothing needs to, because a
+ *   clip that spanned the one that grew is exactly the clip that has to grow with it.
+ *
+ * A clip that overlaps only part of it -- a transition's neighbour, an inset that ends halfway --
+ * keeps its length and moves only if it began after. Guessing at those is how a template starts
+ * rearranging an edit nobody asked it to rearrange.
+ */
+fn stretch_clip(project: &mut Project, id: &ClipId, longer: Time) {
+    let Some(clip) = find_clip(project, id) else {
+        return;
+    };
+    let start = clip.start;
+    let was = clip.duration;
+    let ended = start + was;
+    let gained = longer - was;
+    if gained.as_flicks() <= 0 {
+        return;
+    }
+
+    for track in &mut project.timeline.tracks {
+        for other in &mut track.clips {
+            if &other.id == id {
+                other.duration = longer;
+                continue;
+            }
+            let other_end = other.start + other.duration;
+            if other.start >= ended {
+                other.start = other.start + gained;
+            } else if other.start <= start && other_end >= ended {
+                other.duration = other.duration + gained;
+            }
+        }
+    }
+    // Markers are on the same clock as the clips, and a chapter mark that stayed where it was would
+    // now point into the middle of somebody's shot rather than at the thing it named.
+    for marker in &mut project.markers {
+        if marker.time >= ended {
+            marker.time = marker.time + gained;
+        }
+    }
 }
 
 // A slot's rhythm is the template, so a file that is too short is slowed rather than shortened:
@@ -1052,6 +1153,7 @@ mod tests {
                 }],
                 poster_at: None,
                 slots: vec![Slot {
+                    stretch: false,
                     id: "shot".into(),
                     kind: SlotKind::Media,
                     label: Localized::same("Shot"),
@@ -1095,6 +1197,7 @@ mod tests {
             label: Localized::same("Title"),
             hint: Localized::same(""),
             required: false,
+            stretch: false,
             bindings: vec![
                 SlotBinding::ProjectTitle,
                 SlotBinding::ClipLabel {
@@ -1108,6 +1211,7 @@ mod tests {
             label: Localized::same("Colour"),
             hint: Localized::same(""),
             required: false,
+            stretch: false,
             bindings: vec![SlotBinding::Background],
         });
         template.manifest.steps[0]
@@ -1367,6 +1471,7 @@ mod tests {
             label: Localized::same("Colour"),
             hint: Localized::same(""),
             required: false,
+            stretch: false,
             bindings: vec![SlotBinding::Background],
         });
         template.manifest.steps[0].slots.push("colour".into());
@@ -1456,6 +1561,7 @@ mod tests {
             label: Localized::same("Answer"),
             hint: Localized::same(""),
             required: false,
+            stretch: false,
             bindings: vec![binding],
         });
         template.manifest.steps[0].slots.push("answer".into());
@@ -1524,6 +1630,7 @@ mod tests {
             label: Localized::same("Words"),
             hint: Localized::same(""),
             required: false,
+            stretch: false,
             bindings: vec![SlotBinding::GeneratorText {
                 clip: ClipId::from("clp_a".to_string()),
             }],
@@ -1872,7 +1979,7 @@ mod tests {
         }
         project.timeline.tracks.push(track);
 
-        let template = Template::from_project(&project, "mine", None).unwrap();
+        let template = Template::from_project(&project, "mine", None, None).unwrap();
 
         assert!(template.project.library.is_empty());
         let media_slots: Vec<&Slot> = template
@@ -1924,7 +2031,8 @@ mod tests {
 
     #[test]
     fn with_nothing_marked_every_title_in_the_project_becomes_a_question() {
-        let template = Template::from_project(&project_with_two_titles(), "mine", None).unwrap();
+        let template =
+            Template::from_project(&project_with_two_titles(), "mine", None, None).unwrap();
 
         // Two titles plus the project's own name.
         assert_eq!(slot_ids(&template, SlotKind::Text).len(), 3);
@@ -1936,7 +2044,8 @@ mod tests {
         let marked = BTreeSet::from([ClipId::from("clp_head".to_string())]);
 
         let template =
-            Template::from_project(&project_with_two_titles(), "mine", Some(&marked)).unwrap();
+            Template::from_project(&project_with_two_titles(), "mine", Some(&marked), None)
+                .unwrap();
 
         // The marked title and the project name; the unmarked one keeps the words it has, which is
         // legal precisely because a generator is its own material.
@@ -1973,12 +2082,144 @@ mod tests {
     // An intro, a logo, a watermark: the parts of a recipe that are the same every time it is cooked.
     // A template that asked for its own intro on every use would not be a template, so a medium
     // nobody marked stays in the project and its bytes travel with the file.
+    /// Intro, a shot, an end card, and a watermark across all three -- the shape somebody making a
+    /// template out of their own edit actually has.
+    fn intro_shot_and_end_card() -> Project {
+        let mut project = Project::default();
+        let mut lane = Track::new(TrackKind::Video, "V1".into());
+        for (id, start, duration) in [
+            ("clp_intro", 0.0, 2.0),
+            ("clp_shot", 2.0, 4.0),
+            ("clp_end", 6.0, 2.0),
+        ] {
+            let mut clip = Clip::new_generator(
+                Generator::Solid {
+                    color: "#101010".into(),
+                },
+                Time::from_seconds(start),
+                Time::from_seconds(duration),
+            );
+            clip.id = ClipId::from(id.to_string());
+            lane.clips.push(clip);
+        }
+        // The shot is the only one that reads a medium; the other two are the author's own graphics.
+        let asset = asset(30.0, 1920, 1080);
+        project.library.push(asset.clone());
+        if let Some(clip) = lane
+            .clips
+            .iter_mut()
+            .find(|clip| clip.id.as_str() == "clp_shot")
+        {
+            clip.source = ClipSource::Media { media: asset.id };
+        }
+        project.timeline.tracks.push(lane);
+
+        // The watermark: one clip covering everything, on a track of its own.
+        let mut over = Track::new(TrackKind::Overlay, "O1".into());
+        let mut mark = Clip::new_generator(
+            Generator::Solid {
+                color: "#ffffff".into(),
+            },
+            Time::ZERO,
+            Time::from_seconds(8.0),
+        );
+        mark.id = ClipId::from("clp_mark".to_string());
+        over.clips.push(mark);
+        project.timeline.tracks.push(over);
+        project
+    }
+
+    fn baked_with_a_shot_of(seconds: f64) -> Project {
+        let project = intro_shot_and_end_card();
+        let marked = BTreeSet::from([ClipId::from("clp_shot".to_string())]);
+        let template = Template::from_project(&project, "mine", Some(&marked), None).unwrap();
+        let asset = asset(seconds, 1920, 1080);
+        template
+            .bake(&answers(&[("media1", SlotAnswer::Media { asset })]), None)
+            .unwrap()
+    }
+
+    fn span(project: &Project, id: &str) -> (f64, f64) {
+        let clip = project
+            .timeline
+            .tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .find(|clip| clip.id.as_str() == id)
+            .unwrap_or_else(|| panic!("no clip {id}"));
+        (
+            clip.start.as_flicks() as f64 / 705_600_000.0,
+            clip.duration.as_flicks() as f64 / 705_600_000.0,
+        )
+    }
+
+    // The whole of "my intro, then my video, then my end card": the video is however long it is, and
+    // everything else follows. Without this a template is a template for one particular length of
+    // material, which is not a template.
+    #[test]
+    fn a_stretching_slot_takes_the_length_of_the_material() {
+        let baked = baked_with_a_shot_of(20.0);
+
+        assert_eq!(span(&baked, "clp_shot"), (2.0, 20.0));
+        // The end card moved along rather than being sat on.
+        assert_eq!(span(&baked, "clp_end"), (22.0, 2.0));
+        // The intro did not move: it is before the clip that grew.
+        assert_eq!(span(&baked, "clp_intro"), (0.0, 2.0));
+    }
+
+    // A watermark is a clip that covered the whole thing, and it has to cover the whole thing still.
+    // Nothing in the model says "this one is a watermark", and nothing needs to: a clip that spanned
+    // the one that grew is exactly the clip that has to grow with it.
+    #[test]
+    fn a_clip_that_covered_the_stretched_one_covers_it_still() {
+        let baked = baked_with_a_shot_of(20.0);
+
+        assert_eq!(span(&baked, "clp_mark"), (0.0, 24.0));
+    }
+
+    // Shorter material is the old bargain and stays it: the slot keeps its length and the clip is
+    // slowed, because a template that shortened itself would leave a hole where the next thing starts.
+    #[test]
+    fn material_shorter_than_the_slot_still_slows_rather_than_shrinking_it() {
+        let baked = baked_with_a_shot_of(2.0);
+
+        assert_eq!(span(&baked, "clp_shot"), (2.0, 4.0));
+        assert_eq!(span(&baked, "clp_end"), (6.0, 2.0));
+    }
+
+    // A shipped template says no, and that is the point of the flag: a slideshow cutting on a beat is
+    // the template, and a shot that ran five times as long would be a different one.
+    #[test]
+    fn a_template_that_did_not_ask_to_stretch_keeps_its_own_rhythm() {
+        let project = intro_shot_and_end_card();
+        let marked = BTreeSet::from([ClipId::from("clp_shot".to_string())]);
+        let mut template = Template::from_project(&project, "mine", Some(&marked), None).unwrap();
+        for slot in &mut template.manifest.slots {
+            slot.stretch = false;
+        }
+
+        let baked = template
+            .bake(
+                &answers(&[(
+                    "media1",
+                    SlotAnswer::Media {
+                        asset: asset(20.0, 1920, 1080),
+                    },
+                )]),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(span(&baked, "clp_shot"), (2.0, 4.0));
+        assert_eq!(span(&baked, "clp_end"), (6.0, 2.0));
+    }
+
     #[test]
     fn an_unmarked_medium_stays_in_the_template_rather_than_becoming_a_question() {
         let (project, asset) = project_with_a_shot();
         let marked = BTreeSet::from([ClipId::from("clp_head".to_string())]);
 
-        let template = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+        let template = Template::from_project(&project, "mine", Some(&marked), None).unwrap();
 
         assert!(slot_ids(&template, SlotKind::Media).is_empty());
         assert_eq!(
@@ -1999,7 +2240,7 @@ mod tests {
         let (project, _) = project_with_a_shot();
         let marked = BTreeSet::from([ClipId::from("clp_shot".to_string())]);
 
-        let template = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+        let template = Template::from_project(&project, "mine", Some(&marked), None).unwrap();
 
         assert_eq!(slot_ids(&template, SlotKind::Media), vec!["media1"]);
         assert!(template.project.library.is_empty());
@@ -2010,7 +2251,7 @@ mod tests {
     fn with_nothing_marked_every_medium_is_still_a_question() {
         let (project, _) = project_with_a_shot();
 
-        let template = Template::from_project(&project, "mine", None).unwrap();
+        let template = Template::from_project(&project, "mine", None, None).unwrap();
 
         assert_eq!(slot_ids(&template, SlotKind::Media), vec!["media1"]);
         assert!(template.project.library.is_empty());
@@ -2031,12 +2272,12 @@ mod tests {
         track.clips.push(clip);
         project.timeline.tracks.push(track);
 
-        let untouched = Template::from_project(&project, "mine", None).unwrap();
+        let untouched = Template::from_project(&project, "mine", None, None).unwrap();
         // Only the background: one colour field per coloured clip would be a wall of questions.
         assert_eq!(slot_ids(&untouched, SlotKind::Color), vec!["background"]);
 
         let marked = BTreeSet::from([ClipId::from("clp_field".to_string())]);
-        let chosen = Template::from_project(&project, "mine", Some(&marked)).unwrap();
+        let chosen = Template::from_project(&project, "mine", Some(&marked), None).unwrap();
         assert_eq!(
             slot_ids(&chosen, SlotKind::Color),
             vec!["colour1", "background"]
@@ -2046,7 +2287,8 @@ mod tests {
     // A project with no footage at all must not open the wizard on a panel with nothing on it.
     #[test]
     fn a_template_made_from_a_project_without_footage_has_no_empty_step() {
-        let template = Template::from_project(&project_with_two_titles(), "mine", None).unwrap();
+        let template =
+            Template::from_project(&project_with_two_titles(), "mine", None, None).unwrap();
 
         assert!(template
             .manifest
@@ -2067,7 +2309,7 @@ mod tests {
         track.clips.push(clip);
         project.timeline.tracks.push(track);
 
-        let template = Template::from_project(&project, "mine", None).unwrap();
+        let template = Template::from_project(&project, "mine", None, None).unwrap();
         let replacement = asset(9.0, 640, 480);
         let baked = template
             .bake(

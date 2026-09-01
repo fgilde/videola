@@ -288,6 +288,31 @@ Two details that are not free:
 The offer is absent where nothing is open: the first thing a template does in a fresh session is become
 the project.
 
+### A question that is as long as the answer
+
+A slot may take **the length of the material** rather than the length the template drew it at, and for
+a template somebody makes out of their own edit that is the default. Without it a template is a
+template for one particular video: "my intro, then my clip, then my end card" only works if the clip
+is exactly as long as the one that happened to be there when it was made.
+
+When a slot stretches, the timeline around it follows, by two rules:
+
+* everything that starts at or after the end of that clip **moves along** by what it gained — on every
+  track, because an end card on a title track is as much "after" as the next shot on the same lane;
+* everything that **covered it end to end is stretched to cover it still** — a watermark, a logo, a
+  music bed. Nothing in the model says which clip is a watermark, and nothing needs to: a clip that
+  spanned the one that grew is exactly the clip that has to grow with it.
+
+A clip that overlaps only part of it keeps its length and moves only if it began after. Guessing at
+those is how a template starts rearranging an edit nobody asked it to rearrange.
+
+Material **shorter** than the slot is the old bargain and stays it: the clip is slowed to fill the
+space rather than shortened, because shortening would leave a hole where the next thing starts.
+
+The author's dialogue asks per shot — *length: follows the material* or *as in the template* — and the
+shipped templates all say the second. A slideshow cutting on a beat is the template, and a shot that
+ran five times as long would be a different one.
+
 ## Author mode
 
 **Save this project as a template**, from the gallery, opens a dialogue that lists every element the

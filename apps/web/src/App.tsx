@@ -1579,7 +1579,7 @@ export function App(): ReactElement {
    * lets a template carry its own intro, logo or watermark.
    */
   const writeTemplate = useCallback(
-    async (marked: readonly string[], name: string) => {
+    async (marked: readonly string[], fixed: readonly string[], name: string) => {
       if (doc === undefined || project === undefined) return;
       try {
         if (name !== "" && name !== project.meta.title) {
@@ -1598,6 +1598,7 @@ export function App(): ReactElement {
           },
           doc.state.meta.id,
           marked,
+          fixed,
           media,
         );
         downloadBlob(bytes, `${name || doc.state.meta.id}.videolat`);
@@ -2196,7 +2197,7 @@ export function App(): ReactElement {
       {authoring && project !== undefined && (
         <TemplateAuthor
           project={project}
-          onSave={(marked, name) => void writeTemplate(marked, name)}
+          onSave={(marked, fixed, name) => void writeTemplate(marked, fixed, name)}
           onClose={() => setAuthoring(false)}
         />
       )}

@@ -1999,6 +1999,7 @@ fn media_slot_named(id: &str, label: Localized, hint: Localized, clip: &str) -> 
         label,
         hint,
         required: false,
+        stretch: false,
         bindings: vec![cover(clip)],
     }
 }
@@ -2013,6 +2014,8 @@ fn text_slot(id: &str, label: Localized, hint: Localized, bindings: Vec<SlotBind
         label,
         hint,
         required: false,
+        // A shipped template keeps the rhythm it was drawn at; see `Slot::stretch`.
+        stretch: false,
         bindings,
     }
 }
@@ -2029,6 +2032,8 @@ fn color_slot_named(
         label,
         hint,
         required: false,
+        // A shipped template keeps the rhythm it was drawn at; see `Slot::stretch`.
+        stretch: false,
         bindings,
     }
 }

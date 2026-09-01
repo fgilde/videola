@@ -304,6 +304,32 @@ Zwei Einzelheiten, die nicht umsonst sind:
 Wo nichts offen ist, fehlt das Angebot: in einer frischen Sitzung wird eine Vorlage zuerst das
 Projekt.
 
+### Eine Frage, so lang wie die Antwort
+
+Ein Slot kann **die Länge des Materials** annehmen statt der Länge, in der die Vorlage ihn gezeichnet
+hat — und bei einer Vorlage aus dem eigenen Schnitt ist das die Voreinstellung. Ohne sie ist eine
+Vorlage eine Vorlage für genau ein Video: „mein Intro, dann mein Clip, dann meine Endkarte“ geht nur,
+wenn der Clip genauso lang ist wie der, der zufällig da war, als sie entstand.
+
+Wächst ein Slot, folgt die Zeitleiste um ihn herum, nach zwei Regeln:
+
+* Alles, was am Ende dieses Clips oder danach beginnt, **rückt mit** — auf jeder Spur, denn eine
+  Endkarte auf einer Textspur ist genauso „danach“ wie die nächste Aufnahme auf derselben Spur.
+* Alles, was ihn **von Anfang bis Ende überdeckt hat, wird mitgedehnt** — Wasserzeichen, Logo,
+  Musikbett. Nichts im Modell sagt, welcher Clip ein Wasserzeichen ist, und nichts muss es: ein Clip,
+  der den gewachsenen überspannt hat, ist genau der Clip, der mitwachsen muss.
+
+Ein Clip, der ihn nur teilweise überlappt, behält seine Länge und rückt nur, wenn er danach begann.
+Dort zu raten ist der Anfang davon, dass eine Vorlage einen Schnitt umbaut, um den sie niemand gebeten
+hat.
+
+Material, das **kürzer** ist als der Slot, bleibt beim alten Handel: der Clip wird verlangsamt statt
+gekürzt, denn Kürzen ließe ein Loch, wo das Nächste anfängt.
+
+Der Autorendialog fragt je Aufnahme — *Länge: folgt dem Material* oder *wie in der Vorlage* — und alle
+mitgelieferten Vorlagen sagen das Zweite. Eine Diaschau, die auf den Takt schneidet, ist die Vorlage;
+eine Aufnahme, die fünfmal so lang läuft, wäre eine andere.
+
 ## Autorenmodus
 
 **Dieses Projekt als Vorlage speichern**, aus der Galerie, öffnet einen Dialog mit allem, was das

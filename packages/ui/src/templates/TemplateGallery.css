@@ -503,3 +503,14 @@
   font-size: var(--v-text-xs);
   color: var(--v-text-muted);
 }
+
+/* Under the row it belongs to and indented, because it is a question about that row rather than
+   another element: how long the shot somebody drops in is allowed to be. */
+.v-author__length {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  margin: 2px 0 var(--v-space-1) var(--v-space-5);
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}

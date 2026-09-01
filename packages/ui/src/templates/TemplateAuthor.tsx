@@ -7,8 +7,11 @@ import "./TemplateGallery.css";
 
 export interface TemplateAuthorProps {
   project: Project;
-  /** The clips that are questions, and the name the template goes out under. */
-  onSave: (marked: readonly ClipId[], name: string) => void;
+  /**
+   * The clips that are questions, the ones among them whose length must stay as drawn, and the name
+   * the template goes out under.
+   */
+  onSave: (marked: readonly ClipId[], fixed: readonly ClipId[], name: string) => void;
   onClose: () => void;
 }
 
@@ -43,6 +46,10 @@ export function TemplateAuthor({ project, onSave, onClose }: TemplateAuthorProps
     () => new Set(elements.filter((entry) => entry.kind !== "colour").map((entry) => entry.clip)),
   );
   const [name, setName] = useState(project.meta.title);
+  // Which questions keep the length the template drew them at. Empty by default: a shot somebody
+  // replaces is almost always a different length, and a template that insisted on eleven seconds
+  // would only ever work with an eleven second video.
+  const [fixed, setFixed] = useState<ReadonlySet<string>>(() => new Set());
 
   const toggle = (clip: string): void =>
     setAsked((held) => {
@@ -98,6 +105,28 @@ export function TemplateAuthor({ project, onSave, onClose }: TemplateAuthorProps
                     {asked.has(element.clip) ? t("author.asked") : t("author.kept")}
                   </span>
                 </label>
+                {/* Only for a shot that is a question: the length of a title or a colour field is the
+                    template's own, and a material length is not a thing they have. */}
+                {element.kind === "media" && asked.has(element.clip) && (
+                  <label className="v-author__length">
+                    <span>{t("author.length")}</span>
+                    <select
+                      value={fixed.has(element.clip) ? "fixed" : "material"}
+                      data-length={element.clip}
+                      onChange={(event) =>
+                        setFixed((held) => {
+                          const next = new Set(held);
+                          if (event.target.value === "fixed") next.add(element.clip);
+                          else next.delete(element.clip);
+                          return next;
+                        })
+                      }
+                    >
+                      <option value="material">{t("author.length.material")}</option>
+                      <option value="fixed">{t("author.length.fixed")}</option>
+                    </select>
+                  </label>
+                )}
               </li>
             ))}
           </ul>
@@ -113,7 +142,7 @@ export function TemplateAuthor({ project, onSave, onClose }: TemplateAuthorProps
           <button
             className="v-button v-button--primary"
             data-testid="author-save"
-            onClick={() => onSave([...asked], name.trim())}
+            onClick={() => onSave([...asked], [...fixed], name.trim())}
           >
             {t("author.save")}
           </button>

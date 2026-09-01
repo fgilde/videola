@@ -3,4 +3,22 @@ import type { Localized } from "./Localized";
 import type { SlotBinding } from "./SlotBinding";
 import type { SlotKind } from "./SlotKind";
 
-export type Slot = { id: string, kind: SlotKind, label: Localized, hint: Localized, required: boolean, bindings: Array<SlotBinding>, };
+export type Slot = { id: string, kind: SlotKind, label: Localized, hint: Localized, required: boolean, 
+/**
+     * Whether the clips this slot fills take the length of the material rather than the length the
+     * template drew them at.
+     *
+     * A shipped template says no, and that is not timidity: a slideshow cutting on a beat is the
+     * template, and a shot that ran twice as long would be a different one. A template somebody made
+     * out of their own edit almost always says yes -- "my intro, then my video, then my end card" is
+     * not a template if the video has to be exactly eleven seconds long.
+     *
+     * Stretching ripples: everything that starts after the clip moves along with it, and a clip that
+     * covered it end to end -- a watermark, a music bed, a logo -- is stretched to cover it still.
+     * Both of those are what somebody means by "and the rest follows", and neither is expressible as
+     * a property of one clip.
+     *
+     * Absent in a file written before this existed, which reads as no and is what those templates
+     * were authored against.
+     */
+stretch?: boolean, bindings: Array<SlotBinding>, };

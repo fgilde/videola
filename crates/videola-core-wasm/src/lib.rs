@@ -304,13 +304,15 @@ impl WasmDocument {
         options: JsValue,
         id: String,
         marked: JsValue,
+        fixed: JsValue,
         media: js_sys::Map,
     ) -> std::result::Result<Vec<u8>, JsError> {
         let marked: Option<BTreeSet<ClipId>> = serde_wasm_bindgen::from_value(marked)?;
+        let fixed: Option<BTreeSet<ClipId>> = serde_wasm_bindgen::from_value(fixed)?;
         let parsed: SaveOptions = serde_wasm_bindgen::from_value(options)?;
         let supplied = supplied_media(&media)?;
         self.host
-            .save_as_template(parsed, &id, marked.as_ref(), supplied)
+            .save_as_template(parsed, &id, marked.as_ref(), fixed.as_ref(), supplied)
             .map_err(to_js)
     }
 }
