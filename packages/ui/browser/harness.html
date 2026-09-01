@@ -315,7 +315,8 @@ test("context menu", function () {
   T.flushSync(function () { q("[data-clip-id]").dispatchEvent(menuEvent); });
   const items = all('[role="menuitem"]');
   check("every entry the clip menu promises is there", items.map(function (item) { return item.textContent; }),
-    ["Am Playhead teilen", "Schnitte in diesem Clip finden", "Bild hier einfrieren",
+    ["Am Playhead teilen", "Schnitte in diesem Clip finden", "Sanfte Fahrt (Ken Burns)",
+     "Weich ein- und ausblenden", "Bild hier einfrieren",
      "Clip ausschalten", "Clip löschen", "Löschen und Lücke schließen", "Kopieren", "Ausschneiden",
      "Am Playhead einfügen", "Attribute einfügen", "Gruppieren", "Gruppierung aufheben",
      "Verschachteln", "Mit naechstem Untertitel verbinden", "Geteilter Bildschirm"]);
