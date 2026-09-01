@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -185,5 +186,17 @@ describe("what every deployment agrees on", () => {
     expect(storeId).toBeTruthy();
     expect(MANIFEST).toContain(`id: ${storeId}-videola`);
     expect(COMPOSE).toContain(`APP_HOST: ${storeId}-videola_server_1`);
+  });
+
+  // Unraids Community Applications liest *jede* .xml einer Template-Quelle und meldet alles, dessen
+  // Wurzelelement nicht <Container> ist, als `not_unraid_application`. Es gibt keine Ignorierliste,
+  // also lautet die Regel: in diesem Repository liegt kein anderes XML. Die zwei
+  // Android-Icon-Ressourcen schreibt apps/desktop/android-icon-res.sh vor dem Build, genau deshalb.
+  it("traegt kein XML, das Community Applications falsch liest", () => {
+    const tracked = execFileSync("git", ["ls-files", "*.xml"], { cwd: root, encoding: "utf8" })
+      .split(String.fromCharCode(10))
+      .map((one) => one.trim())
+      .filter(Boolean);
+    expect(tracked.sort()).toEqual(["ca_profile.xml", "templates/videola.xml"]);
   });
 });

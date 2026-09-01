@@ -359,6 +359,9 @@ jobs:
         run: printf '%s' "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
       - name: Android-Projekt erzeugen und Signatur einhaengen
         run: |
+          # Die zwei Icon-Ressourcen liegen nicht im Repository: Unraids Community Applications liest
+          # jede .xml einer Template-Quelle und meldet alles, was kein Container-Template ist.
+          bash apps/desktop/android-icon-res.sh
           pnpm --filter videola-desktop exec tauri android init --ci
           cat >> apps/desktop/src-tauri/gen/android/app/build.gradle.kts <<'GRADLE'
 

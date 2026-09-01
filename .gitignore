@@ -52,3 +52,8 @@ Thumbs.db
 # Renderer-Bundle des Servers
 apps/server/renderer/bundle.js
 apps/web/browser/effects.png
+
+# Written by apps/desktop/android-icon-res.sh before an Android build; committing them makes
+# Unraid Community Applications read them as broken container templates.
+apps/desktop/src-tauri/icons/android/mipmap-anydpi-v26/ic_launcher.xml
+apps/desktop/src-tauri/icons/android/values/ic_launcher_background.xml
