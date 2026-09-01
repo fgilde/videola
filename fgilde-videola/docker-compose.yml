@@ -6,7 +6,7 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: videola_server_1
+      APP_HOST: fgilde-videola_server_1
       APP_PORT: 7331
 
   server:

@@ -50,7 +50,8 @@ Das Image setzt `VIDEOLA_HOST`, `VIDEOLA_PORT`, `VIDEOLA_STORAGE_ROOT`, `VIDEOLA
 
 ## Unraid
 
-`deploy/unraid/videola.xml` ist eine Vorlage für Community Applications. Nach
+`templates/videola.xml` ist eine Vorlage für Community Applications, und `ca_profile.xml` im
+Wurzelverzeichnis ist das, was Community Applications liest, wenn man es auf dieses Repository richtet. Nach
 `/boot/config/plugins/dockerMan/templates-user/` kopiert erscheint sie unter **Add Container**, oder man
 richtet CA auf dieses Repository.
 
@@ -62,14 +63,15 @@ Nein.
 
 ## Umbrel
 
-`deploy/umbrel/videola/` enthält `umbrel-app.yml` und `docker-compose.yml` in der Form, die der App
-Store erwartet. Die Compose-Datei nagelt die genaue Version fest, denn ein App Store zeigt dem
+`fgilde-videola/` enthält `umbrel-app.yml` und `docker-compose.yml` in der Form, die der App Store
+erwartet, und `umbrel-app-store.yml` daneben macht das Repository selbst zu einem Community-App-Store:
+unter *App Store → ⋯ → Community app stores* `https://github.com/fgilde/videola` eintragen. Die Compose-Datei nagelt die genaue Version fest, denn ein App Store zeigt dem
 Installierenden eine Versionsnummer, und `latest` machte diese Nummer zu einer Vermutung — der
 Deployment-Test prüft, dass Pin, `version:` im Manifest und der Release-Tag dieselbe Zeichenkette sind.
 
 Zwei Dinge, die man über die Compose-Datei wissen sollte:
 
-- **`APP_HOST` ist `videola_server_1`, nicht `localhost`.** Umbrel stellt jede App hinter ihren eigenen
+- **`APP_HOST` ist `fgilde-videola_server_1`, nicht `localhost`.** Umbrel stellt jede App hinter ihren eigenen
   Proxy-Container, und dieser Proxy veröffentlicht den Port. Der Server bindet `0.0.0.0` *innerhalb
   seines eigenen Containers*, damit der Proxy ihn erreicht; `127.0.0.1` wäre nur aus dem eigenen
   Netzwerk-Namensraum des Servers erreichbar.
@@ -77,6 +79,26 @@ Zwei Dinge, die man über die Compose-Datei wissen sollte:
   sagte, dass der Prozess gestartet ist; diese sagt, dass der Kern geladen hat und der Speicherort
   antwortet. Sie trägt den Token, weil der Endpunkt hinter derselben Sperre liegt wie alles andere — ein
   unauthentifizierter Health-Endpunkt wäre ein Loch an genau einer Stelle.
+
+## CasaOS
+
+`store/casaos/` ist eine CasaOS-Quelle mit einer App. In CasaOS unter *App Store → Add source*:
+
+```
+https://github.com/fgilde/videola/releases/download/store/casaos-appstore.zip
+```
+
+Das Archiv baut `.github/workflows/casaos-store.yml` bei jedem Push auf `store/casaos/` neu und hängt
+es an einen Release-Tag, der sich nie ändert — die URL bleibt also gültig.
+
+Der mitgelieferte Token lautet `change-this-token` und steht in einer öffentlichen Datei: im
+Installationsdialog ändern.
+
+## Cosmos
+
+`store/cosmos/servapps/Videola/` ist eine Cosmos-ServApp: ein Dienst, ein benanntes Volume, eine
+SERVAPP-Route auf Port 7331. Das Installationsformular fragt den Token ab, bevor der Container startet
+— es läuft also nichts mit einem Token aus einer öffentlichen Datei.
 
 ## Proxmox VE
 

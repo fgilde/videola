@@ -1,5 +1,5 @@
 manifestVersion: 1
-id: videola
+id: fgilde-videola
 name: Videola
 tagline: Cut, grade, mix and export video in your browser
 category: media
@@ -27,10 +27,11 @@ submitter: gilde.org
 submission: https://github.com/fgilde/videola
 repo: https://github.com/fgilde/videola
 support: https://github.com/fgilde/videola/issues
+icon: https://raw.githubusercontent.com/fgilde/videola/main/brand/videola-icon.png
 gallery:
-  - 1.jpg
-  - 2.jpg
-  - 3.jpg
+  - 1.png
+  - 2.png
+  - 3.png
 releaseNotes: >-
   Motion blur that is really motion, spectral noise reduction, surround, scene detection, and an effect
   chain that can finally be operated: effects can be removed and bypassed, clips switched off and

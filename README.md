@@ -216,8 +216,10 @@ Four packaged ways, all documented in
 | Where | How |
 |---|---|
 | Anywhere with Docker | `ghcr.io/fgilde/videola:latest`, port 7331, volume `/data` |
-| Unraid | `deploy/unraid/videola.xml`, a Community Applications template |
-| Umbrel | `deploy/umbrel/videola/`, a manifest and a compose file in the app store's own shape |
+| Unraid | `templates/videola.xml` plus `ca_profile.xml`, a Community Applications template |
+| Umbrel | `fgilde-videola/`, with `umbrel-app-store.yml` making this repo a community app store |
+| CasaOS | *Add source* with the `casaos-appstore.zip` from the `store` release |
+| Cosmos | `store/cosmos/servapps/Videola/`, a ServApp |
 | Proxmox VE | `bash -c "$(curl -fsSL .../deploy/proxmox/videola.sh)"` — makes an unprivileged LXC container, a systemd unit and a token |
 | Anything with Node 22 | `videola-server-<version>.tar.gz` from the release: no dependencies to install |
 

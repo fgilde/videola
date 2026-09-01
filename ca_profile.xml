@@ -1,0 +1,21 @@
+<CommunityApplications>
+  <Profile>
+    **Videola** — a video editor that runs in a browser.
+
+    Import footage, cut it on a timeline, keyframe anything, grade it against real scopes, mix the
+    sound to a loudness target and export an MP4. The project model, the command bus and the file
+    format live in a Rust core compiled to WebAssembly, and nothing is uploaded anywhere: the
+    machine running the container is the machine doing the work.
+
+    Also in it: templates that bake into ordinary editable projects, motion blur averaged over eight
+    real instants of a shutter, spectral noise reduction, 5.1 surround with a position per track,
+    scene detection, an HTTP API and an MCP server for AI agents.
+
+    A token is required. Every /api call carries it as an Authorization: Bearer header, and the
+    server refuses to listen on a reachable address without one.
+
+    Support: https://github.com/fgilde/videola/issues
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/fgilde/videola/main/brand/videola-icon.png</Icon>
+  <WebPage>https://videola.app/</WebPage>
+</CommunityApplications>

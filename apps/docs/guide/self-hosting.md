@@ -49,7 +49,8 @@ and declares `/data` as a volume.
 
 ## Unraid
 
-`deploy/unraid/videola.xml` is a Community Applications template. Copy it into
+`templates/videola.xml` is a Community Applications template, and `ca_profile.xml` at the repository
+root is what Community Applications reads when it is pointed at this repository. Copy it into
 `/boot/config/plugins/dockerMan/templates-user/` and it appears under **Add Container**, or point CA at
 this repository.
 
@@ -60,14 +61,15 @@ version would make **Check for Updates** a permanent no.
 
 ## Umbrel
 
-`deploy/umbrel/videola/` holds `umbrel-app.yml` and `docker-compose.yml` in the shape the app store
-expects. The compose file pins the exact version, because an app store shows a version number to the
+`fgilde-videola/` holds `umbrel-app.yml` and `docker-compose.yml` in the shape the app store expects,
+and `umbrel-app-store.yml` beside it makes the repository itself a community app store: add
+`https://github.com/fgilde/videola` under *App Store → ⋯ → Community app stores*. The compose file pins the exact version, because an app store shows a version number to the
 person installing it and `latest` would make that number a guess — the deployment test checks that the
 pin, the manifest's `version:` and the release tag are the same string.
 
 Two things worth knowing about the compose file:
 
-- **`APP_HOST` is `videola_server_1`, not `localhost`.** Umbrel puts every app behind its own proxy
+- **`APP_HOST` is `fgilde-videola_server_1`, not `localhost`.** Umbrel puts every app behind its own proxy
   container, and that proxy is what publishes a port. The server binds `0.0.0.0` *inside its own
   container* so the proxy can reach it; `127.0.0.1` would be reachable only from the server's own
   network namespace.
@@ -75,6 +77,25 @@ Two things worth knowing about the compose file:
   say the process started; this one says the core loaded and the storage root answers. It carries the
   token because the endpoint is behind the same gate as everything else — an unauthenticated health
   endpoint would be a hole in exactly one place.
+
+## CasaOS
+
+`store/casaos/` is a one-app CasaOS source. In CasaOS, *App Store → Add source* with
+
+```
+https://github.com/fgilde/videola/releases/download/store/casaos-appstore.zip
+```
+
+The archive is rebuilt by `.github/workflows/casaos-store.yml` on every push that touches
+`store/casaos/`, and lives at a release tag that never changes, so the URL keeps working.
+
+The packaged token is `change-this-token`, which is in a public file: change it in the install dialog.
+
+## Cosmos
+
+`store/cosmos/servapps/Videola/` is a Cosmos ServApp: one service, one named volume, and a SERVAPP
+route to port 7331. Its installer form asks for the token before the container starts, so nothing runs
+with a token from a public file.
 
 ## Proxmox VE
 

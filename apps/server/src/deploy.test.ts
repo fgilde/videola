@@ -27,11 +27,14 @@ const read = (path: string): string => readFileSync(join(root, path), "utf8");
 const CARRIAGE_RETURN = String.fromCharCode(13);
 
 const DOCKERFILE = read("docker/Dockerfile");
-const COMPOSE = read("deploy/umbrel/videola/docker-compose.yml");
-const MANIFEST = read("deploy/umbrel/videola/umbrel-app.yml");
-const UNRAID = read("deploy/unraid/videola.xml");
+const COMPOSE = read("fgilde-videola/docker-compose.yml");
+const MANIFEST = read("fgilde-videola/umbrel-app.yml");
+const UNRAID = read("templates/videola.xml");
 const PVE = read("deploy/proxmox/videola.sh");
 const INSTALL = read("deploy/proxmox/install.sh");
+const CASAOS = read("store/casaos/Apps/Videola/docker-compose.yml");
+const COSMOS = read("store/cosmos/servapps/Videola/cosmos-compose.json");
+const STORE = read("umbrel-app-store.yml");
 const TAURI = JSON.parse(read("apps/desktop/src-tauri/tauri.conf.json")) as { version: string };
 
 // The server's own default, from the server's own code. Every number below is compared against this
@@ -122,8 +125,8 @@ describe("what every deployment agrees on", () => {
     for (const path of [
       "deploy/proxmox/videola.sh",
       "deploy/proxmox/install.sh",
-      "deploy/umbrel/videola/docker-compose.yml",
-      "deploy/umbrel/videola/umbrel-app.yml",
+      "fgilde-videola/docker-compose.yml",
+      "fgilde-videola/umbrel-app.yml",
       "docker/Dockerfile",
     ]) {
       expect(read(path).includes(CARRIAGE_RETURN), path).toBe(false);
@@ -160,5 +163,23 @@ describe("what every deployment agrees on", () => {
     expect(INSTALL).toContain("ProtectSystem=strict");
     expect(INSTALL).toContain("NoNewPrivileges=yes");
     expect(INSTALL).toMatch(/ReadWritePaths=\$\{DATA_DIR\}/);
+  });
+  it("packages the same port and storage root for CasaOS and Cosmos", () => {
+    expect(CASAOS).toContain(`target: ${DEFAULT_PORT}`);
+    expect(CASAOS).toContain(`published: "${DEFAULT_PORT}"`);
+    expect(CASAOS).toContain(`port_map: "${DEFAULT_PORT}"`);
+    expect(CASAOS).toContain(`target: ${IMAGE_STORAGE}`);
+    expect(CASAOS).toContain("VIDEOLA_TOKEN");
+    expect(COSMOS).toContain(`http://{ServiceName}:${DEFAULT_PORT}`);
+    expect(COSMOS).toContain(`"VIDEOLA_STORAGE_ROOT=${IMAGE_STORAGE}"`);
+    expect(COSMOS).toContain('"VIDEOLA_TOKEN={Context.apiToken}"');
+    expect(COSMOS).toContain('"name": "apiToken"');
+  });
+
+  it("names the Umbrel app directory after the store it belongs to", () => {
+    const storeId = /^id:\s*"?([\w-]+)"?/m.exec(STORE)?.[1];
+    expect(storeId).toBeTruthy();
+    expect(MANIFEST).toContain(`id: ${storeId}-videola`);
+    expect(COMPOSE).toContain(`APP_HOST: ${storeId}-videola_server_1`);
   });
 });

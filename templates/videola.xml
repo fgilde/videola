@@ -8,12 +8,12 @@
   required because the server refuses to listen on a reachable address without one.
 
   A template that offered a token as optional would be a template that produces an open Videola on
-  somebody's LAN -- which hands out read and write access to the storage root.
+  somebody's LAN, which hands out read and write access to the storage root.
 -->
 <Container version="2">
   <Name>Videola</Name>
   <Repository>ghcr.io/fgilde/videola:latest</Repository>
-  <Registry>https://ghcr.io/fgilde/videola</Registry>
+  <Registry>https://github.com/fgilde/videola/pkgs/container/videola</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
@@ -32,7 +32,7 @@
   </Overview>
   <Category>MediaApp:Video Productivity:</Category>
   <WebUI>http://[IP]:[PORT:7331]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/fgilde/videola/main/deploy/unraid/videola.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/fgilde/videola/main/templates/videola.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/fgilde/videola/main/brand/videola-icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
@@ -41,6 +41,9 @@
   <DonateText/>
   <DonateLink/>
   <Requires/>
+  <ReadMe>https://raw.githubusercontent.com/fgilde/videola/main/README.md</ReadMe>
+  <License>GPL-3.0</License>
+  <ExtraSearchTerms>video editor timeline cut export mp4 keyframes grading audio surround webassembly mcp</ExtraSearchTerms>
   <Config
     Name="WebUI Port"
     Target="7331"
