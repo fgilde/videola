@@ -381,7 +381,47 @@ async function failureOf(handle) {
   }
 }
 
+// A picture the way one arrives: encoded bytes with a type on them. Made rather than fetched, so
+// the size and the colour below are the fixture's own claims.
+const LOGO_WIDTH = 200;
+const LOGO_HEIGHT = 80;
+
+async function makeLogo() {
+  const { canvas, context } = canvasOf(LOGO_WIDTH, LOGO_HEIGHT);
+  context.fillStyle = "rgb(0 255 255)";
+  context.fillRect(0, 0, LOGO_WIDTH, LOGO_HEIGHT);
+  const blob = await canvas.convertToBlob({ type: "image/png" });
+  return new File([blob], "logo.png", { type: "image/png" });
+}
+
 async function main() {
+  // A watermark, a title card and an end card are all this: a picture on the timeline. jsdom has
+  // neither `createImageBitmap` nor `VideoFrame`, so the whole path -- what the probe reads off a
+  // picture, what the store hands back, and what comes out as a frame -- is only provable here.
+  await test("a still is read, stored and handed over as a frame", async () => {
+    const logo = await makeLogo();
+    const probed = await R.probe(logo);
+    check("the probe reads the size off the picture",
+      [probed.video.width, probed.video.height], [LOGO_WIDTH, LOGO_HEIGHT]);
+    check("gives it the length every editor gives a still", probed.duration, R.STILL_DURATION);
+    // The field an untouched project adopts its format from. A picture has no frame rate, and one
+    // invented here would be the rate the project ran at.
+    check("and no frame rate at all", probed.video.fps, undefined);
+
+    const stored = await R.contentHash(logo);
+    await R.putMedia(stored, logo);
+    const frames = new R.MediaFrames("preview");
+    await frames.open(stored);
+    const first = await frames.frameAt(0);
+    check("the source hands back a frame the size of the picture",
+      [first.codedWidth, first.codedHeight], [LOGO_WIDTH, LOGO_HEIGHT]);
+    // Ten seconds into a five second still, which is every instant a stretched watermark is asked
+    // for: the same frame, and not a decode apiece.
+    check("and the same one at every instant", await frames.frameAt(10 * 705600000), first);
+    frames.close();
+    check("closing the source closes the picture it held", first.format, null);
+  });
+
   await test("the browser can encode what the menu offers", async () => {
     const support = await R.formatSupport({
       width: WIDTH,

@@ -4,13 +4,17 @@ import { ALL_FORMATS, BlobSource, EncodedPacketSink, Input } from "mediabunny";
 import type { Rate, Time } from "@videola/core";
 import type { InputAudioTrack, InputTrack, InputVideoTrack } from "mediabunny";
 
+import { isStill, probeStill } from "./image-source";
+
 export type TrackId = "video" | "audio";
 
 export interface VideoTrackInfo {
   codec: string;
   width: number;
   height: number;
-  fps: Rate;
+  // Absent for a still, which has no frame rate to read. Every container that carries moving
+  // pictures reports one.
+  fps?: Rate;
   description?: Uint8Array;
 }
 
@@ -40,15 +44,22 @@ export function openInput(source: Blob): Input {
 }
 
 export async function probe(source: Blob): Promise<MediaInfo> {
-  const input = openInput(source);
   try {
-    return await describe(input);
+    return isStill(source) ? await probeStill(source) : await describeContainer(source);
   } catch (error) {
-    // Truncated or mislabelled bytes surface as whatever mediabunny happened to trip over. The
-    // caller needs one recognisable reason; the original travels as the cause for whoever debugs.
+    // Truncated or mislabelled bytes surface as whatever mediabunny happened to trip over, and a
+    // picture that is not one comes back as a DOMException. The caller needs one recognisable
+    // reason; the original travels as the cause for whoever debugs.
     throw error instanceof Error && error.message === METADATA
       ? error
       : new Error(METADATA, { cause: error });
+  }
+}
+
+async function describeContainer(source: Blob): Promise<MediaInfo> {
+  const input = openInput(source);
+  try {
+    return await describe(input);
   } finally {
     input.dispose();
   }

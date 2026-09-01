@@ -1,6 +1,7 @@
 import { VideoSampleSink } from "mediabunny";
 
 import { openInput } from "./demuxer";
+import { looksLikeStill } from "./image-source";
 
 export const THUMBNAIL_WIDTH = 160;
 export const THUMBNAIL_HEIGHT = 90;
@@ -21,6 +22,7 @@ export const THUMBNAIL_MAX_OFFSET_SECONDS = 1;
  * where a picture belongs is a promise the application cannot keep.
  */
 export async function thumbnail(source: Blob): Promise<Blob | undefined> {
+  if (await looksLikeStill(source)) return stillThumbnail(source);
   const input = openInput(source);
   try {
     const track = await input.getPrimaryVideoTrack();
@@ -44,5 +46,24 @@ export async function thumbnail(source: Blob): Promise<Blob | undefined> {
     return await canvas.convertToBlob({ type: "image/webp", quality: 0.7 });
   } finally {
     input.dispose();
+  }
+}
+
+// A picture is its own thumbnail, so nothing is decoded twice and no offset has to be chosen. The
+// same 'cover' bargain as above: the tile is a fixed 16:9 box, and a portrait logo letterboxed
+// inside it would be more background than logo.
+async function stillThumbnail(source: Blob): Promise<Blob | undefined> {
+  const bitmap = await createImageBitmap(source);
+  try {
+    const canvas = new OffscreenCanvas(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    const context = canvas.getContext("2d");
+    if (context === null) return undefined;
+    const scale = Math.max(THUMBNAIL_WIDTH / bitmap.width, THUMBNAIL_HEIGHT / bitmap.height);
+    const width = bitmap.width * scale;
+    const height = bitmap.height * scale;
+    context.drawImage(bitmap, (THUMBNAIL_WIDTH - width) / 2, (THUMBNAIL_HEIGHT - height) / 2, width, height);
+    return await canvas.convertToBlob({ type: "image/webp", quality: 0.7 });
+  } finally {
+    bitmap.close();
   }
 }

@@ -37,6 +37,10 @@ function videoFile(content = "pretend this is an mp4"): File {
   return new File([content], "clip.mp4", { type: "video/mp4" });
 }
 
+function logoFile(): File {
+  return new File(["pretend this is a png"], "logo.png", { type: "image/png" });
+}
+
 async function openDocument(log: string[]): Promise<VideolaDocument> {
   const backend = await createWasmBackend();
   return new VideolaDocument({
@@ -108,6 +112,37 @@ describe("importFile", () => {
 
     expect(fake.log).toEqual([]);
     expect(doc.state.library).toHaveLength(0);
+  });
+
+  it("takes a still without a frame rate and leaves the field empty", async () => {
+    const fake = installFakeOpfs();
+    const doc = await openDocument(fake.log);
+    const still: MediaProbe = {
+      duration: secondsToTime(5),
+      video: { width: 1200, height: 400 },
+    };
+
+    const id = await importFile(logoFile(), doc, probeOf(still));
+
+    const asset = doc.state.library.find((entry) => entry.id === id);
+    expect(asset?.kind).toBe("image");
+    expect(asset?.width).toBe(1200);
+    // Absent, rather than a number somebody made up: this is the field an untouched project adopts
+    // its format from, and a picture has no frame rate to lend it. The entry goes to the core as
+    // null and comes back without the field at all, which is the same absence spelled twice.
+    expect(asset?.fps ?? null).toBeNull();
+  });
+
+  it("rejects a video file whose track carries no frame rate", async () => {
+    const fake = installFakeOpfs();
+    const doc = await openDocument(fake.log);
+    const rateless: MediaProbe = { duration: secondsToTime(2), video: { width: 1920, height: 1080 } };
+
+    await expect(importFile(videoFile(), doc, probeOf(rateless))).rejects.toThrow(
+      "error.mediaNoVideoTrack",
+    );
+
+    expect(fake.log).toEqual([]);
   });
 
   it("rejects a frame rate with a zero denominator before a command flies", async () => {

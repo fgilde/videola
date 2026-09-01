@@ -29,6 +29,8 @@ export {
   SEEK_BUDGET_MS,
 } from "../src/decode/budget";
 export { probe } from "../src/decode/demuxer";
+export { MediaFrames } from "../src/decode/frames";
+export { ImageSource, STILL_DURATION } from "../src/decode/image-source";
 export { VideoSource } from "../src/decode/video-source";
 export { buildProxy, PROXY_MAX_HEIGHT } from "../src/proxy/build";
 export { EXPORT_FORMATS, formatSupport } from "../src/export/format";

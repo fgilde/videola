@@ -18,7 +18,7 @@ import type {
 } from "@videola/core";
 import type { AudioEncodingConfig, VideoEncodingConfig } from "mediabunny";
 
-import { VideoSource } from "../decode/video-source";
+import { MediaFrames } from "../decode/frames";
 import { GeneratorFrames } from "../generate/generator";
 import { clipHashes } from "../playback";
 import { Compositor } from "../render/compositor";
@@ -103,7 +103,7 @@ export async function runExport(
   // `master`: the file is the delivery, so it is decoded from the original however small and quick
   // a proxy of it happens to be sitting on disk.
   const sources = new SourcePool(
-    hooks.createFrameSource ?? ((): FrameSource => new VideoSource("master")),
+    hooks.createFrameSource ?? ((): FrameSource => new MediaFrames("master")),
   );
   const generated = new GeneratorFrames();
   const video = new CanvasSource(canvas, videoEncoding(request));

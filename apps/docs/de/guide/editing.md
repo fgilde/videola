@@ -30,6 +30,18 @@ Ein unberührtes Projekt übernimmt das Format seines ersten Mediums, damit ein 
 kleines Rechteck in der Ecke eines 1080p-Bildes sitzt. Danach ist das Format eine Entscheidung, die
 jemand getroffen hat, und **Ins Bild einpassen** im Inspector holt einen späteren Clip darauf.
 
+### Bilder
+
+PNG, JPEG, WebP, GIF, BMP und AVIF sind Medien wie alle anderen: in die Bibliothek, auf eine Spur und
+durch den Export. Einem Bild ist keine Länge anzusehen, also bekommt es fünf Sekunden, und ab da
+machen die Trimmgriffe weiter — und gar keine Bildrate, weshalb ein Projekt, dessen erster Import ein
+Logo ist, sein Format behält statt eines zu übernehmen, das niemand gewählt hat.
+
+Ein Standbild wird einmal dekodiert. Ein Wasserzeichen über einem fünfminütigen Video ist ein Bild,
+fünf Minuten lang gehalten, und keine neuntausend Dekodierungen. Gezeichnet wird es durch denselben
+Compositor wie alles andere: Deckkraft, Position, Skalierung und jeder Effekt greifen genauso wie bei
+einem Videoclip. Ein Proxy wird dafür nie gebaut — es gibt nichts zu transkodieren.
+
 ## Die Medienbibliothek
 
 Alles, was im Projekt liegt, mit Länge, Maßen in Pixeln und Abtastrate. **Auf die Zeitleiste** setzt

@@ -8,7 +8,10 @@ import { hasMedia, putMedia } from "./opfs";
 export interface VideoTrackProbe {
   width: number;
   height: number;
-  fps: Rate;
+  // A still has none. Optional here rather than invented at the probe, because this field is what
+  // an untouched project adopts its format from: a project running at whatever number a picture
+  // was given would be the cost of a default nobody chose.
+  fps?: Rate;
 }
 
 export interface AudioTrackProbe {
@@ -84,7 +87,9 @@ function validateProbe(kind: MediaKind, probed: MediaProbe): void {
   // A file whose mime claims video but that carries no video track is broken or mislabelled.
   // Rejecting it here keeps it out of the library entirely, rather than letting the timeline
   // discover the missing track on the first render of a clip that can never show anything.
-  if (kind === "video" && probed.video === undefined) throw new Error("error.mediaNoVideoTrack");
+  if (kind === "video" && probed.video?.fps === undefined) {
+    throw new Error("error.mediaNoVideoTrack");
+  }
   if (kind === "audio" && probed.audio === undefined) throw new Error("error.mediaNoAudioTrack");
   if (probed.video !== undefined) validateVideo(probed.video);
   if (probed.audio !== undefined) validateAudio(probed.audio);
@@ -93,6 +98,7 @@ function validateProbe(kind: MediaKind, probed: MediaProbe): void {
 function validateVideo(video: VideoTrackProbe): void {
   requireInteger(video.width, 1, MAX_DIMENSION, "width");
   requireInteger(video.height, 1, MAX_DIMENSION, "height");
+  if (video.fps === undefined) return;
   requireInteger(video.fps.numerator, 1, MAX_U32, "fps numerator");
   requireInteger(video.fps.denominator, 1, MAX_U32, "fps denominator");
   const fps = video.fps.numerator / video.fps.denominator;

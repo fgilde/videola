@@ -1,7 +1,7 @@
 import { clipHashes } from "../playback";
 import { gatherPictures, SourcePool } from "../export/encode";
 import { GeneratorFrames } from "../generate/generator";
-import { VideoSource } from "../decode/video-source";
+import { MediaFrames } from "../decode/frames";
 import { Compositor } from "./compositor";
 import { createContext } from "./context";
 import { LutStore } from "./lut";
@@ -35,7 +35,7 @@ export async function renderStills(request: StillRequest): Promise<Blob[]> {
   const pass = {
     // `master` like the export: a still is a picture that leaves the program as a file.
     sources: new SourcePool(
-      request.createFrameSource ?? ((): FrameSource => new VideoSource("master")),
+      request.createFrameSource ?? ((): FrameSource => new MediaFrames("master")),
     ),
     generated: new GeneratorFrames(),
   };

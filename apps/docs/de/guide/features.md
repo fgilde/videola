@@ -19,6 +19,11 @@ der Ort der Arbeit. **Das Mischpult** trägt einen Streifen je Spur und einen Su
 die Messgeräte im Transport aufgeklappt und beginnt zugeklappt, denn das Bild ist der größte Bereich
 auf dem Schirm, und keines von beidem ist es wert, das ungefragt aufzugeben.
 
+**Video, Ton und Bilder** sind hier alles Medien. Ein PNG, JPEG, WebP, GIF, BMP oder AVIF landet wie
+alles andere in der Bibliothek, bekommt auf der Zeitleiste fünf Sekunden, weil einem Bild keine Länge
+anzusehen ist, und läuft durch Compositor und Export genau wie Filmmaterial — daraus bestehen
+Wasserzeichen, Titelkarte und Abspann.
+
 ## Schneiden
 
 | Geste | Wirkung |

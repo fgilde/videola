@@ -1,6 +1,6 @@
 import { frameDuration, timeToSeconds } from "@videola/core";
 
-import { VideoSource } from "../decode/video-source";
+import { MediaFrames } from "../decode/frames";
 import { frameSignature, sceneCuts, signatureDistance, SCENE_DEFAULTS } from "./scenes";
 import type { SceneOptions } from "./scenes";
 
@@ -44,7 +44,7 @@ export async function scanForCuts(request: ScanRequest): Promise<Time[]> {
   // `willReadFrequently`, because this reads back every frame it draws: without it a driver keeps the
   // surface on the GPU and every read is a stall, which on a long card is the whole cost of the scan.
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  const source = new VideoSource("preview");
+  const source = new MediaFrames("preview");
   if (ctx === null) return [];
   const distances: number[] = [];
   const times: Time[] = [];

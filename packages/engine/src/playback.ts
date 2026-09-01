@@ -15,7 +15,7 @@ import type {
 import { Clock } from "./clock";
 import { leafClips } from "./nesting";
 import type { ClockSource } from "./clock";
-import { VideoSource } from "./decode/video-source";
+import { MediaFrames } from "./decode/frames";
 import { GeneratorFrames } from "./generate/generator";
 import { Compositor } from "./render/compositor";
 import { createContext } from "./render/context";
@@ -111,7 +111,7 @@ export class Playback {
     // `preview`: everything this class draws is looked at and thrown away, so it reads the proxy
     // where there is one.
     this.#createFrameSource =
-      options.createFrameSource ?? ((): FrameSource => new VideoSource("preview"));
+      options.createFrameSource ?? ((): FrameSource => new MediaFrames("preview"));
     this.#clock = new Clock(options.audio);
     // Subscribed before anyone else, so a consumer's listener sees the time the picture is
     // already on its way to. Never unsubscribed: the clock is this object's own, so the listener

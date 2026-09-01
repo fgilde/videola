@@ -58,6 +58,7 @@ import {
   normalizeToTarget,
   Playback,
   probe,
+  STILL_DURATION,
   ProxyQueue,
   quadCentre,
   rotatedTo,
@@ -167,7 +168,7 @@ interface ShellError {
   id: number;
 }
 
-const MEDIA_ACCEPT = "video/*,audio/*,.cube,.audiola";
+const MEDIA_ACCEPT = "video/*,audio/*,image/*,.cube,.audiola";
 
 // Both extensions and both media types: a browser that knows neither still offers the file, and a
 // browser that knows one of them stops offering everything else.
@@ -205,7 +206,6 @@ const APP_VERSION = __VIDEOLA_VERSION__;
 const SCOPE_WIDTH = 256;
 const SCOPE_HEIGHT = 144;
 const SCOPE_INTERVAL_MS = 100;
-const STILL_DURATION = 5 * FLICKS_PER_SECOND;
 const NOTHING_MISSING: ReadonlySet<MediaId> = new Set();
 // A stable empty array, so the poster hook is not handed a fresh one on every render.
 const NO_TEMPLATES: readonly Template[] = [];
@@ -438,6 +438,13 @@ export function App(): ReactElement {
   // dispatch, and a drag across the timeline would otherwise stat OPFS once per pointer movement.
   const libraryIds = (project?.library ?? []).map((asset) => asset.id).join(" ");
 
+  // What a proxy means anything for. A still and a sound file have no moving picture to transcode,
+  // and a queue that tried would spend a worker on each to arrive back at the file it started with.
+  const proxyIds = (project?.library ?? [])
+    .filter((asset) => asset.kind === "video")
+    .map((asset) => asset.id)
+    .join(" ");
+
   useEffect(() => {
     let cancelled = false;
     void missingMedia(libraryIds === "" ? [] : libraryIds.split(" ")).then((next) => {
@@ -466,11 +473,11 @@ export function App(): ReactElement {
   // Asked for on the same key the missing check uses, so an import is what starts a transcode and
   // a drag across the timeline is not.
   useEffect(() => {
-    const hashes = (libraryIds === "" ? [] : libraryIds.split(" "))
+    const hashes = (proxyIds === "" ? [] : proxyIds.split(" "))
       .map((id) => mediaHash(id))
       .filter((hash): hash is string => hash !== undefined);
     void proxyQueue.current?.want(hashes);
-  }, [libraryIds]);
+  }, [proxyIds]);
 
   // A source that is already open holds a handle on the file it chose, and a proxy arriving does
   // not reach back into it. Keyed on which media are ready rather than on the whole map, or every

@@ -1211,6 +1211,7 @@ async function announce() {
     await keysAndView();
     await soundAndChain();
     await namedAndSized();
+    await stills();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
@@ -1565,8 +1566,11 @@ async function announce() {
     checkAtLeast("reaching the effect library is a thumb-sized target",
       add.getBoundingClientRect().height, 44);
     await openShelf("Effekte durchsuchen");
-    check("a phone gets the library too, with a picture per effect",
-      tileOf("brightness") !== null && tileOf("vignette") !== null, true);
+    // Waited for rather than read: the tiles arrive one at a time, and these two are not the first
+    // two. What is being checked is that a phone gets pictures at all, not how fast.
+    const bothDrawn = await until("a picture for brightness and one for vignette",
+      () => (tileOf("brightness") !== null && tileOf("vignette") !== null ? true : null), 240000);
+    check("a phone gets the library too, with a picture per effect", bothDrawn, true);
     checkAtLeast("and every Add in it is a thumb-sized target",
       Math.round(Math.min(...all(".v-fx__add").map((n) => n.getBoundingClientRect().height))), 44);
     checkAtMost("the shelf fits the window rather than running off it",
@@ -2578,6 +2582,81 @@ async function announce() {
 
   }
 
+  // A real PNG: two hundred by eighty, opaque cyan, three lines of bytes. Written out rather than
+  // fetched because it is the one fixture whose content matters to what is checked -- a picture the
+  // decoder accepts, a size the library can report, and a colour a canvas read can recognise.
+  const LOGO_PNG = [
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0,
+    0, 200, 0, 0, 0, 80, 8, 6, 0, 0, 0, 92, 109, 58, 176, 0, 0, 0,
+    182, 73, 68, 65, 84, 120, 218, 237, 211, 49, 13, 0, 0, 12, 195, 176, 242, 39,
+    221, 33, 232, 183, 211, 135, 9, 68, 74, 210, 22, 24, 68, 0, 131, 128, 65, 192,
+    32, 96, 16, 48, 8, 24, 4, 12, 2, 6, 1, 131, 0, 6, 1, 131, 128, 65,
+    192, 32, 96, 16, 48, 8, 24, 4, 12, 2, 6, 1, 131, 136, 0, 6, 1, 131,
+    128, 65, 192, 32, 96, 16, 48, 8, 24, 4, 12, 2, 6, 1, 12, 2, 6, 1,
+    131, 128, 65, 192, 32, 96, 16, 48, 8, 24, 4, 12, 2, 6, 1, 12, 2, 6,
+    1, 131, 128, 65, 192, 32, 96, 16, 48, 8, 24, 4, 12, 2, 24, 4, 12, 2,
+    6, 1, 131, 128, 65, 192, 32, 96, 16, 48, 8, 24, 4, 12, 2, 24, 4, 12,
+    2, 6, 1, 131, 128, 65, 192, 32, 96, 16, 48, 8, 24, 4, 48, 8, 24, 4,
+    12, 2, 6, 1, 131, 128, 65, 192, 32, 96, 16, 48, 8, 24, 4, 48, 8, 24,
+    4, 62, 28, 185, 210, 207, 103, 69, 157, 37, 110, 0, 0, 0, 0, 73, 69, 78,
+    68, 174, 66, 96, 130,
+  ];
+
+  // What a watermark, a title card and an end card all are: a picture on the timeline. The whole
+  // path in the built application -- the drop, the library entry, the length a still is given, the
+  // decode, and the picture reaching the canvas.
+  async function stills() {
+    const entries = all("[data-media-id]").length;
+    const clips = all("[data-clip-id]").length;
+    // Where the material ends, in seconds. Read off the transport rather than measured on the
+    // strip, because by this point in the run the timeline is not at the zoom it started at and a
+    // width in pixels would be a claim about the zoom.
+    const endOfMaterial = async () => {
+      button("Ans Ende").click();
+      await sleep(200);
+      const [hours, minutes, rest] = position().split(":");
+      return Number(hours) * 3600 + Number(minutes) * 60 + Math.floor(Number(rest));
+    };
+    const wasEnding = await endOfMaterial();
+
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array(LOGO_PNG)], "logo.png", { type: "image/png" }));
+    drag("drop", q(".v-dropzone"), transfer);
+    await until("the still in the library", () => all("[data-media-id]").length === entries + 1);
+    check("importing a picture raised nothing", banner(), "");
+    check("and it reached the timeline", all("[data-clip-id]").length, clips + 1);
+
+    const entry = all("[data-media-id]").pop();
+    check("the library reports the size of the picture",
+      entry.textContent.includes("200 × 80"), true);
+    await until("the thumbnail of the still", () => entry.querySelector("img"));
+
+    // A picture has no length to read off it, so this is the length the editor gives it -- and the
+    // timeline is exactly that much longer for having taken one.
+    check("a still lands five seconds long", (await endOfMaterial()) - wasEnding, 5);
+
+    if (virtual) {
+      toStart();
+      await repainted();
+      // Half a second into the still, which starts where the material used to end.
+      forward(wasEnding * 30 + 15);
+      // A two hundred by eighty picture at source size in a 640 by 360 frame is a fourteenth of the
+      // area, and cyan averages 170 over its three channels -- so the whole frame reads about 12
+      // against the black it would read if nothing were drawn at all.
+      checkAtLeast("and the picture on it is the picture in the file", await repainted(), 8);
+    }
+
+    // Back to the project the rest of the run expects -- the playhead included, because everything
+    // after this reads the picture and a playhead left past the end reads black.
+    for (let i = 0; i < 4 && all("[data-clip-id]").length > clips; i += 1) {
+      button("Rückgängig").click();
+      await sleep(200);
+    }
+    check("undo takes the still back out", all("[data-clip-id]").length, clips);
+    toStart();
+    await sleep(200);
+  }
+
   async function dropFixture() {
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();
     const transfer = new DataTransfer();
@@ -2620,9 +2699,6 @@ async function announce() {
       });
     })
     .then(() => {
-      if (noise.length > 0) {
-        results.push({ name: "nothing reached the console", ok: false, got: noise, want: [] });
-      }
       if (noise.length > 0) {
         results.push({ name: "nothing reached the console", ok: false, got: noise, want: [] });
       }

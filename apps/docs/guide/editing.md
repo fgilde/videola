@@ -30,6 +30,18 @@ An untouched project adopts the format of its first medium, so a 640×360 clip d
 small rectangle in the corner of a 1080p frame. Past that point the format is a decision somebody
 made, and **Fit to frame** in the inspector is how a later clip is brought up to it.
 
+### Pictures
+
+PNG, JPEG, WebP, GIF, BMP and AVIF are media like any other: they go into the library, onto a track
+and through the export. A picture has no length to read off it, so it is given five seconds and the
+trim handles take it from there — and no frame rate at all, which is why a project whose first
+import is a logo keeps the format it had rather than adopting one nobody chose.
+
+A still is decoded once. A watermark over a five minute video is one picture held for five minutes,
+not nine thousand decodes, and it is drawn through the same compositor as everything else: opacity,
+position, scale and every effect apply to it exactly as they do to a clip of footage. No proxy is
+ever made for one, because there is nothing to transcode.
+
 ## The media library
 
 Everything the project holds, with its length, its size in pixels and its sample rate. **Add to

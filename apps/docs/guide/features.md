@@ -17,6 +17,11 @@ the work happens. **The mixer** carries one strip per track plus a master; it an
 instruments are opened from the transport and start folded away, because the picture is the largest
 zone on the screen and neither of them is worth giving that up unasked.
 
+**Video, sound and pictures** are all media here. A PNG, JPEG, WebP, GIF, BMP or AVIF lands in the
+library like anything else, takes five seconds on the timeline because a picture has no length to
+read off it, and goes through the compositor and the export exactly as footage does — which is what
+a watermark, a title card and an end card are made of.
+
 ## Cutting
 
 | Gesture | Result |

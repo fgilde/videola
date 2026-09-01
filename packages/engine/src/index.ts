@@ -34,6 +34,8 @@ export { GeneratorFrames, paintGenerator, paintsGenerator } from "./generate/gen
 export { generatorMotion } from "./generate/motion";
 export { paintText, textStyle } from "./generate/text";
 export type { TextMove, TextStyle } from "./generate/text";
+export { MediaFrames } from "./decode/frames";
+export { ImageSource, isStill, probeStill, STILL_DURATION } from "./decode/image-source";
 export { VideoSource } from "./decode/video-source";
 export { audioChunks, runExport } from "./export/encode";
 export type { ExportAudio, ExportFrame, ExportHooks, ExportRequest } from "./export/encode";
