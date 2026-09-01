@@ -154,8 +154,15 @@ async function render(
   const graph = new AudioGraph(ctx, source, params);
   await graph.prepare(built);
   graph.startAt(0, 0);
-  const rendered = await (ctx as unknown as OfflineAudioContext).startRendering();
-  return rendered.getChannelData(0) as unknown as Float32Array;
+  const offline = ctx as unknown as OfflineAudioContext;
+  const rendered = await offline.startRendering();
+  const samples = rendered.getChannelData(0) as unknown as Float32Array;
+  // Closed once its picture has been taken. Every one of these carries a native audio backend, and a
+  // suite that opens one per check and never closes them takes the worker down with it -- which is
+  // what "worker exited unexpectedly" was, and why an assertion downstream of it read a render that
+  // never happened.
+  await (offline as unknown as { close?: () => Promise<void> }).close?.();
+  return samples;
 }
 
 // How much of one frequency a stretch of samples holds. The same filter the export harness runs
@@ -460,6 +467,17 @@ describe("an effect chain that cannot be built in full", () => {
   // medium does not take the timeline's. Both positions, because the chain is walked from its far
   // end: an unknown one last in the list is the first thing that walk meets, and giving up there
   // would silently drop everything ahead of it.
+  //
+  // Three renders and not one more, which is a real constraint rather than tidiness: every
+  // OfflineAudioContext here carries a native audio backend, and a fourth one in this file takes the
+  // whole worker down -- "worker exited unexpectedly", after which an assertion downstream reads a
+  // render that never happened. That is what this check used to look like when it failed on a runner
+  // and passed everywhere else.
+  //
+  // Measured against the same chain without the alien rather than against an absolute depth of cut:
+  // what this claims is "the unknown one changed nothing", and comparing two renders on the same
+  // machine says exactly that, while "the notch cut by ten times" was a claim about a native filter's
+  // response.
   it("skips a type this build does not carry, wherever it sits in the chain", async () => {
     const alien = (): Effect => effect("brightness", { amount: 2 });
     const notch = (): Effect => effect("eq", { frequency: HIGH_HZ, gain: -24, q: 1 });
@@ -467,17 +485,26 @@ describe("an effect chain that cannot be built in full", () => {
       const ctx = context(0.5);
       return render(ctx, twoTones(ctx), project([track("trk_1", [clip()], { effects })]));
     };
-    const flatCtx = context(0.5);
-    const flat = await render(flatCtx, twoTones(flatCtx), project([track("trk_1", [clip()])]));
     const window: [number, number] = [sample(0.2), sample(0.45)];
+    const alone = await chained([notch()]);
+
+    // The notch did something, said without a second render: the two tones went in at the same
+    // amplitude, and only one of them is under the filter. Without this, a build that dropped every
+    // effect would pass the comparisons below by agreeing with itself.
+    expect(toneStrength(alone, HIGH_HZ, ...window)).toBeLessThan(
+      toneStrength(alone, LOW_HZ, ...window) * 0.5,
+    );
 
     for (const chain of [[alien(), notch()], [notch(), alien()]]) {
       const out = await chained(chain);
-      expect(toneStrength(out, LOW_HZ, ...window)).toBeGreaterThan(
-        toneStrength(flat, LOW_HZ, ...window) * 0.8,
+      // Both tones, to a tenth of a percent: the alien neither swallowed the notch nor became one.
+      expect(toneStrength(out, HIGH_HZ, ...window)).toBeCloseTo(
+        toneStrength(alone, HIGH_HZ, ...window),
+        3,
       );
-      expect(toneStrength(out, HIGH_HZ, ...window)).toBeLessThan(
-        toneStrength(flat, HIGH_HZ, ...window) / 10,
+      expect(toneStrength(out, LOW_HZ, ...window)).toBeCloseTo(
+        toneStrength(alone, LOW_HZ, ...window),
+        3,
       );
     }
   });
