@@ -92,6 +92,7 @@ export function EffectBrowser({
         // happened: the drawing never finished ("pending"), it finished with nothing, or it finished
         // with pictures whose keys do not match these offers. A grid of blank tiles cannot be told
         // apart from the outside, which is what made this hard to chase.
+        // How many pictures have arrived, which is a number that grows while the grid fills in.
         data-tiles={tiles === undefined ? "pending" : String(tiles.size)}
       >
         <div className="v-fx__head">

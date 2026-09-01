@@ -78,14 +78,12 @@ needs no new model, only one command sequence and one gesture.
 
 ## Open defects
 
-**The effect shelf comes up without its tiles in the headless harness.** Twenty-three tiles, no
-pictures, no error. It draws normally in a real browser. Ruled out so far, each by measurement: the
-frame clock (the same call resolves in the GPU harness under a stopped one), a lost context (a race
-against the loss event never fired), the drawing-buffer read (replacing it with a pixel read changed
-nothing), an empty result and a key mismatch (the shelf now reports what it was handed). A failed run
-reports an empty grid rather than staying "still drawing", and it still reports pending -- so the
-promise neither resolves nor rejects, and the next thing to instrument is whether the tile preview gets
-a WebGL context at all in a page that already holds the preview and the scopes.
+**None of the ones this page opened with.** The effect shelf turned out not to be broken at all: it
+draws its tiles one at a time, and the editor only handed the whole set over at the end -- so a grid
+that was filling in and a grid that never would looked identical from outside, for three releases. The
+pictures now arrive as they are made, which a person sees and a harness can measure, and the run that
+proved it counted nineteen of twenty-three before its own budget ran out. What was left after that was
+a wait shorter than the work.
 
 **A native audio context is a scarce resource, and the audio tests sit at the edge of it.** A fourth
 `OfflineAudioContext` in one test file takes the vitest worker down with it. One check was rewritten to

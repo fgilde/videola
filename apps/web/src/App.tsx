@@ -1432,7 +1432,11 @@ export function App(): ReactElement {
     if (browsing === undefined) return;
     let dropped = false;
     let made: ReadonlyMap<string, string> | undefined;
-    effectTiles(canvas).then(
+    effectTiles(canvas, (id, url) => {
+      // Each picture the moment it exists, so the grid fills in rather than staying blank until the
+      // last one is done. The map is replaced rather than mutated because that is what a render reads.
+      if (!dropped) setTiles((held) => new Map([...(held ?? []), [id, url]]));
+    }).then(
       (tiles) => {
         made = tiles;
         if (dropped) return revokeTiles(tiles);
@@ -1440,10 +1444,9 @@ export function App(): ReactElement {
       },
       (err: unknown) => {
         reportError("error.actionFailed", err);
-        // An empty map rather than the pending state it was in: a shelf that reports "still drawing"
-        // for a drawing that already failed is a shelf nobody can tell apart from a slow one, and it
-        // is what made this failure take three releases to pin down.
-        if (!dropped) setTiles(new Map());
+        // Whatever arrived before the failure stays on the screen: half a shelf of pictures is more
+        // use than none, and the banner says the rest is not coming.
+        if (!dropped) setTiles((held) => held ?? new Map());
       },
     );
     return () => {

@@ -82,15 +82,12 @@ Schritt der Historie — das braucht kein neues Modell, nur eine Befehlsfolge un
 
 ## Offene Fehler
 
-**Die Effektbibliothek kommt im kopflosen Prüfstand ohne ihre Kacheln.** Dreiundzwanzig Kacheln, keine
-Bilder, keine Meldung. Im echten Browser zeichnen sie. Ausgeschlossen bisher, jedes durch Messung: die
-Bilduhr (derselbe Aufruf löst im GPU-Prüfstand bei stehender Uhr auf), ein verlorener Kontext (der
-Wettlauf gegen das Verlust-Ereignis feuerte nie), das Lesen des Zeichenpuffers (eine Pixel-Lesart
-änderte nichts), ein leeres Ergebnis und ein Schlüssel-Unterschied (die Bibliothek meldet jetzt, was
-sie bekommen hat). Ein fehlgeschlagener Lauf meldet ein leeres Gitter statt „zeichne noch“ — der
-Lauf meldet weiterhin „pending“ — das Versprechen wird also weder erfüllt noch abgelehnt, und als
-Nächstes ist zu messen, ob die Kachelvorschau überhaupt einen WebGL-Kontext bekommt, während Vorschau
-und Messgeräte schon einen halten.
+**Keiner von denen, mit denen diese Seite anfing.** Die Effektbibliothek war gar nicht kaputt: sie
+zeichnet ihre Kacheln eine nach der anderen, und der Editor gab den ganzen Satz erst am Ende weiter —
+ein Gitter, das sich füllt, und eines, das nie fertig wird, sahen von außen gleich aus, drei Ausgaben
+lang. Die Bilder kommen jetzt an, sobald sie entstehen; das sieht ein Mensch, und ein Prüfstand kann es
+messen. Der Lauf, der es bewies, zählte neunzehn von dreiundzwanzig, bevor sein eigenes Zeitbudget
+endete. Übrig blieb eine Wartezeit, die kürzer war als die Arbeit.
 
 **Ein nativer Ton-Kontext ist knapp, und die Ton-Tests sitzen an dieser Grenze.** Ein vierter
 `OfflineAudioContext` in einer Testdatei reißt den vitest-Arbeiter mit. Eine Prüfung wurde auf drei

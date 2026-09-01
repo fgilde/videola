@@ -25,6 +25,19 @@ export const TILE_HEIGHT = 108;
  */
 export async function effectTiles(
   frame: HTMLCanvasElement | null,
+  /**
+   * Each picture as it is made, rather than all of them at the end.
+   *
+   * This is what the shelf was missing, and it took three releases to see because the two failures
+   * look identical from outside: a grid that is still drawing and a grid that will never draw are
+   * both a grid with no pictures. Handing them over one at a time makes the difference visible --
+   * to a person, who watches the tiles arrive, and to the harness, which can say how far it got.
+   *
+   * On this machine a tile is a millisecond. Through SwiftShader in a headless run it is seconds,
+   * and twenty-three of them are minutes; nothing is wrong with either, and only one of them can
+   * be waited out.
+   */
+  onTile?: (id: string, url: string) => void,
 ): Promise<ReadonlyMap<string, string>> {
   const source = sourceFrame(frame);
   // The picture a transition is coming *from*. A transition mixed with its own incoming frame is
@@ -39,7 +52,9 @@ export async function effectTiles(
       // one picture and shows twenty-two is a shelf somebody can still work from.
       try {
         preview.render(manifest, source, outgoing);
-        tiles.set(manifest.id, URL.createObjectURL(await preview.toBlob()));
+        const url = URL.createObjectURL(await preview.toBlob());
+        tiles.set(manifest.id, url);
+        onTile?.(manifest.id, url);
       } catch (error) {
         console.error(`no tile for ${manifest.id}`, error);
       }

@@ -2608,6 +2608,25 @@ async function playbackChecks() {
       check("it is a PNG", written.type, "image/png");
       check("with bytes in it", written.size > 200, true);
     });
+
+    // Every manifest, one after another, exactly as the shelf asks for them -- because the shelf gets
+    // as far as the eleventh and then waits forever for a picture that never arrives. If that happens
+    // here it can be chased in a minute rather than in a fifteen minute run.
+    const picture = R.referencePicture(TILE, TILE);
+    const other = R.referencePicture(TILE, TILE, 180);
+    const made = [];
+    for (const manifest of R.effectManifests()) {
+      preview.render(manifest, picture, other);
+      const blob = await Promise.race([
+        preview.toBlob(),
+        new Promise((resolve) => setTimeout(() => resolve("never came back"), 4000)),
+      ]);
+      made.push(`${manifest.id}:${typeof blob === "string" ? blob : blob.size > 0 ? "ok" : "empty"}`);
+    }
+    test("every manifest's tile becomes a picture", () => {
+      check("none of them stopped coming back",
+        made.filter((entry) => entry.endsWith("never came back")), []);
+    });
     preview.dispose();
   })();
 

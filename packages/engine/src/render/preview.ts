@@ -86,6 +86,8 @@ export class EffectPreview {
   // One, not the compositor's pair: `passes` is at most two, so the second sweep already draws onto
   // the canvas and never needs somewhere else to land.
   #target: RenderTarget | undefined;
+  // The 2D canvas every tile is encoded through. See `toBlob`.
+  #scratch2d: OffscreenCanvas | undefined;
   #disposed = false;
 
   constructor(width: number, height: number) {
@@ -188,11 +190,16 @@ export class EffectPreview {
         straight[to + at + 3] = alpha;
       }
     }
-    const scratch = new OffscreenCanvas(width, height);
-    const context = scratch.getContext("2d");
+    // One scratch canvas for the life of this preview, and this is not tidiness: a canvas per call
+    // meant twenty-three of them in a tight loop for one shelf of tiles, and somewhere around the
+    // tenth the encode stopped coming back at all -- no error, no rejection, the shelf simply waiting
+    // for a picture forever. Two contexts is what a tile needs; twenty-three is what it was asking a
+    // headless browser for.
+    this.#scratch2d ??= new OffscreenCanvas(width, height);
+    const context = this.#scratch2d.getContext("2d");
     if (context === null) throw new Error("error.webglUnavailable");
     context.putImageData(new ImageData(straight, width, height), 0, 0);
-    return await scratch.convertToBlob({ type: "image/png" });
+    return await this.#scratch2d.convertToBlob({ type: "image/png" });
   }
 
   /** Rows bottom-up, the way GL stores them -- the same reading as `Compositor.readPixels`. */
