@@ -66,6 +66,16 @@ Today an effect is a property of a clip. Filmora applies one to a span. The hone
 split at both ends of the range and the effect on the middle piece, in one step of the history — which
 needs no new model, only one command sequence and one gesture.
 
+## Done since this page was written
+
+* **Custom templates.** A dialogue decides what a template asks for and what it carries; an unmarked
+  medium travels inside the file. That is the half of "replace the Python tool" that is about making
+  the video.
+* **Publishing destinations.** A server holds them, the editor lists them, and an export can go
+  straight to a channel. That is the other half.
+* **The preview holding a stale layer with several media on the timeline**, which was the pin this
+  page's predecessor promised.
+
 ## Open defects
 
 **The effect shelf comes up without its tiles in the headless harness.** Twenty-three tiles, no
@@ -73,8 +83,14 @@ pictures, no error. It draws normally in a real browser. Ruled out so far, each 
 frame clock (the same call resolves in the GPU harness under a stopped one), a lost context (a race
 against the loss event never fired), the drawing-buffer read (replacing it with a pixel read changed
 nothing), an empty result and a key mismatch (the shelf now reports what it was handed). A failed run
-reports an empty grid rather than staying "still drawing", so the next run says whether the tile
-preview gets a WebGL context at all in a page that already holds the preview and the scopes.
+reports an empty grid rather than staying "still drawing", and it still reports pending -- so the
+promise neither resolves nor rejects, and the next thing to instrument is whether the tile preview gets
+a WebGL context at all in a page that already holds the preview and the scopes.
+
+**A native audio context is a scarce resource, and the audio tests sit at the edge of it.** A fourth
+`OfflineAudioContext` in one test file takes the vitest worker down with it. One check was rewritten to
+need three; the others have not been counted, and a suite that grows into a fifth will fail as a
+mysterious CI-only assertion rather than as a crash.
 
 ## Not planned
 

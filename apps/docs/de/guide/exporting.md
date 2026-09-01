@@ -100,6 +100,23 @@ Ein grüner Unit-Test beweist nichts über eine Videodatei.
   Tonspur — und dass jedes Bild dekodiert,
 - dekodiert den Ton zurück und misst, dass der Ton herauskommt, der hineinging.
 
+## Direkt auf einen Kanal veröffentlichen
+
+**Datei ▸ Veröffentlichungsziele** verbindet den Editor mit einem Videola-Server und zeigt, wohin
+dieser Server veröffentlichen kann — ein YouTube-Kanal, ein Vimeo-Konto oder eine eigene Adresse. Der
+Export-Dialog bekommt dann eine Zeile: *nach dem Export hochladen zu*. Voreingestellt ist nirgendwohin,
+also das, was der Editor immer schon getan hat — ein versehentlich hochgeladenes Video nimmt kein
+Rückgängig zurück.
+
+Die Datei wird zuerst gespeichert, immer. Ein Export dauert Minuten, und eine Plattform kann aus einem
+Dutzend Gründen ablehnen; niemand soll eine Ausgabe an einen 401 verlieren.
+
+Warum ein Server dazwischen steht: ein Upload braucht ein Client-Geheimnis, und ein Geheimnis im
+Browser ist keines. Der Encoder bleibt, wo das Material ist — der Tab exportiert, schickt die Bytes an
+den Server, und der Server spricht mit der Plattform. Wie ein Ziel eingerichtet wird, steht unter
+[Selbst betreiben](/de/guide/self-hosting#veroffentlichungsziele); Geheimnisse gehen dort hinein und
+kommen nie zurück, und der Editor sieht nur, welche ein Ziel hält.
+
 ## Den Schnitt an einen anderen Editor geben
 
 Drei Dateien verlassen Videola, die kein Video sind: eine **EDL**, **FCPXML** und **Final Cut Pro 7

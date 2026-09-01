@@ -70,6 +70,16 @@ Heute ist ein Effekt eine Eigenschaft des Clips. Filmora legt einen auf eine Spa
 Fassung hier ist ein Schnitt an beiden Enden des Bereichs und der Effekt auf dem Mittelstück, in einem
 Schritt der Historie — das braucht kein neues Modell, nur eine Befehlsfolge und eine Geste.
 
+## Seit dieser Seite erledigt
+
+* **Eigene Vorlagen.** Ein Dialog entscheidet, wonach eine Vorlage fragt und was sie mitbringt; ein
+  unmarkiertes Medium reist in der Datei mit. Das ist die Hälfte von „das Python-Werkzeug ersetzen“,
+  die vom Videomachen handelt.
+* **Veröffentlichungsziele.** Ein Server hält sie, der Editor listet sie, und ein Export kann direkt
+  auf einen Kanal gehen. Das ist die andere Hälfte.
+* **Die Vorschau, die bei mehreren Medien eine Ebene von gestern zeigte** — genau der Pin, den diese
+  Seite vorher versprochen hatte.
+
 ## Offene Fehler
 
 **Die Effektbibliothek kommt im kopflosen Prüfstand ohne ihre Kacheln.** Dreiundzwanzig Kacheln, keine
@@ -78,8 +88,14 @@ Bilduhr (derselbe Aufruf löst im GPU-Prüfstand bei stehender Uhr auf), ein ver
 Wettlauf gegen das Verlust-Ereignis feuerte nie), das Lesen des Zeichenpuffers (eine Pixel-Lesart
 änderte nichts), ein leeres Ergebnis und ein Schlüssel-Unterschied (die Bibliothek meldet jetzt, was
 sie bekommen hat). Ein fehlgeschlagener Lauf meldet ein leeres Gitter statt „zeichne noch“ — der
-nächste Lauf sagt also, ob die Kachelvorschau überhaupt einen WebGL-Kontext bekommt, während Vorschau
+Lauf meldet weiterhin „pending“ — das Versprechen wird also weder erfüllt noch abgelehnt, und als
+Nächstes ist zu messen, ob die Kachelvorschau überhaupt einen WebGL-Kontext bekommt, während Vorschau
 und Messgeräte schon einen halten.
+
+**Ein nativer Ton-Kontext ist knapp, und die Ton-Tests sitzen an dieser Grenze.** Ein vierter
+`OfflineAudioContext` in einer Testdatei reißt den vitest-Arbeiter mit. Eine Prüfung wurde auf drei
+umgeschrieben; die anderen sind nicht gezählt, und eine Suite, die in einen fünften hineinwächst, fällt
+als rätselhafte CI-Zusicherung aus statt als Absturz.
 
 ## Nicht geplant
 

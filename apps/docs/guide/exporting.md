@@ -98,6 +98,22 @@ therefore drives the real thing in headless Chrome:
   length, the audio stream, and that every frame decodes,
 - decodes the audio back and measures that the tone that went in is the tone that came out.
 
+## Publishing straight to a channel
+
+**File ▸ Publishing destinations** connects the editor to a Videola server and lists what that server
+can publish to — a YouTube channel, a Vimeo account, or any address of your own. The export dialogue
+then grows a row: *after exporting, upload to*. It defaults to nowhere, which is what the editor has
+always done, because a video uploaded by accident cannot be taken back by an undo.
+
+The file is saved first, always. An encode takes minutes and a platform can refuse for a dozen
+reasons; nobody should lose a render to a 401.
+
+Why a server is in the middle of it: an upload needs a client secret, and a secret in a browser is not
+a secret. The encoder stays where the material is — the tab exports, sends the bytes to the server, and
+the server talks to the platform. Setting a destination up is described under
+[running it yourself](/guide/self-hosting#publishing-destinations); secrets go in there and never come
+back out, and the editor only ever sees which ones a destination holds.
+
 ## Handing the cut to another editor
 
 Three files leave here that are not video: an **EDL**, **FCPXML**, and **Final Cut Pro 7 XML** — all
