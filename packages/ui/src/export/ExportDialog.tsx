@@ -43,6 +43,14 @@ export interface ExportDialogProps {
   hasCaptions?: boolean;
   progress?: ExportProgress;
   error?: string;
+  /**
+   * Where the finished file can be sent, if a server holds any destinations. Empty in a browser with
+   * no server behind it, and then the row is not drawn at all -- an offer that cannot be taken is
+   * worse than no offer.
+   */
+  destinations?: readonly { id: string; name: string }[];
+  publishTo?: string;
+  onPublishTo?: (id: string) => void;
   onExport: (selection: ExportSelection) => void;
   onCancel: () => void;
   onClose: () => void;
@@ -318,6 +326,26 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
           <p className="v-export__progress" role="status">
             {t("export.progress", { percent: percentOf(props.progress) })}
           </p>
+        )}
+
+        {props.destinations !== undefined && props.destinations.length > 0 && (
+          <label className="v-export__row">
+            <span>{t("export.destination")}</span>
+            <select
+              value={props.publishTo ?? ""}
+              data-testid="export-destination"
+              onChange={(event) => props.onPublishTo?.(event.target.value)}
+            >
+              {/* The first entry is the one the editor has always done, and it stays the default:
+                  a video that is uploaded by accident cannot be taken back by an undo. */}
+              <option value="">{t("export.destination.none")}</option>
+              {props.destinations.map((destination) => (
+                <option key={destination.id} value={destination.id}>
+                  {destination.name}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
 
         <div className="v-export__actions">

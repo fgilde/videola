@@ -1425,7 +1425,8 @@ async function announce() {
     check("the file title holds what a file title holds",
       under("Datei"),
       ["Neues Projekt", "Aus Vorlage", "Öffnen", "Speichern", "Medien importieren",
-       "Untertitel importieren", "Exportieren", "Weitergeben …"]);
+       "Untertitel importieren", "Exportieren", "Weitergeben …",
+       "Veröffentlichungsziele …"]);
     check("and the rest sit where they belong",
       [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
       [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 5,

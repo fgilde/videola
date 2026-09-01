@@ -18,6 +18,8 @@ export interface TopBarActions {
   onAbout?: () => void;
   /** Open the dialogue that explains what each interchange file is before writing one. */
   onHandOff?: () => void;
+  /** Where finished videos are sent, and the server that does the sending. */
+  onDestinations?: () => void;
   onKeys?: () => void;
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
@@ -99,6 +101,9 @@ export function TopBar({
               than in three menu lines that assume the reader knows what an EDL is. */}
           <Action label={t("action.export")} onClick={actions.onExport} />
           <Action label={t("action.handOff")} onClick={actions.onHandOff} />
+          {/* Beside the two ways out, because it is the third: a finished video that leaves this
+              machine entirely. Absent in a build with no server to send it through. */}
+          <Action label={t("action.destinations")} onClick={actions.onDestinations} />
         </>
       ),
     },

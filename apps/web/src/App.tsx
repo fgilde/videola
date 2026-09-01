@@ -112,6 +112,7 @@ import {
   Scopes,
   SourceBar,
   Stage,
+  DestinationsDialog,
   TemplateAuthor,
   TemplateGallery,
   TemplateWizard,
@@ -136,6 +137,16 @@ import {
 
 import { effectTiles, revokeTiles } from "./effectTiles";
 import { useTemplatePosters } from "./posters";
+import {
+  addDestination,
+  listDestinations,
+  publishVideo,
+  readConnection,
+  removeDestination,
+  writeConnection,
+  type Connection,
+  type DestinationSummary,
+} from "./publishing";
 import { useThumbnails } from "./thumbnails";
 import { findDesktopUpdate, insideTauri, revealWindow, watchForWebUpdate } from "./updates";
 import type { DesktopUpdate } from "./updates";
@@ -297,6 +308,14 @@ export function App(): ReactElement {
   const [gallery, setGallery] = useState(false);
   const [handingOff, setHandingOff] = useState(false);
   const [authoring, setAuthoring] = useState(false);
+  const [managingDestinations, setManagingDestinations] = useState(false);
+  const [connection, setConnection] = useState<Connection>(() => readConnection());
+  const [destinations, setDestinations] = useState<readonly DestinationSummary[]>([]);
+  const [destinationError, setDestinationError] = useState<string>();
+  // Where the next export goes when it is finished. Empty means nowhere, which is what a browser with
+  // no server behind it can offer and what the editor does today.
+  const [publishTo, setPublishTo] = useState("");
+  const [notice, setNotice] = useState<{ key: string; values: Record<string, string> }>();
   const [catalogue, setCatalogue] = useState<Template[]>([]);
   const [template, setTemplate] = useState<Template>();
   const [slotMedia, setSlotMedia] = useState<Record<string, MediaAsset>>({});
@@ -965,6 +984,31 @@ export function App(): ReactElement {
     [doc, playhead, reportError],
   );
 
+  /**
+   * The finished file, sent to a destination, with what happened said out loud.
+   *
+   * A banner rather than a dialogue: the export is over and the editor is usable again, and an upload
+   * of a hundred megabytes is not something to make somebody watch. What it says at the end is the
+   * platform's own words if it refused, because "the upload failed" alone is not something anybody
+   * can act on.
+   */
+  const sendToDestination = useCallback(
+    async (id: string, bytes: Uint8Array, title: string, mimeType: string) => {
+      const destination = destinations.find((entry) => entry.id === id);
+      setNotice({ key: "publish.running", values: {} });
+      try {
+        const published = await publishVideo(connection, id, { bytes, title, mimeType });
+        setNotice({
+          key: "publish.done",
+          values: { name: published.url ?? destination?.name ?? id },
+        });
+      } catch (err) {
+        setNotice({ key: "publish.failed", values: { reason: String((err as Error).message ?? err) } });
+      }
+    },
+    [connection, destinations],
+  );
+
   const undo = useCallback(() => {
     if (doc === undefined) return;
     try {
@@ -1033,6 +1077,43 @@ export function App(): ReactElement {
     };
   }, [exporting, project]);
 
+  /**
+   * Ask a Videola server what destinations it has.
+   *
+   * Quietly on the way in and loudly when somebody presses Connect: an editor opened at videola.app
+   * has no server, and an error banner about that on every start would be a complaint about a
+   * feature nobody asked for yet.
+   */
+  const loadDestinations = useCallback(
+    async (using: Connection, loudly: boolean) => {
+      try {
+        setDestinations(await listDestinations(using));
+        setDestinationError(undefined);
+      } catch (err) {
+        setDestinations([]);
+        if (loudly) setDestinationError(String((err as Error).message ?? err));
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // Only where somebody has already said which server: an unasked request to the origin would be a
+    // 404 in the console of every browser session that has nothing to do with publishing.
+    if (connection.url === "" && connection.token === "") return;
+    void loadDestinations(connection, false);
+  }, [connection, loadDestinations]);
+
+  const connectTo = useCallback(
+    (url: string, token: string) => {
+      const using = { url, token };
+      writeConnection(using);
+      setConnection(using);
+      void loadDestinations(using, true);
+    },
+    [loadDestinations],
+  );
+
   const beginExport = useCallback(
     (options: ExportSelection) => {
       const format = EXPORT_FORMATS.find((entry) => entry.id === options.formatId);
@@ -1066,9 +1147,14 @@ export function App(): ReactElement {
           // next one is already going. Whichever handle is current owns the screen.
           if (runningExport.current !== handle) return;
           runningExport.current = undefined;
+          // Saved first, always. An upload can be refused by a platform for a dozen reasons, and
+          // the encode behind it took minutes: whatever happens next, the file is on disk.
           downloadBlob(result.bytes, `${name}.${result.extension}`, result.mimeType);
           setProgress(undefined);
           setExporting(false);
+          if (publishTo !== "") {
+            void sendToDestination(publishTo, result.bytes, name, result.mimeType);
+          }
         },
         (err: unknown) => {
           if (runningExport.current !== handle) return;
@@ -1810,6 +1896,7 @@ export function App(): ReactElement {
           : () => void pickFiles(CAPTION_ACCEPT).then(importCaptions)
       }
       onHandOff={doc === undefined ? undefined : () => setHandingOff(true)}
+      onDestinations={() => setManagingDestinations(true)}
       onExport={
         doc === undefined
           ? undefined
@@ -1828,6 +1915,7 @@ export function App(): ReactElement {
       <DropZone onFiles={(files) => void importFiles(files)}>
         <div className="v-editor">
           <div className="v-banners">
+            <PublishBanner notice={notice} onDismiss={() => setNotice(undefined)} />
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
             {recovered !== undefined && (
@@ -2074,6 +2162,37 @@ export function App(): ReactElement {
           onClose={closeTemplates}
         />
       )}
+      {managingDestinations && (
+        <DestinationsDialog
+          url={connection.url}
+          token={connection.token}
+          destinations={destinations}
+          error={destinationError}
+          onConnect={connectTo}
+          onAdd={(draft) => {
+            void (async () => {
+              try {
+                await addDestination(connection, draft);
+                await loadDestinations(connection, true);
+              } catch (err) {
+                setDestinationError(String((err as Error).message ?? err));
+              }
+            })();
+          }}
+          onRemove={(id) => {
+            void (async () => {
+              try {
+                await removeDestination(connection, id);
+                if (publishTo === id) setPublishTo("");
+                await loadDestinations(connection, true);
+              } catch (err) {
+                setDestinationError(String((err as Error).message ?? err));
+              }
+            })();
+          }}
+          onClose={() => setManagingDestinations(false)}
+        />
+      )}
       {authoring && project !== undefined && (
         <TemplateAuthor
           project={project}
@@ -2101,6 +2220,9 @@ export function App(): ReactElement {
           error={exportError}
           onExport={beginExport}
           onCancel={cancelExport}
+          destinations={destinations.map((entry) => ({ id: entry.id, name: entry.name }))}
+          publishTo={publishTo}
+          onPublishTo={setPublishTo}
           onClose={() => setExporting(false)}
         />
       )}
@@ -2215,6 +2337,32 @@ function UpdateCheck(): ReactElement | null {
       install={found.install}
       onClose={() => setDismissed(true)}
     />
+  );
+}
+
+/**
+ * What an upload is doing, and how it ended.
+ *
+ * `role="status"` rather than `alert`: an upload in progress is not something to interrupt anybody
+ * with, and the two endings are read where somebody is already looking. It carries a dismiss, because
+ * "uploaded, here is the link" is worth keeping on screen until it has been read.
+ */
+function PublishBanner({
+  notice,
+  onDismiss,
+}: {
+  notice?: { key: string; values: Record<string, string> };
+  onDismiss: () => void;
+}): ReactElement | null {
+  const { t } = useI18n();
+  if (notice === undefined) return null;
+  return (
+    <p role="status" className="v-banner" data-testid="publish-banner">
+      {t(notice.key, notice.values)}
+      <button type="button" className="v-button" onClick={onDismiss}>
+        {t("session.discard")}
+      </button>
+    </p>
   );
 }
 

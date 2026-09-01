@@ -67,3 +67,51 @@
   font-size: var(--v-text-xs);
   color: var(--v-text-muted);
 }
+
+/* The destinations panel: three blocks in the order somebody works through them -- which server,
+   what is already there, and one more. */
+.v-dest__block {
+  display: grid;
+  gap: var(--v-space-2);
+  padding: var(--v-space-3);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-dest__heading {
+  margin: 0;
+  font-size: var(--v-text-sm);
+  font-weight: 600;
+}
+
+.v-dest__field {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  align-items: center;
+  gap: var(--v-space-2);
+  font-size: var(--v-text-sm);
+}
+
+.v-dest__field input,
+.v-dest__field select {
+  width: 100%;
+}
+
+/* Narrow enough that a label above its field is the only thing that fits. */
+@media (max-width: 640px) {
+  .v-dest__field {
+    grid-template-columns: 1fr;
+  }
+}
+
+.v-dest__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--v-space-2);
+  padding: var(--v-space-2) var(--v-space-3);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
