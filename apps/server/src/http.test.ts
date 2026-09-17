@@ -10,6 +10,7 @@ import { COMMAND_LABELS } from "@videola/core/src/generated/commandLabels";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Api } from "./api";
+import type { RunYtDlp } from "./fetch";
 import { createRequestListener, type HttpOptions } from "./http";
 
 // A real, probeable file: the import describes what it reads, and bytes no demuxer can read
@@ -54,7 +55,7 @@ function fakeYtDlp(answers: {
 async function start(
   options: Partial<HttpOptions> = {},
   watched = false,
-  ytdlp?: Parameters<typeof Api>[0]["ytdlp"],
+  ytdlp?: RunYtDlp,
 ): Promise<void> {
   // A publish is an HTTP conversation with somebody else's server. Watched, it is a conversation with
   // this array -- which is the only way a check can say what a publish would do to a real account.

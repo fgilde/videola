@@ -28,7 +28,7 @@ function show(over: Partial<FetchDialogProps> = {}): {
 } {
   const handlers = { onSearch: vi.fn(), onRead: vi.fn(), onFetch: vi.fn() };
   render(
-    <I18nProvider locale="de">
+    <I18nProvider>
       <FetchDialog
         available
         results={[]}
