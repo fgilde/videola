@@ -107,3 +107,20 @@
     width: 108px;
   }
 }
+
+/* A number and a bar, because a ten minute video is a wait that needs both: the bar says something
+   is happening at a glance, the number says how much longer. */
+.v-fetch__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--v-surface-hover);
+  overflow: hidden;
+}
+
+.v-fetch__barFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--v-accent);
+  transition: width 200ms linear;
+}

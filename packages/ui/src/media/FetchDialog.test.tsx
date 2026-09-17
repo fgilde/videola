@@ -147,6 +147,15 @@ describe("FetchDialog", () => {
     expect(screen.getByRole("alert").textContent).toBe("Video unavailable");
   });
 
+  it("shows how far a download has got, once the server says", () => {
+    show({ busy: "fetching", percent: 42, results: [FOUND[1]!] });
+
+    const bar = screen.getByRole("progressbar");
+    expect(bar.getAttribute("aria-valuenow")).toBe("42");
+    // The number as well as the bar: a bar alone says something is happening and never how long.
+    expect(screen.getByRole("button", { name: /42/ })).not.toBeNull();
+  });
+
   it("says which wait this is", () => {
     show({ busy: "fetching", results: [FOUND[1]!] });
 

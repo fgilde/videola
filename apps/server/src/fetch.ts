@@ -21,7 +21,11 @@ import { join } from "node:path";
  */
 
 /** Everything that runs `yt-dlp`, so a check can drive this without a network or a binary. */
-export type RunYtDlp = (args: readonly string[]) => Promise<{
+export type RunYtDlp = (
+  args: readonly string[],
+  /** Each line the tool writes while it works, which is where the progress is. */
+  onLine?: (line: string) => void,
+) => Promise<{
   stdout: string;
   stderr: string;
   code: number;
@@ -147,11 +151,16 @@ export async function describeVideo(url: string, run: RunYtDlp): Promise<FoundVi
 export async function fetchMedium(
   request: FetchRequest,
   run: RunYtDlp,
+  /** How far along, in whole percent. A ten minute video is a wait somebody wants a number for. */
+  onProgress?: (percent: number) => void,
 ): Promise<FetchedMedium> {
   await allowed(request.url);
   const into = await mkdtemp(join(tmpdir(), "videola-fetch-"));
   try {
     const answer = await run([
+      // One line per update rather than a carriage return over the same one: a progress bar written
+      // for a terminal arrives here as one enormous line nobody can parse.
+      "--newline",
       "--no-playlist",
       "--no-warnings",
       "--no-part",
@@ -166,7 +175,10 @@ export async function fetchMedium(
       "-o",
       join(into, "%(title).120B.%(ext)s"),
       request.url,
-    ]);
+    ], onProgress === undefined ? undefined : (line) => {
+      const percent = percentOf(line);
+      if (percent !== undefined) onProgress(percent);
+    });
     if (answer.code !== 0) throw new Error(said(answer.stderr, "the download failed"));
     const written = await readdir(into);
     const filename = written[0];
@@ -182,12 +194,23 @@ export async function fetchMedium(
 
 /** The runner the server really uses. Absent binary and non-zero exit are both ordinary answers. */
 export function ytDlp(command = process.env.VIDEOLA_YTDLP ?? "yt-dlp"): RunYtDlp {
-  return async (args) =>
+  return async (args, onLine) =>
     await new Promise((resolve, reject) => {
       const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
-      child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
+      let pending = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        const text = chunk.toString();
+        stdout += text;
+        if (onLine === undefined) return;
+        // Whole lines only: a download writes its percentage in pieces, and half a line is a
+        // percentage nobody can read.
+        pending += text;
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop() ?? "";
+        for (const line of lines) onLine(line);
+      });
       child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
       child.on("error", (error: NodeJS.ErrnoException) => {
         reject(
@@ -296,6 +319,20 @@ function thumbnailOf(entry: Record<string, unknown>): string | undefined {
 function contentTypeOf(filename: string): string {
   const extension = filename.split(".").pop()?.toLowerCase() ?? "";
   return MIME[extension] ?? "application/octet-stream";
+}
+
+/**
+ * How far along a download line says it is.
+ *
+ * Two streams are fetched for a merged video, so the percentage runs to a hundred twice; the caller
+ * is told what the line says and decides what to make of it. Lines that are not progress -- and most
+ * of them are not -- come back undefined rather than as a zero that would jerk a bar backwards.
+ */
+export function percentOf(line: string): number | undefined {
+  const found = /^\[download\]\s+([\d.]+)%/.exec(line.trim());
+  if (found?.[1] === undefined) return undefined;
+  const percent = Number(found[1]);
+  return Number.isFinite(percent) ? Math.max(0, Math.min(100, Math.round(percent))) : undefined;
 }
 
 // yt-dlp says what went wrong in its last line, and the lines before it are progress. A message

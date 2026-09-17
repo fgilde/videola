@@ -96,6 +96,7 @@ export class Api {
   #destinations: Destinations;
   #http: Fetch;
   #ytdlp: RunYtDlp;
+  #fetchProgress = new Map<string, number>();
 
   constructor(options: ApiOptions) {
     this.#storage = new Storage(options.storageRoot);
@@ -123,11 +124,32 @@ export class Api {
     return await this.#fetching(() => describeVideo(url, this.#ytdlp));
   }
 
-  async fetchMedium(request: FetchRequest): Promise<FetchedMedium> {
+  /**
+   * The material, and how far along it is while it arrives.
+   *
+   * The percentage is kept here rather than streamed back, because the answer to this request is a
+   * file: a body cannot be a progress report and a video at the same time. Whoever asked polls
+   * `progressOf` with the same job id, and the entry goes away when the download ends -- a server
+   * that remembered every download would be a server that leaks a little on every one.
+   */
+  async fetchMedium(request: FetchRequest, job?: string): Promise<FetchedMedium> {
     if (request.url.trim() === "") {
       throw new ApiError(400, "badRequest", "a fetch needs a ?url=");
     }
-    return await this.#fetching(() => fetchMedium(request, this.#ytdlp));
+    try {
+      return await this.#fetching(() =>
+        fetchMedium(request, this.#ytdlp, job === undefined ? undefined : (percent) => {
+          this.#fetchProgress.set(job, percent);
+        }),
+      );
+    } finally {
+      if (job !== undefined) this.#fetchProgress.delete(job);
+    }
+  }
+
+  /** How far a running fetch has got, or nothing where it has finished or never started. */
+  progressOf(job: string): number | undefined {
+    return this.#fetchProgress.get(job);
   }
 
   /** Whether this server can fetch at all, which is what a dialogue asks before it offers to. */

@@ -606,6 +606,7 @@
   "fetch.searching": "Wird gesucht …",
   "fetch.reading": "Link wird gelesen …",
   "fetch.fetching": "Wird geladen …",
+  "fetch.fetchingAt": "Wird geladen … {percent} %",
   "fetch.add": "In die Bibliothek",
   "fetch.close": "Schließen",
   "fetch.kind": "Was geholt wird",

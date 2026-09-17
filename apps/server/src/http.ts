@@ -199,12 +199,13 @@ async function route(
   if (segments[0] === "api" && segments[1] === "fetch") {
     if (segments[2] === undefined && method === "POST") {
       const link = url.searchParams.get("url") ?? "";
+      const job = url.searchParams.get("job") ?? undefined;
       const medium = await api.fetchMedium({
         url: link,
         kind: url.searchParams.get("kind") === "audio" ? "audio" : "video",
         format: url.searchParams.get("format") ?? "mp4",
         quality: url.searchParams.get("quality") ?? "best",
-      });
+      }, job);
       // The bytes themselves, named the way the site named them: the editor imports what comes back
       // exactly as it imports a file somebody dropped, and the name is what the library then shows.
       return {
@@ -225,6 +226,12 @@ async function route(
         throw new ApiError(400, "badRequest", "describing a link needs a ?url=");
       }
       return { status: 200, body: await api.describeLink(link) };
+    }
+    // Polled while the download runs. A body cannot be a progress report and a video at once, so
+    // the percentage lives on a route of its own and the caller names the job it started.
+    if (segments[2] === "progress" && method === "GET") {
+      const job = url.searchParams.get("job") ?? "";
+      return { status: 200, body: { percent: api.progressOf(job) ?? null } };
     }
     if (segments[2] === "ready" && method === "GET") {
       return { status: 200, body: await api.fetcher() };

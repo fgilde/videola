@@ -7,6 +7,7 @@ import {
   fetchMedium,
   formatSelector,
   isPrivateAddress,
+  percentOf,
   searchArgs,
   searchVideos,
   ytDlpVersion,
@@ -192,6 +193,42 @@ describe("fetchMedium", () => {
       { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" },
       run,
     )).rejects.toThrow("Video unavailable");
+  });
+});
+
+describe("percentOf", () => {
+  it("reads the number out of a download line", () => {
+    expect(percentOf("[download]  12.3% of 10.00MiB at 1.00MiB/s ETA 00:09")).toBe(12);
+    expect(percentOf("[download] 100% of 10.00MiB in 00:09")).toBe(100);
+  });
+
+  // Most of what the tool writes is not progress, and a line misread as zero would jerk a bar
+  // backwards on every merge message.
+  it("says nothing about a line that is not progress", () => {
+    expect(percentOf(`[Merger] Merging formats into "x.mp4"`)).toBeUndefined();
+    expect(percentOf("")).toBeUndefined();
+  });
+});
+
+describe("fetchMedium progress", () => {
+  it("asks for one line per update and reports what they say", async () => {
+    const seen: number[] = [];
+    const run: RunYtDlp = async (args, onLine) => {
+      expect(args).toContain("--newline");
+      onLine?.("[download]   0.0% of 10.00MiB");
+      onLine?.("[download]  50.0% of 10.00MiB");
+      onLine?.("[Merger] Merging formats");
+      onLine?.("[download] 100% of 10.00MiB");
+      return { stdout: "", stderr: "", code: 0 };
+    };
+
+    await expect(fetchMedium(
+      { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" },
+      run,
+      (percent) => seen.push(percent),
+    )).rejects.toThrow("no file");
+
+    expect(seen).toEqual([0, 50, 100]);
   });
 });
 

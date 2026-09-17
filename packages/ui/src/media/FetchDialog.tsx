@@ -27,6 +27,8 @@ export interface FetchDialogProps {
   results: readonly FoundVideo[];
   /** What is being asked of the server right now, so the dialogue can say which wait this is. */
   busy?: "searching" | "reading" | "fetching";
+  /** How far the download has got, where the server has said. */
+  percent?: number;
   error?: string;
   onSearch: (query: string) => void;
   onRead: (url: string) => void;
@@ -116,6 +118,12 @@ export function FetchDialog(props: FetchDialogProps): ReactElement {
           </button>
         </div>
 
+        {props.busy === "fetching" && props.percent !== undefined && (
+          <div className="v-fetch__bar" role="progressbar" aria-valuenow={props.percent}
+            aria-valuemin={0} aria-valuemax={100} aria-label={t("fetch.fetching")}>
+            <span className="v-fetch__barFill" style={{ width: `${props.percent}%` }} />
+          </div>
+        )}
         {props.busy === "searching" && <p className="v-export__note">{t("fetch.searching")}</p>}
         {props.busy === "reading" && <p className="v-export__note">{t("fetch.reading")}</p>}
         {props.error !== undefined && (
@@ -217,7 +225,11 @@ export function FetchDialog(props: FetchDialogProps): ReactElement {
               props.onFetch({ url: chosen.url, kind, format, quality })
             }
           >
-            {props.busy === "fetching" ? t("fetch.fetching") : t("fetch.add")}
+            {props.busy === "fetching"
+              ? props.percent === undefined
+                ? t("fetch.fetching")
+                : t("fetch.fetchingAt", { percent: String(props.percent) })
+              : t("fetch.add")}
           </button>
           <span className="v-templates__spacer" />
           <button className="v-button" onClick={props.onClose}>

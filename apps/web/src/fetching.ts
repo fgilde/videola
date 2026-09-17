@@ -69,13 +69,50 @@ export async function describeLink(connection: Connection, url: string): Promise
 export async function fetchMedium(
   connection: Connection,
   choice: FetchChoice,
+  /**
+   * How far along, in whole percent, while it downloads.
+   *
+   * Polled rather than streamed: the answer to this request is a file, and a body cannot be a
+   * progress report and a video at once. The job is named here so two tabs downloading at the same
+   * time do not read each other's number.
+   */
+  onProgress?: (percent: number) => void,
 ): Promise<File> {
+  const job = crypto.randomUUID();
   const query = new URLSearchParams({
     url: choice.url,
     kind: choice.kind,
     format: choice.format,
     quality: choice.quality,
+    job,
   });
+  const watching =
+    onProgress === undefined
+      ? undefined
+      : setInterval(() => {
+          void call(connection, `/api/fetch/progress?job=${job}`)
+            .then(async (answer) => (await answer.json()) as { percent: number | null })
+            .then((body) => {
+              if (body.percent !== null) onProgress(body.percent);
+            })
+            // A poll that fails says nothing about the download, which is still running.
+            .catch(() => undefined);
+        }, POLL_MS);
+  try {
+    return await fetched(connection, query, choice);
+  } finally {
+    if (watching !== undefined) clearInterval(watching);
+  }
+}
+
+// Often enough to look alive, seldom enough that a long download is not a thousand requests.
+const POLL_MS = 700;
+
+async function fetched(
+  connection: Connection,
+  query: URLSearchParams,
+  choice: FetchChoice,
+): Promise<File> {
   const answer = await call(connection, `/api/fetch?${query.toString()}`, { method: "POST" });
   const type = answer.headers.get("content-type") ?? "application/octet-stream";
   const bytes = await answer.arrayBuffer();

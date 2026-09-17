@@ -335,6 +335,7 @@ export function App(): ReactElement {
   const [found, setFound] = useState<readonly FoundVideo[]>([]);
   const [fetchBusy, setFetchBusy] = useState<"searching" | "reading" | "fetching">();
   const [fetchError, setFetchError] = useState<string>();
+  const [fetchPercent, setFetchPercent] = useState<number>();
   const [connection, setConnection] = useState<Connection>(() => readConnection());
   const [destinations, setDestinations] = useState<readonly DestinationSummary[]>([]);
   const [destinationError, setDestinationError] = useState<string>();
@@ -2304,6 +2305,7 @@ export function App(): ReactElement {
           available={fetcher?.available}
           results={found}
           busy={fetchBusy}
+          percent={fetchPercent}
           error={fetchError}
           onSearch={(query) => {
             void (async () => {
@@ -2337,10 +2339,11 @@ export function App(): ReactElement {
             void (async () => {
               setFetchError(undefined);
               setFetchBusy("fetching");
+              setFetchPercent(undefined);
               try {
                 // Through the ordinary import, which is the whole point: what arrives is hashed into
                 // OPFS, probed and placed like any file somebody dropped on the window.
-                await importMedia([await fetchMedium(connection, choice)]);
+                await importMedia([await fetchMedium(connection, choice, setFetchPercent)]);
                 setFetching(false);
                 setFound([]);
               } catch (err) {

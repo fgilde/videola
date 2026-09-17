@@ -606,6 +606,7 @@
   "fetch.searching": "Searching …",
   "fetch.reading": "Reading the link …",
   "fetch.fetching": "Fetching …",
+  "fetch.fetchingAt": "Fetching … {percent}%",
   "fetch.add": "Add to the library",
   "fetch.close": "Close",
   "fetch.kind": "What to take",
