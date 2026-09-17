@@ -93,20 +93,15 @@ back. The first attempt -- keeping fewer frames -- ended the freeze and broke ke
 deterministically, which is how the harness earned its new check: the clock runs and the picture has
 to follow it.
 
-**What is still missing is a progress bar on a fetch.** A link to a ten minute video is a download
-somebody waits for with a spinner and no number. `yt-dlp` reports progress on its own output; nothing
-carries it to the browser yet.
-
-**A native audio context is a scarce resource, and the audio tests sit at the edge of it.** A fourth
-`OfflineAudioContext` in one test file takes the vitest worker down with it. One check was rewritten to
-need three; the others have not been counted, and a suite that grows into a fifth will fail as a
-mysterious CI-only assertion rather than as a crash.
-
-**An export colour check fails on one machine and passes in CI.** Every exported frame is compared
-against the colour the clip reads at that instant; on a Windows workstation the comparison comes back
-with the ramp flattened into plateaus, identically on every run, and on the same commit CI is green.
-It predates the decoder work -- the same failure appears on the tree as it stood before any of it --
-and it is not understood yet.
+**The export colour check that failed on one machine was the encoder, at a size no encoder should be
+asked about.** Every exported frame is compared against the colour the clip reads at that instant, and
+on a Windows workstation six of thirty came back as the frame before -- the same six every run, green
+in CI. It was worth chasing to the end because the first six explanations were all wrong: not the
+source (it hands out the right frame at every instant), not the renderer (the same instants drawn as
+stills are exact), not the worker (an export on the main thread repeats the same six), not the
+bitrate, not the codec, not the reader (two independent decoders agree about the file). What is left
+is the encoder, and the fixture was 160x120 -- below what a hardware H.264 encoder on Windows will
+handle honestly. At 320x240 the same run is exact, and that is what the harness now uses.
 
 **None of the ones this page opened with.** The effect shelf turned out not to be broken at all: it
 draws its tiles one at a time, and the editor only handed the whole set over at the end -- so a grid

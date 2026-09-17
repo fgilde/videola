@@ -14,6 +14,7 @@ export {
   hasProxy,
   importFile,
   importLut,
+  mediaBlob,
   mediaHash,
   mediaSize,
   putMedia,
@@ -34,7 +35,10 @@ export { ImageSource, STILL_DURATION } from "../src/decode/image-source";
 export { VideoSource } from "../src/decode/video-source";
 export { buildProxy, PROXY_MAX_HEIGHT } from "../src/proxy/build";
 export { EXPORT_FORMATS, formatSupport } from "../src/export/format";
-export { EXPORT_CANCELLED, frameTimes, startExport } from "../src/export/run";
+export { EXPORT_CANCELLED, exportFrames, frameTimes, startExport } from "../src/export/run";
+// Only the harness calls this directly: the product always goes through the worker. Reaching past
+// it is how a run can say whether a difference belongs to the render or to the thread it runs on.
+export { runExport } from "../src/export/encode";
 export { renderStills } from "../src/render/still";
 export {
   ALL_FORMATS,

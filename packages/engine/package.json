@@ -14,7 +14,7 @@
   "dependencies": {
     "@videola/core": "workspace:*",
     "@videola/media": "workspace:*",
-    "mediabunny": "^1.52.3"
+    "mediabunny": "^1.58.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

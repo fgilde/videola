@@ -56,13 +56,18 @@ async function test(name, fn) {
   }
 }
 
-const WIDTH = 160;
-const HEIGHT = 120;
+// Not 160x120, which this page used for years. A hardware H.264 encoder on Windows quietly repeats
+// frames at that size -- six of thirty, the same six every run -- and everything downstream then
+// reads as an export drawing the wrong picture. It is not: the source hands out the right frame, the
+// compositor draws it, the canvas carries it, and the file still comes back with the frame before it.
+// At 320x240 the same run is exact. Nothing in CI sees it, because a software encoder does not do it.
+const WIDTH = 320;
+const HEIGHT = 240;
 // The fixture is small enough that the production cap of 720 would refuse it a proxy, so the
 // builder is asked for a height it does have to shrink to. 60 is half of 120, which keeps the
 // width whole and the aspect exact.
-const PROXY_HEIGHT = 60;
-const PROXY_WIDTH = 80;
+const PROXY_HEIGHT = 120;
+const PROXY_WIDTH = 160;
 // What a proxy must never be: a colour that appears nowhere in the original's ramp. It is written
 // over the real proxy before the exports run, so any file that carries this is a file that was
 // decoded from the proxy -- and every colour check downstream, in this page and in ffmpeg, is
@@ -77,8 +82,13 @@ const TONE_HERTZ = 440;
 
 // Distinguishable after a lossy encode and back, and far apart from one end of the clip to the
 // other, so a frame written out of order or dropped altogether cannot pass for its neighbour.
+// Sixteen a frame, not seven. Every colour check downstream says "this picture belongs to this
+// instant and not to its neighbour", and that claim is only as sharp as the distance between two
+// neighbours: a run of these through an encoder, a decoder, a texture and an encoder again arrives
+// with the steps rounded, and seven apart they landed on each other in pairs -- which reads as an
+// export drawing the wrong frame and is really a test signal finer than the path it travels.
 function colourAt(index) {
-  return [20 + index * 7, 128, 240 - index * 7];
+  return [20 + index * 16, 128, 240 - index * 16];
 }
 
 // The cut restarts the source, so the second half repeats the first half's pictures.
@@ -315,7 +325,7 @@ function options(over) {
     width: WIDTH,
     height: HEIGHT,
     fps: FPS,
-    videoBitrate: 4_000_000,
+    videoBitrate: 40_000_000,
     audioBitrate: 128_000,
     range: { from: 0, to: SECOND },
     // Beside the picture rather than in it, so the frame checks above read the colour bars they
@@ -594,6 +604,113 @@ async function main() {
 
   // From here on the proxy is a lie about the material. Nothing that writes a file may read it.
   await R.putProxy(hash, await makePoisonedProxy());
+
+  // Before anything is exported: what the fixture itself reads back as. Every colour check
+  // downstream compares an exported frame against `colourAt`, and that only means something if the
+  // material really carries those colours -- a fixture that was encoded, decoded and drawn has been
+  // through a lossy codec twice before an export touches it.
+  await test("the fixture carries the colours the checks expect of it", async () => {
+    const source = new R.VideoSource("master");
+    const step = SECOND / 30;
+    const read = [];
+    try {
+      await source.open(hash);
+      for (let index = 0; index < 15; index += 1) {
+        const frame = await source.frameAt(index * step);
+        read.push(frame === undefined ? "missing" : pixelOfFrame(frame));
+        source.release();
+      }
+    } finally {
+      source.close();
+    }
+    // What the container really says the frames sit at. The export asks for instants on the
+    // project's own grid -- exact multiples of a frame in flicks -- and picks the frame whose span
+    // covers one. Where a container's time base cannot express 1/30 exactly, those two grids drift
+    // apart, and the pick lands one frame early.
+    const stamps = [];
+    const input = new R.Input({ formats: R.ALL_FORMATS, source: new R.BlobSource(await R.mediaBlob(hash)) });
+    try {
+      const sink = new R.VideoSampleSink(await input.getPrimaryVideoTrack());
+      let seen = 0;
+      for await (const sample of sink.samples()) {
+        if (seen < 6) stamps.push(Number(sample.timestamp.toFixed(9)));
+        seen += 1;
+        sample.close();
+        if (seen >= 6) break;
+      }
+    } finally {
+      input.dispose();
+    }
+    // What the export asks the source for, at the first six instants of its own grid. If these are
+    // not exact multiples of a frame, the pick lands on the frame before.
+    // The same thirty instants the export writes, rendered here instead: same compositor, same
+    // source, same core -- everything but the worker and the encoder. Where these are right and the
+    // file is wrong, the picture was chosen correctly and lost afterwards.
+    const stills = await R.renderStills({
+      project: doc.state,
+      sourceTimes: doc.sourceTimesAt,
+      effectParams: doc.effectParamsAt,
+      transforms: doc.transformsAt,
+      times: R.frameTimes({ from: 0, to: SECOND }, FPS),
+      width: WIDTH,
+      height: HEIGHT,
+    });
+    const drawn = [];
+    for (const still of stills) drawn.push((await readStill(still, WIDTH / 2, HEIGHT / 2)).pixel.slice(0, 3));
+    check("the same instants rendered here carry the same ramp",
+      drawn, Array.from({ length: OUTPUT_FRAMES }, (_, index) => expectedAt(index)), 12);
+
+    check("every instant has a picture", read.filter((one) => one === "missing").length, 0);
+    check("and the ramp is the one it was painted with",
+      read, Array.from({ length: 15 }, (_, index) => colourAt(index)), 12);
+  });
+
+  // The same export, on this thread. Same frames, same compositor, same encoder -- everything but
+  // the worker. Where this is right and the worker's file is wrong, the difference belongs to the
+  // thread rather than to the render.
+  await test("an export on this thread carries the ramp", async () => {
+    const bytes = await R.runExport({
+      project: doc.state,
+      format: chosen ?? R.EXPORT_FORMATS[0],
+      width: WIDTH,
+      height: HEIGHT,
+      fps: FPS,
+      videoBitrate: 4_000_000,
+      audioBitrate: 128_000,
+      frames: R.exportFrames({
+        project: doc.state,
+        sourceTimes: doc.sourceTimesAt,
+        effectParams: doc.effectParamsAt,
+        transforms: doc.transformsAt,
+        options: options(),
+      }),
+    });
+    const { frames } = await readBack(bytes);
+    check("one frame per instant", frames.length, OUTPUT_FRAMES);
+
+    // The same file, read through this package's own decoder instead of through  on a
+    // 2D canvas. Two readers disagreeing about one file is a reader's fault, not an export's.
+    const written = new File([bytes], "written.mp4", { type: chosen?.mimeType ?? "video/mp4" });
+    const writtenHash = await R.contentHash(written);
+    await R.putMedia(writtenHash, written);
+    const source = new R.VideoSource("master");
+    const ours = [];
+    try {
+      await source.open(writtenHash);
+      for (let index = 0; index < OUTPUT_FRAMES; index += 1) {
+        const frame = await source.frameAt(index * (SECOND / 30));
+        ours.push(frame === undefined ? "missing" : pixelOfFrame(frame));
+        source.release();
+      }
+    } finally {
+      source.close();
+    }
+    check("and our own decoder reads the same ramp out of it",
+      ours, Array.from({ length: OUTPUT_FRAMES }, (_, index) => expectedAt(index)), 12);
+    check("and every picture is the one of its instant",
+      frames.map((frame) => frame.pixel),
+      Array.from({ length: OUTPUT_FRAMES }, (_, index) => expectedAt(index)), 12);
+  });
 
   // The defect this exists for: a decoder works out of a fixed pool of surfaces, a frame it handed
   // out holds one until the cache closes it, and the cache was sized in bytes alone -- two hundred

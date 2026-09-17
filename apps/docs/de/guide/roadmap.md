@@ -98,15 +98,16 @@ zurück. Der erste Versuch — einfach weniger Bilder halten — beendete das Ei
 Keyframe-Interpolation, reproduzierbar. Daraus entstand die neue Prüfung: Die Uhr läuft, und das Bild
 muss ihr folgen.
 
-**Was noch fehlt, ist ein Fortschrittsbalken beim Laden aus einem Link.** Ein zehnminütiges Video ist
-ein Download, bei dem man mit einem Spinner und ohne Zahl wartet. `yt-dlp` meldet den Fortschritt auf
-seiner eigenen Ausgabe; bisher trägt ihn nichts bis in den Browser.
-
-**Eine Farbprüfung des Exports scheitert auf einer Maschine und läuft in der CI durch.** Verglichen
-wird jedes exportierte Bild mit der Farbe, die der Clip zu diesem Zeitpunkt liest; auf einer
-Windows-Workstation kommt die Rampe zu Plateaus verflacht zurück, bei jedem Lauf identisch, und auf
-demselben Commit ist die CI grün. Der Fehler ist älter als die Decoder-Arbeit — er tritt auch auf dem
-Stand davor auf — und noch nicht verstanden.
+**Die Farbprüfung des Exports, die auf einer Maschine scheiterte, war der Encoder — bei einer Größe,
+die man keinem Encoder zumuten sollte.** Verglichen wird jedes exportierte Bild mit der Farbe, die der
+Clip zu diesem Zeitpunkt liest; auf einer Windows-Workstation kamen sechs von dreißig als das Bild
+davor zurück, bei jedem Lauf dieselben sechs, in der CI grün. Es lohnte, das bis zum Ende zu verfolgen,
+denn die ersten sechs Erklärungen waren alle falsch: nicht die Quelle (sie liefert zu jedem Zeitpunkt
+das richtige Bild), nicht der Renderer (dieselben Zeitpunkte als Standbilder sind exakt), nicht der
+Worker (ein Export auf dem Hauptthread wiederholt dieselben sechs), nicht die Bitrate, nicht der Codec,
+nicht das Zurücklesen (zwei unabhängige Decoder sind sich über die Datei einig). Übrig bleibt der
+Encoder, und die Testdatei war 160×120 — unterhalb dessen, was ein Hardware-H.264-Encoder unter Windows
+ehrlich verarbeitet. Bei 320×240 ist derselbe Lauf exakt, und genau damit läuft der Prüfstand jetzt.
 
 **Keiner von denen, mit denen diese Seite anfing.** Die Effektbibliothek war gar nicht kaputt: sie
 zeichnet ihre Kacheln eine nach der anderen, und der Editor gab den ganzen Satz erst am Ende weiter —

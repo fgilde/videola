@@ -6,3 +6,5 @@ allowBuilds:
   # its install script only re-resolves that same binary, so skipping it costs nothing and keeps
   # the workspace free of post-install scripts.
   esbuild: false
+minimumReleaseAgeExclude:
+  - mediabunny@1.58.0
