@@ -78,6 +78,36 @@ needs no new model, only one command sequence and one gesture.
 
 ## Open defects
 
+**The preview froze after half a second on any machine with a hardware decoder, and that was three
+bugs wearing one coat.** A decoder works out of a fixed pool of surfaces and every frame it hands out
+holds one until it is closed; the frame cache is sized in bytes -- two hundred and ninety-one frames
+of 640x360 -- so a cache doing exactly what it was built for took every surface the decoder had. It
+does not fail when that happens. It stops producing, the generator never yields again, and the paint
+loop waits on a frame that is not coming for the rest of the session: the picture freezes, the clock
+runs on, and every later edit -- a move, a rotation, a scale -- draws nothing at all. Nothing reaches
+the console. Measured on Windows with a hardware H.264 decoder: the twenty-first frame. Nothing in CI
+has such a decoder, which is why five hundred checks and three harnesses never saw it.
+
+Fixed by decoupling: the cache holds copies of its own and gives the decoder its surfaces straight
+back. The first attempt -- keeping fewer frames -- ended the freeze and broke keyframe interpolation,
+deterministically, which is how the harness earned its new check: the clock runs and the picture has
+to follow it.
+
+**What is still missing is a progress bar on a fetch.** A link to a ten minute video is a download
+somebody waits for with a spinner and no number. `yt-dlp` reports progress on its own output; nothing
+carries it to the browser yet.
+
+**A native audio context is a scarce resource, and the audio tests sit at the edge of it.** A fourth
+`OfflineAudioContext` in one test file takes the vitest worker down with it. One check was rewritten to
+need three; the others have not been counted, and a suite that grows into a fifth will fail as a
+mysterious CI-only assertion rather than as a crash.
+
+**An export colour check fails on one machine and passes in CI.** Every exported frame is compared
+against the colour the clip reads at that instant; on a Windows workstation the comparison comes back
+with the ramp flattened into plateaus, identically on every run, and on the same commit CI is green.
+It predates the decoder work -- the same failure appears on the tree as it stood before any of it --
+and it is not understood yet.
+
 **None of the ones this page opened with.** The effect shelf turned out not to be broken at all: it
 draws its tiles one at a time, and the editor only handed the whole set over at the end -- so a grid
 that was filling in and a grid that never would looked identical from outside, for three releases. The

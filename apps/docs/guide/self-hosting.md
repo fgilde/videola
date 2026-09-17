@@ -145,6 +145,32 @@ ReadWritePaths=/var/lib/videola
 One writable path, and nothing else the machine offers. A video editor has no business with a device, a
 kernel module or somebody else's home directory.
 
+## Adding material from a link
+
+A link is not a file, and a browser may not read another origin's video. So the server does it, with
+[yt-dlp](https://github.com/yt-dlp/yt-dlp): **File → Add from a link …** takes an address or a search,
+shows what it found with thumbnails, and lets you pick picture and sound or sound alone, the format
+and a maximum height. What comes back is imported exactly like a file somebody dropped on the window.
+
+The image carries `yt-dlp` and `ffmpeg`. Anywhere else, install both and the server finds them on
+`PATH`; `VIDEOLA_YTDLP` points at a different binary. Without them every other part of the editor
+works and the dialogue says this server cannot fetch, rather than failing halfway into a download.
+
+```bash
+curl "localhost:7331/api/fetch/ready" -H "authorization: Bearer $VIDEOLA_TOKEN"
+curl "localhost:7331/api/fetch/search?q=chopin" -H "authorization: Bearer $VIDEOLA_TOKEN"
+curl -X POST "localhost:7331/api/fetch?url=https://…&kind=video&format=mp4&quality=1080" \
+  -H "authorization: Bearer $VIDEOLA_TOKEN" -o clip.mp4
+```
+
+**Only where it may go.** A server that fetches whatever it is handed is a way into the network it
+runs on, so the address a link really resolves to is checked first, and one that lands on a private,
+loopback or link-local address is refused — the address a cloud instance keeps its credentials at
+included.
+
+**Only material you hold the rights to.** No software can tell your own talk from somebody else's
+film, and this one does not try. It is a downloader on a machine you run.
+
 ## Publishing destinations
 
 A finished video's last step is usually not "a file in the downloads folder". A destination is a place

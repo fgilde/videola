@@ -280,6 +280,16 @@ on Linux is exactly that browser.
 Every export in CI is handed to `ffprobe` and `ffmpeg`, which share no code with this project, and
 the decoded result is compared frame by frame against what went in.
 
+## Material from a link
+
+**Add from a link** takes an address or a search, shows what it found with thumbnails, and lets you
+choose picture and sound or sound alone, the format and a maximum height. What arrives is an ordinary
+medium in the library: hashed into storage, probed, ready for a track.
+
+It needs [a server of your own](/guide/self-hosting) with `yt-dlp` on it, because a page may not read
+another origin's video — and it is for material you hold the rights to. A link is resolved before it
+is fetched and refused if it points into the server's own network.
+
 ## Templates
 
 ![The template gallery: thirteen cards in five categories, each one a still rendered from the template itself](/editor-templates.webp)

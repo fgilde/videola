@@ -307,6 +307,18 @@ statt auf halbem Weg zu scheitern — Chrome unter Linux ist genau dieser Browse
 Jeder Export in der CI wird an `ffprobe` und `ffmpeg` übergeben, die keine Zeile mit diesem Projekt
 teilen, und das dekodierte Ergebnis Bild für Bild mit dem verglichen, was hineinging.
 
+## Material aus einem Link
+
+**Aus einem Link hinzufügen** nimmt eine Adresse oder eine Suche, zeigt die Treffer mit
+Vorschaubildern und lässt Bild und Ton oder nur Ton wählen, dazu Format und Höchsthöhe. Was ankommt,
+ist ein ganz normales Medium in der Bibliothek: gehasht in den Speicher, geprüft, bereit für eine
+Spur.
+
+Dafür braucht es [einen eigenen Server](/de/guide/self-hosting) mit `yt-dlp` darauf, denn eine Seite
+darf das Video einer fremden Herkunft nicht lesen — und es ist für Material gedacht, an dem Sie die
+Rechte haben. Wohin ein Link wirklich zeigt, wird vorher geprüft; zeigt er ins eigene Netz des
+Servers, wird er abgelehnt.
+
 ## Vorlagen
 
 ![Die Vorlagengalerie: dreizehn Karten in fünf Kategorien, jede ein aus der Vorlage selbst gerendertes Standbild](/editor-templates.webp)

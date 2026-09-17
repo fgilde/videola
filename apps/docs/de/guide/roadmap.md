@@ -82,6 +82,32 @@ Schritt der Historie — das braucht kein neues Modell, nur eine Befehlsfolge un
 
 ## Offene Fehler
 
+**Die Vorschau fror auf jeder Maschine mit Hardware-Decoder nach einer halben Sekunde ein — und das
+waren drei Fehler in einem Mantel.** Ein Decoder arbeitet aus einem festen Vorrat an Bildpuffern, und
+jedes Bild, das er herausgibt, belegt einen davon, bis es geschlossen wird. Der Frame-Cache ist in
+Bytes bemessen — 291 Bilder à 640×360 —, also nimmt ein Cache, der genau das tut, wofür er gebaut ist,
+dem Decoder alle Puffer weg. Er meldet dann nichts. Er hört auf zu liefern, der Generator gibt nie
+wieder etwas heraus, und die Malschleife wartet für den Rest der Sitzung auf ein Bild, das nicht
+kommt: Bild eingefroren, Uhr läuft weiter, und jede spätere Änderung — verschieben, drehen,
+skalieren — zeichnet gar nichts mehr. In der Konsole steht nichts. Gemessen unter Windows mit einem
+Hardware-H.264-Decoder: das einundzwanzigste Bild. In der CI gibt es keinen solchen Decoder, weshalb
+fünfhundert Prüfungen und drei Prüfstände ihn nie gesehen haben.
+
+Behoben durch Entkopplung: Der Cache hält eigene Kopien und gibt dem Decoder seine Puffer sofort
+zurück. Der erste Versuch — einfach weniger Bilder halten — beendete das Einfrieren und zerlegte die
+Keyframe-Interpolation, reproduzierbar. Daraus entstand die neue Prüfung: Die Uhr läuft, und das Bild
+muss ihr folgen.
+
+**Was noch fehlt, ist ein Fortschrittsbalken beim Laden aus einem Link.** Ein zehnminütiges Video ist
+ein Download, bei dem man mit einem Spinner und ohne Zahl wartet. `yt-dlp` meldet den Fortschritt auf
+seiner eigenen Ausgabe; bisher trägt ihn nichts bis in den Browser.
+
+**Eine Farbprüfung des Exports scheitert auf einer Maschine und läuft in der CI durch.** Verglichen
+wird jedes exportierte Bild mit der Farbe, die der Clip zu diesem Zeitpunkt liest; auf einer
+Windows-Workstation kommt die Rampe zu Plateaus verflacht zurück, bei jedem Lauf identisch, und auf
+demselben Commit ist die CI grün. Der Fehler ist älter als die Decoder-Arbeit — er tritt auch auf dem
+Stand davor auf — und noch nicht verstanden.
+
 **Keiner von denen, mit denen diese Seite anfing.** Die Effektbibliothek war gar nicht kaputt: sie
 zeichnet ihre Kacheln eine nach der anderen, und der Editor gab den ganzen Satz erst am Ende weiter —
 ein Gitter, das sich füllt, und eines, das nie fertig wird, sahen von außen gleich aus, drei Ausgaben

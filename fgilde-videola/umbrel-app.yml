@@ -3,7 +3,7 @@ id: fgilde-videola
 name: Videola
 tagline: Cut, grade, mix and export video in your browser
 category: media
-version: "0.9.2"
+version: "0.9.3"
 port: 7331
 description: >-
   A video editor that runs in a browser and keeps its project model, its command bus and its file format
@@ -33,9 +33,11 @@ gallery:
   - 2.png
   - 3.png
 releaseNotes: >-
-  Motion blur that is really motion, spectral noise reduction, surround, scene detection, and an effect
-  chain that can finally be operated: effects can be removed and bypassed, clips switched off and
-  renamed, tracks resized.
+  The preview no longer freezes on a machine with a hardware decoder — it held every surface the
+  decoder had, and the decoder stopped producing without a word. Pictures are media now, so a
+  watermark is a PNG. Material can be added from a link, with search and thumbnails. Save and save as
+  write back into the file you opened, empty tracks can be deleted, and a colour field or a gradient
+  can be inserted like a title.
 dependencies: []
 path: ""
 defaultUsername: ""

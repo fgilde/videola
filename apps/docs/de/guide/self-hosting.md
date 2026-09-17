@@ -148,6 +148,35 @@ ReadWritePaths=/var/lib/videola
 Ein beschreibbarer Pfad und nichts anderes, was die Maschine anbietet. Ein Videoeditor hat mit einem
 Gerät, einem Kernelmodul oder dem Heimatverzeichnis eines anderen nichts zu schaffen.
 
+## Material aus einem Link
+
+Ein Link ist keine Datei, und eine Seite darf das Video einer fremden Herkunft nicht lesen. Also
+macht es der Server, mit [yt-dlp](https://github.com/yt-dlp/yt-dlp): **Datei → Aus einem Link
+hinzufügen …** nimmt eine Adresse oder eine Suche, zeigt die Treffer mit Vorschaubildern und lässt
+Bild und Ton oder nur Ton, das Format und eine Höchsthöhe wählen. Was zurückkommt, wird importiert
+wie eine Datei, die jemand auf das Fenster gezogen hat.
+
+Das Image bringt `yt-dlp` und `ffmpeg` mit. Überall sonst: beides installieren, der Server findet es
+über `PATH`; `VIDEOLA_YTDLP` zeigt auf ein anderes Binary. Ohne die beiden funktioniert alles andere
+im Editor, und der Dialog sagt, dass dieser Server nicht laden kann — statt mitten im Download zu
+scheitern.
+
+```bash
+curl "localhost:7331/api/fetch/ready" -H "authorization: Bearer $VIDEOLA_TOKEN"
+curl "localhost:7331/api/fetch/search?q=chopin" -H "authorization: Bearer $VIDEOLA_TOKEN"
+curl -X POST "localhost:7331/api/fetch?url=https://…&kind=video&format=mp4&quality=1080" \
+  -H "authorization: Bearer $VIDEOLA_TOKEN" -o clip.mp4
+```
+
+**Nur dorthin, wo er hindarf.** Ein Server, der alles lädt, was man ihm hinhält, ist ein Weg in das
+Netz, in dem er steht. Deshalb wird zuerst geprüft, auf welche Adresse ein Link wirklich zeigt, und
+eine private, Loopback- oder Link-Local-Adresse wird abgelehnt — die Adresse eingeschlossen, unter
+der eine Cloud-Instanz ihre Zugangsdaten hält.
+
+**Nur Material, an dem Sie die Rechte haben.** Keine Software kann Ihren eigenen Vortrag vom Film
+eines anderen unterscheiden, und diese versucht es nicht. Es ist ein Downloader auf einer Maschine,
+die Sie betreiben.
+
 ## Veröffentlichungsziele
 
 Der letzte Schritt eines fertigen Videos ist selten „eine Datei im Download-Ordner". Ein Ziel ist ein
