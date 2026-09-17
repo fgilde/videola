@@ -59,6 +59,11 @@ export async function scanForCuts(request: ScanRequest): Promise<Time[]> {
       const frame = await source.frameAt(at);
       if (frame === undefined) continue;
       const signature = frameSignature(ctx, frame);
+      // Read, and done with. A frame handed out holds one of the decoder's surfaces until the cache
+      // is free to close it, and a scan walks every frame of a clip: without this the decoder runs
+      // out of surfaces partway through and stops producing, and the scan waits on a frame that is
+      // never coming.
+      source.release();
       if (previous !== undefined) {
         distances.push(signatureDistance(previous, signature));
         times.push(at);

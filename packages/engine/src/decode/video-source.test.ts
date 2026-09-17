@@ -6,6 +6,7 @@ import { installFakeOpfs } from "@videola/media/src/fake-opfs";
 
 import { NTSC_FIXTURE, tinyMp4 } from "./fixture-mp4";
 import {
+  detached,
   heldIndexAt,
   insertHeld,
   lastStartingAtOrBefore,
@@ -277,5 +278,98 @@ describe("lastStartingAtOrBefore", () => {
 
   it("reports the last entry beyond the end", () => {
     expect(lastStartingAtOrBefore(held, 99)).toBe(3);
+  });
+});
+
+// A decoder works out of a fixed pool of surfaces, and a frame it handed out holds one of them
+// until it is closed. None of that is visible from jsdom; what is testable here is the bargain this
+// function makes -- one picture in, a different picture out, and the first one given back whatever
+// happens. That the decoder then goes on producing is the export harness's to show.
+describe("detached", () => {
+  interface Fake {
+    bitmaps: number;
+    closedBitmaps: number;
+  }
+
+  function stubCopying(): Fake {
+    const fake: Fake = { bitmaps: 0, closedBitmaps: 0 };
+    vi.stubGlobal("createImageBitmap", async () => {
+      fake.bitmaps += 1;
+      return {
+        close: () => {
+          fake.closedBitmaps += 1;
+        },
+      };
+    });
+    vi.stubGlobal(
+      "VideoFrame",
+      class {
+        constructor(
+          public from: unknown,
+          public init: { timestamp: number; duration?: number },
+        ) {}
+        close(): void {
+          return undefined;
+        }
+      },
+    );
+    return fake;
+  }
+
+  function fromDecoder(): { frame: VideoFrame; closed: () => boolean } {
+    let closed = false;
+    const frame = {
+      timestamp: 4200,
+      duration: 33367,
+      close: () => {
+        closed = true;
+      },
+    };
+    return { frame: frame as unknown as VideoFrame, closed: () => closed };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("gives the decoder its surface back and hands out a picture of our own", async () => {
+    const fake = stubCopying();
+    const original = fromDecoder();
+
+    const copy = await detached(original.frame);
+
+    expect(fake.bitmaps).toBe(1);
+    expect(copy).not.toBe(original.frame);
+    expect(original.closed()).toBe(true);
+  });
+
+  it("keeps the instant the frame was decoded at", async () => {
+    stubCopying();
+
+    const copy = (await detached(fromDecoder().frame)) as unknown as {
+      init: { timestamp: number; duration?: number };
+    };
+
+    expect(copy.init).toEqual({ timestamp: 4200, duration: 33367 });
+  });
+
+  it("closes the bitmap it copied through rather than leaving it to the collector", async () => {
+    const fake = stubCopying();
+
+    await detached(fromDecoder().frame);
+
+    expect(fake.closedBitmaps).toBe(1);
+  });
+
+  it("gives the surface back even when the copy cannot be made", async () => {
+    stubCopying();
+    vi.stubGlobal("createImageBitmap", async () => {
+      throw new Error("no bitmap today");
+    });
+    const original = fromDecoder();
+
+    await expect(detached(original.frame)).rejects.toThrow("no bitmap today");
+
+    expect(original.closed()).toBe(true);
   });
 });

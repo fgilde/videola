@@ -595,6 +595,44 @@ async function main() {
   // From here on the proxy is a lie about the material. Nothing that writes a file may read it.
   await R.putProxy(hash, await makePoisonedProxy());
 
+  // The defect this exists for: a decoder works out of a fixed pool of surfaces, a frame it handed
+  // out holds one until the cache closes it, and the cache was sized in bytes alone -- two hundred
+  // and ninety-one frames of 640x360. On a machine with a hardware decoder the twenty-first frame
+  // never arrived: no error, no rejected promise, the paint loop waiting on it for the rest of the
+  // session while the clock ran on. Nothing in a headless runner has such a decoder, so what is
+  // checked here is the rule that keeps it from happening rather than the freeze itself.
+  await test("the cache holds only what a decoder can spare", async () => {
+    const source = new R.VideoSource("master");
+    const step = SECOND / 30;
+    let arrived = 0;
+    try {
+      await source.open(hash);
+      for (let index = 0; index < OUTPUT_FRAMES; index += 1) {
+        const frame = await Promise.race([
+          source.frameAt(index * step),
+          new Promise((resolve) => setTimeout(() => resolve("never came back"), 4000)),
+        ]);
+        if (frame === "never came back") break;
+        arrived += 1;
+        // What playback, the export and the scan all do once they have drawn.
+        source.release();
+      }
+      check("every frame of the fixture arrives", arrived, OUTPUT_FRAMES);
+      // The fingerprint of the copy: every decoder within reach of this program hands out planar
+      // frames, and a picture that went through an `ImageBitmap` is packed. A cache holding the
+      // decoder's own frames would read I420 here -- and would be holding its surfaces.
+      const held = await source.frameAt(0);
+      check("and what the cache holds is not a decoder's own frame",
+        ["I420", "I420A", "I422", "I444", "NV12"].includes(held.format), false);
+      check("and the decoder really produced them", source.framesDecoded, OUTPUT_FRAMES);
+      // Every one of them still held: the cache is sized in bytes and these are its own pictures,
+      // not the decoder's -- which is exactly why the decoder could go on producing.
+      check("with every picture still in the cache", source.framesHeld, OUTPUT_FRAMES);
+    } finally {
+      source.close();
+    }
+  });
+
   await test("the poisoned proxy is what the preview now shows", async () => {
     const source = new R.VideoSource("preview");
     try {

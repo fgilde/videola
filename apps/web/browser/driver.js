@@ -341,6 +341,24 @@ async function announce() {
     return sum / (pixels.length / 4) / 3;
   }
 
+  // A few pixels spread across the picture, as one string. `luma` averages the whole frame and a
+  // mean over real footage can sit within half a unit for a second at a time -- which reads as a
+  // frozen picture when the picture is moving. Points do not average out.
+  function signature() {
+    const canvas = q(".v-preview__canvas");
+    const gl = canvas.getContext("webgl2");
+    if (gl === null) return "no context";
+    const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+    gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    const at = (x, y) => {
+      const start = (Math.floor(y) * canvas.width + Math.floor(x)) * 4;
+      return `${pixels[start]},${pixels[start + 1]},${pixels[start + 2]}`;
+    };
+    return [0.2, 0.4, 0.6, 0.8]
+      .map((part) => at(canvas.width * part, canvas.height * part))
+      .join(" ");
+  }
+
   // A right click, and the entry it brings up. The menu is a real one -- role="menu" with buttons in
   // it -- so an entry is found by its words like every other control here.
   function contextMenu(target) {
@@ -1212,6 +1230,7 @@ async function announce() {
     await soundAndChain();
     await namedAndSized();
     await stills();
+    await fromALink();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
@@ -1252,7 +1271,23 @@ async function announce() {
     checkAtLeast("the edit is wider than the window to follow across it",
       q("[data-clip-id]").getBoundingClientRect().width / surface.clientWidth, 1.5);
     const stood = surface.scrollLeft;
-    await sleep(1200);
+    // What playing looks like from outside: the clock moves and the picture with it. Sampled
+    // together over the same stretch, because those are two different failures -- a playhead that
+    // stands still is a transport fault, and a playhead that runs under a picture that does not is
+    // a paint that stopped being asked or stopped answering.
+    const seen = [];
+    for (let sample = 0; sample < 10; sample += 1) {
+      await sleep(120);
+      seen.push({ at: position(), picture: signature() });
+    }
+    const pictures = new Set(seen.map((entry) => entry.picture));
+    const clocks = new Set(seen.map((entry) => entry.at));
+    checkAtLeast(`the clock runs while playing (${[...clocks].join(" ")})`, clocks.size, 5);
+    // The defect this is here for: a decoder whose surfaces are all held stops producing, and the
+    // paint loop waits on a frame that never comes. From outside, the clock runs on under a picture
+    // that never changes again -- and every edit made afterwards draws nothing either.
+    checkAtLeast(`and the picture follows it (${pictures.size} of ${seen.length} differ)`,
+      pictures.size, 3);
     checkAtLeast("the view pages ahead to keep a running playhead on screen",
       surface.scrollLeft - stood, 1);
     const after = position();
@@ -1434,12 +1469,12 @@ async function announce() {
     };
     check("the file title holds what a file title holds",
       under("Datei"),
-      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Speichern", "Medien importieren",
-       "Untertitel importieren", "Exportieren", "Weitergeben …",
-       "Veröffentlichungsziele …"]);
+      ["Neues Projekt", "Aus Vorlage", "Öffnen", "Speichern", "Speichern unter …",
+       "Projekt als Vorlage speichern", "Medien importieren", "Aus einem Link hinzufügen …",
+       "Untertitel importieren", "Exportieren", "Weitergeben …", "Veröffentlichungsziele …"]);
     check("and the rest sit where they belong",
       [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
-      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 5,
+      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 7,
        ["Tastenkürzel", "Über Videola"]]);
     checkAtLeast("with rows a thumb can hit",
       Math.min(...all(".v-topbar__group[open] .v-topbar__group-items button")
@@ -1869,8 +1904,12 @@ async function announce() {
     await sleep(100);
     check("and going back brings the rest with it", all("[data-template-id]").length, 15);
 
+    // In the gallery, where the question is whether this project has anything to ask about. The
+    // same words are a line in the File menu now, and that one is merely disabled -- so this looks
+    // inside the dialogue rather than at every button on the page.
     check("an untouched project is not worth saving as a template",
-      labelled("Projekt als Vorlage speichern"), undefined);
+      [...q(".v-templates").querySelectorAll("button")]
+        .some((node) => node.textContent.trim() === "Projekt als Vorlage speichern"), false);
 
     // The card is the button. A picture with a control under it makes the largest thing on the
     // screen the one part that does nothing.
@@ -2655,6 +2694,21 @@ async function announce() {
     check("undo takes the still back out", all("[data-clip-id]").length, clips);
     toStart();
     await sleep(200);
+  }
+
+  // Material from a link, which only a server can fetch. There is no server behind this run, so what
+  // is checked is the half that belongs to the editor: the entry is in the File menu, the dialogue
+  // opens, and it says plainly that this install cannot fetch instead of offering a field that was
+  // never going to work.
+  async function fromALink() {
+    pickMenu("Aus einem Link hinzufügen …");
+    const dialog = await until("the link dialogue", () => q('[data-testid="fetch-dialog"]'));
+    check("opening it raised nothing", banner(), "");
+    await until("the answer about this server", () => q('[data-testid="fetch-unavailable"]'));
+    check("and the field is not offered where nothing can be fetched",
+      dialog.querySelector('input[type="text"]').disabled, true);
+    labelled("Schließen").click();
+    await until("the dialogue to close", () => (q('[data-testid="fetch-dialog"]') === null ? true : null));
   }
 
   async function dropFixture() {

@@ -2,6 +2,7 @@ const BYTES_PER_PIXEL = 4;
 
 export const DEFAULT_FRAME_BUDGET_BYTES = 256 * 1024 * 1024;
 
+
 // The one place in the program that owns decoded frames, and therefore the only place that closes
 // them. A VideoFrame holds GPU or system memory the collector never reclaims, so every path that
 // drops one -- eviction, overwrite, clear -- closes it here and nowhere else. Closing a frame a
@@ -9,6 +10,10 @@ export const DEFAULT_FRAME_BUDGET_BYTES = 256 * 1024 * 1024;
 //
 // The budget is in bytes, not entries: a 4K frame is sixteen times a 540p frame, and a cache
 // counted in entries is sized for one of them and wrong for the other.
+//
+// Nothing in here is a decoder's surface. That is `VideoSource`'s bargain rather than this class's,
+// and it is what lets this one hold as many frames as the budget allows: a cache of decoder output
+// would be limited by the decoder's pool, which is a driver's business and reported by no API.
 export class FrameCache {
   #budget: number;
   #frames = new Map<string, Entry>();

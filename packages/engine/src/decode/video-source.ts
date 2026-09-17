@@ -187,7 +187,7 @@ export class VideoSource {
         next.value.close();
         return;
       }
-      this.#keep(next.value);
+      await this.#keep(next.value);
     }
   }
 
@@ -212,15 +212,15 @@ export class VideoSource {
     this.#position = from;
   }
 
-  #keep(sample: VideoSample): void {
+  async #keep(sample: VideoSample): Promise<void> {
     const key = String(sample.microsecondTimestamp);
     const start = sample.timestamp;
     const end = start + sample.duration;
-    const frame = sample.toVideoFrame();
-    // The sample and the frame it yields hold separate handles. The cache owns the frame from
-    // the next line on and is the only thing that will ever close it.
+    const decoded = sample.toVideoFrame();
+    // The sample and the frame it yields hold separate handles. What `detached` returns is the
+    // cache's from the next line on, and the cache is the only thing that will ever close it.
     sample.close();
-    this.#cache.put(key, frame);
+    this.#cache.put(key, await detached(decoded));
     insertHeld(this.#held, { start, end, key });
     this.#position = end;
     this.#decoded += 1;
@@ -239,6 +239,39 @@ export class VideoSource {
     // learns the frame is gone.
     if (frame === undefined) this.#held.splice(index, 1);
     return frame;
+  }
+}
+
+/**
+ * The same picture, owned by this program rather than by the decoder.
+ *
+ * A decoder works out of a fixed pool of surfaces and every frame it hands out holds one of them
+ * until it is closed. The cache is sized in bytes -- two hundred and fifty-six megabytes, which is
+ * two hundred and ninety-one frames of 640x360 -- so a cache doing exactly what it was built to do
+ * takes every surface a decoder has. What follows is not an error: the decoder stops producing, the
+ * generator never yields again, and whoever was waiting on the next frame waits for the rest of the
+ * session. On a Windows machine with a hardware H.264 decoder that is the twenty-first frame -- the
+ * picture freezes half a second into playback, the clock runs on, every edit after it draws nothing,
+ * and the console stays empty.
+ *
+ * So nothing the cache holds is a decoder surface. It costs one copy per decoded frame, on the GPU,
+ * and it buys back the one resource no budget in this package could see. The alternative -- keeping
+ * fewer frames -- trades the freeze for a cache too small to scrub in, which is the same bug wearing
+ * a different hat.
+ */
+export async function detached(frame: VideoFrame): Promise<VideoFrame> {
+  try {
+    const bitmap = await createImageBitmap(frame);
+    try {
+      return new VideoFrame(bitmap, {
+        timestamp: frame.timestamp,
+        ...(frame.duration === null ? {} : { duration: frame.duration }),
+      });
+    } finally {
+      bitmap.close();
+    }
+  } finally {
+    frame.close();
   }
 }
 
