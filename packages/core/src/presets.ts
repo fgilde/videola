@@ -326,13 +326,15 @@ export function title(
 }
 
 /** Everything a person can put on the timeline that is not a medium. */
-export type InsertKind = TitleKind | "shape" | "countdown";
+export type InsertKind = TitleKind | "shape" | "countdown" | "colour" | "gradient";
 
 export const INSERT_KINDS: readonly InsertKind[] = [
   "lowerThird",
   "banner",
   "credits",
   "shape",
+  "colour",
+  "gradient",
   "countdown",
 ];
 
@@ -355,6 +357,29 @@ export function insert(kind: InsertKind, text: string): {
     // second is a clip showing nothing, which reads as a bug rather than as a pause.
     return {
       source: { kind: "generator", generator: { type: "countdown", fromSeconds: 3 } },
+      duration: secondsToTime(3),
+      track: "overlay",
+    };
+  }
+  // A full-frame colour and a full-frame ramp: the black a cut fades to, the ground a title stands
+  // on, the wash under a lower third. Both have been in the model since the first week and neither
+  // was reachable from the surface -- a generator whose only way in was a hand-written project file.
+  //
+  // On an overlay like every other picture that is not a medium: over the footage is where a fade or
+  // a wash belongs, and a ground for a title is the same clip dragged down a row.
+  if (kind === "colour") {
+    return {
+      source: { kind: "generator", generator: { type: "solid", color: "#000000" } },
+      duration: secondsToTime(3),
+      track: "overlay",
+    };
+  }
+  if (kind === "gradient") {
+    return {
+      source: {
+        kind: "generator",
+        generator: { type: "gradient", from: "#101828", to: "#3b6ea5", angle: 90 },
+      },
       duration: secondsToTime(3),
       track: "overlay",
     };

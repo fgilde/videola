@@ -735,6 +735,19 @@ export function Timeline({
                     −
                   </button>
                 </div>
+                {/* Beside the lock, because the two are the same kind of thing: what this row is,
+                    rather than what is on it. A track with clips on it goes with them and undo is
+                    one press -- the alternative was a row nobody could get rid of once its clips
+                    were gone. */}
+                <button
+                  type="button"
+                  className="v-timeline__remove"
+                  aria-label={t("track.remove", { name: track.name })}
+                  title={t("track.remove", { name: track.name })}
+                  onClick={() => dispatch(cmd.trackRemove(track.id))}
+                >
+                  <Icon name="trash" />
+                </button>
               </div>
             </div>
           ))}

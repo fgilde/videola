@@ -27,6 +27,8 @@ interface Reply {
   bytes?: Uint8Array;
   contentType?: string;
   cacheControl?: string;
+  /** What the thing is called where it came from, for a reply that is a file rather than an answer. */
+  filename?: string;
 }
 
 export function createRequestListener(options: HttpOptions): RequestListener {
@@ -188,6 +190,44 @@ async function route(
         contentType: request.headers["content-type"] ?? "video/mp4",
       });
       return { status: 200, body: published };
+    }
+    return notFound();
+  }
+  // Material from a link. Three routes rather than one: asking what a link is costs a second and
+  // fetching it costs a download, and a dialogue that could not tell them apart would make somebody
+  // wait for the second to find out the first.
+  if (segments[0] === "api" && segments[1] === "fetch") {
+    if (segments[2] === undefined && method === "POST") {
+      const link = url.searchParams.get("url") ?? "";
+      const medium = await api.fetchMedium({
+        url: link,
+        kind: url.searchParams.get("kind") === "audio" ? "audio" : "video",
+        format: url.searchParams.get("format") ?? "mp4",
+        quality: url.searchParams.get("quality") ?? "best",
+      });
+      // The bytes themselves, named the way the site named them: the editor imports what comes back
+      // exactly as it imports a file somebody dropped, and the name is what the library then shows.
+      return {
+        status: 200,
+        body: undefined,
+        bytes: medium.bytes,
+        contentType: medium.contentType,
+        filename: medium.filename,
+      };
+    }
+    if (segments[2] === "search" && method === "GET") {
+      const query = url.searchParams.get("q") ?? "";
+      return { status: 200, body: { results: await api.searchFor(query) } };
+    }
+    if (segments[2] === "describe" && method === "GET") {
+      const link = url.searchParams.get("url");
+      if (link === null || link.trim() === "") {
+        throw new ApiError(400, "badRequest", "describing a link needs a ?url=");
+      }
+      return { status: 200, body: await api.describeLink(link) };
+    }
+    if (segments[2] === "ready" && method === "GET") {
+      return { status: 200, body: await api.fetcher() };
     }
     return notFound();
   }
@@ -412,12 +452,28 @@ function errorReply(error: unknown): Reply {
   return { status: 500, body: { error: { code: "internal", message: text(error) } } };
 }
 
+/**
+ * What the file is called, in a header that may only carry one line of ASCII.
+ *
+ * A video title is whatever somebody typed into a website: umlauts, quotes, semicolons, emoji. Node
+ * refuses a header with any of it in, so the name goes out twice -- a plain one every client
+ * understands, and the real one in the encoding RFC 5987 defines for exactly this.
+ */
+function disposition(filename: string): string {
+  // eslint-disable-next-line no-control-regex
+  const plain = filename.replace(/[^\u0020-\u007e]/g, "_").replace(/["\\;]/g, " ").trim();
+  return `attachment; filename="${plain === "" ? "download" : plain}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 function send(response: ServerResponse, reply: Reply): void {
   if (reply.bytes !== undefined) {
     response.writeHead(reply.status, {
       "content-type": reply.contentType ?? "application/octet-stream",
       "content-length": String(reply.bytes.byteLength),
       ...(reply.cacheControl === undefined ? {} : { "cache-control": reply.cacheControl }),
+      ...(reply.filename === undefined
+        ? {}
+        : { "content-disposition": disposition(reply.filename) }),
     });
     response.end(Buffer.from(reply.bytes));
     return;

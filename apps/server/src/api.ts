@@ -9,6 +9,17 @@ import type { Command, DispatchResult, LoadWarning, Project } from "@videola/cor
 import type { DocumentBackend } from "@videola/core";
 
 import { Destinations, type NewDestination, type PublicDestination } from "./destinations";
+import {
+  describeVideo,
+  fetchMedium,
+  searchVideos,
+  ytDlp,
+  ytDlpVersion,
+  type FetchedMedium,
+  type FetchRequest,
+  type FoundVideo,
+  type RunYtDlp,
+} from "./fetch";
 import { measurePeaks, RenderError, renderStills, type AudioPeaks, type RenderCode } from "./frames";
 import { publish, type Fetch, type PublishResult } from "./publish";
 import { describeProject, validateProject, type Finding } from "./inspect";
@@ -70,6 +81,8 @@ export interface ApiOptions {
   readonly locale?: string;
   /** For the checks: what a publish would send, without sending it. */
   readonly fetch?: Fetch;
+  /** What runs `yt-dlp`. Injected for the same reason `fetch` is: a check needs neither. */
+  readonly ytdlp?: RunYtDlp;
 }
 
 // The one place that turns a request into core calls, shared verbatim by the HTTP routes and the
@@ -82,6 +95,7 @@ export class Api {
   #locale: string;
   #destinations: Destinations;
   #http: Fetch;
+  #ytdlp: RunYtDlp;
 
   constructor(options: ApiOptions) {
     this.#storage = new Storage(options.storageRoot);
@@ -91,6 +105,49 @@ export class Api {
     // Injected so a check can watch what would go over the wire, and so that a server nobody has
     // given credentials to still has a testable publish path.
     this.#http = options.fetch ?? fetch;
+    this.#ytdlp = options.ytdlp ?? ytDlp();
+  }
+
+  /**
+   * Material from a link, for a person who has the link rather than the file.
+   *
+   * Here and not in the browser because a page may not read another origin's video, and because the
+   * sites this reaches hand out a manifest rather than a file. The bytes go back to the editor and
+   * are imported there like anything else somebody dropped on the window.
+   */
+  async searchFor(query: string): Promise<FoundVideo[]> {
+    return await this.#fetching(() => searchVideos(query, this.#ytdlp));
+  }
+
+  async describeLink(url: string): Promise<FoundVideo> {
+    return await this.#fetching(() => describeVideo(url, this.#ytdlp));
+  }
+
+  async fetchMedium(request: FetchRequest): Promise<FetchedMedium> {
+    if (request.url.trim() === "") {
+      throw new ApiError(400, "badRequest", "a fetch needs a ?url=");
+    }
+    return await this.#fetching(() => fetchMedium(request, this.#ytdlp));
+  }
+
+  /** Whether this server can fetch at all, which is what a dialogue asks before it offers to. */
+  async fetcher(): Promise<{ available: boolean; version?: string }> {
+    const version = await ytDlpVersion(this.#ytdlp);
+    return version === undefined ? { available: false } : { available: true, version };
+  }
+
+  // One shape of failure for all three: the tool's own words, and a status that says the request
+  // was refused by what is behind this server rather than by this server.
+  async #fetching<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      const said = String((error as Error).message ?? error);
+      if (said.includes("not installed")) {
+        throw new ApiError(501, "noFetcher", said);
+      }
+      throw new ApiError(502, "fetchFailed", said);
+    }
   }
 
   storage(): Storage {

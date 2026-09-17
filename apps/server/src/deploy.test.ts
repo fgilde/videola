@@ -163,6 +163,15 @@ describe("what every deployment agrees on", () => {
 
   // The unit is the only part of a bundle install that outlives the script, so what it forbids matters
   // more than what it starts. One writable path, and nothing else the machine offers.
+  // "Add from a link" shells out to yt-dlp and hands the streams to ffmpeg. Neither is bundled --
+  // yt-dlp needs updating faster than any image is rebuilt -- so the image installs both, and a
+  // server without them says "not set up" rather than failing halfway into a download.
+  it("carries the two tools that fetching a link needs", () => {
+    const installs = DOCKERFILE.split("\n").filter((line) => line.includes("apk add")).join(" ");
+    expect(installs).toContain("yt-dlp");
+    expect(installs).toContain("ffmpeg");
+  });
+
   it("runs the service as a user that can write one directory", () => {
     expect(INSTALL).toContain("User=videola");
     expect(INSTALL).toContain("ProtectSystem=strict");

@@ -1,3 +1,12 @@
+export {
+  askWhereToSave,
+  canWriteFiles,
+  downloadProject,
+  openProjectFile,
+  projectFileName,
+  writeProjectFile,
+} from "./project-file";
+export type { OpenedProject } from "./project-file";
 export { contentHash } from "./hash";
 export { describeMedia, importFile } from "./import";
 export type {

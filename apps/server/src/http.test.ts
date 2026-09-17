@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { AddressInfo } from "node:net";
 
 import { cmd } from "@videola/core";
@@ -22,7 +22,40 @@ let base = "";
 
 let sent: { url: string; body: unknown }[] = [];
 
-async function start(options: Partial<HttpOptions> = {}, watched = false): Promise<void> {
+// A `yt-dlp` that answers out of this file rather than off the internet. Where the real one writes
+// a file into the directory it was handed, this one writes one too -- which is what lets the route
+// be checked the whole way, from a query string to the bytes the editor receives.
+let fetched: string[][] = [];
+
+function fakeYtDlp(answers: {
+  version?: string;
+  search?: unknown[];
+  describe?: unknown;
+  writes?: { name: string; bytes: Uint8Array };
+  fails?: string;
+}) {
+  return async (args: readonly string[]) => {
+    fetched.push([...args]);
+    if (answers.fails !== undefined) return { stdout: "", stderr: answers.fails, code: 1 };
+    if (args.includes("--version")) return { stdout: answers.version ?? "2026.01.01", stderr: "", code: 0 };
+    if (args.some((arg) => arg.startsWith("ytsearch"))) {
+      return { stdout: (answers.search ?? []).map((one) => JSON.stringify(one)).join("\n"), stderr: "", code: 0 };
+    }
+    if (args.includes("--dump-single-json")) {
+      return { stdout: JSON.stringify(answers.describe ?? {}), stderr: "", code: 0 };
+    }
+    const target = args[args.indexOf("-o") + 1] ?? "";
+    const written = answers.writes;
+    if (written !== undefined) await writeFile(join(dirname(target), written.name), written.bytes);
+    return { stdout: "", stderr: "", code: 0 };
+  };
+}
+
+async function start(
+  options: Partial<HttpOptions> = {},
+  watched = false,
+  ytdlp?: Parameters<typeof Api>[0]["ytdlp"],
+): Promise<void> {
   // A publish is an HTTP conversation with somebody else's server. Watched, it is a conversation with
   // this array -- which is the only way a check can say what a publish would do to a real account.
   const http = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -39,6 +72,7 @@ async function start(options: Partial<HttpOptions> = {}, watched = false): Promi
     storageRoot: root,
     maxProjects: 4,
     ...(watched ? { fetch: http } : {}),
+    ...(ytdlp === undefined ? {} : { ytdlp }),
   });
   server = createServer(createRequestListener({ api, ...options }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -48,6 +82,7 @@ async function start(options: Partial<HttpOptions> = {}, watched = false): Promi
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "videola-http-"));
   sent = [];
+  fetched = [];
 });
 
 afterEach(async () => {
@@ -541,5 +576,128 @@ describe("destinations", () => {
 
     expect(response.status).toBe(502);
     expect(JSON.stringify(await response.json())).toContain("invalid_grant");
+  });
+});
+
+describe("fetching material from a link", () => {
+  const FOUND = {
+    id: "abc123",
+    title: "Die Bühne",
+    duration: 61,
+    uploader: "Ein Kanal",
+    thumbnails: [{ url: "https://i.example/big.jpg" }],
+  };
+
+  it("says whether this server can fetch at all", async () => {
+    await start({}, false, fakeYtDlp({ version: "2026.08.31" }));
+
+    const { status, body } = await json("/api/fetch/ready");
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ available: true, version: "2026.08.31" });
+  });
+
+  it("says so plainly where the tool is not installed", async () => {
+    await start({}, false, async () => {
+      throw new Error("yt-dlp is not installed on this server");
+    });
+
+    const { body } = await json("/api/fetch/ready");
+
+    expect(body.available).toBe(false);
+  });
+
+  it("searches, and hands back what a dialogue needs to show a result", async () => {
+    await start({}, false, fakeYtDlp({ search: [FOUND] }));
+
+    const { status, body } = await json("/api/fetch/search?q=b%C3%BChne");
+
+    expect(status).toBe(200);
+    expect(body.results).toEqual([
+      {
+        id: "abc123",
+        title: "Die Bühne",
+        url: "https://www.youtube.com/watch?v=abc123",
+        duration: 61,
+        uploader: "Ein Kanal",
+        thumbnail: "https://i.example/big.jpg",
+      },
+    ]);
+    expect(fetched[0]?.some((arg) => arg === "ytsearch12:bühne")).toBe(true);
+  });
+
+  it("describes one link without downloading it", async () => {
+    await start({}, false, fakeYtDlp({ describe: { ...FOUND, webpage_url: "https://ok.test/v" } }));
+
+    const { body } = await json("/api/fetch/describe?url=https%3A%2F%2Fok.test%2Fv");
+
+    expect(body.title).toBe("Die Bühne");
+    expect(fetched[0]).toContain("--dump-single-json");
+  });
+
+  it("refuses a link into the server's own network", async () => {
+    await start({}, false, fakeYtDlp({}));
+
+    const { status, body } = await json("/api/fetch/describe?url=http%3A%2F%2F127.0.0.1%2Fadmin");
+
+    expect(status).toBe(502);
+    expect(body.error.message).toContain("own network");
+    // Refused before anything ran: a downloader that reaches the address first has already been
+    // used as a way in, whatever it reports afterwards.
+    expect(fetched).toEqual([]);
+  });
+
+  it("hands the file back as bytes, named the way the site named it", async () => {
+    await start({}, false, fakeYtDlp({ writes: { name: "Die Bühne.mp4", bytes: new Uint8Array(MP4) } }));
+
+    const response = await fetch(
+      `${base}/api/fetch?url=https%3A%2F%2Fok.test%2Fv&kind=video&format=mp4&quality=720`,
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+    // Twice: a plain name for every client, and the real one in the encoding a header can carry.
+    // A title from a video site has umlauts, quotes and emoji in it, and Node refuses the header
+    // outright rather than mangling it.
+    expect(response.headers.get("content-disposition")).toContain(`filename="Die B_hne.mp4"`);
+    expect(response.headers.get("content-disposition")).toContain(
+      "filename*=UTF-8''" + encodeURIComponent("Die Bühne.mp4"),
+    );
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array(MP4));
+    const asked = fetched[0] ?? [];
+    expect(asked[asked.indexOf("-f") + 1]).toContain("height<=720");
+  });
+
+  it("asks for sound alone when sound is what was asked for", async () => {
+    await start({}, false, fakeYtDlp({ writes: { name: "ton.m4a", bytes: new Uint8Array([1, 2]) } }));
+
+    const response = await fetch(
+      `${base}/api/fetch?url=https%3A%2F%2Fok.test%2Fv&kind=audio&format=m4a&quality=best`,
+      { method: "POST" },
+    );
+
+    expect(response.headers.get("content-type")).toBe("audio/mp4");
+    expect(fetched[0]).toContain("--extract-audio");
+  });
+
+  it("passes the tool's own words on when a download fails", async () => {
+    await start({}, false, fakeYtDlp({ fails: "ERROR: Video unavailable" }));
+
+    const { status, body } = await json("/api/fetch?url=https%3A%2F%2Fok.test%2Fv", {
+      method: "POST",
+    });
+
+    expect(status).toBe(502);
+    expect(body.error.message).toBe("Video unavailable");
+  });
+
+  it("refuses a fetch with no link at all", async () => {
+    await start({}, false, fakeYtDlp({}));
+
+    const { status, body } = await json("/api/fetch", { method: "POST" });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("badRequest");
   });
 });

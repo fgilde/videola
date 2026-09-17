@@ -40,6 +40,12 @@ COPY --from=build /src/apps/server/dist/serve.mjs /src/apps/server/dist/mcp.mjs 
 COPY --from=build /src/packages/core/src/wasm/videola_core_bg.wasm /app/
 COPY --from=build /src/apps/web/dist /app/web
 
+# What "add from a link" runs, and the tool it hands the streams to. Both from Alpine's own
+# packages, so the image stays multi-arch: yt-dlp needs updating faster than this image is rebuilt,
+# and a container that is months old will say so rather than fail with a parse error nobody can read.
+# Without them the server answers "not set up" and everything else works exactly as before.
+RUN apk add --no-cache yt-dlp ffmpeg
+
 ENV NODE_ENV=production \
     VIDEOLA_HOST=0.0.0.0 \
     VIDEOLA_PORT=7331 \

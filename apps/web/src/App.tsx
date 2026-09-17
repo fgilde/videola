@@ -79,11 +79,17 @@ import {
   clearSession,
   importFile,
   importLut,
+  askWhereToSave,
+  canWriteFiles,
+  downloadProject,
   mediaForProject,
   mediaHash,
   missingMedia,
+  openProjectFile,
+  projectFileName,
   putMedia,
   readSession,
+  writeProjectFile,
   proxiesInUse,
   relinkMedia,
   // Not a React hook, whatever the name reads like on this side: the one switch that tells the
@@ -114,6 +120,7 @@ import {
   SourceBar,
   Stage,
   DestinationsDialog,
+  FetchDialog,
   TemplateAuthor,
   TemplateGallery,
   TemplateWizard,
@@ -138,6 +145,13 @@ import {
 
 import { effectTiles, revokeTiles } from "./effectTiles";
 import { useTemplatePosters } from "./posters";
+import {
+  describeLink,
+  fetchMedium,
+  fetchReady,
+  searchVideos,
+  type FoundVideo,
+} from "./fetching";
 import {
   addDestination,
   listDestinations,
@@ -308,7 +322,19 @@ export function App(): ReactElement {
   const [gallery, setGallery] = useState(false);
   const [handingOff, setHandingOff] = useState(false);
   const [authoring, setAuthoring] = useState(false);
+  // The file this project came from and goes back to, where the browser hands out a handle, and
+  // whether anything has happened since it was last written. Together they are the difference
+  // between an editor that downloads copies and one that saves a document.
+  const [file, setFile] = useState<{ handle?: FileSystemFileHandle; name: string }>();
+  const [unsaved, setUnsaved] = useState(false);
   const [managingDestinations, setManagingDestinations] = useState(false);
+  // Material from a link, which is a thing only a server can do. The dialogue asks whether this one
+  // can before it offers to, so nobody types a link into a field that was never going to work.
+  const [fetching, setFetching] = useState(false);
+  const [fetcher, setFetcher] = useState<{ available: boolean; version?: string }>();
+  const [found, setFound] = useState<readonly FoundVideo[]>([]);
+  const [fetchBusy, setFetchBusy] = useState<"searching" | "reading" | "fetching">();
+  const [fetchError, setFetchError] = useState<string>();
   const [connection, setConnection] = useState<Connection>(() => readConnection());
   const [destinations, setDestinations] = useState<readonly DestinationSummary[]>([]);
   const [destinationError, setDestinationError] = useState<string>();
@@ -418,6 +444,9 @@ export function App(): ReactElement {
     if (doc === undefined) return;
     return doc.subscribe((next) => {
       setProject(next);
+      // Every command is a change, which is what makes this honest: the mark goes up here and only
+      // comes down where the bytes really reached a file.
+      setUnsaved(true);
       // doc.warnings only ever narrows (media.remove is the one command that can clear a
       // "missing" entry) or stays put after load - but it does change, and #notify() in
       // document.ts already refreshes it before listeners run, so read it fresh here too instead
@@ -1036,28 +1065,73 @@ export function App(): ReactElement {
     }
   }, [doc, reportError]);
 
-  const save = useCallback(async () => {
-    if (doc === undefined || project === undefined) return;
+  // The bytes of the project as they would be written, gathered here because both ways out want
+  // exactly the same ones. The media live in OPFS since M1, so they are collected before the write:
+  // the core only holds what a `.videola` brought with it and falls back to those on its own.
+  const projectBytes = useCallback(async () => {
+    if (doc === undefined || project === undefined) return undefined;
+    const now = new Date().toISOString();
+    const media = await mediaForProject(project);
+    return doc.save(
+      { appVersion: APP_VERSION, created: now, modified: now, locale: navigator.language },
+      media,
+    );
+  }, [doc, project]);
+
+  /**
+   * Save, in the sense every other editor means it: back into the file this project came from.
+   *
+   * Where the browser gives out no handle -- Firefox, Safari -- there is nowhere to write back to
+   * and this is the download it always was. The difference is not hidden: the header says which
+   * file is open, or that there is none.
+   */
+  const saveTo = useCallback(
+    async (handle: FileSystemFileHandle | undefined) => {
+      if (project === undefined) return;
+      try {
+        const bytes = await projectBytes();
+        if (bytes === undefined) return;
+        const name = projectFileName(project.meta.title, project.meta.id);
+        if (handle === undefined) {
+          downloadProject(bytes, name);
+          setFile({ name });
+        } else {
+          await writeProjectFile(handle, bytes);
+          setFile({ handle, name: handle.name });
+        }
+        setUnsaved(false);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.saveFailed", err);
+      }
+    },
+    [project, projectBytes, reportError],
+  );
+
+  const saveAs = useCallback(async () => {
+    if (project === undefined) return;
+    if (!canWriteFiles()) {
+      await saveTo(undefined);
+      return;
+    }
     try {
-      const now = new Date().toISOString();
-      // The bytes live in OPFS since M1, so they have to be gathered before the write - the core
-      // only holds media a .videola brought with it, and falls back to those on its own.
-      const media = await mediaForProject(project);
-      const bytes = doc.save(
-        {
-          appVersion: APP_VERSION,
-          created: now,
-          modified: now,
-          locale: navigator.language,
-        },
-        media,
-      );
-      downloadBlob(bytes, `${project.meta.title || project.meta.id}.videola`);
-      setError(undefined);
+      const chosen = await askWhereToSave(projectFileName(project.meta.title, project.meta.id));
+      // Cancelled. Nothing was written and nothing is said: a dialogue somebody dismissed is an
+      // answer, and an error banner for it is the application arguing with them.
+      if (chosen === undefined) return;
+      await saveTo(chosen);
     } catch (err) {
       reportError("error.saveFailed", err);
     }
-  }, [doc, project, reportError]);
+  }, [project, saveTo, reportError]);
+
+  const save = useCallback(async () => {
+    if (file?.handle !== undefined) {
+      await saveTo(file.handle);
+      return;
+    }
+    await saveAs();
+  }, [file, saveAs, saveTo]);
 
   // Asked once the dialog opens and once per project size, because the answer depends on both the
   // machine and the resolution -- a 4K H.264 encode can be refused where 1080p is fine.
@@ -1179,10 +1253,14 @@ export function App(): ReactElement {
   }, []);
 
   const open = useCallback(async () => {
-    const file = (await pickFiles(".videola"))[0];
-    if (file === undefined) return;
     try {
-      adopt(new VideolaDocument(await createWasmBackend(new Uint8Array(await file.arrayBuffer()))));
+      const opened = await openProjectFile();
+      if (opened === undefined) return;
+      adopt(new VideolaDocument(await createWasmBackend(opened.bytes)));
+      // After `adopt`, which resets everything a project carries: the file it came from is part of
+      // that, and a save straight after opening has to land in this file rather than the last one.
+      setFile({ handle: opened.handle, name: opened.name });
+      setUnsaved(false);
     } catch (err) {
       reportError("error.openFailed", err);
     }
@@ -1895,6 +1973,23 @@ export function App(): ReactElement {
       onReframe={doc === undefined ? undefined : reframeInto}
       onNew={() => window.location.reload()}
       onTemplates={openGallery}
+      onSaveTemplate={
+        project !== undefined && hasClips(project) ? () => setAuthoring(true) : undefined
+      }
+      onSaveAs={doc === undefined ? undefined : () => void saveAs()}
+      onFetch={
+        doc === undefined
+          ? undefined
+          : () => {
+              setFetching(true);
+              setFetchError(undefined);
+              // Asked each time the dialogue opens rather than once at start-up: a server that had
+              // no `yt-dlp` this morning may have one now, and nobody should have to reload a tab
+              // to find that out.
+              void fetchReady(connection).then(setFetcher);
+            }
+      }
+      file={doc === undefined ? undefined : { name: file?.name, unsaved }}
       onOpen={() => void open()}
       onImportMedia={
         doc === undefined ? undefined : () => void pickFiles(MEDIA_ACCEPT).then(importMedia)
@@ -2202,6 +2297,60 @@ export function App(): ReactElement {
             })();
           }}
           onClose={() => setManagingDestinations(false)}
+        />
+      )}
+      {fetching && (
+        <FetchDialog
+          available={fetcher?.available}
+          results={found}
+          busy={fetchBusy}
+          error={fetchError}
+          onSearch={(query) => {
+            void (async () => {
+              setFetchError(undefined);
+              setFetchBusy("searching");
+              try {
+                setFound(await searchVideos(connection, query));
+              } catch (err) {
+                setFound([]);
+                setFetchError(String((err as Error).message ?? err));
+              } finally {
+                setFetchBusy(undefined);
+              }
+            })();
+          }}
+          onRead={(url) => {
+            void (async () => {
+              setFetchError(undefined);
+              setFetchBusy("reading");
+              try {
+                setFound([await describeLink(connection, url)]);
+              } catch (err) {
+                setFound([]);
+                setFetchError(String((err as Error).message ?? err));
+              } finally {
+                setFetchBusy(undefined);
+              }
+            })();
+          }}
+          onFetch={(choice) => {
+            void (async () => {
+              setFetchError(undefined);
+              setFetchBusy("fetching");
+              try {
+                // Through the ordinary import, which is the whole point: what arrives is hashed into
+                // OPFS, probed and placed like any file somebody dropped on the window.
+                await importMedia([await fetchMedium(connection, choice)]);
+                setFetching(false);
+                setFound([]);
+              } catch (err) {
+                setFetchError(String((err as Error).message ?? err));
+              } finally {
+                setFetchBusy(undefined);
+              }
+            })();
+          }}
+          onClose={() => setFetching(false)}
         />
       )}
       {authoring && project !== undefined && (

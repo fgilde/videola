@@ -27,6 +27,18 @@ export interface TopBarActions {
   /** Reframe the whole edit into another shape. The shapes themselves come from the core. */
   onReframe?: (aspect: string) => void;
   onTemplates?: () => void;
+  /** Undefined while the project has nothing a template could ask about. */
+  onSaveTemplate?: () => void;
+  onSaveAs?: () => void;
+  /** Material from a link. Absent in a build with no server to fetch through. */
+  onFetch?: () => void;
+  /**
+   * The file the project is in, and whether it has been written since the last change.
+   *
+   * Shown rather than kept: "which of the four files in my downloads folder is this" is the
+   * question a browser editor leaves people with, and the answer is a line in the header.
+   */
+  file?: { name?: string; unsaved: boolean };
   onOpen?: () => void;
   onSave?: () => void;
   onImportMedia?: () => void;
@@ -92,8 +104,14 @@ export function TopBar({
           <Action label={t("action.templates")} onClick={actions.onTemplates} />
           <Action label={t("action.open")} onClick={actions.onOpen} />
           <Action label={t("action.save")} onClick={actions.onSave} />
+          <Action label={t("action.saveAs")} onClick={actions.onSaveAs} />
+          {/* Its own line rather than a button inside the template gallery. Making a template out of
+              the open project is not a step on the way to using one, and behind "From a template" it
+              was a feature nobody could find. */}
+          <Action label={t("template.saveCurrent")} onClick={actions.onSaveTemplate} />
           <Rule />
           <Action label={t("action.importMedia")} onClick={actions.onImportMedia} />
+          <Action label={t("action.fetch")} onClick={actions.onFetch} />
           <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
           <Rule />
           {/* The two ways out, in the order they are wanted: a finished video, and the cut for
@@ -200,6 +218,16 @@ export function TopBar({
             </Disclosure>
           ))}
         </nav>
+      )}
+      {actions.file !== undefined && roomy && (
+        <span className="v-topbar__file" data-unsaved={actions.file.unsaved ? "" : undefined}>
+          <span className="v-topbar__fileName">
+            {actions.file.name ?? t("file.notSaved")}
+          </span>
+          <span className="v-topbar__fileState">
+            {actions.file.unsaved ? t("file.unsaved") : t("file.saved")}
+          </span>
+        </span>
       )}
       <span className="v-topbar__spacer" />
       <IconButton

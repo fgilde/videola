@@ -166,6 +166,36 @@
 
 /* The seam between "what this project does" and "what I prefer". Two ranks side by side with the
    same gap between them read as one undifferentiated row of six. */
+/* Which file is open and whether it holds the work: two lines where a desktop editor puts a title
+   bar. Quiet until it has something to say -- the state goes bold only while there is something
+   unwritten, because a permanent warning is a warning nobody reads. */
+.v-topbar__file {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  max-width: 22ch;
+  margin-inline-end: var(--v-space-2);
+  line-height: 1.15;
+}
+
+.v-topbar__fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--v-text-sm);
+  color: var(--v-text);
+}
+
+.v-topbar__fileState {
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}
+
+.v-topbar__file[data-unsaved] .v-topbar__fileState {
+  color: var(--v-accent);
+}
+
 .v-topbar__rule {
   align-self: stretch;
   width: 1px;

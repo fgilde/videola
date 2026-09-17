@@ -120,7 +120,18 @@ export async function publishVideo(
   return (await answer.json()) as Published;
 }
 
-async function call(connection: Connection, path: string, init?: RequestInit): Promise<Response> {
+/**
+ * One request to the server, with the token on it and the server's own words out of it on failure.
+ *
+ * Exported because fetching material shares it: two files talking to the same server through two
+ * different ideas of what an error is would be two error banners saying different things about one
+ * failure.
+ */
+export async function call(
+  connection: Connection,
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
   const base = connection.url === "" ? sameOrigin() : connection.url.replace(/\/+$/, "");
   const answer = await fetch(`${base}${path}`, {
     ...init,

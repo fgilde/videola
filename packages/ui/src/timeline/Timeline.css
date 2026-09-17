@@ -752,6 +752,41 @@
   gap: var(--v-space-1);
 }
 
+/* The same button the lock is, because they are the same kind of control: what this row is, not
+   what sits on it. */
+.v-timeline__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--v-radius-sm);
+  color: var(--v-text-muted);
+  opacity: 0.45;
+  cursor: pointer;
+}
+
+.v-timeline__remove .v-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.v-timeline__remove:hover {
+  opacity: 1;
+  background: var(--v-surface-hover);
+  color: var(--v-danger);
+}
+
+@media (pointer: coarse) {
+  .v-timeline__remove {
+    width: var(--v-touch-target);
+    height: var(--v-touch-target);
+  }
+}
+
 .v-timeline__size {
   display: flex;
   /* Side by side rather than stacked: two 18 px buttons and a gap fit inside a 44 px row, and stacked

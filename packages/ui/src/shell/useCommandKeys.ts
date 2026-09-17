@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import type { TopBarActions } from "./TopBar";
 
 /** What a modifier combination means, resolved from the event and nothing else. */
-export type CommandKey = "undo" | "redo" | "save" | "open" | "export";
+export type CommandKey = "undo" | "redo" | "save" | "saveAs" | "open" | "export";
 
 // Only the four everybody's fingers already know, plus the redo spelling Windows uses. Anything more
 // would take a combination the browser has its own use for -- and a shortcut the browser eats is a
@@ -20,7 +20,8 @@ export function commandKey(event: {
   if (key === "z") return event.shiftKey ? "redo" : "undo";
   // Ctrl+Y is redo on Windows and nothing anywhere else, so it is accepted and never the only way.
   if (key === "y" && !event.shiftKey) return "redo";
-  if (key === "s" && !event.shiftKey) return "save";
+  // Ctrl+Shift+S is "save as" in every editor that has both, and the browser has no use for it.
+  if (key === "s") return event.shiftKey ? "saveAs" : "save";
   if (key === "o" && !event.shiftKey) return "open";
   if (key === "e" && !event.shiftKey) return "export";
   return undefined;
@@ -31,7 +32,8 @@ export function commandKey(event: {
 const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
 /**
- * The keys that belong to the application rather than to a panel: undo, redo, save, open, export.
+ * The keys that belong to the application rather than to a panel: undo, redo, save, save as, open,
+ * export.
  *
  * On the window, because they have to work wherever the focus is — the timeline's own keys are
  * handled where the timeline can see its selection, and these four have no such place. Every one of
@@ -39,7 +41,7 @@ const TYPING = new Set(["INPUT", "TEXTAREA", "SELECT"]);
  * action the host did not hand over is a key that does nothing, not a key that throws.
  */
 export function useCommandKeys(actions: TopBarActions): void {
-  const { onUndo, onRedo, onSave, onOpen, onExport, canUndo, canRedo } = actions;
+  const { onUndo, onRedo, onSave, onSaveAs, onOpen, onExport, canUndo, canRedo } = actions;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -53,6 +55,7 @@ export function useCommandKeys(actions: TopBarActions): void {
         undo: canUndo === true ? onUndo : undefined,
         redo: canRedo === true ? onRedo : undefined,
         save: onSave,
+        saveAs: onSaveAs,
         open: onOpen,
         export: onExport,
       }[command];
@@ -64,5 +67,5 @@ export function useCommandKeys(actions: TopBarActions): void {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onUndo, onRedo, onSave, onOpen, onExport, canUndo, canRedo]);
+  }, [onUndo, onRedo, onSave, onSaveAs, onOpen, onExport, canUndo, canRedo]);
 }
