@@ -13,7 +13,8 @@ Geheimnis im Browser ist keines.
 
 ### 1. Das Video einmal bauen
 
-Die Teile importieren — **Medien importieren** in der Kopfzeile, oder auf das Fenster ziehen:
+Die Teile importieren — **Medien importieren** in der Kopfzeile, oder auf das Fenster ziehen (**Datei
+→ Aus einem Link hinzufügen …**, wenn das Material ein Link ist statt einer Datei):
 
 - `intro.mp4`, Ihr Auftakt
 - irgendein Video als Platzhalter für das Material, das jemand der Vorlage später gibt
