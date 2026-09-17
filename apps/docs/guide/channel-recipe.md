@@ -13,8 +13,8 @@ in a browser is not a secret.
 
 ### 1. Build the video you want, once
 
-Import the pieces — **Import media** in the header, or drag them onto the window (**File → Add from
-a link …** where the material is a link rather than a file):
+Import the pieces — **Import media** in the header, or drag them onto the window. The dialogue has
+both ways in: files from this computer on one side, a link or a search on the other.
 
 - `intro.mp4`, your opener
 - any video at all as a stand-in for the material somebody will hand the template later

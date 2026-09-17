@@ -148,9 +148,15 @@ kernel module or somebody else's home directory.
 ## Adding material from a link
 
 A link is not a file, and a browser may not read another origin's video. So the server does it, with
-[yt-dlp](https://github.com/yt-dlp/yt-dlp): **File → Add from a link …** takes an address or a search,
-shows what it found with thumbnails, and lets you pick picture and sound or sound alone, the format
-and a maximum height. What comes back is imported exactly like a file somebody dropped on the window.
+[yt-dlp](https://github.com/yt-dlp/yt-dlp). **Import media** opens one dialogue with both ways in:
+files from this computer on one side, a link or a search on the other — the type, the codec, the
+format and the quality the way MeTube asks them, and a progress bar while it runs. What comes back is
+imported exactly like a file somebody dropped on the window.
+
+Nothing has to be installed for this beyond the server itself. The image carries `yt-dlp` and
+`ffmpeg`, so a container started with the line above can already fetch; the editor finds the server
+it was served from on its own, and an editor opened at videola.app is pointed at one under
+**Publishing destinations**.
 
 The image carries `yt-dlp` and `ffmpeg`. Anywhere else, install both and the server finds them on
 `PATH`; `VIDEOLA_YTDLP` points at a different binary. Without them every other part of the editor

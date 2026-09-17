@@ -282,9 +282,12 @@ the decoded result is compared frame by frame against what went in.
 
 ## Material from a link
 
-**Add from a link** takes an address or a search, shows what it found with thumbnails, and lets you
-choose picture and sound or sound alone, the format and a maximum height. What arrives is an ordinary
-medium in the library: hashed into storage, probed, ready for a track.
+**Import media** opens one dialogue with both ways in. On the left, files from this computer —
+dropped on it or chosen. On the right, a link or a search: paste a YouTube address, or type what you
+remember of the title and pick from the results, with thumbnails, the channel and the running time.
+Then the type, the codec, the format and the quality, the way MeTube asks them, and it downloads with
+a progress bar. What arrives is an ordinary medium in the library: hashed into storage, probed, ready
+for a track.
 
 It needs [a server of your own](/guide/self-hosting) with `yt-dlp` on it, because a page may not read
 another origin's video — and it is for material you hold the rights to. A link is resolved before it

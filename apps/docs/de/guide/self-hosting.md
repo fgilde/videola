@@ -151,10 +151,16 @@ Gerät, einem Kernelmodul oder dem Heimatverzeichnis eines anderen nichts zu sch
 ## Material aus einem Link
 
 Ein Link ist keine Datei, und eine Seite darf das Video einer fremden Herkunft nicht lesen. Also
-macht es der Server, mit [yt-dlp](https://github.com/yt-dlp/yt-dlp): **Datei → Aus einem Link
-hinzufügen …** nimmt eine Adresse oder eine Suche, zeigt die Treffer mit Vorschaubildern und lässt
-Bild und Ton oder nur Ton, das Format und eine Höchsthöhe wählen. Was zurückkommt, wird importiert
-wie eine Datei, die jemand auf das Fenster gezogen hat.
+macht es der Server, mit [yt-dlp](https://github.com/yt-dlp/yt-dlp). **Medien importieren** öffnet
+einen Dialog mit beiden Wegen: Dateien von diesem Rechner auf der einen Seite, ein Link oder eine
+Suche auf der anderen — Art, Codec, Format und Qualität so, wie MeTube danach fragt, und ein
+Fortschrittsbalken, während es läuft. Was zurückkommt, wird importiert wie eine Datei, die jemand auf
+das Fenster gezogen hat.
+
+Dafür muss nichts zusätzlich installiert werden außer dem Server selbst. Das Image bringt `yt-dlp`
+und `ffmpeg` mit, ein mit der Zeile oben gestarteter Container kann also sofort laden. Der Editor
+findet den Server, von dem er ausgeliefert wurde, von allein; ein Editor, der auf videola.app
+geöffnet wurde, bekommt seinen unter **Veröffentlichungsziele** genannt.
 
 Das Image bringt `yt-dlp` und `ffmpeg` mit. Überall sonst: beides installieren, der Server findet es
 über `PATH`; `VIDEOLA_YTDLP` zeigt auf ein anderes Binary. Ohne die beiden funktioniert alles andere

@@ -28,7 +28,7 @@ export * from "./source/SourceBar";
 export * from "./export/ExportDialog";
 export * from "./export/HandOffDialog";
 export * from "./export/DestinationsDialog";
-export * from "./media/FetchDialog";
+export * from "./media/ImportDialog";
 export * from "./templates/TemplateGallery";
 export * from "./templates/TemplateAuthor";
 export * from "./templates/TemplateWizard";

@@ -46,9 +46,11 @@ export type FetchKind = "video" | "audio";
 export interface FetchRequest {
   url: string;
   kind: FetchKind;
+  /** `auto`, `h264`, `h265`, `av1` or `vp9`. Video only, and a preference rather than a demand. */
+  codec?: string;
   /** `mp4` or `any` for video; `m4a`, `mp3`, `opus`, `wav` or `flac` for audio. */
   format: string;
-  /** A height for video -- 1080, 720, 480 -- or `best`. */
+  /** A height for video -- 1080, 720, 480 -- `best` or `worst`; a bitrate in kbps for audio. */
   quality: string;
 }
 
@@ -86,16 +88,39 @@ const MIME: Record<string, string> = {
  * on a video that has no separate streams, and a person then sees "nothing to download" about a
  * video that plays fine in a browser.
  */
+// What a codec preference means to yt-dlp. MeTube's map, because these are the spellings the sites
+// really hand out: `avc` and `h264` are the same thing under two names, and a filter that knows only
+// one of them falls through to whatever was there without saying so.
+const CODEC_FILTERS: Record<string, string> = {
+  h264: "[vcodec~='^(h264|avc)']",
+  h265: "[vcodec~='^(h265|hevc)']",
+  av1: "[vcodec~='^av0?1']",
+  vp9: "[vcodec~='^vp0?9']",
+};
+
 export function formatSelector(request: FetchRequest): string {
   if (request.kind === "audio") {
     const format = request.format === "any" ? "" : `[ext=${request.format}]`;
     return `bestaudio${format}/bestaudio/best`;
   }
-  const height = request.quality === "best" ? "" : `[height<=${request.quality}]`;
-  if (request.format === "mp4") {
-    return `bestvideo[ext=mp4]${height}+bestaudio[ext=m4a]/best[ext=mp4]${height}/best${height}/best`;
-  }
-  return `bestvideo${height}+bestaudio/best${height}/best`;
+  const worst = request.quality === "worst";
+  const height = worst || request.quality === "best" ? "" : `[height<=${request.quality}]`;
+  const picture = worst ? "worstvideo" : "bestvideo";
+  const sound = worst ? "worstaudio" : "bestaudio";
+  const either = worst ? "worst" : "best";
+  const container = request.format === "mp4" ? "[ext=mp4]" : "";
+  const soundContainer = request.format === "mp4" ? "[ext=m4a]" : "";
+  const codec = CODEC_FILTERS[request.codec ?? "auto"] ?? "";
+  // The fallbacks matter more than the first branch, which is the lesson in MeTube's bug reports: a
+  // selector that insists on a codec, a container and a height at once finds nothing on half the
+  // videos out there, and a person then sees "nothing to download" about one that plays perfectly
+  // well in a browser. Each step drops the narrowest demand it still has.
+  return [
+    `${picture}${codec}${container}${height}+${sound}${soundContainer}`,
+    `${picture}${container}${height}+${sound}${soundContainer}`,
+    `${either}${container}${height}`,
+    either,
+  ].join("/");
 }
 
 /** What `yt-dlp` is asked, in one place, so the two callers cannot drift apart. */
@@ -167,7 +192,14 @@ export async function fetchMedium(
       "-f",
       formatSelector(request),
       ...(request.kind === "audio" && request.format !== "any"
-        ? ["--extract-audio", "--audio-format", request.format]
+        ? [
+            "--extract-audio",
+            "--audio-format",
+            request.format,
+            // A bitrate where one was asked for. yt-dlp reads 0-10 as a VBR level and anything
+            // larger as kbps, which is how MeTube passes these through too.
+            ...(request.quality === "best" ? [] : ["--audio-quality", `${request.quality}K`]),
+          ]
         : []),
       // Merged into the container somebody asked for, because a separate video and audio file is not
       // a medium anything here can place on a track.

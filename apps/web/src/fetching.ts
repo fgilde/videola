@@ -25,13 +25,10 @@ export type FetchKind = "video" | "audio";
 export interface FetchChoice {
   url: string;
   kind: FetchKind;
+  codec: string;
   format: string;
   quality: string;
 }
-
-export const VIDEO_FORMATS = ["mp4", "any"] as const;
-export const AUDIO_FORMATS = ["m4a", "mp3", "opus", "wav", "flac"] as const;
-export const QUALITIES = ["best", "2160", "1440", "1080", "720", "480", "360"] as const;
 
 /** Whether the server behind this editor can fetch at all, and with which version of the tool. */
 export async function fetchReady(
@@ -82,6 +79,7 @@ export async function fetchMedium(
   const query = new URLSearchParams({
     url: choice.url,
     kind: choice.kind,
+    codec: choice.codec,
     format: choice.format,
     quality: choice.quality,
     job,

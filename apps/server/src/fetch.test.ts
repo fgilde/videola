@@ -48,6 +48,40 @@ describe("formatSelector", () => {
     expect(selector.endsWith("/best")).toBe(true);
   });
 
+  it("prefers a codec without insisting on it", () => {
+    const selector = formatSelector({
+      url: "",
+      kind: "video",
+      codec: "h264",
+      format: "mp4",
+      quality: "1080",
+    });
+
+    // Both spellings, because the sites hand out both and a filter that knows one of them finds
+    // nothing without saying so.
+    expect(selector).toContain("h264|avc");
+    // And the step after it has dropped the codec again: a video with no H.264 stream should still
+    // arrive rather than come back as nothing at all.
+    const steps = selector.split("/");
+    expect(steps[0]).toContain("vcodec");
+    expect(steps[1]).not.toContain("vcodec");
+    expect(steps.at(-1)).toBe("best");
+  });
+
+  it("asks for the worst of everything where that is what was chosen", () => {
+    const selector = formatSelector({
+      url: "",
+      kind: "video",
+      codec: "auto",
+      format: "any",
+      quality: "worst",
+    });
+
+    expect(selector).toContain("worstvideo");
+    expect(selector).not.toContain("height");
+    expect(selector.split("/").at(-1)).toBe("worst");
+  });
+
   it("leaves the height out when the answer is best", () => {
     const selector = formatSelector({ url: "", kind: "video", format: "mp4", quality: "best" });
 
@@ -184,6 +218,21 @@ describe("fetchMedium", () => {
 
     expect(calls[0]).toContain("--extract-audio");
     expect(calls[0]?.[(calls[0]?.indexOf("--audio-format") ?? -1) + 1]).toBe("mp3");
+    // `best` means do not argue with the source, so no bitrate is passed at all.
+    expect(calls[0]).not.toContain("--audio-quality");
+  });
+
+  it("passes a bitrate where one was chosen", async () => {
+    const { run, calls } = runner(() => ({ code: 0 }));
+
+    await expect(
+      fetchMedium(
+        { url: "https://example.com/v", kind: "audio", format: "mp3", quality: "320" },
+        run,
+      ),
+    ).rejects.toThrow("no file");
+
+    expect(calls[0]?.[(calls[0]?.indexOf("--audio-quality") ?? -1) + 1]).toBe("320K");
   });
 
   it("says what the tool said when the download fails", async () => {

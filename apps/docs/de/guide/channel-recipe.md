@@ -13,8 +13,9 @@ Geheimnis im Browser ist keines.
 
 ### 1. Das Video einmal bauen
 
-Die Teile importieren — **Medien importieren** in der Kopfzeile, oder auf das Fenster ziehen (**Datei
-→ Aus einem Link hinzufügen …**, wenn das Material ein Link ist statt einer Datei):
+Die Teile importieren — **Medien importieren** in der Kopfzeile, oder auf das Fenster ziehen. Der
+Dialog hat beide Wege: Dateien von diesem Rechner auf der einen Seite, ein Link oder eine Suche auf
+der anderen.
 
 - `intro.mp4`, Ihr Auftakt
 - irgendein Video als Platzhalter für das Material, das jemand der Vorlage später gibt

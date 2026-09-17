@@ -309,10 +309,12 @@ teilen, und das dekodierte Ergebnis Bild für Bild mit dem verglichen, was hinei
 
 ## Material aus einem Link
 
-**Aus einem Link hinzufügen** nimmt eine Adresse oder eine Suche, zeigt die Treffer mit
-Vorschaubildern und lässt Bild und Ton oder nur Ton wählen, dazu Format und Höchsthöhe. Was ankommt,
-ist ein ganz normales Medium in der Bibliothek: gehasht in den Speicher, geprüft, bereit für eine
-Spur.
+**Medien importieren** öffnet einen Dialog mit beiden Wegen. Links Dateien von diesem Rechner —
+hineingezogen oder ausgewählt. Rechts ein Link oder eine Suche: eine YouTube-Adresse einfügen, oder
+tippen, woran man sich vom Titel erinnert, und aus den Treffern wählen — mit Vorschaubild, Kanal und
+Laufzeit. Dann Art, Codec, Format und Qualität, so wie MeTube danach fragt, und es lädt mit
+Fortschrittsbalken. Was ankommt, ist ein ganz normales Medium in der Bibliothek: gehasht in den
+Speicher, geprüft, bereit für eine Spur.
 
 Dafür braucht es [einen eigenen Server](/de/guide/self-hosting) mit `yt-dlp` darauf, denn eine Seite
 darf das Video einer fremden Herkunft nicht lesen — und es ist für Material gedacht, an dem Sie die

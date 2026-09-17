@@ -30,8 +30,6 @@ export interface TopBarActions {
   /** Undefined while the project has nothing a template could ask about. */
   onSaveTemplate?: () => void;
   onSaveAs?: () => void;
-  /** Material from a link. Absent in a build with no server to fetch through. */
-  onFetch?: () => void;
   /**
    * The file the project is in, and whether it has been written since the last change.
    *
@@ -111,7 +109,6 @@ export function TopBar({
           <Action label={t("template.saveCurrent")} onClick={actions.onSaveTemplate} />
           <Rule />
           <Action label={t("action.importMedia")} onClick={actions.onImportMedia} />
-          <Action label={t("action.fetch")} onClick={actions.onFetch} />
           <Action label={t("action.importCaptions")} onClick={actions.onImportCaptions} />
           <Rule />
           {/* The two ways out, in the order they are wanted: a finished video, and the cut for

@@ -120,7 +120,7 @@ import {
   SourceBar,
   Stage,
   DestinationsDialog,
-  FetchDialog,
+  ImportDialog,
   TemplateAuthor,
   TemplateGallery,
   TemplateWizard,
@@ -1840,6 +1840,19 @@ export function App(): ReactElement {
     [importAudiola, importCaptions, importLuts, importMedia],
   );
 
+  /**
+   * Both ways in, in one dialogue.
+   *
+   * Whether this server can fetch is asked each time it opens rather than once at start-up: a server
+   * that had no `yt-dlp` this morning may have one now, and nobody should have to reload a tab to
+   * find that out.
+   */
+  const openImport = useCallback(() => {
+    setFetching(true);
+    setFetchError(undefined);
+    void fetchReady(connection).then(setFetcher);
+  }, [connection]);
+
   const exportCaptions = useCallback(() => {
     if (project === undefined) return;
     const cues = captionCues(project);
@@ -1978,23 +1991,9 @@ export function App(): ReactElement {
         project !== undefined && hasClips(project) ? () => setAuthoring(true) : undefined
       }
       onSaveAs={doc === undefined ? undefined : () => void saveAs()}
-      onFetch={
-        doc === undefined
-          ? undefined
-          : () => {
-              setFetching(true);
-              setFetchError(undefined);
-              // Asked each time the dialogue opens rather than once at start-up: a server that had
-              // no `yt-dlp` this morning may have one now, and nobody should have to reload a tab
-              // to find that out.
-              void fetchReady(connection).then(setFetcher);
-            }
-      }
       file={doc === undefined ? undefined : { name: file?.name, unsaved }}
       onOpen={() => void open()}
-      onImportMedia={
-        doc === undefined ? undefined : () => void pickFiles(MEDIA_ACCEPT).then(importMedia)
-      }
+      onImportMedia={doc === undefined ? undefined : openImport}
       onAddTrack={doc === undefined ? undefined : addTrack}
       onInsert={doc === undefined ? undefined : insertGenerator}
       onImportCaptions={
@@ -2301,9 +2300,11 @@ export function App(): ReactElement {
         />
       )}
       {fetching && (
-        <FetchDialog
-          available={fetcher?.available}
+        <ImportDialog
+          canFetch={fetcher?.available}
           results={found}
+          onFiles={(files) => void importFiles(files)}
+          onPick={() => void pickFiles(MEDIA_ACCEPT).then(importFiles)}
           busy={fetchBusy}
           percent={fetchPercent}
           error={fetchError}

@@ -203,6 +203,7 @@ async function route(
       const medium = await api.fetchMedium({
         url: link,
         kind: url.searchParams.get("kind") === "audio" ? "audio" : "video",
+        codec: url.searchParams.get("codec") ?? "auto",
         format: url.searchParams.get("format") ?? "mp4",
         quality: url.searchParams.get("quality") ?? "best",
       }, job);

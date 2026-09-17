@@ -1470,8 +1470,8 @@ async function announce() {
     check("the file title holds what a file title holds",
       under("Datei"),
       ["Neues Projekt", "Aus Vorlage", "Öffnen", "Speichern", "Speichern unter …",
-       "Projekt als Vorlage speichern", "Medien importieren", "Aus einem Link hinzufügen …",
-       "Untertitel importieren", "Exportieren", "Weitergeben …", "Veröffentlichungsziele …"]);
+       "Projekt als Vorlage speichern", "Medien importieren", "Untertitel importieren",
+       "Exportieren", "Weitergeben …", "Veröffentlichungsziele …"]);
     check("and the rest sit where they belong",
       [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
       [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 7,
@@ -2701,14 +2701,22 @@ async function announce() {
   // opens, and it says plainly that this install cannot fetch instead of offering a field that was
   // never going to work.
   async function fromALink() {
-    pickMenu("Aus einem Link hinzufügen …");
-    const dialog = await until("the link dialogue", () => q('[data-testid="fetch-dialog"]'));
+    // One dialogue behind one menu entry, with both ways in: a file from this machine on one side,
+    // a link on the other. There is no server behind this run, so the right-hand half says what to
+    // start rather than offering a field that was never going to work -- and the left-hand half,
+    // which needs no server at all, is there either way.
+    pickMenu("Medien importieren");
+    const dialog = await until("the import dialogue", () => q('[data-testid="import-dialog"]'));
     check("opening it raised nothing", banner(), "");
-    await until("the answer about this server", () => q('[data-testid="fetch-unavailable"]'));
-    check("and the field is not offered where nothing can be fetched",
-      dialog.querySelector('input[type="text"]').disabled, true);
+    check("files from this machine are one half of it",
+      dialog.querySelector('[data-testid="import-drop"]') !== null, true);
+    const setup = await until("the answer about this server",
+      () => q('[data-testid="import-no-server"]'));
+    check("and somebody without a server is handed the command that starts one",
+      setup.textContent.includes("docker run"), true);
     labelled("Schließen").click();
-    await until("the dialogue to close", () => (q('[data-testid="fetch-dialog"]') === null ? true : null));
+    await until("the dialogue to close",
+      () => (q('[data-testid="import-dialog"]') === null ? true : null));
   }
 
   async function dropFixture() {
