@@ -106,6 +106,9 @@ async function announce() {
   // it is the only one where a drag between them can be driven at all -- and it had no run of its
   // own until now, only a layout rule nobody had ever seen.
   const tablet = location.search.includes("tablet");
+  // A run of its own for one picture: the import dialogue, open, so what it looks like can be
+  // looked at rather than asserted about.
+  const importing = location.search.includes("import");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1229,6 +1232,7 @@ async function announce() {
     await keysAndView();
     await soundAndChain();
     await namedAndSized();
+    await fromTheLibrary();
     await stills();
     await fromALink();
 
@@ -2719,6 +2723,77 @@ async function announce() {
       () => (q('[data-testid="import-dialog"]') === null ? true : null));
   }
 
+  // What a library is for, and the two complaints that said it was not doing it: a medium can go on
+  // the timeline as often as you like, and carrying one into the empty space under the tracks makes
+  // a track for it rather than quietly doing nothing.
+  async function fromTheLibrary() {
+    // Found again before each press: the list re-renders after a dispatch, so a node held across
+    // one is a node that is no longer in the document -- and a click on it would prove nothing.
+    const plus = () =>
+      [...all("[data-media-id]")[0].querySelectorAll("button")]
+        .find((node) => node.getAttribute("aria-label") === "Auf die Zeitleiste");
+    // Measured on the transport rather than by counting strips: the timeline only renders the clips
+    // in view, so a count in the DOM says as much about the zoom as about the edit.
+    const endOfMaterial = async () => {
+      button("Ans Ende").click();
+      await sleep(200);
+      const [hours, minutes, rest] = position().split(":");
+      return Number(hours) * 3600 + Number(minutes) * 60 + Number(rest);
+    };
+    const before = await endOfMaterial();
+
+    plus().click();
+    await sleep(250);
+    const once = await endOfMaterial();
+    plus().click();
+    await sleep(250);
+    const twice = await endOfMaterial();
+
+    checkNear(`a medium goes on the timeline once (said: ${banner() || "nothing"})`,
+      once - before, 2, 0.2);
+    // And again, behind what was already there: the second press must add its own length rather
+    // than land on top of the first, which would be one clip nobody can see.
+    checkNear("and again, after the one before it", twice - once, 2, 0.2);
+
+    button("Rückgängig").click();
+    await sleep(200);
+    button("Rückgängig").click();
+    await sleep(200);
+
+    // And the drag. Pointer events, because that is what the library and the timeline speak; the
+    // release lands under the last track, which is where every editor makes a new one.
+    const tracksBefore = all(".v-timeline__header").length;
+    const surface = q(".v-timeline__scroll");
+    const area = surface.getBoundingClientRect();
+    const entry = all("[data-media-id]")[0];
+    const from = entry.getBoundingClientRect();
+    pointer("pointerdown", entry, { clientX: from.left + 20, clientY: from.top + 20 });
+    // The timeline listens on the window, and it only starts listening once React has rendered the
+    // grab. A hand takes longer than a tick to move a mouse; a run that fires both in the same one
+    // is testing an editor nobody is using.
+    await sleep(120);
+    for (const part of [0.4, 0.7, 1]) {
+      pointer("pointermove", surface, {
+        clientX: area.left + 200 * part,
+        clientY: from.top + (area.bottom - 6 - from.top) * part,
+      });
+      await sleep(40);
+    }
+    pointer("pointerup", surface, { clientX: area.left + 200, clientY: area.bottom - 6 });
+    await sleep(250);
+
+    check("a medium dropped below the tracks makes one of its own",
+      all(".v-timeline__header").length, tracksBefore + 1);
+    checkAtLeast("and the clip is on it", (await endOfMaterial()) - before, 0);
+    check("dropping raised nothing", banner(), "");
+    // Making the track and filling it is one step, the way a drag has been one step everywhere else
+    // in this program since the first version.
+    button("Rückgängig").click();
+    await sleep(200);
+    check("and the whole drop is one press of undo",
+      all(".v-timeline__header").length, tracksBefore);
+  }
+
   async function dropFixture() {
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();
     const transfer = new DataTransfer();
@@ -2737,10 +2812,21 @@ async function announce() {
     return until("the second library entry", () => all("[data-media-id]").length === 2);
   }
 
+  // The import dialogue on a fresh editor, for the screenshot. Nothing is asserted here that the
+  // run above does not already assert; what this is for is the picture.
+  async function runImport() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    pickMenu("Medien importieren");
+    await until("the import dialogue", () => q('[data-testid="import-dialog"]'));
+    await sleep(400);
+  }
+
   pickFixture()
     .then(announce)
     .then(() =>
-      shelves
+      importing
+        ? runImport()
+        : shelves
         ? runEffects()
         : templates
           ? runTemplates()

@@ -1230,16 +1230,24 @@ function dropAt(
   const area = config.tracksArea.current;
   const surface = config.surface.current;
   if (area === null || surface === null) return undefined;
-  const box = area.getBoundingClientRect();
-  if (clientY < box.top || clientY > box.bottom) return undefined;
   const across = surface.getBoundingClientRect();
   if (clientX < across.left || clientX > across.right) return undefined;
-  const row = trackAt(config.project.timeline.tracks, clientY - box.top);
-  const track = config.project.timeline.tracks[row];
-  if (track === undefined) return undefined;
+  // The whole surface, not only the rows on it. A project with no tracks has no rows at all, and
+  // the space under the last one is where every editor lets you make another: a drop there that
+  // did nothing is a first drag that fails silently.
+  if (clientY < across.top || clientY > across.bottom) return undefined;
+  const box = area.getBoundingClientRect();
+  const y = clientY - box.top;
+  // `trackAt` answers with a row for any y at all -- it clamps, because a move gesture that let go
+  // a pixel below the last track should still land on it. A drop is the other question: below the
+  // rows there is no row, and that is where a new one is made. So the total height is measured here
+  // rather than trusting an answer that cannot say "none".
+  const rows = config.project.timeline.tracks;
+  const total = rows.reduce((sum, track) => sum + trackHeight(track), 0);
+  const track = y >= 0 && y < total ? rows[trackAt(rows, y)] : undefined;
   return {
     media,
-    track: track.id,
+    track: track?.id ?? "new",
     at: Math.max(0, xToTime(clientX - across.left + surface.scrollLeft, config.flicksPerPixel)),
   };
 }

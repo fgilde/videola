@@ -6,6 +6,8 @@ import {
   describeVideo,
   fetchMedium,
   formatSelector,
+  downloadArgs,
+  forbidden,
   isPrivateAddress,
   percentOf,
   searchArgs,
@@ -242,6 +244,77 @@ describe("fetchMedium", () => {
       { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" },
       run,
     )).rejects.toThrow("Video unavailable");
+  });
+});
+
+describe("a download that was refused", () => {
+  // YouTube signs every fragment URL and the signature goes stale, and it serves some clients a
+  // stream it then refuses them. Both arrive as a 403 partway through a download that was working,
+  // and the same link succeeds on the next attempt -- which is what makes it infuriating rather
+  // than informative. So: retries in the arguments, and one more attempt as a different client.
+  it("asks again as another client", async () => {
+    const attempts: string[][] = [];
+    const run: RunYtDlp = async (args) => {
+      attempts.push([...args]);
+      return attempts.length === 1
+        ? { stdout: "", stderr: "ERROR: unable to download video data: HTTP Error 403: Forbidden", code: 1 }
+        : { stdout: "", stderr: "", code: 0 };
+    };
+
+    // No file comes back from either attempt here, and the message proves which one it got to: the
+    // second, because the first one's own error never reaches the caller.
+    await expect(
+      fetchMedium(
+        { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" },
+        run,
+      ),
+    ).rejects.toThrow("the download produced no file");
+
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]).not.toContain("--extractor-args");
+    expect(attempts[1]).toContain("--extractor-args");
+    expect(attempts[1]?.join(" ")).toContain("player_client=web_safari");
+    // Everything else is the same request, or the second attempt would be a different download.
+    expect(attempts[0]?.filter((one) => one !== "--extractor-args")).toEqual(
+      attempts[1]?.filter(
+        (one, index) =>
+          one !== "--extractor-args" && attempts[1]?.[index - 1] !== "--extractor-args",
+      ),
+    );
+  });
+
+  it("does not try twice for a failure that is not a refusal", async () => {
+    let attempts = 0;
+    const run: RunYtDlp = async () => {
+      attempts += 1;
+      return { stdout: "", stderr: "ERROR: Video unavailable", code: 1 };
+    };
+
+    await expect(
+      fetchMedium(
+        { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" },
+        run,
+      ),
+    ).rejects.toThrow("Video unavailable");
+
+    expect(attempts).toBe(1);
+  });
+
+  it("carries retries, because a stale fragment is the ordinary case", () => {
+    const args = downloadArgs(
+      { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" },
+      "/tmp/x",
+      [],
+    );
+
+    expect(args).toContain("--retries");
+    expect(args).toContain("--fragment-retries");
+    expect(args).toContain("--extractor-retries");
+  });
+
+  it("knows a refusal from anything else", () => {
+    expect(forbidden("ERROR: HTTP Error 403: Forbidden")).toBe(true);
+    expect(forbidden("ERROR: Video unavailable")).toBe(false);
   });
 });
 

@@ -80,14 +80,6 @@ const MIME: Record<string, string> = {
   flac: "audio/flac",
 };
 
-/**
- * The `-f` selector for a choice somebody made in a dialogue.
- *
- * The shape of these comes from MeTube, which has had years of bug reports about exactly this: the
- * fallbacks matter more than the first branch. A selector with no `/best` at the end fails outright
- * on a video that has no separate streams, and a person then sees "nothing to download" about a
- * video that plays fine in a browser.
- */
 // What a codec preference means to yt-dlp. MeTube's map, because these are the spellings the sites
 // really hand out: `avc` and `h264` are the same thing under two names, and a filter that knows only
 // one of them falls through to whatever was there without saying so.
@@ -181,14 +173,68 @@ export async function fetchMedium(
 ): Promise<FetchedMedium> {
   await allowed(request.url);
   const into = await mkdtemp(join(tmpdir(), "videola-fetch-"));
+  const watch =
+    onProgress === undefined
+      ? undefined
+      : (line: string): void => {
+          const percent = percentOf(line);
+          if (percent !== undefined) onProgress(percent);
+        };
   try {
-    const answer = await run([
+    // Twice, where the first attempt hit a 403.
+    //
+    // YouTube signs the URL of every fragment and the signature goes stale; it also serves some
+    // clients a stream the same client is then refused. Both come back as "HTTP Error 403:
+    // Forbidden" in the middle of a download that was working a moment ago -- the same link then
+    // succeeds on the next try, which is exactly what makes it infuriating rather than informative.
+    // The retries below cover a stale fragment, and asking as a different player client covers the
+    // rest. Nothing is guessed about which happened: the second attempt simply changes both.
+    let answer = await run(downloadArgs(request, into, []), watch);
+    if (answer.code !== 0 && forbidden(answer.stderr)) {
+      answer = await run(
+        downloadArgs(request, into, ["--extractor-args", "youtube:player_client=web_safari,web"]),
+        watch,
+      );
+    }
+    if (answer.code !== 0) throw new Error(said(answer.stderr, "the download failed"));
+    const written = await readdir(into);
+    const filename = written[0];
+    if (filename === undefined) throw new Error("the download produced no file");
+    const bytes = new Uint8Array(await readFile(join(into, filename)));
+    return { bytes, filename, contentType: contentTypeOf(filename) };
+  } finally {
+    // Whatever happened. A failed merge leaves both streams behind, and a directory per attempt in
+    // the system's temporary space is a disk that fills up over a month of use.
+    await rm(into, { recursive: true, force: true });
+  }
+}
+
+export function forbidden(stderr: string): boolean {
+  return /403|forbidden/i.test(stderr);
+}
+
+/** What the tool is handed for a download, so both attempts differ in one argument and nothing else. */
+export function downloadArgs(
+  request: FetchRequest,
+  into: string,
+  extra: readonly string[],
+): string[] {
+  return [
       // One line per update rather than a carriage return over the same one: a progress bar written
       // for a terminal arrives here as one enormous line nobody can parse.
       "--newline",
       "--no-playlist",
       "--no-warnings",
       "--no-part",
+      // A stale fragment URL is the ordinary reason a download stops halfway, and asking again is
+      // the ordinary cure: yt-dlp fetches a fresh URL for the fragment it retries.
+      "--retries",
+      "10",
+      "--fragment-retries",
+      "10",
+      "--extractor-retries",
+      "3",
+      ...extra,
       "-f",
       formatSelector(request),
       ...(request.kind === "audio" && request.format !== "any"
@@ -207,21 +253,7 @@ export async function fetchMedium(
       "-o",
       join(into, "%(title).120B.%(ext)s"),
       request.url,
-    ], onProgress === undefined ? undefined : (line) => {
-      const percent = percentOf(line);
-      if (percent !== undefined) onProgress(percent);
-    });
-    if (answer.code !== 0) throw new Error(said(answer.stderr, "the download failed"));
-    const written = await readdir(into);
-    const filename = written[0];
-    if (filename === undefined) throw new Error("the download produced no file");
-    const bytes = new Uint8Array(await readFile(join(into, filename)));
-    return { bytes, filename, contentType: contentTypeOf(filename) };
-  } finally {
-    // Whatever happened. A failed merge leaves both streams behind, and a directory per attempt in
-    // the system's temporary space is a disk that fills up over a month of use.
-    await rm(into, { recursive: true, force: true });
-  }
+  ];
 }
 
 /** The runner the server really uses. Absent binary and non-zero exit are both ordinary answers. */

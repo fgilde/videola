@@ -16,10 +16,16 @@ import {
  */
 export type MediaGrab = MediaId;
 
-/** Where a grabbed medium would land if the pointer were released now. */
+/**
+ * Where a grabbed medium would land if the pointer were released now.
+ *
+ * `track` is `"new"` where the pointer is over the timeline but not over a row -- under the last
+ * track, or anywhere at all in a project that has none yet. Every editor makes a track there, and
+ * one that refuses instead is a timeline where a first drag does nothing and says nothing.
+ */
 export interface MediaDrop {
   media: MediaId;
-  track: TrackId;
+  track: TrackId | "new";
   at: Time;
 }
 

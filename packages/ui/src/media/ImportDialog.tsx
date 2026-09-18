@@ -79,10 +79,14 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
   const [format, setFormat] = useState<string>("any");
   const [quality, setQuality] = useState<string>("best");
   const [over, setOver] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
 
+  // The field, not the panel: somebody who opened this to paste a link can paste it, and Escape
+  // still closes because the handler sits on the panel the focus is inside.
   useEffect(() => {
-    field.current?.focus();
+    if (field.current !== null) field.current.focus();
+    else panel.current?.focus();
   }, []);
 
   // A link is one video, so reading one is also choosing it. Asking somebody to click the single row
@@ -102,8 +106,19 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
   };
 
   return (
-    <div className="v-modal" role="dialog" aria-modal="true" aria-label={t("import.title")}>
-      <div className="v-modal__panel v-import" data-testid="import-dialog">
+    <div className="v-export__scrim">
+      <div
+        ref={panel}
+        className="v-export v-import"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("import.title")}
+        tabIndex={-1}
+        data-testid="import-dialog"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") props.onClose();
+        }}
+      >
         <h2 className="v-export__title">{t("import.title")}</h2>
 
         <div className="v-import__ways">
@@ -210,7 +225,7 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
                 )}
 
                 <div className="v-import__options">
-                  <label className="v-dest__field">
+                  <label className="v-import__field">
                     <span>{t("import.kind")}</span>
                     <select
                       value={kind}
@@ -230,7 +245,7 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
                     </select>
                   </label>
                   {kind === "video" && (
-                    <label className="v-dest__field">
+                    <label className="v-import__field">
                       <span>{t("import.codec")}</span>
                       <select
                         value={codec}
@@ -245,7 +260,7 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
                       </select>
                     </label>
                   )}
-                  <label className="v-dest__field">
+                  <label className="v-import__field">
                     <span>{t("import.format")}</span>
                     <select
                       value={format}
@@ -262,7 +277,7 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
                       ))}
                     </select>
                   </label>
-                  <label className="v-dest__field">
+                  <label className="v-import__field">
                     <span>{t("import.quality")}</span>
                     <select
                       value={quality}

@@ -1300,16 +1300,30 @@ export function App(): ReactElement {
     [doc, reportError],
   );
 
-  // A medium carried out of the library and let go over a track. One command, so one undo step --
-  // and the track and the instant are the timeline's own, not a guess made here.
+  /**
+   * A medium carried out of the library and let go over the timeline.
+   *
+   * Where it lands on a row, that row takes it. Where it lands under the last one -- or anywhere at
+   * all in a project with no rows yet -- a row is made for it, because that is what every editor
+   * does with that gesture and a drag that quietly does nothing is worse than no drag at all. Both
+   * carry the same coalescing key, so making the track and filling it is one press of undo.
+   */
   const dropMedia = useCallback(
     ({ media, track, at }: MediaDrop) => {
       if (doc === undefined) return;
       try {
         const asset = doc.state.library.find((entry) => entry.id === media);
         if (asset === undefined) return;
+        const step = `drop:${media}:${Date.now()}`;
+        const kind: TrackKind = asset.kind === "audio" ? "audio" : "video";
+        const target =
+          track === "new"
+            ? added(doc, kind, nextTrackName(doc, kind), step)?.id
+            : track;
+        if (target === undefined) return;
         doc.dispatch(
-          cmd.clipAdd(track, { kind: "media", media }, at, asset.duration ?? STILL_DURATION),
+          cmd.clipAdd(target, { kind: "media", media }, at, asset.duration ?? STILL_DURATION),
+          step,
         );
         setError(undefined);
       } catch (err) {
@@ -2128,7 +2142,10 @@ export function App(): ReactElement {
                   // Only where the timeline is on screen at the same time. On a phone the two take
                   // turns behind the tab bar, so there is nowhere to drag to.
                   draggable={layout !== "phone"}
-                  onImport={() => void pickFiles(MEDIA_ACCEPT).then(importMedia)}
+                  // The same dialogue the header opens. Two buttons that looked alike and did
+                  // different things -- one a file picker, one the dialogue -- was the whole of the
+                  // complaint, and there is only one way in now.
+                  onImport={openImport}
                   // The camera and the gallery are what a touch device has instead of a file
                   // system, and `capture` only means anything to one.
                   onCapture={layout === "desktop" ? undefined : (files) => void importMedia(files)}
@@ -2454,9 +2471,28 @@ function adoptFormat(doc: VideolaDocument, asset: MediaAsset): void {
   );
 }
 
-function added(doc: VideolaDocument, kind: TrackKind, name: string): Track | undefined {
-  doc.dispatch(cmd.trackAdd(kind, name));
-  return doc.state.timeline.tracks.find((candidate) => candidate.kind === kind);
+/**
+ * A track of this kind, made now.
+ *
+ * The one it hands back is the *last* of its kind rather than the first: this is called to get the
+ * track that was just made, and with two video tracks already there the first one is somebody
+ * else's. A coalescing key makes the track and whatever follows it one step of the history.
+ */
+function added(
+  doc: VideolaDocument,
+  kind: TrackKind,
+  name: string,
+  step?: string,
+): Track | undefined {
+  doc.dispatch(cmd.trackAdd(kind, name), step);
+  return [...doc.state.timeline.tracks].reverse().find((candidate) => candidate.kind === kind);
+}
+
+/** V1, V2, A1 — the next free number for its kind, which is what a person expects to see. */
+function nextTrackName(doc: VideolaDocument, kind: TrackKind): string {
+  const letter = kind === "audio" ? "A" : kind === "video" ? "V" : "T";
+  const taken = doc.state.timeline.tracks.filter((track) => track.kind === kind).length;
+  return `${letter}${taken + 1}`;
 }
 
 // A track of this kind with nothing standing in the window an insert would occupy, or a new one.

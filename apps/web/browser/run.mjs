@@ -15,6 +15,7 @@ const dist = join(here, "..", "dist");
 const shot = join(here, "preview.png");
 const templateShot = join(here, "templates.png");
 const effectShot = join(here, "effects.png");
+const importShot = join(here, "import.png");
 const phoneShot = join(here, "phone.png");
 const phoneLibraryShot = join(here, "phone-library.png");
 const phoneInspectorShot = join(here, "phone-inspector.png");
@@ -344,6 +345,13 @@ try {
     [...desktop, `--screenshot=${effectShot}`],
     RUN_BUDGET_MS,
   );
+  // The import dialogue, open, on a desktop viewport. Its own launch for the same reason the two
+  // above are: the picture has to be the dialogue rather than whatever the run before it left.
+  const brought = await drive(
+    `http://localhost:${PORT}/?import=1&virtual=1`,
+    [...desktop, `--screenshot=${importShot}`],
+    RUN_BUDGET_MS,
+  );
   const pocket = await driveTouch(PHONE, "phone=1", RUN_BUDGET_MS, "the phone");
   // The mode that had a layout rule and no run behind it. It is also the only viewport where a
   // drag from the library onto a track can be driven with a finger, because it is the only one
@@ -352,10 +360,10 @@ try {
   // Last, and not next to the run that took each picture: Chrome writes --screenshot when the
   // virtual budget runs out, which is after the run has already reported back. Cropped too early
   // the harness trims the file the run before it left, and the real one lands uncropped on top.
-  for (const [results, path] of [[drawn, shot], [baked, templateShot], [shelved, effectShot]]) {
+  for (const [results, path] of [[drawn, shot], [baked, templateShot], [shelved, effectShot], [brought, importShot]]) {
     cropHeight(path, viewport(results));
   }
-  const results = [...live, ...drawn, ...baked, ...shelved, ...pocket, ...slate];
+  const results = [...live, ...drawn, ...baked, ...shelved, ...brought, ...pocket, ...slate];
   // Printed whether the run passed or not: which container the browser could read, what viewport
   // the page was laid out in, and how tall every zone came out. Three layout checks read differently
   // on a CI runner than on a desktop, and a failure that says "216 px" without saying which row took
