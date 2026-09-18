@@ -42,6 +42,7 @@ import {
   shownValue,
 } from "./ParamRow";
 import type { LutChoice } from "./ParamRow";
+import { RecordingContext, useRecording } from "./recording";
 import { TextPanel } from "./TextPanel";
 import "./Inspector.css";
 
@@ -117,6 +118,8 @@ export interface InspectorProps {
    * rather than to a panel inside it, which is why the inspector only asks for it.
    */
   onBrowse: (only: 1 | 2) => void;
+  /** Record mode: every change lands as a key at the playhead rather than as a value at rest. */
+  recording?: boolean;
 }
 
 type Send = (command: Command, coalesceKey?: string) => void;
@@ -131,43 +134,46 @@ export function Inspector({
   dispatch,
   onSeek,
   onBrowse,
+  recording = false,
 }: InspectorProps): ReactElement {
   const { t } = useI18n();
   const found = clip === undefined ? undefined : findClip(project, clip);
 
   return (
-    <aside className="v-inspector" aria-label={t("inspector.label")} data-testid="inspector">
-      {found === undefined ? (
-        <p className="v-inspector__empty">{t("inspector.empty")}</p>
-      ) : (
-        <>
-          <Transform_
-            clip={found.clip}
-            project={project}
-            playhead={playhead}
-            transformsAt={transformsAt}
-            send={dispatch}
-            onSeek={onSeek}
-          />
-          {/* Above the presets, because on a caption clip it is the only thing anyone came here
-              for -- and it renders nothing at all on a clip that draws no words. */}
-          <TextPanel clip={found.clip} send={dispatch} />
-          <Playback clip={found.clip} send={dispatch} />
-          <Presets clip={found.clip} project={project} playhead={playhead} send={dispatch} />
-          <Transitions clip={found.clip} effects={effects} send={dispatch} onBrowse={onBrowse} />
-          <Effects
-            clip={found.clip}
-            playhead={playhead}
-            effects={effects}
-            effectParamsAt={effectParamsAt}
-            tables={lutTables(project)}
-            send={dispatch}
-            onSeek={onSeek}
-            onBrowse={onBrowse}
-          />
-        </>
-      )}
-    </aside>
+    <RecordingContext.Provider value={recording}>
+      <aside className="v-inspector" aria-label={t("inspector.label")} data-testid="inspector">
+        {found === undefined ? (
+          <p className="v-inspector__empty">{t("inspector.empty")}</p>
+        ) : (
+          <>
+            <Transform_
+              clip={found.clip}
+              project={project}
+              playhead={playhead}
+              transformsAt={transformsAt}
+              send={dispatch}
+              onSeek={onSeek}
+            />
+            {/* Above the presets, because on a caption clip it is the only thing anyone came here
+                for -- and it renders nothing at all on a clip that draws no words. */}
+            <TextPanel clip={found.clip} send={dispatch} />
+            <Playback clip={found.clip} send={dispatch} />
+            <Presets clip={found.clip} project={project} playhead={playhead} send={dispatch} />
+            <Transitions clip={found.clip} effects={effects} send={dispatch} onBrowse={onBrowse} />
+            <Effects
+              clip={found.clip}
+              playhead={playhead}
+              effects={effects}
+              effectParamsAt={effectParamsAt}
+              tables={lutTables(project)}
+              send={dispatch}
+              onSeek={onSeek}
+              onBrowse={onBrowse}
+            />
+          </>
+        )}
+      </aside>
+    </RecordingContext.Provider>
   );
 }
 
@@ -216,6 +222,7 @@ function Transform_({
   onSeek: (time: Time) => void;
 }): ReactElement {
   const { t } = useI18n();
+  const recording = useRecording();
   const source = sourceSize(clip, project.library);
   const path = (clip.keyframes[POSITION_TRACK] ?? []).length > 0;
   const inside = playhead >= clip.start && playhead < clip.start + clip.duration;
@@ -237,6 +244,10 @@ function Transform_({
         // write a keyframe that never reaches a pixel. No switch at all is the honest answer; the
         // note above the group says why, and the lane shows the keys that are there.
         const overridden = path && (field.key === "x" || field.key === "y");
+        // Already animated, or recording over a moment the clip covers: either way the change
+        // belongs to this instant. Outside the clip there is no instant to write to, so a field
+        // nobody has animated still takes the value it rests at.
+        const armed = track.length > 0 || (recording && inside);
         return (
           <ParamRow
             key={field.key}
@@ -252,7 +263,7 @@ function Transform_({
             disabled={overridden || (track.length > 0 && !inside)}
             onChange={(value, coalesceKey) =>
               send(
-                track.length > 0
+                armed
                   ? // Not a plain "linear": the upsert must not turn a held keyframe into a ramp.
                     cmd.keyframeAdd(
                       on.clip(clip.id),
@@ -790,8 +801,9 @@ function EffectParam({
   onSeek: (time: Time) => void;
 }): ReactElement {
   const { locale } = useI18n();
+  const recording = useRecording();
   const track = effect.keyframes[param.key] ?? [];
-  const keyframed = track.length > 0;
+  const keyframed = track.length > 0 || (recording && inside);
   const set = (next: number, interp: Interp = "linear"): Command =>
     cmd.keyframeAdd(on.clip(clip), effect.effectType, param.key, playhead, float(next), interp);
 
@@ -850,8 +862,9 @@ function CurveParam({
   onSeek: (time: Time) => void;
 }): ReactElement {
   const { locale } = useI18n();
+  const recording = useRecording();
   const track = effect.keyframes[param.key] ?? [];
-  const keyframed = track.length > 0;
+  const keyframed = track.length > 0 || (recording && inside);
   const label = param.name[locale];
   const set = (next: readonly (readonly [number, number])[], interp: Interp = "linear"): Command =>
     cmd.keyframeAdd(on.clip(clip), effect.effectType, param.key, playhead, curve(next), interp);

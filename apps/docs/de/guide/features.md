@@ -122,6 +122,10 @@ Spur löscht ihn, und eine Auswahl bestimmt den Verlauf der Strecke danach — l
 weich oder eine eigene Kurve. Ein Zug ist ein Undo-Schritt, und alles funktioniert mit dem Finger
 genauso wie mit der Maus.
 
+Der **Aufnahmemodus** — der runde Knopf im Transport — macht aus jeder Einstellung einen Keyframe am
+Playhead, auf Feldern, die niemand von Hand scharf gestellt hat, genauso wie bei einem Zug über das
+Bild, und sagt es mit einem lila Rahmen ums Fenster.
+
 Das **Kurvenfeld** öffnet neben dem gewählten Keyframe über den Spuren und zeigt den einen
 Abschnitt, der bei ihm beginnt: den Weg, aufgetragen gegen die gleichmäßige Diagonale, mit je einem
 Anfasser an beiden Enden. Die Linie wird beim Kern abgetastet statt hier nachgerechnet — was auf

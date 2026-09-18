@@ -53,6 +53,9 @@
   /* The accent at reading strength, for a pressed symbol or a selected row: a tint carries state
      without turning a quiet control into a second primary action. */
   --v-accent-soft: rgb(91 140 255 / 20%);
+  /* Record mode, and nothing else: a colour that means "what you change now belongs to this
+     moment" is worth reserving. */
+  --v-record: #b57bff;
   --v-danger: #ff6b6b;
   --v-success: #2ea043;
   --v-warning: #f0a030;
@@ -90,6 +93,7 @@
     --v-accent-hover: #1a55e6;
     --v-accent-contrast: #ffffff;
     --v-accent-soft: rgb(47 107 255 / 14%);
+    --v-record: #8a3ffc;
     --v-danger: #d13438;
     --v-success: #107c10;
     --v-warning: #b4690e;
@@ -121,6 +125,7 @@
   --v-accent-hover: #7aa2ff;
   --v-accent-contrast: #0b0d10;
   --v-accent-soft: rgb(91 140 255 / 20%);
+  --v-record: #b57bff;
   --v-danger: #ff6b6b;
   --v-success: #2ea043;
   --v-warning: #f0a030;
@@ -154,6 +159,7 @@
   --v-accent-hover: #1a55e6;
   --v-accent-contrast: #ffffff;
   --v-accent-soft: rgb(47 107 255 / 14%);
+  --v-record: #8a3ffc;
   --v-danger: #d13438;
   --v-success: #107c10;
   --v-warning: #b4690e;

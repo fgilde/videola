@@ -16,13 +16,20 @@ export interface AppShellProps extends TopBarActions {
    * an application should not do.
    */
   layoutPreference?: LayoutPreference;
+  /** Keyframe record mode, shown as a border around everything: it changes what every edit means. */
+  recording?: boolean;
 }
 
-export function AppShell({ children, layoutPreference, ...actions }: AppShellProps): ReactElement {
+export function AppShell({
+  children,
+  layoutPreference,
+  recording,
+  ...actions
+}: AppShellProps): ReactElement {
   return (
     <ThemeProvider>
       <I18nProvider>
-        <Frame layoutPreference={layoutPreference} actions={actions}>
+        <Frame layoutPreference={layoutPreference} recording={recording} actions={actions}>
           {children}
         </Frame>
       </I18nProvider>
@@ -33,10 +40,12 @@ export function AppShell({ children, layoutPreference, ...actions }: AppShellPro
 function Frame({
   children,
   layoutPreference,
+  recording,
   actions,
 }: {
   children: ReactNode;
   layoutPreference?: LayoutPreference;
+  recording?: boolean;
   actions: TopBarActions;
 }): ReactElement {
   // Undo, redo, save, open and export answer wherever the focus is, so they are handled here rather
@@ -48,7 +57,12 @@ function Frame({
   const layout = useLayoutMode(preference);
 
   return (
-    <div className="v-shell" data-layout={layout} data-testid="app-shell">
+    <div
+      className="v-shell"
+      data-layout={layout}
+      data-recording={recording === true ? "" : undefined}
+      data-testid="app-shell"
+    >
       <TopBar
         {...actions}
         compact={layout === "phone"}

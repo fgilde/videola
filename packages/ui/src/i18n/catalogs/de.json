@@ -160,6 +160,7 @@
   "track.remove": "{name} löschen",
   "transport.scopes": "Messgeräte zeigen",
   "transport.mixer": "Mischpult zeigen",
+  "transport.record": "Keyframes aufzeichnen",
   "media.dropHint": "Videodatei hier ablegen",
   "library.label": "Medien",
   "library.empty": "Noch keine Medien. Ziehe eine Videodatei hierher oder nutze „Medien importieren“.",

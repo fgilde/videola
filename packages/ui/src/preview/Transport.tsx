@@ -42,6 +42,12 @@ export interface TransportProps {
    */
   mixer?: boolean;
   onToggleMixer?: () => void;
+  /**
+   * Keyframe record mode. Here and not in the inspector, because it belongs to the playhead: what
+   * it changes is that a setting applies to *this* moment rather than to the clip as a whole.
+   */
+  recording?: boolean;
+  onToggleRecording?: () => void;
 }
 
 export function Transport({
@@ -61,6 +67,8 @@ export function Transport({
   onToggleScopes,
   mixer,
   onToggleMixer,
+  recording,
+  onToggleRecording,
 }: TransportProps): ReactElement {
   const { t, formatTimecode } = useI18n();
   useTransportKeys(playing, onPlayPause, onStep, onShuttle, onMarkerJump);
@@ -118,6 +126,16 @@ export function Transport({
           pressed={mixer === true}
           onClick={onToggleMixer}
         />
+      )}
+      {onToggleRecording !== undefined && (
+        <span className="v-transport__record">
+          <IconButton
+            icon="record"
+            label={t("transport.record")}
+            pressed={recording === true}
+            onClick={onToggleRecording}
+          />
+        </span>
       )}
       <span className="v-transport__time" aria-label={t("transport.position")}>
         {formatTimecode(timeToSeconds(time), fps)}

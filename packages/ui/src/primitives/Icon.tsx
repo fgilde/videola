@@ -42,6 +42,7 @@ const OUTLINED = {
 // outline around a 6 px triangle is a smudge.
 const FILLED = {
   play: "M8 5.2v13.6L19 12z",
+  record: "M12 5.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13",
   pause: "M8 5h3.2v14H8zM12.8 5H16v14h-3.2z",
   skipStart: "M6 6h2.2v12H6zM19 6v12l-9-6z",
   skipEnd: "M15.8 6H18v12h-2.2zM5 6v12l9-6z",

@@ -700,6 +700,22 @@ der beiden Skalierungen oder der Pfad —, auf der Uhr ist.
 
 Die Lautstärke bleibt unanimiert, dort fehlt tatsächlich noch die Auswertung.
 
+#### Keyframes aufzeichnen
+
+Der runde Knopf im Transport ist der Aufnahmemodus: Solange er gedrückt ist, gehört **jede**
+Einstellung dem Playhead und nicht dem Clip. Ein Schieber auf einem Feld, das noch niemand animiert
+hat, schreibt dann einen Keyframe an der Stelle, an der der Playhead steht — genauso wie ein Zug am
+Bild selbst, der sonst die Platzierung des ganzen Clips ändert. Das ist der Weg, auf dem eine
+Bewegung entsteht: Playhead setzen, ändern, Playhead weitersetzen, ändern.
+
+Das Fenster trägt dabei einen dicken lila Rahmen. Ein Modus, der die Bedeutung jeder Änderung
+umdreht, ist wertlos, wenn man ihm nicht ansieht, dass er an ist.
+
+Zwei Dinge bleiben auch im Aufnahmemodus, wie sie sind: Steht der Playhead außerhalb des Clips, gibt
+es keinen Augenblick, auf den geschrieben werden könnte — dann gilt wieder der Wert in Ruhe. Und ein
+Zug am Bild schreibt nur die Felder, die er wirklich geändert hat; ein Verschieben, das nebenbei
+einen Skalierungs-Keyframe setzte, würde eine Größe festnageln, die niemand animieren wollte.
+
 ### Die Keyframe-Spur
 
 Unter den Spuren, innerhalb des scrollenden Bereichs der Zeitleiste, liegt eine Spur mit den

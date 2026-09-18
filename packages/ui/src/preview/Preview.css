@@ -221,3 +221,11 @@
 .v-path__key:hover {
   fill: var(--v-warning, #f0a030);
 }
+
+/* The one control in the transport that is not about moving the playhead: what it changes is what
+   every other change means, which is why it is tinted rather than merely pressed. */
+.v-transport__record [aria-pressed="true"] {
+  color: var(--v-record);
+  border-color: var(--v-record);
+  background: color-mix(in srgb, var(--v-record) 18%, transparent);
+}

@@ -459,3 +459,15 @@
 .v-shell[data-layout="phone"] .v-topbar__brand {
   display: none;
 }
+
+/* Record mode is not a setting, it is a different meaning for every change made while it is on --
+   so it is said the way a camera says it: a border around everything, in a colour nothing else in
+   this interface uses. */
+.v-shell[data-recording] {
+  box-shadow: inset 0 0 0 4px var(--v-record);
+}
+
+.v-shell[data-recording] .v-shell__content {
+  /* The border belongs to the window, not to a panel, so the content is inset rather than covered. */
+  padding: 4px;
+}

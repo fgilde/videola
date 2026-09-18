@@ -106,6 +106,10 @@ drag it to move it, <kbd>Delete</kbd> or the button above the lane to remove it,
 what times the stretch after it — linear, hold, ease or a curve of your own. One drag is one undo
 step, and it all works with a finger as well as with a mouse.
 
+**Record mode** — the round button in the transport — turns every setting into a key at the
+playhead, on fields nobody armed by hand and on a drag across the picture alike, and says so with a
+purple border around the window.
+
 The **curve field** opens beside the picked keyframe, over the tracks, and shows the one segment
 that starts at it: the travel plotted against the even-paced diagonal, with a handle on each end to
 drag. The line is sampled from the core's own easing rather than redrawn here, so what is on screen

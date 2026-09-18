@@ -316,6 +316,9 @@ export function App(): ReactElement {
   const [activeTrack, setActiveTrack] = useState<string>();
   // Which row and instant the "put a medium here" dialogue is answering for.
   const [placing, setPlacing] = useState<{ track: string; at: Time }>();
+  // Record mode. Every setting made while this is on belongs to the playhead rather than to the
+  // clip as a whole, and the window says so with a border nothing else in the interface uses.
+  const [recording, setRecording] = useState(false);
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
   const [selection, setSelection] = useState<readonly ClipId[]>([]);
@@ -1574,9 +1577,30 @@ export function App(): ReactElement {
                 drag.even ? ROTATE_STEP : 0,
               )
             : scaledBy(transform, grab, drag.delta, source, !drag.even);
+      // Recording, the drag belongs to this instant: every field it actually changed becomes a key
+      // at the playhead, and the ones it did not are left alone -- a move that also wrote a scale
+      // key would pin a scale nobody asked to animate.
+      if (recording && playhead >= staged.clip.start && playhead < staged.clip.start + staged.clip.duration) {
+        for (const field of TRANSFORM_KEYS) {
+          if (next[field] === transform[field]) continue;
+          const track = staged.clip.keyframes[field] ?? [];
+          edit(
+            cmd.keyframeAdd(
+              on.clip(staged.clip.id),
+              null,
+              field,
+              playhead,
+              { kind: "float", value: next[field] },
+              track.find((key) => key.time === playhead)?.interp ?? "linear",
+            ),
+            stageKey.current,
+          );
+        }
+        return;
+      }
       edit(cmd.clipSetTransform(staged.clip.id, next), stageKey.current);
     },
-    [edit, playhead, staged],
+    [edit, playhead, recording, staged],
   );
 
   // The tiles are drawn when the shelf opens and thrown away when it closes. Nothing is kept: the
@@ -2048,6 +2072,7 @@ export function App(): ReactElement {
 
   return (
     <AppShell
+      recording={recording}
       onAbout={() => setAbout(true)}
       onKeys={() => setKeys(true)}
       // Only in a browser: in the desktop build this would offer to install what is already
@@ -2172,6 +2197,8 @@ export function App(): ReactElement {
                 onToggleScopes={layout === "phone" ? undefined : () => setScopesOpen((on) => !on)}
                 mixer={layout === "phone" ? undefined : mixerOpen}
                 onToggleMixer={layout === "phone" ? undefined : () => setMixerOpen((on) => !on)}
+                recording={recording}
+                onToggleRecording={() => setRecording((on) => !on)}
               />
               {/* Between the picture and the panels, because that is where the work is: the range
                   is marked here and lands on the timeline below. */}
@@ -2273,6 +2300,7 @@ export function App(): ReactElement {
                   dispatch={edit}
                   onSeek={seek}
                   onBrowse={setBrowsing}
+                  recording={recording}
                 />
               )}
             </>
@@ -2576,6 +2604,9 @@ function added(
 }
 
 /** V1, V2, A1 — the next free number for its kind, which is what a person expects to see. */
+// What a grab on the picture can change, and the only fields record mode writes keys for.
+const TRANSFORM_KEYS = ["x", "y", "scaleX", "scaleY", "rotation", "opacity"] as const;
+
 function nextTrackName(doc: VideolaDocument, kind: TrackKind): string {
   const letter = kind === "audio" ? "A" : kind === "video" ? "V" : "T";
   const taken = doc.state.timeline.tracks.filter((track) => track.kind === kind).length;

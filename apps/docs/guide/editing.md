@@ -659,6 +659,21 @@ while the placement it would write — `x`, `y`, either scale, or the path — i
 
 Volume is still unanimated, and that one is genuinely missing an evaluation.
 
+#### Recording keyframes
+
+The round button in the transport is record mode: while it is pressed **every** setting belongs to
+the playhead rather than to the clip. A slider on a field nobody has animated writes a key where the
+playhead stands, and so does a drag on the picture itself, which otherwise changes the placement of
+the whole clip. That is how a move is made: put the playhead somewhere, change what you want
+changed, move the playhead on.
+
+The window carries a thick purple border while it is on. A mode that reverses the meaning of every
+change is worthless if you cannot see that it is on.
+
+Two things stay as they are in record mode. With the playhead outside the clip there is no instant
+to write to, so the value at rest applies again. And a drag on the picture writes only the fields it
+actually changed; a move that also wrote a scale key would pin down a size nobody asked to animate.
+
 ### The keyframe lane
 
 Under the tracks, inside the timeline's own scrolling area, is a lane showing the keyframes of the

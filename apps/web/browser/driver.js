@@ -619,6 +619,77 @@ async function announce() {
   }
 
   /**
+   * Record mode: every setting belongs to the playhead.
+   *
+   * Without it, animating something means arming each field by hand first, which is the step
+   * nobody finds -- and the question "what is keyframe recording" is really the question "can I
+   * just move the playhead and change things". So the run asks exactly that, of a field nobody
+   * armed, and asks it twice: once with the mode off, where the change has to stay a value at
+   * rest, and once with it on, where it has to become a key. The border is the other half: a mode
+   * that changes what every edit means is worthless if it cannot be seen from across the room.
+   */
+  async function recordMode() {
+    pointer("pointerdown", q("[data-clip-id]"));
+    pointer("pointerup", q("[data-clip-id]"));
+    await until("the properties panel", () => rowSlider("Drehung (Grad)"));
+    toStart();
+    forward(10);
+    await sleep(200);
+
+    dragSlider(rowSlider("Drehung (Grad)"), [10, 20, 30]);
+    await sleep(250);
+    check("off record mode, a change on an unarmed field animates nothing",
+      laneRow("Drehung (Grad)"), -1);
+
+    button("Keyframes aufzeichnen").click();
+    await sleep(200);
+    check("the whole window says the mode is on",
+      q('[data-testid="app-shell"]').hasAttribute("data-recording"), true);
+
+    forward(10);
+    await sleep(200);
+    dragSlider(rowSlider("Breite (Faktor)"), [1.2, 1.4]);
+    await sleep(250);
+    check("recording, the same kind of change lands as a key",
+      laneRow("Breite (Faktor)") >= 0, true);
+    check("at the instant the playhead stands on",
+      all(".v-keylane__key").length > 0, true);
+    check("recording raised nothing", banner(), "");
+
+    button("Rückgängig").click();
+    await sleep(250);
+    check("and one press of undo takes the recorded key with it",
+      laneRow("Breite (Faktor)"), -1);
+
+    // The picture is a control too, and a drag on it is where a move is really made. Recording, it
+    // has to land on the clock like everything else -- a drag that wrote the placement of the whole
+    // clip while the border was up would be the mode lying about what it does.
+    // Counted per parameter rather than per lane: the run has put keys on other fields by now, and
+    // "one more key on x than before" is the only form of the question that survives that.
+    const keysOn = (key) => all(`[data-keyframe-key="${key}"]`).length;
+    const xBefore = keysOn("x");
+    const picture = q(".v-preview__canvas").getBoundingClientRect();
+    const middle = { x: picture.left + picture.width / 2, y: picture.top + picture.height / 2 };
+    const travel = picture.width / 8;
+    pointer("pointerdown", q(".v-stage__box"), { clientX: middle.x, clientY: middle.y });
+    pointer("pointermove", q(".v-stage__svg"), { clientX: middle.x + travel, clientY: middle.y });
+    pointer("pointerup", q(".v-stage__svg"), { clientX: middle.x + travel, clientY: middle.y });
+    await sleep(300);
+    check("a drag on the picture is recorded the same way", keysOn("x") - xBefore, 1);
+    check("dragging the picture while recording raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(250);
+    check("and that drag is one step back as well", keysOn("x"), xBefore);
+    button("Rückgängig").click();
+    await sleep(250);
+
+    button("Keyframes aufzeichnen").click();
+    await sleep(200);
+    check("switching it off takes the border with it",
+      q('[data-testid="app-shell"]').hasAttribute("data-recording"), false);
+  }
+
+  /**
    * The curve editor, end to end and through nothing but the surface: the earlier of the two keys
    * picked, switched to a curve, its handle dragged, and the picture read out of the drawing
    * buffer before and after -- at an instant neither key sits at, because that is the only place a
@@ -1238,6 +1309,7 @@ async function announce() {
     await namedAndSized();
     await fromTheLibrary();
     await theTimeline();
+    await recordMode();
     await stills();
     await fromALink();
 

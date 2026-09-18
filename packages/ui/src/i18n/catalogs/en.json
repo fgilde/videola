@@ -160,6 +160,7 @@
   "track.remove": "Delete {name}",
   "transport.scopes": "Show scopes",
   "transport.mixer": "Show mixer",
+  "transport.record": "Record keyframes",
   "media.dropHint": "Drop the video file here",
   "library.label": "Media",
   "library.empty": "No media yet. Drop a video file here or use “Import media”.",

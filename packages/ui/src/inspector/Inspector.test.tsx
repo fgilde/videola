@@ -103,6 +103,8 @@ interface Scene {
   effects?: readonly EffectDescriptor[];
   /** The whole resolved batch, for a parameter `amountAt` has no shape for. */
   resolved?: EffectParamSnapshot;
+  /** Record mode, the way the application arms it. */
+  recording?: boolean;
   dispatch?: (command: Command, key?: string) => void;
 }
 
@@ -149,6 +151,7 @@ function show(scene: Scene = {}): Rig {
         dispatch={rig.dispatch}
         onSeek={(time) => rig.seeks.push(time)}
         onBrowse={(only) => rig.browsed.push(only)}
+        recording={scene.recording}
       />
     </I18nProvider>,
   );
@@ -452,6 +455,30 @@ describe("the inspector", () => {
       key: "rotation",
       interp: "hold",
     });
+  });
+
+  // Record mode is the whole of "every setting belongs to this moment": a field nobody armed by
+  // hand still takes a key, at the playhead, with the value the slider was given.
+  it("writes a keyframe on an unanimated field while recording", () => {
+    const rig = show({ recording: true, playhead: SECOND });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      type: "keyframe.add",
+      key: "rotation",
+      time: SECOND,
+    });
+  });
+
+  // With the playhead off the clip there is no moment to write to, and a key outside the clip is a
+  // key no picture is ever drawn from -- so the value at rest is still the honest answer.
+  it("writes the static transform while recording with the playhead off the clip", () => {
+    const rig = show({ recording: true, playhead: 4 * SECOND });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    expect(rig.sent[0]?.command).toMatchObject({ type: "clip.setTransform" });
   });
 
   it("still writes the static transform while nothing on that field is keyframed", () => {
