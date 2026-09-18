@@ -30,6 +30,10 @@ An import goes into the **library and nowhere else**. A medium reaches the timel
 sends it there: the plus on its entry, a drag onto a track, or a track's own menu. Dropping ten
 files at once fills a shelf; it does not make ten clips to delete one by one.
 
+The import dialogue closes as soon as something has arrived. The library fills up behind it, and a
+dialogue still standing there afterwards reads as "nothing happened" — which is how the same files
+were imported twice.
+
 An untouched project adopts the format of its first medium, so a 640×360 clip does not sit as a
 small rectangle in the corner of a 1080p frame. Past that point the format is a decision somebody
 made, and **Fit to frame** in the inspector is how a later clip is brought up to it.
@@ -303,6 +307,11 @@ A corner of a turned clip grows along the edge it is on rather than along the sc
 is the angle between where the handle was grabbed and where the pointer is now — not a delta anyone
 accumulates, so a pointer that leaves the window and comes back lands where it is.
 
+The box ends where the picture's pane ends. A clip scaled far past the frame draws a box larger than
+the pane it lives in, and unclipped that box lay over the inspector and swallowed every press meant
+for the sliders underneath. A handle that falls outside is reached through the row's own number
+field instead.
+
 The whole drag is one step in the history, the same bargain the timeline's own drags make: the
 coalescing key is minted on the way down and dropped on the way up, so a hundred pointer moves are
 one <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Every one of them goes through `clip.setTransform`, so the fields
@@ -367,6 +376,17 @@ for — and it is the answer to a menu with eleven media in it that nobody reads
 
 New tracks are counted by their kind: the third video track is V3, even where the project already
 holds four audio tracks.
+
+### Carrying a medium over
+
+A library entry is carried onto the timeline with the button held down. On the way its name hangs off
+the pointer, so that there is something to see at all; the row under the pointer is highlighted, and
+a vertical line shows the instant the clip would start at.
+
+Under the last row, for as long as something is being carried, there is a dashed row: **New track**.
+Releasing there makes a track and puts the clip on it, and the two together are one step back. A
+project with no tracks at all has nothing else — before, there was nothing there to aim at, and the
+first drag onto an empty timeline quietly did nothing.
 
 ## The timeline
 
@@ -632,6 +652,19 @@ slider that nobody can aim.
 
 There is no row for the audio fades. The model carries them and the audio graph plays them, but no
 command sets them — a slider there would write nothing.
+
+### Typing a number, and taking it back
+
+Every row carries a field beside its slider that the value can be typed into. A slider two hundred
+pixels wide cannot be asked for −0.4; the field can, and it takes the decimal comma it also displays
+the value with. Anything past the row's limits is pulled onto the nearest one, and anything that is
+not a number at all changes nothing.
+
+Beside it each row carries a reset that puts the value back to what an untouched clip rests at,
+greyed out while the row is already there. **Reset everything** under the group does it for the whole
+placement at once. That is what makes playing with keyframes bearable: the way back is one press
+rather than a memory of what the number used to be. Anchor and crop stay where they are — neither has
+a row here, and putting back what was never shown is a change nobody can see coming.
 
 ### Keyframes
 

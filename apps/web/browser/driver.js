@@ -645,6 +645,12 @@ async function announce() {
     await sleep(200);
     check("the whole window says the mode is on",
       q('[data-testid="app-shell"]').hasAttribute("data-recording"), true);
+    // Not only the attribute: the first try drew the border as an inset shadow on the shell, which
+    // every panel then painted its own background over. Read off the sheet that draws it, which is
+    // the thing somebody actually sees.
+    const edge = getComputedStyle(q('[data-testid="app-shell"]'), "::after");
+    check("and draws a border over the panels rather than under them",
+      [edge.borderTopWidth, edge.position], ["4px", "fixed"]);
 
     forward(10);
     await sleep(200);
@@ -687,6 +693,46 @@ async function announce() {
     await sleep(200);
     check("switching it off takes the border with it",
       q('[data-testid="app-shell"]').hasAttribute("data-recording"), false);
+
+    // Off the clock again, where a typed number is a number and a reset is a reset. Recording, both
+    // would be keyframes, which is a different check and the one above it.
+    await exactValues();
+  }
+
+  /**
+   * A number typed rather than aimed at, and the way back.
+   *
+   * A slider two hundred pixels wide cannot be asked for -0.4, and somebody who has spent a minute
+   * pushing keyframes around wants the clip back where it started without remembering what it was.
+   */
+  async function exactValues() {
+    const exact = (name) => q(`input[aria-label="${name} genau eingeben"]`);
+    const slider = (name) => rowSlider(name);
+    const field = exact("Position X (px)");
+    writeValue.call(field, "-0,4");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await sleep(250);
+    // Near, not equal: the core holds this in single precision and hands back what a float can say.
+    checkNear("a value typed with a comma is the value that is set",
+      Number(slider("Position X").value), -0.4, 0.001);
+    check("typing raised nothing", banner(), "");
+
+    button("Position X (px) zurücksetzen").click();
+    await sleep(250);
+    check("and one press puts that row back where it rests",
+      Number(slider("Position X").value), 0);
+
+    // The whole placement, in one press, which is what makes a keyframe worth playing with.
+    const rotation = exact("Drehung (Grad)");
+    writeValue.call(rotation, "30");
+    rotation.dispatchEvent(new Event("input", { bubbles: true }));
+    rotation.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await sleep(250);
+    labelled("Alles zurücksetzen").closest("button").click();
+    await sleep(250);
+    check("and one press puts the whole placement back",
+      [Number(slider("Drehung (Grad)").value), Number(slider("Breite (Faktor)").value)], [0, 1]);
   }
 
   /**
@@ -885,6 +931,23 @@ async function announce() {
       button("Rückgängig").click();
       await sleep(300);
     }
+
+    // A clip blown up past the frame draws a box larger than the pane it lives in. Unclipped, that
+    // box lay over the inspector and swallowed every press meant for the sliders under it, which is
+    // "I cannot work the panel any more". Asked the way a press asks: what is under that point?
+    const wideField = q('input[aria-label="Breite (Faktor) genau eingeben"]');
+    writeValue.call(wideField, "4");
+    wideField.dispatchEvent(new Event("input", { bubbles: true }));
+    wideField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await sleep(300);
+    const onPanel = q(".v-inspector").getBoundingClientRect();
+    const hit = document.elementFromPoint(onPanel.left + 30, onPanel.top + 40);
+    check("a clip scaled past the frame keeps its handles off the panel beside it",
+      hit?.closest(".v-stage") === null, true);
+    check("and the panel is what a press there reaches",
+      hit?.closest(".v-inspector") !== null, true);
+    button("Rückgängig").click();
+    await sleep(250);
 
     // And the line the clip travels, once there is one. Two keys on Position X at two instants is
     // a clip that moves, which is the whole condition for a path -- and the path is sampled from
@@ -2812,9 +2875,22 @@ async function announce() {
       () => q('[data-testid="import-no-server"]'));
     check("and somebody without a server is handed the command that starts one",
       setup.textContent.includes("docker run"), true);
-    labelled("Schließen").click();
-    await until("the dialogue to close",
-      () => (q('[data-testid="import-dialog"]') === null ? true : null));
+
+    // A file dropped into the dialogue's own half arrives in the library behind it, and the
+    // dialogue that stays standing afterwards reads as "nothing happened" -- which is how the same
+    // three files were imported twice.
+    const entries = all("[data-media-id]").length;
+    const bytes = await (await fetch("/second.mp4")).blob();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], "dialog.mp4", { type: "video/mp4" }));
+    drag("drop", dialog.querySelector('[data-testid="import-drop"]'), transfer);
+    await until("the dialogue to get out of the way",
+      () => (q('[data-testid="import-dialog"]') === null ? true : null), 20000);
+    check("and what was dropped is in the library",
+      all("[data-media-id]").length, entries + 1);
+    check("importing from the dialogue raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(200);
   }
 
   // What a library is for, and the two complaints that said it was not doing it: a medium can go on
@@ -2866,6 +2942,24 @@ async function announce() {
     // grab. A hand takes longer than a tick to move a mouse; a run that fires both in the same one
     // is testing an editor nobody is using.
     await sleep(120);
+    const overRow = q(".v-track").getBoundingClientRect();
+    pointer("pointermove", surface, {
+      clientX: area.left + 200,
+      clientY: overRow.top + overRow.height / 2,
+    });
+    await sleep(80);
+    // The feedback of a carry in flight. Under the virtual clock React does not commit between two
+    // dispatches in the same task, so what is on screen mid-gesture is only answerable on the wall
+    // clock -- the same artefact the drop hint is skipped for.
+    check("a row that does not exist yet is offered while something is carried",
+      q('[data-testid="timeline-new-row"]') !== null, true);
+    if (!virtual) {
+      check("what is being carried is shown under the pointer",
+        q('[data-testid="timeline-ghost"]')?.textContent, "fixture.mp4");
+      check("the row under it says it would take it",
+        q(".v-track[data-drop-target]") !== null, true);
+    }
+
     for (const part of [0.4, 0.7, 1]) {
       pointer("pointermove", surface, {
         clientX: area.left + 200 * part,

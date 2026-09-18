@@ -1,4 +1,4 @@
-import { useId, useRef, type ReactElement } from "react";
+import { useId, useRef, useState, type ReactElement } from "react";
 
 import type { Interp, Keyframe, Time } from "@videola/core";
 
@@ -35,6 +35,12 @@ export interface ParamRowProps {
   disabled?: boolean;
   onChange: (value: number, coalesceKey?: string) => void;
   keyframes?: KeyframeStrip;
+  /**
+   * What this parameter rests at when nobody has touched it. Given, the row offers to put it back
+   * -- which is what makes a keyframe worth playing with: the way out is one press and not a
+   * memory of what the number used to be.
+   */
+  reset?: number;
 }
 
 let gesture = 0;
@@ -48,9 +54,14 @@ export function ParamRow({
   disabled,
   onChange,
   keyframes,
+  reset,
 }: ParamRowProps): ReactElement {
   const { formatNumber, t } = useI18n();
   const id = useId();
+  // What is being typed, while it is being typed. Undefined means "show the value", which is what
+  // every render outside an edit does -- a field bound straight to the number cannot be typed in,
+  // because a half-written "-0," is not a number and would be thrown away on the keystroke.
+  const [typing, setTyping] = useState<string>();
   // One drag is one undo step: every change under one grab carries one key, and the next grab
   // mints another. There is deliberately no release on pointerup -- between two grabs the only
   // thing that can change this value is the keyboard, and a pointer let go outside the window
@@ -97,12 +108,61 @@ export function ParamRow({
         }}
         onChange={(event) => onChange(Number(event.target.value), coalesceKey.current)}
       />
-      <output className="v-param__value" htmlFor={id}>
-        {formatNumber(value)}
-      </output>
+      {/* A slider cannot be asked for -0.4. Typed rather than nudged, and the same field reads the
+          value back, so there is one number on the row rather than a readout beside an input. */}
+      <input
+        className="v-param__value"
+        type="text"
+        inputMode="decimal"
+        aria-label={t("inspector.exact", { name: name ?? label })}
+        value={typing ?? formatNumber(value)}
+        disabled={disabled === true}
+        onChange={(event) => setTyping(event.target.value)}
+        onBlur={() => {
+          commit(typing, min, max, onChange);
+          setTyping(undefined);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit(typing, min, max, onChange);
+            setTyping(undefined);
+          }
+          if (event.key === "Escape") setTyping(undefined);
+        }}
+      />
+      {reset !== undefined && (
+        <button
+          type="button"
+          className="v-param__reset"
+          aria-label={t("inspector.reset", { name: name ?? label })}
+          title={t("inspector.reset", { name: name ?? label })}
+          disabled={disabled === true || value === reset}
+          onClick={() => onChange(reset)}
+        >
+          <Icon name="undo" />
+        </button>
+      )}
       {keyframes !== undefined && <Keys strip={keyframes} name={name ?? label} />}
     </div>
   );
+}
+
+/**
+ * What was typed, as a number this row can use -- or nothing, where it was not one.
+ *
+ * A comma is a decimal point here: the readout beside the field is written in the reader's own
+ * locale, and a field that shows "-0,4" and then refuses to take it back is a field that lies.
+ */
+function commit(
+  typed: string | undefined,
+  min: number,
+  max: number,
+  onChange: (value: number) => void,
+): void {
+  if (typed === undefined) return;
+  const parsed = Number(typed.replace(",", ".").trim());
+  if (typed.trim() === "" || Number.isNaN(parsed)) return;
+  onChange(Math.min(Math.max(parsed, min), max));
 }
 
 /**

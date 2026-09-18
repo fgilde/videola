@@ -239,7 +239,7 @@ function masterOf(project: Project, effects: Effect[]): Project {
 // The number printed beside a slider, which is what a reader reads. The slider's own `value` is the
 // platform's opinion of what fits between its min and max, and asking it proves nothing about ours.
 const readoutFor = (label: string): string =>
-  screen.getByLabelText(label).parentElement!.querySelector(".v-param__value")!.textContent!;
+  screen.getByLabelText(label).parentElement!.querySelector<HTMLInputElement>(".v-param__value")!.value;
 
 const snapshot = (entries: Record<string, Record<string, number>>): EffectParamSnapshot =>
   new Map(

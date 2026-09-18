@@ -1935,6 +1935,16 @@ export function App(): ReactElement {
     [importAudiola, importCaptions, importLuts, importMedia],
   );
 
+  // The dialogue's own way in: import, then get out of the way if anything came of it.
+  const importThenClose = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      await importFiles(files);
+      setFetching(false);
+    },
+    [importFiles],
+  );
+
   /**
    * Both ways in, in one dialogue.
    *
@@ -2426,8 +2436,11 @@ export function App(): ReactElement {
         <ImportDialog
           canFetch={fetcher?.available}
           results={found}
-          onFiles={(files) => void importFiles(files)}
-          onPick={() => void pickFiles(MEDIA_ACCEPT).then(importFiles)}
+          // Closed once something has actually arrived. The library fills up behind the dialogue,
+          // and a dialogue still standing there afterwards reads as "nothing happened" -- which is
+          // how people imported the same three files twice.
+          onFiles={(files) => void importThenClose(files)}
+          onPick={() => void pickFiles(MEDIA_ACCEPT).then(importThenClose)}
           busy={fetchBusy}
           percent={fetchPercent}
           error={fetchError}

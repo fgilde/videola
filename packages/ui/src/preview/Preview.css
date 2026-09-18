@@ -132,6 +132,16 @@
 .v-stage {
   position: absolute;
   inset: 0;
+  /* A clip scaled past the frame draws a box larger than the pane. Unclipped it lay over the
+     inspector, where its handles swallowed the presses meant for the sliders underneath -- so the
+     overlay ends where the picture's pane ends, and a handle out there is reached by typing a
+     number rather than by covering another panel. */
+  overflow: hidden;
+  /* A clip scaled past the frame draws a box larger than the pane. Unclipped it lay over the
+     inspector, where its handles swallowed the presses meant for the sliders underneath -- so the
+     overlay ends where the picture's pane ends, and a handle out there is reached by typing a
+     number rather than by covering another panel. */
+
   /* Only the handles and the box take the pointer. Everything between them is the picture, which
      is still a picture: a click in the letterbox must not be swallowed by an invisible sheet. */
   pointer-events: none;
@@ -141,7 +151,6 @@
   display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
 }
 
 /* Drawn in project units and stroked in screen ones. Without the non-scaling stroke the outline of

@@ -462,12 +462,15 @@
 
 /* Record mode is not a setting, it is a different meaning for every change made while it is on --
    so it is said the way a camera says it: a border around everything, in a colour nothing else in
-   this interface uses. */
-.v-shell[data-recording] {
-  box-shadow: inset 0 0 0 4px var(--v-record);
-}
-
-.v-shell[data-recording] .v-shell__content {
-  /* The border belongs to the window, not to a panel, so the content is inset rather than covered. */
-  padding: 4px;
+   this interface uses. Drawn as a sheet over the window rather than as a shadow on the shell: every
+   panel paints its own background after its parent, so an inset shadow was covered by the very
+   panels it was meant to frame. */
+.v-shell[data-recording]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  border: 4px solid var(--v-record);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 100;
 }

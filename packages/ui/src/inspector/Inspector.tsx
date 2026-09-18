@@ -190,18 +190,20 @@ interface TransformField {
   key: "x" | "y" | "scaleX" | "scaleY" | "rotation" | "opacity";
   min: number;
   max: number;
+  /** What the field rests at on an untouched clip, for the row's own reset. */
+  reset: number;
 }
 
 // Anchor and crop are not here. Both are fractions of the source with no visible handle to grab,
 // and a slider for a pivot point is worse than none -- they wait for an on-canvas gizmo.
 function transformFields(settings: ProjectSettings): readonly TransformField[] {
   return [
-    { key: "x", min: -settings.width, max: settings.width },
-    { key: "y", min: -settings.height, max: settings.height },
-    { key: "scaleX", min: 0, max: 4 },
-    { key: "scaleY", min: 0, max: 4 },
-    { key: "rotation", min: -180, max: 180 },
-    { key: "opacity", min: 0, max: 1 },
+    { key: "x", min: -settings.width, max: settings.width, reset: 0 },
+    { key: "y", min: -settings.height, max: settings.height, reset: 0 },
+    { key: "scaleX", min: 0, max: 4, reset: 1 },
+    { key: "scaleY", min: 0, max: 4, reset: 1 },
+    { key: "rotation", min: -180, max: 180, reset: 0 },
+    { key: "opacity", min: 0, max: 1, reset: 1 },
   ];
 }
 
@@ -257,6 +259,7 @@ function Transform_({
             value={resolved?.[field.key] ?? clip.transform[field.key]}
             min={field.min}
             max={field.max}
+            reset={field.reset}
             // A slider that moves a number the renderer never reads is worse than one that says it
             // is not in charge. Keyframed and the playhead elsewhere is the same case: the static
             // value is ignored once a track exists, so there is nothing it could truthfully do.
@@ -307,17 +310,31 @@ function Transform_({
           />
         );
       })}
-      <button
-        type="button"
-        className="v-button"
-        // Fitting writes the four static fields, and every one of them that is keyframed -- or
-        // replaced by a path -- is a field the renderer no longer reads. The same rule that leaves
-        // the two path rows without a switch: no control that does nothing.
-        disabled={source === undefined || placementIsAnimated(clip)}
-        onClick={() => source !== undefined && set(fitted(source, project.settings))}
-      >
-        {t("inspector.fit")}
-      </button>
+      <div className="v-inspector__rowButtons">
+        <button
+          type="button"
+          className="v-button"
+          // Fitting writes the four static fields, and every one of them that is keyframed -- or
+          // replaced by a path -- is a field the renderer no longer reads. The same rule that leaves
+          // the two path rows without a switch: no control that does nothing.
+          disabled={source === undefined || placementIsAnimated(clip)}
+          onClick={() => source !== undefined && set(fitted(source, project.settings))}
+        >
+          {t("inspector.fit")}
+        </button>
+        {/* The way back from a session of trying things. Anchor and crop are left where they are:
+            neither has a row here, and putting back what was never shown is a change nobody can
+            see coming. */}
+        <button
+          type="button"
+          className="v-button"
+          onClick={() =>
+            set({ x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1 })
+          }
+        >
+          {t("inspector.resetAll")}
+        </button>
+      </div>
     </Group>
   );
 }
@@ -813,6 +830,7 @@ function EffectParam({
       value={value}
       min={param.min}
       max={param.max}
+      reset={param.default}
       // A keyframed parameter can only be written at a moment the clip covers, and its static
       // value is ignored once a track exists -- so with the playhead elsewhere the slider has
       // nothing it could truthfully do.

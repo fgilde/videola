@@ -275,6 +275,7 @@ export function Timeline({
     onDropMedia,
     onGrabEnd,
   });
+  const carrying = useGrabSpot(grab !== undefined);
   // Top row first, because tracks[0] is the one the compositor draws lowest.
   const rows = useMemo(() => tracks.map((track, index) => ({ track, index })).reverse(), [tracks]);
   const mediaNames = useMemo(() => mediaNameIndex(project.library), [project.library]);
@@ -736,6 +737,7 @@ export function Timeline({
               key={track.id}
               className="v-timeline__header"
               data-active={track.id === activeTrack ? "" : undefined}
+              data-drop-target={dropping?.track === track.id ? "" : undefined}
               data-header-for={track.id}
               style={{ height: `${trackHeight(track)}px`, borderLeftColor: track.colorHex }}
               // The row somebody is working on. Every editor has one, and everything that has to
@@ -817,6 +819,11 @@ export function Timeline({
               </div>
             </div>
           ))}
+          {grab !== undefined && (
+            <div className="v-timeline__newHeader" data-active={dropping?.track === "new" ? "" : undefined}>
+              {t("timeline.newTrack")}
+            </div>
+          )}
           <KeyframeLaneHeaders rows={laneRowList} effects={effects} />
         </div>
 
@@ -847,6 +854,16 @@ export function Timeline({
                   onSelect={select}
                 />
               ))}
+              {/* The one drop nothing on screen could offer before: below the last row is where a
+                  new one is made, and on a project with no rows at all it was the only possible
+                  drop and had no target to aim at. */}
+              {grab !== undefined && (
+                <div
+                  className="v-timeline__newRow"
+                  data-testid="timeline-new-row"
+                  data-active={dropping?.track === "new" ? "" : undefined}
+                />
+              )}
             </div>
             {/* Inside the same content the tracks are in, so the lane's x axis is the timeline's
                 x axis by construction rather than by agreement, and the playhead crosses it. */}
@@ -917,6 +934,16 @@ export function Timeline({
       </div>
 
       {tracks.length === 0 && <p className="v-timeline__empty">{t("empty.noTracks")}</p>}
+
+      {grab !== undefined && carrying !== undefined && (
+        <div
+          className="v-timeline__ghost"
+          data-testid="timeline-ghost"
+          style={{ left: `${carrying.x}px`, top: `${carrying.y}px` }}
+        >
+          {mediaNames.get(grab) ?? ""}
+        </div>
+      )}
 
       {menu !== undefined && (
         <TimelineContextMenu
@@ -1287,6 +1314,29 @@ interface MediaDropConfig {
   tracksArea: RefObject<HTMLElement | null>;
   onDropMedia: ((drop: MediaDrop) => void) | undefined;
   onGrabEnd: (() => void) | undefined;
+}
+
+/**
+ * Where the pointer is while a medium is being carried.
+ *
+ * A grab that starts in another panel shows nothing at all under the pointer -- the entry stays put
+ * in the library and the timeline only lights up once the pointer is over a row. Between those two
+ * there was no drag to see, which is what "I cannot tell that I am dragging" was.
+ */
+function useGrabSpot(active: boolean): { x: number; y: number } | undefined {
+  const [spot, setSpot] = useState<{ x: number; y: number }>();
+
+  useEffect(() => {
+    if (!active) {
+      setSpot(undefined);
+      return;
+    }
+    const onMove = (event: PointerEvent) => setSpot({ x: event.clientX, y: event.clientY });
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [active]);
+
+  return spot;
 }
 
 // A medium carried from the library onto a track. Listening on the window rather than on the

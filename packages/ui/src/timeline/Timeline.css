@@ -399,8 +399,57 @@
 
 .v-track[data-drop-target] {
   background: var(--v-accent-soft);
-  outline: 1px solid var(--v-accent);
-  outline-offset: -1px;
+  outline: 2px solid var(--v-accent);
+  outline-offset: -2px;
+}
+
+.v-timeline__header[data-drop-target] {
+  background: var(--v-accent-soft);
+}
+
+/* The row that does not exist yet. Shown only while something is being carried, in both columns, so
+   the tracks column and the headers column keep the same height. */
+.v-timeline__newRow,
+.v-timeline__newHeader {
+  height: 44px;
+  border: 1px dashed var(--v-border-strong);
+  border-radius: var(--v-radius-sm);
+  box-sizing: border-box;
+}
+
+.v-timeline__newHeader {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--v-space-2);
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+}
+
+.v-timeline__newRow[data-active],
+.v-timeline__newHeader[data-active] {
+  border-color: var(--v-accent);
+  border-style: solid;
+  background: var(--v-accent-soft);
+  color: var(--v-text);
+}
+
+/* What is being carried, under the pointer, over everything. Fixed rather than placed in the
+   timeline: the gesture starts in another panel and crosses the whole window. */
+.v-timeline__ghost {
+  position: fixed;
+  z-index: 40;
+  transform: translate(14px, 14px);
+  max-width: 14rem;
+  overflow: hidden;
+  padding: 2px var(--v-space-2);
+  background: var(--v-accent);
+  color: var(--v-accent-contrast);
+  border-radius: var(--v-radius-sm);
+  font-size: var(--v-text-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: var(--v-shadow);
 }
 
 .v-timeline__empty {

@@ -30,6 +30,10 @@ erst, wenn jemand es dorthin schickt: mit dem Plus am Eintrag, mit einem Zug auf
 das Kontextmenü einer Spur. Zehn Dateien auf einmal fallen zu lassen ist das Füllen eines Regals und
 nicht das Anlegen von zehn Clips, die man einzeln wieder löscht.
 
+Der Importdialog schließt sich, sobald etwas angekommen ist. Die Bibliothek füllt sich hinter ihm,
+und ein Dialog, der danach stehen bleibt, liest sich wie „nichts passiert" — so wurden dieselben
+Dateien zweimal importiert.
+
 Ein unberührtes Projekt übernimmt das Format seines ersten Mediums, damit ein 640×360-Clip nicht als
 kleines Rechteck in der Ecke eines 1080p-Bildes sitzt. Danach ist das Format eine Entscheidung, die
 jemand getroffen hat, und **Ins Bild einpassen** im Inspector holt einen späteren Clip darauf.
@@ -326,6 +330,11 @@ also sind hundert Zeigerbewegungen ein <kbd>Strg</kbd>+<kbd>Z</kbd>. Jede davon 
 `clip.setTransform`, also wandern die Felder im Eigenschaften-Bereich mit dem Rahmen mit, und ein
 Keyframe von der einen wie von der anderen Seite bedeutet dasselbe.
 
+Der Rahmen endet am Rand des Bildbereichs. Ein Clip, der weit über das Format hinaus skaliert ist,
+zeichnet einen Rahmen, der größer ist als der Bereich, in dem er liegt — ungeschnitten lag der über
+dem Eigenschaften-Bereich und schluckte jeden Druck, der einem Schieber darunter galt. Ein Griff, der
+dadurch außerhalb liegt, wird über das Zahlenfeld der jeweiligen Zeile erreicht.
+
 ### Die Bahn, die er nimmt
 
 `Position X` oder `Position Y` an zwei Zeitpunkten auf die Uhr setzen, und die Bahn erscheint als
@@ -391,6 +400,18 @@ er ist die Antwort auf ein Menü mit elf Medien darin, das niemand liest.
 
 Neue Spuren werden nach ihrer Art gezählt: Die dritte Bildspur heißt V3, auch wenn schon vier
 Tonspuren im Projekt liegen.
+
+### Ein Medium herübertragen
+
+Ein Eintrag der Bibliothek wird mit gedrückter Maustaste auf die Zeitleiste getragen. Unterwegs hängt
+sein Name am Zeiger, damit überhaupt zu sehen ist, dass etwas getragen wird; die Spur unter dem
+Zeiger wird hervorgehoben, und eine senkrechte Linie zeigt den Augenblick, an dem der Clip beginnen
+würde.
+
+Unter der letzten Spur steht, solange getragen wird, eine gestrichelte Reihe: **Neue Spur**. Ein
+Loslassen dort legt eine Spur an und setzt den Clip darauf, und beides zusammen ist ein Schritt
+zurück. Ein Projekt ganz ohne Spuren hat nichts anderes — vorher war dort nichts, worauf man zielen
+konnte, und der erste Zug ins Leere tat still gar nichts.
 
 ## Die Timeline
 
@@ -672,6 +693,20 @@ Griff im Bild statt auf einen Schieber, den niemand zielen kann.
 
 Für die Ton-Blenden gibt es keine Zeile. Das Modell trägt sie und der Tongraph spielt sie, aber kein
 Command setzt sie — ein Schieber dort würde nichts schreiben.
+
+### Genau eintippen, und wieder zurück
+
+Jede Zeile trägt neben dem Schieber ein Feld, in das der Wert eingetippt werden kann. Ein Schieber
+über zweihundert Pixel kann nicht nach −0,4 gefragt werden; das Feld schon, und es nimmt das Komma,
+in dem es den Wert auch anzeigt. Was außerhalb der Grenzen der Zeile liegt, wird auf deren Ende
+gezogen, und was gar keine Zahl ist, ändert nichts.
+
+Daneben steht pro Zeile ein Rücksetzer, der den Wert auf das zurückstellt, worauf ein unberührter
+Clip steht — abgeblendet, solange die Zeile ohnehin dort steht. **Alles zurücksetzen** unter der
+Gruppe macht es für die ganze Platzierung auf einmal. Das ist es, was das Spielen mit Keyframes
+zumutbar macht: der Weg zurück ist ein Druck und nicht die Erinnerung daran, was vorher dastand.
+Ankerpunkt und Beschnitt bleiben, wo sie sind — beide haben hier keine Zeile, und etwas
+zurückzusetzen, das nie gezeigt wurde, ist eine Änderung, die niemand kommen sieht.
 
 ### Keyframes
 

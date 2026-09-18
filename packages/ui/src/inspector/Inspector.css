@@ -90,11 +90,11 @@
    guessed. One layout for every pointer, so the coarse rules below only change sizes. */
 .v-param {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   grid-template-areas:
-    "label label"
-    "slider value"
-    "keys keys";
+    "label label label"
+    "slider value reset"
+    "keys keys keys";
   align-items: center;
   /* No row gap on purpose: a range input is a 20 px box around an 8 px track and a touch one is a
      44 px box, so each row already carries its own air. Adding gap on top is what pushed the
@@ -126,7 +126,39 @@
   font-family: var(--v-font-mono);
   font-size: var(--v-text-sm);
   text-align: right;
-  min-width: 4ch;
+  width: 7ch;
+  padding: 2px var(--v-space-1);
+  background: var(--v-surface);
+  color: inherit;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+}
+
+.v-param__value:disabled {
+  opacity: 0.5;
+}
+
+.v-param__reset {
+  grid-area: reset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  border-radius: var(--v-radius-sm);
+  color: var(--v-text-muted);
+  cursor: pointer;
+}
+
+.v-param__reset:hover:not(:disabled) {
+  color: var(--v-text);
+  background: var(--v-surface-hover);
+}
+
+.v-param__reset:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .v-param__keys {
@@ -501,4 +533,14 @@
   .v-param__text {
     min-height: 44px;
   }
+}
+
+.v-inspector__rowButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-1);
+}
+
+.v-inspector__rowButtons > .v-button {
+  flex: 1 1 auto;
 }

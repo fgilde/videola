@@ -283,7 +283,16 @@ function slider(name: string): HTMLInputElement {
 }
 
 function readout(name: string): string | undefined {
-  return slider(name).parentElement?.querySelector("output")?.textContent ?? undefined;
+  return slider(name).parentElement?.querySelector<HTMLInputElement>(".v-param__value")?.value;
+}
+
+function field(name: string): HTMLInputElement {
+  return screen.getByLabelText(`${name} genau eingeben`) as HTMLInputElement;
+}
+
+function type(input: HTMLInputElement, text: string): void {
+  act(() => void fireEvent.change(input, { target: { value: text } }));
+  act(() => void fireEvent.keyDown(input, { key: "Enter" }));
 }
 
 function press(name: string): void {
@@ -459,6 +468,70 @@ describe("the inspector", () => {
 
   // Record mode is the whole of "every setting belongs to this moment": a field nobody armed by
   // hand still takes a key, at the playhead, with the value the slider was given.
+  // A slider cannot be asked for -0.4, and the readout is written in the reader's own locale -- so
+  // the field that shows "0,9" has to take "-0,4" back.
+  it("takes an exact value typed into the row, comma and all", () => {
+    const rig = show();
+
+    type(field("Position X (px)"), "-0,4");
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      type: "clip.setTransform",
+      transform: expect.objectContaining({ x: -0.4 }),
+    });
+  });
+
+  it("keeps the value where what was typed is not a number", () => {
+    const rig = show();
+
+    type(field("Position X (px)"), "nach links");
+
+    expect(rig.sent).toEqual([]);
+  });
+
+  it("pulls a typed value that is out of range onto the end of it", () => {
+    const rig = show();
+
+    type(field("Deckkraft"), "5");
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      transform: expect.objectContaining({ opacity: 1 }),
+    });
+  });
+
+  // The way back from a session of trying things: one press per row, one press for the lot.
+  it("puts one field back to what it rests at", () => {
+    const rig = show({ clip: clipWithMedia({ transform: { ...identity(), rotation: 45 } }) });
+
+    press("Drehung (Grad) zurücksetzen");
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      transform: expect.objectContaining({ rotation: 0 }),
+    });
+  });
+
+  it("offers no reset on a field that is already where it rests", () => {
+    show();
+
+    expect(
+      (screen.getByRole("button", { name: "Drehung (Grad) zurücksetzen" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("puts the whole placement back in one press", () => {
+    const rig = show({
+      clip: clipWithMedia({ transform: { ...identity(), x: 300, scaleX: 2, opacity: 0.2 } }),
+    });
+
+    press("Alles zurücksetzen");
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      type: "clip.setTransform",
+      transform: expect.objectContaining({ x: 0, scaleX: 1, opacity: 1 }),
+    });
+  });
+
   it("writes a keyframe on an unanimated field while recording", () => {
     const rig = show({ recording: true, playhead: SECOND });
 

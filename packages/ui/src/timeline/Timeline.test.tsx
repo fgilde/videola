@@ -359,3 +359,136 @@ describe("Timeline waveforms", () => {
     expect(screen.getByTestId("clip-waveform").getAttribute("aria-hidden")).toBe("true");
   });
 });
+
+// What carrying a medium across the window looks like. Nothing moved under the pointer before:
+// the entry stayed in the library, the timeline lit up only once the pointer was over a row, and
+// in between there was no drag to see at all.
+describe("carrying a medium in from the library", () => {
+  const library = [{ id: "med_a", originalName: "beach.mp4" }] as Project["library"];
+  const stubRects = (): void => {
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 900, bottom: 200, width: 900, height: 200 }),
+    });
+  };
+  const move = (x: number, y: number): void => {
+    act(() => void window.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y })));
+  };
+
+  afterEach(() => Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect"));
+
+  it("shows what is being carried, under the pointer", () => {
+    renderTimeline(
+      <Timeline
+        project={makeProject([makeTrack("trk_1")], library)}
+        playhead={0}
+        grab="med_a"
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    move(300, 120);
+
+    expect(screen.getByTestId("timeline-ghost").textContent).toBe("beach.mp4");
+  });
+
+  it("offers a row that does not exist yet, but only while something is being carried", () => {
+    const project = makeProject([makeTrack("trk_1")], library);
+    const { rerender } = renderTimeline(
+      <Timeline project={project} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
+    );
+    expect(screen.queryByTestId("timeline-new-row")).toBeNull();
+
+    act(() =>
+      rerender(
+        <I18nProvider>
+          <Timeline
+            project={project}
+            playhead={0}
+            grab="med_a"
+            dispatch={() => {}}
+            onSeek={() => {}}
+          />
+        </I18nProvider>,
+      ),
+    );
+
+    expect(screen.getByTestId("timeline-new-row")).toBeTruthy();
+  });
+
+  // Below the last row is where a new one is made. `trackAt` clamps -- it answers with a row for
+  // any y at all, because a move gesture let go a pixel low should still land on the row it came
+  // from -- so a drop that trusted it could never make a row at all.
+  it("takes a drop under the last row as a new one, not as the row above it", () => {
+    stubRects();
+    const drops: { track?: string }[] = [];
+    renderTimeline(
+      <Timeline
+        project={makeProject([makeTrack("trk_1")], library)}
+        playhead={0}
+        grab="med_a"
+        onDropMedia={(drop) => drops.push(drop)}
+        onGrabEnd={() => {}}
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    // The row is 72 px tall and starts at the top of the tracks area.
+    move(400, 150);
+    act(() =>
+      void window.dispatchEvent(new PointerEvent("pointerup", { clientX: 400, clientY: 150 })),
+    );
+
+    expect(drops[0]?.track).toBe("new");
+  });
+
+  it("takes a drop on a row as that row", () => {
+    stubRects();
+    const drops: { track?: string }[] = [];
+    renderTimeline(
+      <Timeline
+        project={makeProject([makeTrack("trk_1")], library)}
+        playhead={0}
+        grab="med_a"
+        onDropMedia={(drop) => drops.push(drop)}
+        onGrabEnd={() => {}}
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    move(400, 30);
+    act(() =>
+      void window.dispatchEvent(new PointerEvent("pointerup", { clientX: 400, clientY: 30 })),
+    );
+
+    expect(drops[0]?.track).toBe("trk_1");
+  });
+
+  // The one drop a project with no tracks can make, and the one that did nothing: there were no
+  // rows, so there was nothing under the pointer to aim at and nothing to release onto.
+  it("takes a drop onto an empty timeline as a new row", () => {
+    stubRects();
+    const drops: unknown[] = [];
+    renderTimeline(
+      <Timeline
+        project={makeProject([], library)}
+        playhead={0}
+        grab="med_a"
+        onDropMedia={(drop) => drops.push(drop)}
+        onGrabEnd={() => {}}
+        dispatch={() => {}}
+        onSeek={() => {}}
+      />,
+    );
+
+    move(400, 100);
+    act(() =>
+      void window.dispatchEvent(new PointerEvent("pointerup", { clientX: 400, clientY: 100 })),
+    );
+
+    expect(drops).toEqual([{ media: "med_a", track: "new", at: expect.any(Number) }]);
+  });
+});
