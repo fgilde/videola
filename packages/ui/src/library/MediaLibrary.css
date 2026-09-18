@@ -188,3 +188,32 @@
   align-items: center;
   gap: var(--v-space-1);
 }
+
+/* The preview's own quality, said as a choice rather than as a button whose name was a verb. It
+   sits under the import button because it is a setting, not an action. */
+.v-library__quality {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.v-library__quality > span {
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}
+
+.v-library__quality select {
+  width: 100%;
+  min-height: var(--v-control-height, 2.25rem);
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  font: inherit;
+}
+
+.v-library__quality small {
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}

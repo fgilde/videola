@@ -30,6 +30,7 @@ import {
   type Project,
   type Time,
   type TrackId,
+  type TrackKind,
 } from "@videola/core";
 
 import type { Peaks } from "@videola/media";
@@ -79,6 +80,10 @@ import "./Timeline.css";
 export const DEFAULT_FLICKS_PER_PIXEL = FLICKS_PER_SECOND / 100;
 
 const ZOOM_FACTOR = 2;
+
+// How much of the window the whole edit fills when it is fitted. The rest is where the last clip's
+// right edge can be taken hold of.
+const FIT_FILL = 0.94;
 
 // One press of the height buttons. A third of the resting row, so three presses double a track and
 // three halve it -- and the core clamps both ends, so neither runs off.
@@ -158,6 +163,21 @@ export interface TimelineProps {
    * own geometry, and a second opinion on any of them could disagree with the first.
    */
   grab?: MediaGrab;
+  /**
+   * The row somebody is working on, and how it changes.
+   *
+   * It is what the library's button fills, what an insert without a named track uses, and what a
+   * new clip belongs to. Without it every such action guesses at the first row of the right kind,
+   * which is the same row forever however many the project grows.
+   */
+  activeTrack?: string;
+  onActivateTrack?: (track: string) => void;
+  /** Asked from the row's own menu: a medium chosen from the library and put at that instant. */
+  onPlaceMedia?: (track: string, at: Time) => void;
+  onPasteAt?: (track: string, at: Time) => void;
+  onRenameTrack?: (track: string) => void;
+  /** A new, empty row of this kind. */
+  onAddTrack?: (kind: TrackKind) => void;
   /** Released over a track. One command, so one undo step. */
   onDropMedia?: (drop: MediaDrop) => void;
   /** Released anywhere else, or cancelled. The grab is over either way. */
@@ -181,6 +201,12 @@ export function Timeline({
   onFade,
   onSelectionChange,
   grab,
+  activeTrack,
+  onActivateTrack,
+  onPlaceMedia,
+  onPasteAt,
+  onRenameTrack,
+  onAddTrack,
   onDropMedia,
   onGrabEnd,
 }: TimelineProps): ReactElement {
@@ -374,9 +400,17 @@ export function Timeline({
   // The whole edit in the window, which is where a person starts and returns to. Set rather than
   // stepped: a factor from here would need a loop, and the loop would stop on the clamp at a zoom
   // that is nearly right instead of the one that fits.
+  /**
+   * The whole edit in the window, with room to the right of it.
+   *
+   * The room is the point. Fitted exactly, the last clip ends at the last pixel of the surface and
+   * its right edge is an edge no pointer can grab: trimming the end of the edit -- which is the one
+   * trim everybody makes -- becomes impossible until you zoom out by hand and nothing says so. A
+   * sixteenth of the window is enough to take hold of and too little to look like a gap.
+   */
   const fit = useCallback(() => {
     if (viewport.width < 1) return;
-    setFlicksPerPixel(clampZoom(end / viewport.width, end));
+    setFlicksPerPixel(clampZoom(end / (viewport.width * FIT_FILL), end));
     if (scrollRef.current !== null) scrollRef.current.scrollLeft = 0;
   }, [end, viewport.width]);
 
@@ -524,6 +558,27 @@ export function Timeline({
             label={t("timeline.zoomIn")}
             onClick={() => zoom(1 / ZOOM_FACTOR, viewport.width / 2)}
           />
+          {/* The third zoom every editor has, and the only one that was a key nobody could see.
+              "Fit" is what somebody reaches for after zooming in to work on a frame, and a
+              keystroke printed on a help page is not where they reach. */}
+          <IconButton icon="fit" label={t("timeline.zoomFit")} onClick={fit} />
+          {/* A row of its own, made here rather than in a menu two panels away: an empty track is
+              what somebody makes before they put anything on it, and the timeline is where they
+              are looking when they want one. */}
+          {onAddTrack !== undefined && (
+            <>
+              <IconButton
+                icon="plus"
+                label={t("timeline.addTrack.video")}
+                onClick={() => onAddTrack("video")}
+              />
+              <IconButton
+                icon="waveform"
+                label={t("timeline.addTrack.audio")}
+                onClick={() => onAddTrack("audio")}
+              />
+            </>
+          )}
           <IconButton
             icon="magnet"
             label={t("timeline.snap")}
@@ -680,7 +735,18 @@ export function Timeline({
             <div
               key={track.id}
               className="v-timeline__header"
+              data-active={track.id === activeTrack ? "" : undefined}
+              data-header-for={track.id}
               style={{ height: `${trackHeight(track)}px`, borderLeftColor: track.colorHex }}
+              // The row somebody is working on. Every editor has one, and everything that has to
+              // put a clip somewhere without being told where -- the library's own button, a paste,
+              // an insert -- asks it rather than guessing at the first row of the right kind.
+              onPointerDown={(event) => {
+                if (event.target instanceof Element && event.target.closest("button") !== null) {
+                  return;
+                }
+                onActivateTrack?.(track.id);
+              }}
             >
               <span className="v-timeline__headerName">{track.name}</span>
               <span className="v-timeline__headerKind">{t(`track.kind.${track.kind}`)}</span>
@@ -862,6 +928,9 @@ export function Timeline({
           dispatch={dispatch}
           onClose={gestures.closeMenu}
           onDelete={remove}
+          onPlaceMedia={onPlaceMedia}
+          onPasteAt={onPasteAt}
+          onRenameTrack={onRenameTrack}
           onCopy={copy}
           onCut={cut}
           onPaste={paste}
@@ -886,6 +955,10 @@ interface MenuProps {
   dispatch: (command: Command, coalesceKey?: string) => void;
   onClose: () => void;
   onDelete: (ripple: boolean) => void;
+  /** A medium chosen and put on this row at this instant -- the host owns the library. */
+  onPlaceMedia?: (track: string, at: Time) => void;
+  onPasteAt?: (track: string, at: Time) => void;
+  onRenameTrack?: (track: string) => void;
   onCopy: () => void;
   onCut: () => void;
   onPaste: () => void;
@@ -940,6 +1013,52 @@ function TimelineContextMenu(props: MenuProps): ReactElement | null {
             label: t("timeline.deleteMarker"),
             onSelect: () => {
               dispatch(cmd.markerRemove(marker));
+              onClose();
+            },
+          },
+        ]}
+      />
+    );
+  }
+
+  // Empty space on a row: what can be done *here*, at this instant, on this track.
+  if (menu.target.kind === "track") {
+    const { track, at } = menu.target;
+    const row = project.timeline.tracks.find((candidate) => candidate.id === track);
+    if (row === undefined) return null;
+    return (
+      <ContextMenu
+        x={menu.x}
+        y={menu.y}
+        label={t("timeline.trackMenu", { name: row.name })}
+        onClose={onClose}
+        items={[
+          {
+            label: t("timeline.putMediaHere"),
+            onSelect: () => {
+              props.onPlaceMedia?.(track, at);
+              onClose();
+            },
+          },
+          {
+            label: t("timeline.pasteHere"),
+            disabled: !props.hasClipboard,
+            onSelect: () => {
+              props.onPasteAt?.(track, at);
+              onClose();
+            },
+          },
+          {
+            label: t("timeline.renameTrack"),
+            onSelect: () => {
+              props.onRenameTrack?.(track);
+              onClose();
+            },
+          },
+          {
+            label: t("track.remove", { name: row.name }),
+            onSelect: () => {
+              dispatch(cmd.trackRemove(track));
               onClose();
             },
           },

@@ -90,18 +90,22 @@ export function MediaLibrary({
           </>
         )}
         {/* A proxy that nobody can switch off is a picture quality decided behind the person's
-            back. Pressed means the preview is on the originals -- the state the button names is
-            the state it is in, not the one it would go to, because the second reading is what
-            makes a toggle ambiguous. */}
+            back -- but "Use originals" said nothing about what it was for. Named as the choice it
+            is, with both answers spelled out and the thing everybody worries about said plainly:
+            the export never reads a proxy, whatever this is set to. */}
         {onUseOriginals !== undefined && (
-          <button
-            type="button"
-            className="v-button v-library__proxies"
-            aria-pressed={useOriginals}
-            onClick={() => onUseOriginals(!useOriginals)}
-          >
-            {t("library.useOriginals")}
-          </button>
+          <label className="v-library__quality">
+            <span>{t("preview.quality")}</span>
+            <select
+              aria-label={t("preview.quality")}
+              value={useOriginals ? "original" : "proxy"}
+              onChange={(event) => onUseOriginals(event.target.value === "original")}
+            >
+              <option value="proxy">{t("preview.quality.proxy")}</option>
+              <option value="original">{t("preview.quality.original")}</option>
+            </select>
+            <small>{t("preview.qualityNote")}</small>
+          </label>
         )}
       </div>
       {library.length === 0 ? (

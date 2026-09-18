@@ -29,6 +29,7 @@ export * from "./export/ExportDialog";
 export * from "./export/HandOffDialog";
 export * from "./export/DestinationsDialog";
 export * from "./media/ImportDialog";
+export * from "./media/PlaceMediaDialog";
 export * from "./templates/TemplateGallery";
 export * from "./templates/TemplateAuthor";
 export * from "./templates/TemplateWizard";

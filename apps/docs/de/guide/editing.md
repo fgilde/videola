@@ -45,8 +45,10 @@ einem Videoclip. Ein Proxy wird dafür nie gebaut — es gibt nichts zu transkod
 ## Die Medienbibliothek
 
 Alles, was im Projekt liegt, mit Länge, Maßen in Pixeln und Abtastrate. **Auf die Zeitleiste** setzt
-ein Medium hinter das, was auf der ersten Spur seiner Art schon liegt — dieselbe Stelle, an der ein
-Import landet. Ein Medium lässt sich so beliebig oft platzieren, ohne es erneut zu importieren.
+ein Medium hinter das, was auf der aktiven Spur schon liegt — und wo keine aktiv ist oder die aktive
+das Material nicht nimmt, hinter das auf der ersten Spur seiner Art. Ein Medium lässt sich so
+beliebig oft platzieren, ohne es erneut zu importieren; welche Spur es trifft, entscheidet ein Klick
+auf deren Kopf.
 
 Jeder Eintrag trägt ein Vorschaubild, das aus der Datei selbst dekodiert wurde, und Tonclips zeichnen
 ihre Waveform aus den Puffern, die der Graph ohnehin dekodiert hat — kein zweites Dekodieren, und ein
@@ -94,9 +96,11 @@ Bibliothek: er hat keine Medienkennung, wird nie in eine `.videola` geschrieben 
 neu verknüpfen. Ein Medium, dessen Proxy fehlt, verhält sich genau wie eines, das nie einen hatte —
 das Original wird dekodiert, und nur die Geschwindigkeit ist weg.
 
-**Originale benutzen** in der Werkzeugleiste der Bibliothek schaltet die Vorschau zurück auf das
-Material. Der Schalter ändert, was dekodiert wird, nicht, was angezeigt wird: jeder offene Dekoder
-wird geschlossen und auf der Datei wieder geöffnet, die der Schalter jetzt nennt.
+**Vorschauqualität** in der Werkzeugleiste der Bibliothek ist die Wahl zwischen beidem:
+*Flüssig (720p-Kopien)* dekodiert die Proxies, *Scharf (die Originaldateien)* das Material selbst.
+Die Wahl ändert, was dekodiert wird, nicht, was angezeigt wird: jeder offene Dekoder wird geschlossen
+und auf der Datei wieder geöffnet, die die Wahl jetzt nennt. Auf den Export wirkt sie nie — der liest
+ohnehin immer die Originale.
 
 ## In- und Out-Punkte
 
@@ -359,6 +363,30 @@ solo-geschaltet — und die Schalter selbst, denn darüber wird wieder entsperrt
 Die Zeitleiste wartet diese Ablehnung nicht ab. Ein Clip auf einer gesperrten Zeile ist gar kein
 Ziel für eine Zieh-Geste, kommt also nie unter dem Zeiger weg und springt zurück; die Zeile ist
 schraffiert, und das Schloss neben ihrem Namen sagt warum.
+
+## Spuren
+
+Die beiden Knöpfe links in der Werkzeugleiste der Zeitleiste legen eine leere Spur an — eine Bild-
+und eine Tonspur —, und die neue Spur ist sofort die aktive. Aktiv heißt: Sie trägt einen hellen
+Rand, und alles, was einen Clip ablegen muss, ohne gefragt zu haben, wo, fragt sie zuerst. Aktiviert
+wird eine Spur mit einem Klick auf ihren Kopf.
+
+Ein Rechtsklick auf freien Platz einer Spur öffnet deren Kontextmenü, und zwar für **die Stelle, an
+der geklickt wurde**:
+
+| Eintrag | Wirkung |
+|---|---|
+| Medium hier einsetzen … | öffnet die Liste der importierten Medien und setzt das gewählte an diese Stelle |
+| Hier einfügen | setzt die Zwischenablage an diese Stelle statt an den Playhead |
+| Spur umbenennen | fragt nach einem Namen |
+| V1 löschen | nimmt die Spur mitsamt allem darauf; ein Undo holt beides zurück |
+
+Der Dialog hinter **Medium hier einsetzen …** zeigt nur, was das Projekt schon hat: Vorschaubild,
+Name und Länge, ein Doppelklick setzt. Er importiert nichts — dafür gibt es den Importdialog —, und
+er ist die Antwort auf ein Menü mit elf Medien darin, das niemand liest.
+
+Neue Spuren werden nach ihrer Art gezählt: Die dritte Bildspur heißt V3, auch wenn schon vier
+Tonspuren im Projekt liegen.
 
 ## Die Timeline
 

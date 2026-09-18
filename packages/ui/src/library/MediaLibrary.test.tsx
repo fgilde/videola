@@ -218,27 +218,35 @@ describe("MediaLibrary and proxies", () => {
 
   // The button names the state it is in, not the one it would go to: pressed means the preview is
   // on the originals.
-  it("shows the switch as pressed while the preview is on the originals", () => {
+  // It used to be a button called "Use originals", which says what it does and nothing about why
+  // anybody would. It is the preview's own quality now, with both answers written out.
+  it("shows which quality the preview is reading", () => {
     const onUseOriginals = vi.fn<(on: boolean) => void>();
     showProxies([video("a")], new Map(), { useOriginals: true, onUseOriginals });
-    const button = screen.getByRole("button", { name: "Originale benutzen" });
 
-    expect(button.getAttribute("aria-pressed")).toBe("true");
+    const choice = screen.getByLabelText("Vorschauqualität") as HTMLSelectElement;
 
-    fireEvent.click(button);
-
-    expect(onUseOriginals.mock.calls).toEqual([[false]]);
+    expect(choice.value).toBe("original");
+    expect(choice.textContent).toContain("Flüssig");
+    expect(choice.textContent).toContain("Scharf");
   });
 
-  it("asks for the originals when the switch is off and pressed", () => {
+  it("asks for the originals when that is what was chosen, and for proxies when it is not", () => {
     const onUseOriginals = vi.fn<(on: boolean) => void>();
     showProxies([video("a")], new Map(), { useOriginals: false, onUseOriginals });
-    const button = screen.getByRole("button", { name: "Originale benutzen" });
+    const choice = screen.getByLabelText("Vorschauqualität");
 
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-
-    fireEvent.click(button);
-
+    fireEvent.change(choice, { target: { value: "original" } });
     expect(onUseOriginals.mock.calls).toEqual([[true]]);
+
+    fireEvent.change(choice, { target: { value: "proxy" } });
+    expect(onUseOriginals.mock.calls).toEqual([[true], [false]]);
+  });
+
+  // The question everybody actually has about a proxy, answered where the choice is made.
+  it("says that an export is not affected by it", () => {
+    showProxies([video("a")], new Map(), { useOriginals: false, onUseOriginals: vi.fn() });
+
+    expect(screen.getByText(/Export/)).not.toBeNull();
   });
 });

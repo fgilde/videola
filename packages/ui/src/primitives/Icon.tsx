@@ -10,6 +10,8 @@ const OUTLINED = {
   moon: "M20 14.2A8.2 8.2 0 0 1 9.8 4 8.2 8.2 0 1 0 20 14.2Z",
   zoomIn: "M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M20 20l-4.4-4.4M11 8v6M8 11h6",
   zoomOut: "M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M20 20l-4.4-4.4M8 11h6",
+  // Arrows pushing out to four corners: the whole edit made to fill the window.
+  fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5M9 12h6",
   magnet: "M6 4v8a6 6 0 0 0 12 0V4M6 10h4M14 10h4",
   flag: "M6 3v18M6 4.5h11l-2.4 3.75L17 12H6",
   plus: "M12 5v14M5 12h14",

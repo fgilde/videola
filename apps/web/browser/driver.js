@@ -1067,15 +1067,19 @@ async function announce() {
     // decoder underneath a running preview is survivable. The console check at the end of this run
     // is the second half of it, and it is what caught a disposed Input being reported as a decoder
     // failure once per source, every time this button was pressed.
-    labelled("Originale benutzen").click();
-    await sleep(400);
-    check("pressing it puts the preview on the originals",
-      labelled("Originale benutzen").getAttribute("aria-pressed"), "true");
+    const quality = q('select[aria-label="Vorschauqualität"]');
+    const setQuality = async (value) => {
+      quality.value = value;
+      quality.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(400);
+    };
+    await setQuality("original");
+    check("choosing the sharp setting puts the preview on the originals",
+      q('select[aria-label="Vorschauqualität"]').value, "original");
     check("switching raised nothing", banner(), "");
-    labelled("Originale benutzen").click();
-    await sleep(400);
+    await setQuality("proxy");
     check("and it goes back to the proxies",
-      labelled("Originale benutzen").getAttribute("aria-pressed"), "false");
+      q('select[aria-label="Vorschauqualität"]').value, "proxy");
     check("and the timeline is untouched by any of it", all("[data-clip-id]").length, 1);
 
     noteZones("layout");
@@ -1233,6 +1237,7 @@ async function announce() {
     await soundAndChain();
     await namedAndSized();
     await fromTheLibrary();
+    await theTimeline();
     await stills();
     await fromALink();
 
@@ -2792,6 +2797,89 @@ async function announce() {
     await sleep(200);
     check("and the whole drop is one press of undo",
       all(".v-timeline__header").length, tracksBefore);
+  }
+
+  // The gestures a timeline is: move a clip along its track, move it to another one, put a second
+  // clip on a track that already has one, and trim an edge. With a mouse, which is what a desktop
+  // has and what nothing here had ever driven -- the only move check in this file was a finger on a
+  // tablet.
+  async function theTimeline() {
+    const strip = () => q("[data-clip-id]");
+    const alongTheTimeline = () => strip().offsetLeft;
+    const drag = async (from, to) => {
+      pointer("pointerdown", from.el, { clientX: from.x, clientY: from.y });
+      // The timeline listens on the window and only starts once React has rendered the grab. A hand
+      // is slower than a tick; a run that fires both in one is driving an editor nobody uses.
+      await sleep(120);
+      for (const part of [0.34, 0.67, 1]) {
+        pointer("pointermove", q(".v-timeline__scroll"), {
+          clientX: from.x + (to.x - from.x) * part,
+          clientY: from.y + (to.y - from.y) * part,
+        });
+        await sleep(40);
+      }
+      pointer("pointerup", q(".v-timeline__scroll"), { clientX: to.x, clientY: to.y });
+      await sleep(250);
+    };
+
+    // Back to a zoom where the whole clip is on screen. Earlier sections zoom in far enough that a
+    // two second clip is wider than the window, and an edge outside the viewport is an edge no
+    // pointer can reach -- which is exactly what "I cannot trim" looks like from the outside.
+    button("Ganzen Schnitt einpassen").click();
+    await sleep(250);
+    // Fitted, the edit fills the window but not the last pixel of it: the room on the right is
+    // where the final clip's edge can be taken hold of, which is the one trim everybody makes.
+    checkAtLeast("fitting leaves room to grab the last edge",
+      q(".v-timeline__scroll").getBoundingClientRect().right - strip().getBoundingClientRect().right,
+      20);
+    const box = strip().getBoundingClientRect();
+    const middle = { el: strip(), x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    const startedAt = alongTheTimeline();
+
+    await drag(middle, { x: middle.x + 150, y: middle.y });
+    checkNear("a mouse drags a clip along its track", alongTheTimeline() - startedAt, 150, 8);
+    check("dragging raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(200);
+    check("and the drag is one step back", alongTheTimeline(), startedAt);
+
+    // A second track, and the clip carried onto it. Which row a clip is on is the row its strip is
+    // drawn in, so the check is the strip's own top against the rows.
+    pickMenu("Spur hinzufügen");
+    await sleep(250);
+    const rows = all(".v-timeline__header").length;
+    checkAtLeast("a track can be added", rows, 2);
+    const onRow = () => Math.round(strip().getBoundingClientRect().top);
+    const wasOn = onRow();
+    const target = all(".v-timeline__header")[0].getBoundingClientRect();
+    const again = strip().getBoundingClientRect();
+    await drag(
+      { el: strip(), x: again.left + again.width / 2, y: again.top + again.height / 2 },
+      { x: again.left + again.width / 2, y: target.top + target.height / 2 },
+    );
+    check("and a clip can be carried onto it", onRow() !== wasOn, true);
+    check("carrying it raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(200);
+
+    // Trimming, which is the edge rather than the middle. The right edge in, then back.
+    const edge = strip().getBoundingClientRect();
+    const width = () => Math.round(strip().getBoundingClientRect().width);
+    const wide = width();
+    // The handle, not the clip: the gesture reads `data-edge` off the element the pointer went down
+    // on, and a synthetic event on the clip itself is a drag rather than a trim. A real pointer
+    // lands on whatever is under it, which is the handle.
+    const handle = strip().querySelector('[data-edge="end"]');
+    check("a clip carries a handle at its end", handle !== null, true);
+    await drag(
+      { el: handle, x: edge.right - 3, y: edge.top + edge.height / 2 },
+      { x: edge.right - 60, y: edge.top + edge.height / 2 },
+    );
+    checkNear("an edge trims the clip", wide - width(), 60, 10);
+    check("trimming raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(200);
+    checkNear("and the trim is one step back", width(), wide, 2);
   }
 
   async function dropFixture() {

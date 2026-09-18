@@ -121,6 +121,7 @@ import {
   Stage,
   DestinationsDialog,
   ImportDialog,
+  PlaceMediaDialog,
   TemplateAuthor,
   TemplateGallery,
   TemplateWizard,
@@ -310,6 +311,11 @@ export function App(): ReactElement {
     watchForWebUpdate((take) => setTakeUpdate(() => take));
   }, []);
   const [grab, setGrab] = useState<MediaGrab>();
+  // The row being worked on. Everything that has to place a clip without being told where asks
+  // this before it falls back to the first row of the right kind.
+  const [activeTrack, setActiveTrack] = useState<string>();
+  // Which row and instant the "put a medium here" dialogue is answering for.
+  const [placing, setPlacing] = useState<{ track: string; at: Time }>();
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
   const [selection, setSelection] = useState<readonly ClipId[]>([]);
@@ -991,15 +997,64 @@ export function App(): ReactElement {
     };
   }, [playback]);
 
-  const addTrack = useCallback(() => {
-    if (doc === undefined) return;
-    try {
-      doc.dispatch(cmd.trackAdd("video", `V${doc.state.timeline.tracks.length + 1}`));
-      setError(undefined);
-    } catch (err) {
-      reportError("error.actionFailed", err);
-    }
-  }, [doc, reportError]);
+  /**
+   * An empty row, of the kind that was asked for, named after its own kind.
+   *
+   * It used to be one video track named after the total number of tracks, so a project with two
+   * audio tracks got a "V3" as its first video row. The new one is also made active, because a row
+   * somebody just asked for is the row they are about to fill.
+   */
+  const addTrack = useCallback(
+    (kind: TrackKind) => {
+      if (doc === undefined) return;
+      try {
+        const track = added(doc, kind, nextTrackName(doc, kind));
+        if (track !== undefined) setActiveTrack(track.id);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
+
+  // A medium from the library, put on a named row at a named instant -- the row's own menu asks for
+  // it, and this is the half that knows what the library holds.
+  const placeMedia = useCallback(
+    (track: string, at: Time, media: MediaId) => {
+      if (doc === undefined) return;
+      try {
+        const asset = doc.state.library.find((entry) => entry.id === media);
+        if (asset === undefined) return;
+        doc.dispatch(
+          cmd.clipAdd(track, { kind: "media", media }, at, asset.duration ?? STILL_DURATION),
+        );
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
+
+  const renameTrack = useCallback(
+    (track: string) => {
+      if (doc === undefined) return;
+      const current = doc.state.timeline.tracks.find((candidate) => candidate.id === track);
+      if (current === undefined) return;
+      // A browser prompt rather than a dialogue of our own: renaming a row is two seconds of typing,
+      // and a modal built for it would be a modal to maintain for two seconds of typing.
+      const name = window.prompt(current.name, current.name);
+      if (name === null || name.trim() === "") return;
+      try {
+        doc.dispatch(cmd.trackRename(track, name.trim()));
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, reportError],
+  );
 
   // A title, a shape or a countdown at the playhead. Two dispatches under one key where a track has
   // to be made first, so the whole insert is one press of undo and a project with an empty track in
@@ -1290,14 +1345,14 @@ export function App(): ReactElement {
     (media: MediaId) => {
       if (doc === undefined) return;
       try {
-        appendClip(doc, media);
+        appendClip(doc, media, activeTrack);
         setPanel("timeline");
         setError(undefined);
       } catch (err) {
         reportError("error.actionFailed", err);
       }
     },
-    [doc, reportError],
+    [doc, reportError, activeTrack],
   );
 
   /**
@@ -2008,7 +2063,7 @@ export function App(): ReactElement {
       file={doc === undefined ? undefined : { name: file?.name, unsaved }}
       onOpen={() => void open()}
       onImportMedia={doc === undefined ? undefined : openImport}
-      onAddTrack={doc === undefined ? undefined : addTrack}
+      onAddTrack={doc === undefined ? undefined : () => addTrack("video")}
       onInsert={doc === undefined ? undefined : insertGenerator}
       onImportCaptions={
         doc === undefined
@@ -2198,6 +2253,11 @@ export function App(): ReactElement {
                   onFade={fadeEnds}
                   onSelectionChange={setSelection}
                   grab={grab}
+                  activeTrack={activeTrack}
+                  onActivateTrack={setActiveTrack}
+                  onAddTrack={addTrack}
+                  onRenameTrack={renameTrack}
+                  onPlaceMedia={(track, at) => setPlacing({ track, at })}
                   onDropMedia={dropMedia}
                   onGrabEnd={() => setGrab(undefined)}
                 />
@@ -2316,6 +2376,22 @@ export function App(): ReactElement {
           onClose={() => setManagingDestinations(false)}
         />
       )}
+      {placing !== undefined && project !== undefined && (
+        <PlaceMediaDialog
+          library={project.library}
+          thumbnails={thumbnails}
+          trackName={
+            project.timeline.tracks.find((track) => track.id === placing.track)?.name ?? ""
+          }
+          at={placing.at}
+          fps={project.settings.fps}
+          onPlace={(media) => {
+            placeMedia(placing.track, placing.at, media);
+            setPlacing(undefined);
+          }}
+          onClose={() => setPlacing(undefined)}
+        />
+      )}
       {fetching && (
         <ImportDialog
           canFetch={fetcher?.available}
@@ -2417,14 +2493,25 @@ export function App(): ReactElement {
 
 // An imported medium that is not on the timeline is an entry in a list nobody built yet, so it
 // goes straight behind whatever is already on the first track of its kind.
-function appendClip(doc: VideolaDocument, media: MediaId): void {
+/**
+ * A medium onto the timeline, behind whatever is already on the row.
+ *
+ * The row is the one being worked on where there is one and it takes this kind of material. Without
+ * that it was always the *first* row of the kind, which is the same row forever: a project with
+ * four video tracks could only ever be filled on V1, whatever anybody had clicked.
+ */
+function appendClip(doc: VideolaDocument, media: MediaId, active?: string): void {
   const asset = doc.state.library.find((entry) => entry.id === media);
   if (asset === undefined) return;
   adoptFormat(doc, asset);
   const kind: TrackKind = asset.kind === "audio" ? "audio" : "video";
+  const chosen = doc.state.timeline.tracks.find(
+    (candidate) => candidate.id === active && candidate.kind === kind,
+  );
   const track =
+    chosen ??
     doc.state.timeline.tracks.find((candidate) => candidate.kind === kind) ??
-    added(doc, kind, `${kind === "audio" ? "A" : "V"}${doc.state.timeline.tracks.length + 1}`);
+    added(doc, kind, nextTrackName(doc, kind));
   if (track === undefined) return;
   const start = track.clips.reduce((end, clip) => Math.max(end, clip.start + clip.duration), 0);
   // A medium the core could not time - a still, or a container without a duration - still has to

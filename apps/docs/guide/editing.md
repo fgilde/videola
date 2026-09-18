@@ -45,8 +45,10 @@ ever made for one, because there is nothing to transcode.
 ## The media library
 
 Everything the project holds, with its length, its size in pixels and its sample rate. **Add to
-timeline** puts a medium behind whatever is already on the first track of its kind — the same place
-an import lands, so a medium can be placed as often as you like without importing it again.
+timeline** puts a medium behind whatever is already on the active track — and where none is active,
+or the active one does not take this material, behind whatever is on the first track of its kind. A
+medium can be placed as often as you like without importing it again, and a click on a track header
+decides which row it lands on.
 
 Each entry carries a thumbnail decoded from the file itself, and audio clips draw their waveform
 from the buffers the graph already decoded — no second decode, and a reversed clip shows itself the
@@ -93,9 +95,10 @@ enters the library: it has no media id, is never written into a `.videola`, and 
 to. A medium whose proxy is missing behaves exactly like one that never had a proxy — the original
 is decoded, and only the speed is gone.
 
-**Use originals** in the library toolbar switches the preview back to the material. It changes what
-is decoded, not what is displayed: every open decoder is closed and reopened on the file the switch
-now names.
+**Preview quality** in the library toolbar is the choice between the two: *Smooth (720p copies)*
+decodes the proxies, *Sharp (the original files)* the material itself. It changes what is decoded,
+not what is displayed: every open decoder is closed and reopened on the file the choice now names.
+It never touches an export, which reads the originals whatever this is set to.
 
 ## In and out points
 
@@ -338,6 +341,28 @@ flags themselves, which is how a track is unlocked again.
 The timeline does not wait for that refusal to arrive. A clip on a locked row is not a drag target
 at all, so it never comes away from under the pointer and springs back; the row is hatched, and the
 padlock beside its name says why.
+
+## Tracks
+
+The two buttons on the left of the timeline toolbar make an empty track — one video, one audio — and
+the new one is active at once. Active means it carries a light border, and everything that has to put
+a clip down without having been told where asks it first. A track is activated by clicking its header.
+
+A right click on free space on a track opens that track's menu, for **the spot that was clicked**:
+
+| Entry | Result |
+|---|---|
+| Place medium here … | opens the list of imported media and puts the chosen one at that spot |
+| Paste here | puts the clipboard at that spot rather than at the playhead |
+| Rename track | asks for a name |
+| Delete V1 | takes the track and everything on it; one undo brings both back |
+
+The dialogue behind **Place medium here …** shows only what the project already holds: thumbnail,
+name and length, and a double click places. It imports nothing — that is what the import dialogue is
+for — and it is the answer to a menu with eleven media in it that nobody reads.
+
+New tracks are counted by their kind: the third video track is V3, even where the project already
+holds four audio tracks.
 
 ## The timeline
 

@@ -18,6 +18,7 @@ import {
   FINE_TRIM_ZONE_PX,
   tickStep,
   trackAt,
+  trackHeight,
   xToTime,
   type TimeRange,
   type ZoomBy,
@@ -41,7 +42,17 @@ const WHEEL_ZOOM_FACTOR = 1.15;
 export type EdgeMode = "trim" | "ripple" | "roll";
 export type DragMode = "move" | "slip" | "slide";
 
-export type MenuTarget = { kind: "clip"; clip: ClipId } | { kind: "marker"; marker: MarkerId };
+export type MenuTarget =
+  | { kind: "clip"; clip: ClipId }
+  | { kind: "marker"; marker: MarkerId }
+  /**
+   * Empty space on a row, and the instant under the pointer.
+   *
+   * A timeline where a right click on a gap does nothing is a timeline that answers "what can I do
+   * here" with silence -- and putting a medium at *this* instant on *this* row is the one thing
+   * everybody wants there.
+   */
+  | { kind: "track"; track: TrackId; at: Time };
 
 export interface TimelineMenu {
   target: MenuTarget;
@@ -391,7 +402,17 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       const hit = hitTest(event.target);
       // A keyframe has no menu: the bar above the lane is always showing, and everything it could
       // offer is already there under a finger as well as under a right button.
-      if (hit === undefined || hit.kind === "ruler" || hit.kind === "keyframe") return;
+      if (hit?.kind === "ruler" || hit?.kind === "keyframe") return;
+      const config = latest.current;
+      // Empty space on a row. The instant is the one under the pointer, because "insert here" has
+      // to mean here.
+      if (hit === undefined) {
+        const spot = trackSpotAt(config, event.clientX, event.clientY);
+        if (spot === undefined) return;
+        event.preventDefault();
+        openMenu({ kind: "track", ...spot }, event.clientX, event.clientY);
+        return;
+      }
       event.preventDefault();
       if (hit.kind === "marker") {
         openMenu({ kind: "marker", marker: hit.marker }, event.clientX, event.clientY);
@@ -399,7 +420,6 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       }
       // A right click inside an existing selection keeps it, so the menu can act on all of it;
       // outside it, it selects what was clicked, the way every editor does.
-      const config = latest.current;
       if (!config.selection.has(hit.clip)) config.onSelect(hit.clip);
       openMenu({ kind: "clip", clip: hit.clip }, event.clientX, event.clientY);
     },
@@ -428,6 +448,36 @@ export interface SelectHow {
   collapse?: boolean;
 }
 
+
+/**
+ * Which row a pointer is over and the instant under it, or nothing where it is over no row.
+ *
+ * The same two conversions every other gesture here makes, and the same refusal: `trackAt` clamps,
+ * so the rows' own total height decides whether there is a row at all rather than an answer that
+ * cannot say "none".
+ */
+function trackSpotAt(
+  config: GestureConfig,
+  clientX: number,
+  clientY: number,
+): { track: TrackId; at: Time } | undefined {
+  const area = config.tracksArea.current;
+  const surface = config.surface.current;
+  if (area === null || surface === null) return undefined;
+  const box = area.getBoundingClientRect();
+  const across = surface.getBoundingClientRect();
+  if (clientX < across.left || clientX > across.right) return undefined;
+  const y = clientY - box.top;
+  const rows = config.project.timeline.tracks;
+  const total = rows.reduce((sum, track) => sum + trackHeight(track), 0);
+  if (y < 0 || y >= total) return undefined;
+  const track = rows[trackAt(rows, y)];
+  if (track === undefined) return undefined;
+  return {
+    track: track.id,
+    at: Math.max(0, xToTime(clientX - across.left + surface.scrollLeft, config.flicksPerPixel)),
+  };
+}
 
 // Whether a press landed on the tracks at all. Outside them -- on the toolbar, the ruler's row, the
 // slack under the last track -- a rubber band would be a selection gesture nobody aimed.

@@ -75,6 +75,13 @@
 
 /* Quiet until it is either hovered or on. A row carries one of these per track, and a column of
    lit padlocks beside every name would be the loudest thing on the timeline. */
+/* The row being worked on. A left edge rather than a fill: the header already carries the track's
+   own colour there, and a whole row lit up would compete with the selected clips on it. */
+.v-timeline__header[data-active] {
+  background: var(--v-surface-hover);
+  box-shadow: inset 3px 0 0 var(--v-accent);
+}
+
 .v-timeline__lock {
   grid-area: lock;
   display: flex;
@@ -306,6 +313,20 @@
 
 .v-clip__trim[data-edge="end"]::after {
   right: 2px;
+}
+
+/* Under the pointer the handle says so: a two pixel line is enough to find once you know it is
+   there, and nothing at all if you do not. The cursor already changes; this is the half a person
+   sees before they have moved onto it. */
+.v-clip__trim:hover::after {
+  width: 4px;
+  top: 12%;
+  bottom: 12%;
+  background: var(--v-accent);
+}
+
+.v-clip__trim:hover {
+  background: color-mix(in srgb, var(--v-accent) 18%, transparent);
 }
 
 /* A flag on the ruler line, wide enough to be hit by a finger without covering the clip below. */
