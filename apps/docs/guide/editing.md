@@ -711,6 +711,16 @@ Two things stay as they are in record mode. With the playhead outside the clip t
 to write to, so the value at rest applies again. And a drag on the picture writes only the fields it
 actually changed; a move that also wrote a scale key would pin down a size nobody asked to animate.
 
+The first key on a field brings the clip's start with it. A single key holds its value over the whole
+clip — **before** it as well as after — so an opacity recorded two seconds in used to change the
+first two seconds too. So the first key on a field is written together with one at the clip's start
+carrying what was there before: everything up to it stays as it was, and the ramp starts there. The
+two go out under one key, so they are one step back.
+
+Only the first: a track that already carries keys has a shape somebody made and gets no anchor added
+to it. And only where the playhead stands past the clip's start — standing exactly on it, the key
+being written is the anchor.
+
 ### The keyframe lane
 
 Under the tracks, inside the timeline's own scrolling area, is a lane showing the keyframes of the

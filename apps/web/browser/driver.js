@@ -658,8 +658,12 @@ async function announce() {
     await sleep(250);
     check("recording, the same kind of change lands as a key",
       laneRow("Breite (Faktor)") >= 0, true);
-    check("at the instant the playhead stands on",
-      all(".v-keylane__key").length > 0, true);
+    // Two keys, not one: a single key holds its value over the whole clip, so a change recorded a
+    // second in used to change the second before it as well. The clip's own start is pinned with
+    // what was there, and the change lands at the playhead.
+    const scaleKeys = all('[data-keyframe-key="scaleX"]').map((node) => Number(node.dataset.keyframeTime));
+    check("with the clip's start pinned to what was there before", scaleKeys.length, 2);
+    check("and the pin sits before the change", scaleKeys[0] < scaleKeys[1], true);
     check("recording raised nothing", banner(), "");
 
     button("Rückgängig").click();
@@ -674,18 +678,31 @@ async function announce() {
     // "one more key on x than before" is the only form of the question that survives that.
     const keysOn = (key) => all(`[data-keyframe-key="${key}"]`).length;
     const xBefore = keysOn("x");
+    // Sideways and down, so the drag writes both fields. x carries keys from the motion path this
+    // run built earlier -- a field with a track already has the shape somebody gave it and takes no
+    // pin -- and y is untouched, which is where the pin can be seen.
+    // A field that already carries keys has the shape somebody gave it and takes no pin; one that
+    // carries none gets the pair. Which of the two x is depends on whether the motion path earlier
+    // in this run ran at all, so the run says what it expects rather than assuming.
+    const pinned = xBefore === 0 ? 2 : 1;
+    check("the other field is untouched, which is where the pin shows", keysOn("y"), 0);
     const picture = q(".v-preview__canvas").getBoundingClientRect();
     const middle = { x: picture.left + picture.width / 2, y: picture.top + picture.height / 2 };
     const travel = picture.width / 8;
     pointer("pointerdown", q(".v-stage__box"), { clientX: middle.x, clientY: middle.y });
-    pointer("pointermove", q(".v-stage__svg"), { clientX: middle.x + travel, clientY: middle.y });
-    pointer("pointerup", q(".v-stage__svg"), { clientX: middle.x + travel, clientY: middle.y });
+    pointer("pointermove", q(".v-stage__svg"),
+      { clientX: middle.x + travel, clientY: middle.y + travel / 2 });
+    pointer("pointerup", q(".v-stage__svg"),
+      { clientX: middle.x + travel, clientY: middle.y + travel / 2 });
     await sleep(300);
-    check("a drag on the picture is recorded the same way", keysOn("x") - xBefore, 1);
+    // Two keys per field it moved: the pin at the clip's start and the move at the playhead, the
+    // same pair a slider writes.
+    check("a drag on the picture is recorded the same way",
+      [keysOn("x") - xBefore, keysOn("y")], [pinned, 2]);
     check("dragging the picture while recording raised nothing", banner(), "");
     button("Rückgängig").click();
     await sleep(250);
-    check("and that drag is one step back as well", keysOn("x"), xBefore);
+    check("and that drag is one step back as well", [keysOn("x"), keysOn("y")], [xBefore, 0]);
     button("Rückgängig").click();
     await sleep(250);
 

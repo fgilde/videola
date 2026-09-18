@@ -1586,6 +1586,20 @@ export function App(): ReactElement {
         for (const field of TRANSFORM_KEYS) {
           if (next[field] === transform[field]) continue;
           const track = staged.clip.keyframes[field] ?? [];
+          // The clip's own start, holding what was there before this drag. One key is the whole
+          // clip: a move recorded two seconds in would otherwise move the first two seconds too.
+          if (track.length === 0 && playhead > staged.clip.start) {
+            edit(
+              cmd.keyframeAdd(
+                on.clip(staged.clip.id),
+                null,
+                field,
+                staged.clip.start,
+                { kind: "float", value: transform[field] },
+              ),
+              stageKey.current,
+            );
+          }
           edit(
             cmd.keyframeAdd(
               on.clip(staged.clip.id),

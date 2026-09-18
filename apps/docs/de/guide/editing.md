@@ -755,6 +755,16 @@ es keinen Augenblick, auf den geschrieben werden könnte — dann gilt wieder de
 Zug am Bild schreibt nur die Felder, die er wirklich geändert hat; ein Verschieben, das nebenbei
 einen Skalierungs-Keyframe setzte, würde eine Größe festnageln, die niemand animieren wollte.
 
+Die erste Keyframe eines Feldes bringt den Clipanfang mit. Ein einzelner Keyframe hält seinen Wert
+über den ganzen Clip — auch **davor** —, eine bei Sekunde zwei aufgezeichnete Deckkraft hätte also
+die ersten zwei Sekunden mitverändert. Darum wird beim ersten Keyframe eines Feldes zusätzlich einer
+am Clipanfang gesetzt, mit dem Wert, der vorher galt: Davor bleibt alles, wie es war, ab dort läuft
+die Rampe. Beide gehen unter einem Schlüssel raus, sind also ein Schritt zurück.
+
+Nur beim ersten: Eine Spur, die schon Keyframes trägt, hat eine Form, die jemand gemacht hat, und
+bekommt keinen Anker dazu. Und nur, wenn der Playhead überhaupt hinter dem Clipanfang steht — steht
+er genau darauf, ist die geschriebene Keyframe selbst der Anker.
+
 ### Die Keyframe-Spur
 
 Unter den Spuren, innerhalb des scrollenden Bereichs der Zeitleiste, liegt eine Spur mit den

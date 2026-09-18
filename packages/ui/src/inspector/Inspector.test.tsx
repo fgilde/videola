@@ -537,11 +537,51 @@ describe("the inspector", () => {
 
     slide(slider("Drehung (Grad)"), 45);
 
-    expect(rig.sent[0]?.command).toMatchObject({
+    expect(rig.sent.at(-1)?.command).toMatchObject({
       type: "keyframe.add",
       key: "rotation",
       time: SECOND,
     });
+  });
+
+  // One key holds its value over the whole clip, before it as well as after -- so a change recorded
+  // two seconds in used to change the first two seconds too. The clip's own start is pinned first,
+  // with what was there before, and the two go out under one key so one undo takes both.
+  it("pins the clip's start when it records the first key of a field", () => {
+    const rig = show({
+      recording: true,
+      playhead: SECOND,
+      clip: clipWithMedia({ transform: { ...identity(), rotation: 20 } }),
+    });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    expect(rig.sent.map((entry) => entry.command)).toMatchObject([
+      { type: "keyframe.add", key: "rotation", time: 0, value: { kind: "float", value: 20 } },
+      { type: "keyframe.add", key: "rotation", time: SECOND, value: { kind: "float", value: 45 } },
+    ]);
+    expect(rig.sent[0]?.key).toBe(rig.sent[1]?.key);
+    expect(rig.sent[0]?.key).toBeTruthy();
+  });
+
+  it("pins nothing where the playhead is already on the clip's start", () => {
+    const rig = show({ recording: true, playhead: 0 });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    expect(rig.sent).toHaveLength(1);
+  });
+
+  it("pins nothing on a field that is already animated", () => {
+    const rig = show({
+      recording: true,
+      playhead: SECOND,
+      clip: clipWithMedia({ keyframes: { rotation: [key(0, 0, "hold")] } }),
+    });
+
+    slide(slider("Drehung (Grad)"), 45);
+
+    expect(rig.sent).toHaveLength(1);
   });
 
   // With the playhead off the clip there is no moment to write to, and a key outside the clip is a

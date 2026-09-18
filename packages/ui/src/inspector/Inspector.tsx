@@ -16,6 +16,7 @@ import {
   type Effect,
   type EffectParamSnapshot,
   type Interp,
+  type Keyframe,
   type MediaAsset,
   type ParamValue,
   type Project,
@@ -264,7 +265,27 @@ function Transform_({
             // is not in charge. Keyframed and the playhead elsewhere is the same case: the static
             // value is ignored once a track exists, so there is nothing it could truthfully do.
             disabled={overridden || (track.length > 0 && !inside)}
-            onChange={(value, coalesceKey) =>
+            onChange={(value, coalesceKey) => {
+              const anchoring = anchorable(armed, track, clip, playhead);
+              // A change that is not part of a drag carries no key, and adding one would join two
+              // keystrokes into one undo step. Only the anchored pair needs one of its own.
+              const key = coalesceKey ?? (anchoring ? mintKey() : undefined);
+              // The first key of a recorded field takes the clip's own start with it, holding what
+              // was there before. Without it one key is the whole clip: set the opacity at two
+              // seconds and the first two seconds change too, which is not what anybody recording
+              // a change at a moment means by it.
+              if (anchoring) {
+                send(
+                  cmd.keyframeAdd(
+                    on.clip(clip.id),
+                    null,
+                    field.key,
+                    clip.start,
+                    float(resolved?.[field.key] ?? clip.transform[field.key]),
+                  ),
+                  key,
+                );
+              }
               send(
                 armed
                   ? // Not a plain "linear": the upsert must not turn a held keyframe into a ramp.
@@ -277,9 +298,9 @@ function Transform_({
                       keyframeAt(track, playhead)?.interp ?? "linear",
                     )
                   : cmd.clipSetTransform(clip.id, { ...clip.transform, [field.key]: value }),
-                coalesceKey,
-              )
-            }
+                key,
+              );
+            }}
 
             keyframes={
               overridden
@@ -337,6 +358,31 @@ function Transform_({
       </div>
     </Group>
   );
+}
+
+/**
+ * Whether a change about to be recorded needs the clip's own start pinned first.
+ *
+ * Only for the first key of a field: a track that already carries one has a shape somebody made,
+ * and adding to it is what an upsert is for. And only where the playhead has moved off the start,
+ * because a key written there is the anchor.
+ */
+function anchorable(
+  armed: boolean,
+  track: readonly Keyframe[],
+  clip: Clip,
+  playhead: Time,
+): boolean {
+  return armed && track.length === 0 && playhead > clip.start;
+}
+
+// One key for a pair of commands that belong to one press, where the row had none to give -- a
+// keyboard change carries no gesture, and two entries in the history for one keystroke is one too
+// many.
+let anchorGesture = 0;
+
+function mintKey(): string {
+  return `anchor-${(anchorGesture += 1)}`;
 }
 
 // Whether anything the fit button would write is already on the clock. `position` counts because it
@@ -717,6 +763,7 @@ function Effects({
                   <CurveParam
                     key={param.key}
                     clip={clip.id}
+                    start={clip.start}
                     effect={authored}
                     param={param}
                     value={shownCurve(param, held)}
@@ -767,6 +814,7 @@ function Effects({
                 <EffectParam
                   key={param.key}
                   clip={clip.id}
+                  start={clip.start}
                   effect={authored}
                   param={param}
                   value={shownValue(param, held)}
@@ -800,6 +848,7 @@ function Effects({
 // wrong `clip.id` hides.
 function EffectParam({
   clip,
+  start,
   effect,
   param,
   value,
@@ -809,6 +858,7 @@ function EffectParam({
   onSeek,
 }: {
   clip: ClipId;
+  start: Time;
   effect: Effect;
   param: EffectParamDescriptor;
   value: number;
@@ -835,15 +885,24 @@ function EffectParam({
       // value is ignored once a track exists -- so with the playhead elsewhere the slider has
       // nothing it could truthfully do.
       disabled={keyframed && !inside}
-      onChange={(next, coalesceKey) =>
+      onChange={(next, coalesceKey) => {
+        // The same anchor a transform row writes, for the same reason: one key is the whole clip.
+        const anchoring = keyframed && track.length === 0 && playhead > start;
+        const key = coalesceKey ?? (anchoring ? mintKey() : undefined);
+        if (anchoring) {
+          send(
+            cmd.keyframeAdd(on.clip(clip), effect.effectType, param.key, start, float(value)),
+            key,
+          );
+        }
         send(
           keyframed
             ? // Not a plain "linear": the upsert must not turn a held keyframe into a ramp.
               set(next, keyframeAt(track, playhead)?.interp ?? "linear")
             : cmd.effectSetParam(on.clip(clip), effect.effectType, param.key, float(next)),
-          coalesceKey,
-        )
-      }
+          key,
+        );
+      }}
       keyframes={{
         at: playhead,
         track,
@@ -862,6 +921,7 @@ function EffectParam({
 // with a change is not what a slider does with one, and the difference is a whole widget.
 function CurveParam({
   clip,
+  start,
   effect,
   param,
   value,
@@ -871,6 +931,7 @@ function CurveParam({
   onSeek,
 }: {
   clip: ClipId;
+  start: Time;
   effect: Effect;
   param: CurveParamDescriptor;
   value: readonly (readonly [number, number])[];
@@ -892,14 +953,22 @@ function CurveParam({
       label={label}
       value={value}
       disabled={keyframed && !inside}
-      onChange={(next, coalesceKey) =>
+      onChange={(next, coalesceKey) => {
+        const anchoring = keyframed && track.length === 0 && playhead > start;
+        const key = coalesceKey ?? (anchoring ? mintKey() : undefined);
+        if (anchoring) {
+          send(
+            cmd.keyframeAdd(on.clip(clip), effect.effectType, param.key, start, curve(value)),
+            key,
+          );
+        }
         send(
           keyframed
             ? set(next, keyframeAt(track, playhead)?.interp ?? "linear")
             : cmd.effectSetParam(on.clip(clip), effect.effectType, param.key, curve(next)),
-          coalesceKey,
-        )
-      }
+          key,
+        );
+      }}
       keyframes={
         <Keys
           strip={{
