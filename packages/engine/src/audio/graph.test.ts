@@ -269,6 +269,61 @@ describe("AudioGraph", () => {
   });
 });
 
+// A gain on the clock. The static field is the level of the material and the fades are the shape of
+// the edit; a keyframed gain is the level changing over the clip, and the three have to end up as
+// one envelope rather than as whichever the graph happened to read.
+describe("AudioGraph, a keyframed gain", () => {
+  const keyed = (time: number, value: number) => ({
+    time,
+    value: { kind: "float", value },
+    interp: "linear",
+  });
+
+  it("ramps between two gain keyframes instead of holding the static one", async () => {
+    const ctx = context(2);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({
+            duration: 2 * SECOND,
+            volume: 1,
+            keyframes: { volume: [keyed(0, 0.2), keyed(2 * SECOND, 1)] },
+          } as unknown as Partial<Clip>),
+        ]),
+      ]),
+    );
+
+    expect(out[0]).toBeCloseTo(0.2, 2);
+    expect(at(out, 1)).toBeCloseTo(0.6, 2);
+    expect(at(out, 1.9)).toBeCloseTo(0.96, 2);
+  });
+
+  // Both, not the louder of the two: a fade is what the edit does to the level, whatever the level
+  // is at that moment.
+  it("multiplies a fade onto the gain the keys ask for", async () => {
+    const ctx = context(2);
+    const out = await render(
+      ctx,
+      dc(ctx),
+      project([
+        track("A1", [
+          clip({
+            duration: 2 * SECOND,
+            fades: { inDuration: SECOND, outDuration: 0 },
+            keyframes: { volume: [keyed(0, 0.5), keyed(2 * SECOND, 0.5)] },
+          } as unknown as Partial<Clip>),
+        ]),
+      ]),
+    );
+
+    expect(out[0]).toBeCloseTo(0, 2);
+    expect(at(out, 0.5)).toBeCloseTo(0.25, 2);
+    expect(at(out, 1.5)).toBeCloseTo(0.5, 2);
+  });
+});
+
 // Resuming is the ordinary case -- press play with the playhead anywhere but zero -- and the
 // envelope has to pick up where it stands rather than start over. The context time is varied
 // alongside it, because a live context is never at zero when playback begins.

@@ -390,7 +390,11 @@
   /* The picture and the properties panel share what the three content-sized rows leave. Both carry
      a floor rather than one of them a fixed share: a canvas has no height of its own to hold its
      row open with, so a bare 1fr on the properties panel collapsed the preview to nothing. */
-  grid-template-rows: auto minmax(200px, 1fr) auto auto minmax(160px, 1fr) fit-content(26%) fit-content(34%);
+  /* The desk's share went up and the timeline's down by the same four points: a strip is 278 px of
+     controls that cannot be cut -- two faders, the flags row and the chain picker are each a touch
+     target -- and the row was landing 26 px short of it, which is a desk with a scrollbar through
+     the middle of its faders. */
+  grid-template-rows: auto minmax(200px, 1fr) auto auto minmax(160px, 1fr) fit-content(20%) fit-content(40%);
   grid-template-areas:
     "banners  banners"
     "library  preview"

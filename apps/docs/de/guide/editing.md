@@ -737,7 +737,12 @@ würde gespeichert, gesichert und wieder geladen, ohne je ein Pixel zu erreichen
 ist **Ins Bild einpassen** stillgelegt, solange die Platzierung, die es schriebe — `x`, `y`, eine
 der beiden Skalierungen oder der Pfad —, auf der Uhr ist.
 
-Die Lautstärke bleibt unanimiert, dort fehlt tatsächlich noch die Auswertung.
+Lautstärke und Geschwindigkeit tragen ihre Keyframes genauso. Die Lautstärke bekam dafür eine
+eigene Spur — `volume`, neben `speed` die zweite, die kein Transformationsfeld benennt —, und gelesen
+wird sie vom Tongraph: Die Hüllkurve eines Clips ist der gekeyframte Pegel mal seinen Blenden, denn
+eine Blende ist die Form des Schnitts und der Pegel die Höhe des Materials. Beim Tempo schreibt die
+Zeile in dieselbe `speed`-Spur, auf der auch die [Geschwindigkeitsrampen](#geschwindigkeitsrampen)
+liegen; beide Wege meinen dieselbe Kurve.
 
 #### Keyframes aufzeichnen
 

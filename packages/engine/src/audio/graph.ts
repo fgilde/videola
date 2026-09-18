@@ -1,9 +1,12 @@
 import {
   consumedBetween,
   consumedSource,
+  secondsToTime,
   speedRateAt,
   SPEED_TRACK,
   timeToSeconds,
+  volumeAt,
+  VOLUME_TRACK,
 } from "@videola/core";
 import { mediaHash, peaks } from "@videola/media";
 
@@ -565,17 +568,36 @@ function ratePoints(clip: Clip, contextTime: number, projectTime: Time): Point[]
 
 // A hold reads as a ramp between two equal values, so the whole envelope is one list of corners
 // and `automate` never has to know which kind of segment it is walking through.
+//
+// The gain a clip is played at is the keyframed one where there is a track, the static one where
+// there is not, and either of them is multiplied by the fades: a fade is the shape of an edit and
+// the gain is the level of the material, and a project that carries both means both.
 function envelope(clip: Clip, clipStart: number): Point[] {
-  const target = clip.volume;
   const [fadeIn, fadeOut] = fadeDurations(clip);
-  const clipEnd = clipStart + timeToSeconds(clip.duration);
-  const points: Point[] = [{ at: clipStart, value: fadeIn > 0 ? 0 : target }];
-  if (fadeIn > 0) points.push({ at: clipStart + fadeIn, value: target });
-  if (fadeOut > 0) {
-    points.push({ at: clipEnd - fadeOut, value: target });
-    points.push({ at: clipEnd, value: 0 });
+  const duration = timeToSeconds(clip.duration);
+  const keys = clip.keyframes?.[VOLUME_TRACK] ?? [];
+  const offsets = new Set<number>([0, duration]);
+  if (fadeIn > 0) offsets.add(fadeIn);
+  if (fadeOut > 0) offsets.add(duration - fadeOut);
+  // The same corners the rate curve is sampled at, for the same reason: an eased segment becomes a
+  // polyline through the core's own values rather than a straight run between its ends.
+  for (const at of sampleTimes(keys)) {
+    const offset = timeToSeconds(at - clip.start);
+    if (offset > 0 && offset < duration) offsets.add(offset);
   }
-  return points;
+  const shaped = (offset: number): number => {
+    if (fadeIn > 0 && offset < fadeIn) return offset / fadeIn;
+    if (fadeOut > 0 && offset > duration - fadeOut) {
+      return Math.max(0, (duration - offset) / fadeOut);
+    }
+    return 1;
+  };
+  return [...offsets]
+    .sort((left, right) => left - right)
+    .map((offset) => ({
+      at: clipStart + offset,
+      value: volumeAt(clip, clip.start + secondsToTime(offset)) * shaped(offset),
+    }));
 }
 
 // Trimming and splitting leave the fades alone, so a clip shorter than its own fades is reachable

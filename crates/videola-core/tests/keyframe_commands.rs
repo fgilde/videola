@@ -785,11 +785,11 @@ fn two_speed_keyframes_make_a_ramp_the_clip_reads_its_source_by() {
     assert!((at - 0.875).abs() < 1e-6, "{at}");
 }
 
-// The rate track is the one name outside `Transform`'s roster that `keyframe.add` lets through, so
-// the roster still has to turn everything else away.
+// The rate and the gain are the two names outside `Transform`'s roster that `keyframe.add` lets
+// through, so the roster still has to turn everything else away.
 #[test]
 #[allow(clippy::unwrap_used)]
-fn the_rate_track_is_the_only_name_outside_the_transform_roster() {
+fn the_rate_and_the_gain_are_the_only_names_outside_the_transform_roster() {
     let (mut doc, clip) = doc_with_effect();
     assert!(doc
         .dispatch(Dispatch::new(transform_key(&clip, "wobble", 1.0, 1.0)))
@@ -797,6 +797,37 @@ fn the_rate_track_is_the_only_name_outside_the_transform_roster() {
     assert!(doc
         .dispatch(Dispatch::new(speed_key(&clip, 1.0, 1.0, Interp::Linear)))
         .is_ok());
+    assert!(doc
+        .dispatch(Dispatch::new(transform_key(&clip, "volume", 1.0, 0.5)))
+        .is_ok());
+}
+
+// `clip.setVolume` clamps the static field into the range the model allows, so a keyframe on the
+// same field is clamped by the same numbers: a track that could carry a gain the static field
+// cannot is a project that sounds different depending on which of the two the graph happens to read.
+#[test]
+#[allow(clippy::unwrap_used)]
+fn a_gain_keyframe_is_held_to_the_range_the_static_field_is() {
+    let (mut doc, clip) = doc_with_effect();
+    doc.dispatch(Dispatch::new(transform_key(&clip, "volume", 1.0, 9.0)))
+        .unwrap();
+    doc.dispatch(Dispatch::new(transform_key(&clip, "volume", 2.0, -3.0)))
+        .unwrap();
+
+    let track = doc.project().timeline.tracks[0].clips[0]
+        .keyframes
+        .get("volume")
+        .cloned()
+        .unwrap();
+    let values: Vec<f32> = track
+        .iter()
+        .map(|keyframe| match keyframe.value {
+            ParamValue::Float(value) => value,
+            _ => unreachable!("a gain keyframe carries a float"),
+        })
+        .collect();
+    assert_eq!(values, vec![4.0, 0.0]);
+    assert!(videola_core::Document::from_project(doc.project().clone()).is_ok());
 }
 
 // The bounds the load path applies, applied by the command too — otherwise a rate a dispatch wrote

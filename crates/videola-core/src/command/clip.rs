@@ -4,7 +4,7 @@ use super::{bounded, find_clip_mut, finite, EffectTarget, TrimEdge, MAX_VOLUME};
 use crate::model::keyframe::sort_track;
 use crate::model::{
     Clip, ClipId, ClipSource, Effect, Generator, GroupId, Interp, Keyframe, MediaId, ParamValue,
-    Project, Time, TrackId, Transform, Transition, POSITION_TRACK, SPEED_TRACK,
+    Project, Time, TrackId, Transform, Transition, POSITION_TRACK, SPEED_TRACK, VOLUME_TRACK,
 };
 use crate::{CoreError, Result};
 
@@ -786,9 +786,19 @@ pub(super) fn add_keyframe(
     crate::model::project::keyframe_bounded(&keyframe)?;
     // Only where a track is created, because that is the only place a name nobody reads can be
     // written; the three commands below reach an existing track or refuse on their own.
-    if effect_type.is_none() && key != SPEED_TRACK {
+    if effect_type.is_none() && key != SPEED_TRACK && key != VOLUME_TRACK {
         transform_field(key)?;
     }
+    // The gain track answers the same question the static field does, so it is held to the same
+    // range `set_volume` clamps to. A track that could carry a gain the field cannot is a project
+    // that sounds different depending on which of the two the graph reads.
+    let keyframe = match (effect_type, key, &keyframe.value) {
+        (None, VOLUME_TRACK, ParamValue::Float(value)) => Keyframe {
+            value: ParamValue::Float(value.clamp(0.0, MAX_VOLUME)),
+            ..keyframe
+        },
+        _ => keyframe,
+    };
     let tracks = keyframes_mut(target, at, effect_type)?;
     let track = tracks.entry(key.to_string()).or_default();
     match track.iter_mut().find(|existing| existing.time == time) {

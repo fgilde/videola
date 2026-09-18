@@ -694,7 +694,11 @@ from it and ignores whatever the two fields hold, so a keyframe written on eithe
 saved and reloaded without ever reaching a pixel. For the same reason **Fit to frame** goes dead
 while the placement it would write — `x`, `y`, either scale, or the path — is on the clock.
 
-Volume is still unanimated, and that one is genuinely missing an evaluation.
+Volume and speed carry their keyframes the same way. Volume got a track of its own for it —
+`volume`, the second after `speed` that names no transform field — and the audio graph is what reads
+it: a clip's envelope is its keyframed level multiplied by its fades, because a fade is the shape of
+the edit and the level is the height of the material. The rate row writes to the same `speed` track
+the [speed ramps](#speed-ramps) live on; both ways mean the same curve.
 
 #### Recording keyframes
 

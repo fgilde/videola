@@ -212,6 +212,11 @@ pub const POSITION_TRACK: &str = "position";
 // the compound mapping in nesting.ts divides by.
 pub const SPEED_TRACK: &str = "speed";
 
+// The keyframe track that carries clip loudness over time, in the same factor `Clip::volume` uses.
+// Like the rate above it, it names no `Transform` field, so the geometry resolution walks past it;
+// what reads it is the audio graph, which is where every other gain in this program is applied.
+pub const VOLUME_TRACK: &str = "volume";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ClipSource {

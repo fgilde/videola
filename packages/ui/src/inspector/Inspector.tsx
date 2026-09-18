@@ -8,6 +8,8 @@ import {
   pictureInPicture,
   secondsToTime,
   speedRamp,
+  speedRateAt,
+  SPEED_TRACK,
   stageFor,
   timeToSeconds,
   type Clip,
@@ -25,6 +27,8 @@ import {
   type Transform,
   type TransformSnapshot,
   type Transition,
+  volumeAt,
+  VOLUME_TRACK,
 } from "@videola/core";
 
 import { useI18n, type Locale } from "../i18n/useI18n";
@@ -158,7 +162,12 @@ export function Inspector({
             {/* Above the presets, because on a caption clip it is the only thing anyone came here
                 for -- and it renders nothing at all on a clip that draws no words. */}
             <TextPanel clip={found.clip} send={dispatch} />
-            <Playback clip={found.clip} send={dispatch} />
+            <Playback
+              clip={found.clip}
+              playhead={playhead}
+              send={dispatch}
+              onSeek={onSeek}
+            />
             <Presets clip={found.clip} project={project} playhead={playhead} send={dispatch} />
             <Transitions clip={found.clip} effects={effects} send={dispatch} onBrowse={onBrowse} />
             <Effects
@@ -414,8 +423,22 @@ function sourceSize(clip: Clip, library: readonly MediaAsset[]): Size | undefine
   return { width: asset.width, height: asset.height };
 }
 
-function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
+function Playback({
+  clip,
+  playhead,
+  send,
+  onSeek,
+}: {
+  clip: Clip;
+  playhead: Time;
+  send: Send;
+  onSeek: (time: Time) => void;
+}): ReactElement {
   const { t } = useI18n();
+  const recording = useRecording();
+  const inside = playhead >= clip.start && playhead < clip.start + clip.duration;
+  const gain = clip.keyframes[VOLUME_TRACK] ?? [];
+  const rate = clip.keyframes[SPEED_TRACK] ?? [];
   const denoising = clip.effects.find((effect) => effect.effectType === DENOISE);
   // `preservePitch` is carried through rather than shown: sending the default would silently
   // undo a project that set it, and there is no second control worth a row for it yet.
@@ -441,19 +464,115 @@ function Playback({ clip, send }: { clip: Clip; send: Send }): ReactElement {
           }
         />
       </label>
+      {/* The gain is a level over time like any other parameter, and the rate has been a curve
+          since the ramps: both take keys, and both are therefore recordable. */}
       <ParamRow
         label={t("inspector.volume")}
-        value={clip.volume}
+        value={volumeAt(clip, inside ? playhead : clip.start)}
         min={0}
         max={2}
-        onChange={(value, coalesceKey) => send(cmd.clipSetVolume(clip.id, value), coalesceKey)}
+        reset={1}
+        disabled={gain.length > 0 && !inside}
+        onChange={(value, coalesceKey) => {
+          const armed = gain.length > 0 || (recording && inside);
+          const anchoring = anchorable(armed, gain, clip, playhead);
+          const key = coalesceKey ?? (anchoring ? mintKey() : undefined);
+          if (anchoring) {
+            send(
+              cmd.keyframeAdd(on.clip(clip.id), null, VOLUME_TRACK, clip.start, float(clip.volume)),
+              key,
+            );
+          }
+          send(
+            armed
+              ? cmd.keyframeAdd(
+                  on.clip(clip.id),
+                  null,
+                  VOLUME_TRACK,
+                  playhead,
+                  float(value),
+                  keyframeAt(gain, playhead)?.interp ?? "linear",
+                )
+              : cmd.clipSetVolume(clip.id, value),
+            key,
+          );
+        }}
+        keyframes={{
+          at: playhead,
+          track: gain,
+          settable: inside,
+          onAdd: () =>
+            send(
+              cmd.keyframeAdd(
+                on.clip(clip.id),
+                null,
+                VOLUME_TRACK,
+                playhead,
+                float(volumeAt(clip, playhead)),
+              ),
+            ),
+          onRemove: () => send(cmd.keyframeRemove(on.clip(clip.id), null, VOLUME_TRACK, playhead)),
+          onGoTo: onSeek,
+          onInterp: (interp) =>
+            send(cmd.keyframeSetInterp(on.clip(clip.id), null, VOLUME_TRACK, playhead, interp)),
+        }}
       />
       <ParamRow
         label={t("inspector.rate")}
-        value={clip.speed.rate}
+        value={speedRateAt(clip, inside ? playhead : clip.start)}
         min={0.1}
         max={4}
-        onChange={(value, coalesceKey) => send(speed(value, clip.speed.reverse), coalesceKey)}
+        reset={1}
+        disabled={rate.length > 0 && !inside}
+        onChange={(value, coalesceKey) => {
+          const armed = rate.length > 0 || (recording && inside);
+          const anchoring = anchorable(armed, rate, clip, playhead);
+          const key = coalesceKey ?? (anchoring ? mintKey() : undefined);
+          if (anchoring) {
+            send(
+              cmd.keyframeAdd(
+                on.clip(clip.id),
+                null,
+                SPEED_TRACK,
+                clip.start,
+                float(clip.speed.rate),
+              ),
+              key,
+            );
+          }
+          send(
+            armed
+              ? cmd.keyframeAdd(
+                  on.clip(clip.id),
+                  null,
+                  SPEED_TRACK,
+                  playhead,
+                  float(value),
+                  keyframeAt(rate, playhead)?.interp ?? "linear",
+                )
+              : speed(value, clip.speed.reverse),
+            key,
+          );
+        }}
+        keyframes={{
+          at: playhead,
+          track: rate,
+          settable: inside,
+          onAdd: () =>
+            send(
+              cmd.keyframeAdd(
+                on.clip(clip.id),
+                null,
+                SPEED_TRACK,
+                playhead,
+                float(speedRateAt(clip, playhead)),
+              ),
+            ),
+          onRemove: () => send(cmd.keyframeRemove(on.clip(clip.id), null, SPEED_TRACK, playhead)),
+          onGoTo: onSeek,
+          onInterp: (interp) =>
+            send(cmd.keyframeSetInterp(on.clip(clip.id), null, SPEED_TRACK, playhead, interp)),
+        }}
       />
       {/* Not in the effect chain below, and deliberately: that chain is the video one, and a person
           looking for the noise in a recording looks at the recording. Add and remove rather than a

@@ -671,6 +671,17 @@ async function announce() {
     check("and one press of undo takes the recorded key with it",
       laneRow("Breite (Faktor)"), -1);
 
+    // The gain is a parameter like any other since it grew a track of its own -- it was the one row
+    // in the panel that could not be put on the clock at all.
+    const gainKeys = () => all('[data-keyframe-key="volume"]').length;
+    dragSlider(rowSlider("Lautstärke"), [0.8, 0.6]);
+    await sleep(300);
+    check("a recorded gain lands on the clock too", gainKeys(), 2);
+    check("recording the gain raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(250);
+    check("and it goes back in one press", gainKeys(), 0);
+
     // The picture is a control too, and a drag on it is where a move is really made. Recording, it
     // has to land on the clock like everything else -- a drag that wrote the placement of the whole
     // clip while the border was up would be the mode lying about what it does.

@@ -37,11 +37,23 @@
    before a project has an effect on it, and the band along the bottom of the editor is 180 --
    which is how a mixer came to be cut off through the middle of its first slider. */
 .v-mixer .v-param {
-  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
   grid-template-areas:
-    "label slider value"
-    "keys keys keys";
+    "label slider value reset"
+    "keys keys keys keys";
   max-width: none;
+}
+
+/* A strip is three rows of controls in a fixed height, so the field that reads the number back is
+   flat here rather than boxed: the inspector's padding and border, times two rows, times three
+   strips, is what pushed the desk into a scrollbar on a tablet. */
+.v-mixer .v-param__value {
+  width: 5ch;
+  height: 1.3em;
+  padding: 0;
+  background: none;
+  border: none;
+  line-height: 1.3;
 }
 
 .v-mixer .v-param__label {

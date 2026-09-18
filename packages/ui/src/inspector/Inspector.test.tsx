@@ -466,6 +466,51 @@ describe("the inspector", () => {
     });
   });
 
+  // The gain and the rate are parameters like any other: both carry a track, so both take a key at
+  // the playhead and both follow record mode. The gain used to be the one row that could not.
+  it("sets a gain keyframe from the row's own switch", () => {
+    const rig = show({ playhead: SECOND });
+
+    press("Keyframe für Lautstärke am Playhead");
+
+    expect(rig.sent[0]?.command).toMatchObject({
+      type: "keyframe.add",
+      key: "volume",
+      time: SECOND,
+    });
+  });
+
+  it("records a gain change as a key, with the clip's start pinned", () => {
+    const rig = show({ recording: true, playhead: SECOND });
+
+    slide(slider("Lautstärke"), 0.4);
+
+    expect(rig.sent.map((entry) => entry.command)).toMatchObject([
+      { type: "keyframe.add", key: "volume", time: 0 },
+      { type: "keyframe.add", key: "volume", time: SECOND, value: { kind: "float", value: 0.4 } },
+    ]);
+  });
+
+  it("still writes the static gain while nothing is recording it", () => {
+    const rig = show({ playhead: SECOND });
+
+    slide(slider("Lautstärke"), 0.4);
+
+    expect(rig.sent[0]?.command).toMatchObject({ type: "clip.setVolume" });
+  });
+
+  it("records a rate change onto the speed track", () => {
+    const rig = show({ recording: true, playhead: SECOND });
+
+    slide(slider("Geschwindigkeit"), 2);
+
+    expect(rig.sent.at(-1)?.command).toMatchObject({
+      type: "keyframe.add",
+      key: "speed",
+      time: SECOND,
+    });
+  });
+
   // Record mode is the whole of "every setting belongs to this moment": a field nobody armed by
   // hand still takes a key, at the playhead, with the value the slider was given.
   // A slider cannot be asked for -0.4, and the readout is written in the reader's own locale -- so

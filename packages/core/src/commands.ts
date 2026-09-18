@@ -98,6 +98,10 @@ export const MAX_COMPOUND_DEPTH = 8;
 // authored here would be a track the picture walks past.
 export const SPEED_TRACK = "speed";
 
+// The keyframe track a clip's gain lives on, mirrored from `VOLUME_TRACK` in the core. The audio
+// graph reads it the way it reads the rate above: what is on the clock wins over the value at rest.
+export const VOLUME_TRACK = "volume";
+
 export function consumedSource(clip: Clip): Time {
   return sourceOffset(clip, clip.duration);
 }
@@ -203,6 +207,37 @@ export function speedRateAt(clip: Clip, at: Time): number {
   return (
     rateOf(left) + (rateOf(next) - rateOf(left)) * ease(left.interp, (at - left.time) / span)
   );
+}
+
+/**
+ * The gain an instant is played at: the keyframed value where there is one, the clip's own
+ * otherwise.
+ *
+ * Interpolated here rather than in the core because the whole of this program's audio -- the
+ * preview and the written file alike -- is mixed by the graph in this package. The picture is the
+ * other way around for exactly the same reason: it is drawn in two places, so the one answer comes
+ * from the core.
+ */
+export function volumeAt(clip: Clip, at: Time): number {
+  const track = clip.keyframes?.[VOLUME_TRACK];
+  if (track === undefined || track.length === 0) return clip.volume;
+  const floats = track.filter((keyframe) => keyframe.value.kind === "float");
+  const first = floats[0];
+  const last = floats[floats.length - 1];
+  if (first === undefined || last === undefined) return clip.volume;
+  if (at <= first.time) return gainOf(first);
+  if (at >= last.time) return gainOf(last);
+  let right = 0;
+  while (right < floats.length && floats[right]!.time <= at) right += 1;
+  const left = floats[right - 1]!;
+  const next = floats[right]!;
+  const span = next.time - left.time;
+  if (span <= 0 || left.interp === "hold") return gainOf(left);
+  return gainOf(left) + (gainOf(next) - gainOf(left)) * ease(left.interp, (at - left.time) / span);
+}
+
+function gainOf(keyframe: Keyframe): number {
+  return keyframe.value.kind === "float" ? keyframe.value.value : 1;
 }
 
 // `easeArea` is this function's integral. Changing one without the other makes the rate the sound
