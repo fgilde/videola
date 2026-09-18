@@ -223,9 +223,20 @@
 }
 
 /* The one control in the transport that is not about moving the playhead: what it changes is what
-   every other change means, which is why it is tinted rather than merely pressed. */
-.v-transport__record [aria-pressed="true"] {
+   every other change means, so it carries its colour whether or not it is on, and fills with it
+   when it is. */
+.v-transport__record {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--v-space-1);
   color: var(--v-record);
   border-color: var(--v-record);
-  background: color-mix(in srgb, var(--v-record) 18%, transparent);
+  font-size: var(--v-text-sm);
+  letter-spacing: 0.06em;
+}
+
+.v-transport__record[aria-pressed="true"] {
+  background: var(--v-record);
+  border-color: var(--v-record);
+  color: var(--v-accent-contrast);
 }

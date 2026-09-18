@@ -192,6 +192,9 @@
 /* The preview's own quality, said as a choice rather than as a button whose name was a verb. It
    sits under the import button because it is a setting, not an action. */
 .v-library__quality {
+  /* The rail is a two-column grid and this is a label over a select over a sentence: in one column
+     it came out as a clipped select under four lines of wrapped text. */
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: 2px;

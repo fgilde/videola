@@ -3,7 +3,7 @@ import { useEffect, type ReactElement } from "react";
 import { timeToSeconds, type Rate, type Time } from "@videola/core";
 
 import { useI18n } from "../i18n/useI18n";
-import { IconButton } from "../primitives/Icon";
+import { Icon, IconButton } from "../primitives/Icon";
 import "./Preview.css";
 
 /**
@@ -127,15 +127,21 @@ export function Transport({
           onClick={onToggleMixer}
         />
       )}
+      {/* The one control here that is not grey until it is pressed. A dot the size of the step
+          buttons, in the mode's own colour, with the word beside it: a switch that changes what
+          every edit means cannot be a symbol nobody recognises among eight others. */}
       {onToggleRecording !== undefined && (
-        <span className="v-transport__record">
-          <IconButton
-            icon="record"
-            label={t("transport.record")}
-            pressed={recording === true}
-            onClick={onToggleRecording}
-          />
-        </span>
+        <button
+          type="button"
+          className="v-button v-transport__record"
+          aria-label={t("transport.record")}
+          title={t("transport.record")}
+          aria-pressed={recording === true}
+          onClick={onToggleRecording}
+        >
+          <Icon name="record" />
+          <span>{t("transport.recordShort")}</span>
+        </button>
       )}
       <span className="v-transport__time" aria-label={t("transport.position")}>
         {formatTimecode(timeToSeconds(time), fps)}

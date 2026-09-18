@@ -23,8 +23,12 @@ Zwei Wege, die dasselbe tun:
 
 Die Bytes werden mit SHA-256 gehasht und unter diesem Hash nach OPFS geschrieben, **bevor**
 irgendein Command abgeschickt wird — ein Medium liegt also auf der Platte, bevor das Projekt sich
-darauf bezieht. Dieselbe Datei zweimal importiert wird einmal gespeichert. Der Clip landet auf der
-ersten Videospur; hat das Projekt keine, wird eine angelegt.
+darauf bezieht. Dieselbe Datei zweimal importiert wird einmal gespeichert.
+
+Ein Import geht in die **Bibliothek und sonst nirgendwohin**. Auf die Zeitleiste kommt ein Medium
+erst, wenn jemand es dorthin schickt: mit dem Plus am Eintrag, mit einem Zug auf eine Spur oder über
+das Kontextmenü einer Spur. Zehn Dateien auf einmal fallen zu lassen ist das Füllen eines Regals und
+nicht das Anlegen von zehn Clips, die man einzeln wieder löscht.
 
 Ein unberührtes Projekt übernimmt das Format seines ersten Mediums, damit ein 640×360-Clip nicht als
 kleines Rechteck in der Ecke eines 1080p-Bildes sitzt. Danach ist das Format eine Entscheidung, die

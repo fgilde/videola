@@ -24,7 +24,11 @@ Two ways, both doing the same thing:
 
 The bytes are hashed with SHA-256 and written to OPFS under that hash before anything is
 dispatched, so a medium is on disk before the project refers to it. Importing the same file twice
-stores it once. A clip is placed on the first video track; if the project has none, one is created.
+stores it once.
+
+An import goes into the **library and nowhere else**. A medium reaches the timeline when somebody
+sends it there: the plus on its entry, a drag onto a track, or a track's own menu. Dropping ten
+files at once fills a shelf; it does not make ten clips to delete one by one.
 
 An untouched project adopts the format of its first medium, so a 640×360 clip does not sit as a
 small rectangle in the corner of a 1080p frame. Past that point the format is a decision somebody

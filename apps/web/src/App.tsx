@@ -1325,14 +1325,16 @@ export function App(): ReactElement {
     }
   }, [adopt, reportError]);
 
-  // One file at a time and in order, because each one decides where it lands from the state the
-  // one before it left behind. A rejected file costs itself and not the rest of the drop.
+  // One file at a time and in order, so a rejected file costs itself and not the rest of the drop.
+  // Into the library and no further: an import is somebody saying "I will use this", not "put it
+  // at the end of my edit" -- three files dropped at once used to become three clips nobody asked
+  // for. The way onto the timeline is the row's own plus, a drag onto a row, or a track menu.
   const importMedia = useCallback(
     async (files: File[]) => {
       if (doc === undefined) return;
       for (const file of files) {
         try {
-          appendClip(doc, await importFile(file, doc, probe));
+          await importFile(file, doc, probe);
           setError(undefined);
         } catch (err) {
           reportError("error.importFailed", err);

@@ -1113,7 +1113,12 @@ async function announce() {
     const dropped = drag("drop", zone, transfer);
     check("the drop is taken, not left to the browser", dropped.defaultPrevented, true);
 
-    const clip = await until("a clip on the timeline", () => q("[data-clip-id]"));
+    // An import is somebody saying "I will use this", not "put this at the end of my edit": it
+    // joins the library and the timeline is left alone. Three files dropped at once used to become
+    // three clips nobody had asked for, on a row nobody had chosen.
+    await until("the library entry", () => q("[data-media-id]"));
+    check("a drop imports and places nothing", all("[data-clip-id]").length, 0);
+    const clip = await placeMedium();
     check("the import raised nothing", banner(), "");
     check("the drop hint is gone again", q(".v-dropzone__overlay"), null);
     check("the clip is as wide as two seconds at the default zoom",
@@ -2597,9 +2602,12 @@ async function announce() {
     const bytes = await (await fetch("/cuts.mp4")).blob();
     const transfer = new DataTransfer();
     transfer.items.add(new File([bytes], "cuts.mp4", { type: "video/mp4" }));
+    const entries = all("[data-media-id]").length;
     drag("drop", q(".v-dropzone"), transfer);
-    await until("the dropped clip", () => all("[data-clip-id]").length === before + 1, 30000);
-    const dropped = all("[data-clip-id]").at(-1);
+    await until("the dropped file in the library",
+      () => all("[data-media-id]").length === entries + 1, 30000);
+    const dropped = await placeMedium(entries);
+    check("placing it made exactly one clip", all("[data-clip-id]").length, before + 1);
     check("dropping the cut fixture raised nothing", banner(), "");
 
     contextMenu(dropped);
@@ -2739,12 +2747,21 @@ async function announce() {
     };
     const wasEnding = await endOfMaterial();
 
+    // On the row this run has been building on, and said out loud rather than left to whatever the
+    // last section happened to activate: where a placed medium lands is now a choice, so a check
+    // about *length* has to make that choice itself or it is measuring the choice instead.
+    pointer("pointerdown", all(".v-timeline__header").at(-1));
+    pointer("pointerup", all(".v-timeline__header").at(-1));
+    await sleep(150);
+
     const transfer = new DataTransfer();
     transfer.items.add(new File([new Uint8Array(LOGO_PNG)], "logo.png", { type: "image/png" }));
     drag("drop", q(".v-dropzone"), transfer);
     await until("the still in the library", () => all("[data-media-id]").length === entries + 1);
     check("importing a picture raised nothing", banner(), "");
-    check("and it reached the timeline", all("[data-clip-id]").length, clips + 1);
+    await placeMedium(entries);
+    check("and it reaches the timeline when it is asked to",
+      all("[data-clip-id]").length, clips + 1);
 
     const entry = all("[data-media-id]").pop();
     check("the library reports the size of the picture",
@@ -2954,12 +2971,30 @@ async function announce() {
     checkNear("and the trim is one step back", width(), wide, 2);
   }
 
+  // An import joins the library and nothing else, so every run that needs something on the
+  // timeline puts it there the way a person does: the entry's own plus.
+  async function placeMedium(index = 0) {
+    const before = all("[data-clip-id]").length;
+    // On a phone the library is behind a tab, so the entry has to be brought up before its plus can
+    // be pressed -- which is what a person does there too.
+    if (q("[data-media-id]") === null) {
+      all(".v-panels__tab").find((tab) => tab.textContent === "Medien")?.click();
+    }
+    const row = await until("the library entry", () => all("[data-media-id]")[index]);
+    row.querySelector('button[aria-label="Auf die Zeitleiste"]').click();
+    const made = await until("the clip it makes",
+      () => (all("[data-clip-id]").length > before ? all("[data-clip-id]").at(-1) : undefined));
+    // Back where the run was: placing from a phone's library opens the timeline by itself, and a
+    // desktop never left it.
+    return made;
+  }
+
   async function dropFixture() {
     const bytes = await (await fetch("/" + FIXTURE.name)).blob();
     const transfer = new DataTransfer();
     transfer.items.add(new File([bytes], FIXTURE.name, { type: FIXTURE.type }));
     drag("drop", q(".v-dropzone"), transfer);
-    return until("a clip on the timeline", () => q("[data-clip-id]"));
+    return placeMedium();
   }
 
   // A second, different file. Different bytes, so a different hash and a genuinely second entry --
@@ -2969,7 +3004,8 @@ async function announce() {
     const transfer = new DataTransfer();
     transfer.items.add(new File([bytes], "second.mp4", { type: "video/mp4" }));
     drag("drop", q(".v-dropzone"), transfer);
-    return until("the second library entry", () => all("[data-media-id]").length === 2);
+    await until("the second library entry", () => all("[data-media-id]").length === 2);
+    return placeMedium(1);
   }
 
   // The import dialogue on a fresh editor, for the screenshot. Nothing is asserted here that the
