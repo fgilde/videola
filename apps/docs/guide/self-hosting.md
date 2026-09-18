@@ -23,6 +23,8 @@ opened over the API and a project opened in the editor are opened by the same co
 | `VIDEOLA_WASM` | none | The core. Without it the server cannot open a project at all |
 | `VIDEOLA_LOCALE` | `en` | `en` or `de`: what the *server* writes into generated names. The editor follows the browser |
 | `VIDEOLA_MAX_PROJECTS` | `8` | How many projects stay open in memory, each with its own core instance |
+| `VIDEOLA_YOUTUBE_CLIENT_ID` | none | The OAuth client a channel sign-in runs through. With the secret below, or not at all |
+| `VIDEOLA_YOUTUBE_CLIENT_SECRET` | none | The other half of it. Without both there is no sign-in, only the fields in the dialogue |
 
 **The token is not a hardening option.** The server checks the bind address at startup and refuses to
 listen on anything but loopback without one, because an open Videola hands every machine that can reach
@@ -188,6 +190,33 @@ from then on.
 | `youtube` | `clientId`, `clientSecret`, `refreshToken` | a resumable upload through the Data API |
 | `vimeo` | `accessToken` | a tus upload to the account |
 | `webhook` | `url` | posts the file as a multipart form, with any headers you name |
+
+### Signing in instead of pasting tokens
+
+The three YouTube values come from two different pages of Google's console, and the third is only
+ever printed by a tool almost nobody has installed. So the server can run the sign-in itself: the
+**Destinations** dialogue offers *Sign in with YouTube*, the browser goes to Google, and what comes
+back is exactly the refresh token the publisher already uses -- along with the channel name the
+destination is then called after.
+
+That needs one OAuth client of your own, once:
+
+```bash
+VIDEOLA_YOUTUBE_CLIENT_ID=…apps.googleusercontent.com
+VIDEOLA_YOUTUBE_CLIENT_SECRET=…
+```
+
+The redirect URI to register in Google's console is the address the editor is opened at plus
+`/api/destinations/oauth/youtube/callback`, for example
+`http://localhost:7331/api/destinations/oauth/youtube/callback`.
+
+No client is shipped: an OAuth secret in a public repository is a published secret, and the quota
+attached to it would be one bucket for every installation in the world. Without one the dialogue
+says so and leaves the fields; with one, every destination after that is a button.
+
+The way back from Google carries no bearer token -- it is a redirect, not a call from the editor.
+What stands in for it is the `state`: minted by the guarded half of the flow, single use, ten
+minutes, held only in memory. A callback with an unknown state is refused.
 
 ```bash
 curl -X POST localhost:7331/api/destinations \

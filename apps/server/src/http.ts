@@ -50,7 +50,10 @@ export function createRequestListener(options: HttpOptions): RequestListener {
       send(response, await staticReply(web, request));
       return;
     }
-    if (!authorised(request, options.token)) {
+    // The one route a bearer token cannot guard: it is a redirect from Google, not a call from the
+    // editor. What stands in for the token is the `state` -- minted by the guarded half of the
+    // flow, single use, ten minutes -- so a callback nobody here started goes nowhere.
+    if (!isOAuthCallback(request) && !authorised(request, options.token)) {
       send(response, {
         status: 401,
         body: { error: { code: "unauthorised", message: "a bearer token is required" } },
@@ -160,10 +163,37 @@ async function route(
   if (match(segments, ["api", "schema"]) && method === "GET") {
     return { status: 200, body: { commands: COMMAND_CATALOG } };
   }
+  // Signing in to a channel instead of pasting three secrets at it. Two routes: the editor asks
+  // where to send the browser, and the browser comes back here with a code.
+  if (match(segments, ["api", "destinations", "oauth", "youtube", "start"]) && method === "POST") {
+    const given = asObject(await body());
+    const name = typeof given.name === "string" && given.name.trim() !== "" ? given.name.trim() : "YouTube";
+    return { status: 200, body: api.startYoutubeAuth(name, callbackUri(request)) };
+  }
+  if (match(segments, ["api", "destinations", "oauth", "youtube", "callback"]) && method === "GET") {
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (code === null || state === null) {
+      return page(400, "Google sent no code back. Nothing was saved.");
+    }
+    try {
+      const destination = await api.finishYoutubeAuth(code, state);
+      return page(200, `${destination.name} is connected. You can close this tab.`);
+    } catch (error) {
+      return page(400, text(error));
+    }
+  }
   // Where finished videos go. A destination is set up once and used from then on, which is why it
   // lives beside the projects rather than inside one: a channel is not a property of an edit.
   if (match(segments, ["api", "destinations"])) {
-    if (method === "GET") return { status: 200, body: { destinations: await api.destinations() } };
+    if (method === "GET") {
+      // Whether a sign-in can be offered at all travels with the list, because the dialogue has to
+      // decide between a button and a paragraph about registering a client before it draws either.
+      return {
+        status: 200,
+        body: { destinations: await api.destinations(), canSignIn: api.canSignIn() },
+      };
+    }
     if (method === "POST") {
       return { status: 201, body: await api.addDestination(newDestination(asObject(await body()))) };
     }
@@ -447,6 +477,39 @@ async function readBytes(request: IncomingMessage, maxBodyBytes: number): Promis
 
 function match(segments: readonly string[], expected: readonly string[]): boolean {
   return segments.length === expected.length && expected.every((part, at) => segments[at] === part);
+}
+
+// The address Google is told to come back to, built from the host the request arrived on rather
+// than from a setting: it has to be the one the operator registered, and the operator registered
+// the one they open the editor at.
+function callbackUri(request: IncomingMessage): string {
+  const host = request.headers.host ?? "127.0.0.1";
+  const proto = (request.headers["x-forwarded-proto"] as string | undefined) ?? "http";
+  return `${proto.split(",")[0]}://${host}/api/destinations/oauth/youtube/callback`;
+}
+
+function isOAuthCallback(request: IncomingMessage): boolean {
+  const path = (request.url ?? "/").split("?")[0];
+  return path === "/api/destinations/oauth/youtube/callback";
+}
+
+// A browser is at the other end of the callback, not a client that reads JSON, so what comes back
+// is a sentence somebody can read and a tab they can close.
+function page(status: number, message: string): Reply {
+  const body = `<!doctype html><meta charset="utf-8"><title>Videola</title>` +
+    `<body style="font:16px system-ui;margin:3rem"><p>${escapeHtml(message)}</p></body>`;
+  return {
+    status,
+    body: undefined,
+    bytes: new TextEncoder().encode(body),
+    contentType: "text/html; charset=utf-8",
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (char) =>
+    char === "&" ? "&amp;" : char === "<" ? "&lt;" : char === ">" ? "&gt;" : "&quot;",
+  );
 }
 
 function notFound(): Reply {

@@ -56,13 +56,23 @@ async function start(
   options: Partial<HttpOptions> = {},
   watched = false,
   ytdlp?: RunYtDlp,
+  youtubeClient?: { clientId: string; clientSecret: string },
 ): Promise<void> {
   // A publish is an HTTP conversation with somebody else's server. Watched, it is a conversation with
   // this array -- which is the only way a check can say what a publish would do to a real account.
   const http = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     sent.push({ url: String(input), body: init?.body });
     if (String(input).includes("oauth2")) {
-      return new Response(JSON.stringify({ access_token: "at" }), { status: 200 });
+      return new Response(
+        JSON.stringify({ access_token: "at", refresh_token: "rt" }),
+        { status: 200 },
+      );
+    }
+    if (String(input).includes("youtube/v3/channels")) {
+      return new Response(
+        JSON.stringify({ items: [{ snippet: { title: "Kanal aus dem Konto" } }] }),
+        { status: 200 },
+      );
     }
     if (String(input).includes("uploadType=resumable")) {
       return new Response("{}", { status: 200, headers: { location: "https://upload.test/s" } });
@@ -74,6 +84,7 @@ async function start(
     maxProjects: 4,
     ...(watched ? { fetch: http } : {}),
     ...(ytdlp === undefined ? {} : { ytdlp }),
+    ...(youtubeClient === undefined ? {} : { youtubeClient }),
   });
   server = createServer(createRequestListener({ api, ...options }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -458,6 +469,111 @@ describe("a still over HTTP", () => {
 
   it("is unknown for an unknown project before it renders anything", async () => {
     expect((await json("/api/projects/prj_nope/frame?at=0")).status).toBe(404);
+  });
+});
+
+// Signing in instead of pasting. Three values from two pages of a console is the reason nobody set
+// a destination up; this is one button, and what it stores is the same refresh token.
+describe("signing in to a channel", () => {
+  it("hands back an address to send the browser to, with a state of its own", async () => {
+    await start({}, true, undefined, { clientId: "cid", clientSecret: "cs" });
+
+    const { status, body } = await json("/api/destinations/oauth/youtube/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Mein Kanal" }),
+    });
+
+    expect(status).toBe(200);
+    const url = new URL(body.url as string);
+    expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(url.searchParams.get("client_id")).toBe("cid");
+    expect(url.searchParams.get("access_type")).toBe("offline");
+    expect(url.searchParams.get("redirect_uri")).toContain("/api/destinations/oauth/youtube/callback");
+    expect(url.searchParams.get("state")).toBe(body.state);
+  });
+
+  // The one thing an operator has to do once, said as an answer rather than as silence.
+  it("says what is missing where the server has no client of its own", async () => {
+    await start({}, true);
+
+    const { status, body } = await json("/api/destinations/oauth/youtube/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Mein Kanal" }),
+    });
+
+    expect(status).toBe(400);
+    expect(body.error.code).toBe("noOAuthClient");
+    expect(body.error.message).toContain("VIDEOLA_YOUTUBE_CLIENT_ID");
+  });
+
+  it("turns the code it is sent back into a destination named after the channel", async () => {
+    await start({}, true, undefined, { clientId: "cid", clientSecret: "cs" });
+    const started = await json("/api/destinations/oauth/youtube/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Mein Kanal" }),
+    });
+
+    const back = await fetch(
+      `${base}/api/destinations/oauth/youtube/callback?code=abc&state=${started.body.state}`,
+    );
+
+    expect(back.status).toBe(200);
+    expect(back.headers.get("content-type")).toContain("text/html");
+    const { body } = await json("/api/destinations");
+    expect(body.destinations).toHaveLength(1);
+    expect(body.destinations[0].name).toBe("Kanal aus dem Konto");
+    expect(body.destinations[0].holds).toEqual(["clientId", "clientSecret", "refreshToken"]);
+    expect(JSON.stringify(body)).not.toContain("rt");
+  });
+
+  // The state is what the bearer token cannot be here, so it has to be worth something: unknown is
+  // refused, and a used one is unknown.
+  it("refuses a callback it did not start, and the same one twice", async () => {
+    await start({}, true, undefined, { clientId: "cid", clientSecret: "cs" });
+    const started = await json("/api/destinations/oauth/youtube/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Mein Kanal" }),
+    });
+
+    const invented = await fetch(
+      `${base}/api/destinations/oauth/youtube/callback?code=abc&state=not-ours`,
+    );
+    expect(invented.status).toBe(400);
+
+    const first = await fetch(
+      `${base}/api/destinations/oauth/youtube/callback?code=abc&state=${started.body.state}`,
+    );
+    const again = await fetch(
+      `${base}/api/destinations/oauth/youtube/callback?code=abc&state=${started.body.state}`,
+    );
+    expect([first.status, again.status]).toEqual([200, 400]);
+    const { body } = await json("/api/destinations");
+    expect(body.destinations).toHaveLength(1);
+  });
+
+  // The callback is exempt from the bearer token because Google carries none; everything else on
+  // the same prefix is not.
+  it("takes the callback without a token and still guards the rest", async () => {
+    await start({ token: "geheim" }, true, undefined, { clientId: "cid", clientSecret: "cs" });
+
+    const listed = await fetch(`${base}/api/destinations`);
+    expect(listed.status).toBe(401);
+
+    const started = await fetch(`${base}/api/destinations/oauth/youtube/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer geheim" },
+      body: JSON.stringify({ name: "Mein Kanal" }),
+    });
+    const { state } = (await started.json()) as { state: string };
+    const back = await fetch(
+      `${base}/api/destinations/oauth/youtube/callback?code=abc&state=${state}`,
+    );
+
+    expect(back.status).toBe(200);
   });
 });
 

@@ -10,6 +10,13 @@ import type { DocumentBackend } from "@videola/core";
 
 import { Destinations, type NewDestination, type PublicDestination } from "./destinations";
 import {
+  channelTitle,
+  exchangeCode,
+  PendingAuths,
+  youtubeAuthUrl,
+  type OAuthClient,
+} from "./oauth";
+import {
   describeVideo,
   fetchMedium,
   searchVideos,
@@ -83,6 +90,8 @@ export interface ApiOptions {
   readonly fetch?: Fetch;
   /** What runs `yt-dlp`. Injected for the same reason `fetch` is: a check needs neither. */
   readonly ytdlp?: RunYtDlp;
+  /** The OAuth client a sign-in uses, where the operator has registered one. */
+  readonly youtubeClient?: OAuthClient | undefined;
 }
 
 // The one place that turns a request into core calls, shared verbatim by the HTTP routes and the
@@ -96,6 +105,8 @@ export class Api {
   #destinations: Destinations;
   #http: Fetch;
   #ytdlp: RunYtDlp;
+  #youtubeClient: OAuthClient | undefined;
+  #pending = new PendingAuths();
   #fetchProgress = new Map<string, number>();
 
   constructor(options: ApiOptions) {
@@ -107,6 +118,58 @@ export class Api {
     // given credentials to still has a testable publish path.
     this.#http = options.fetch ?? fetch;
     this.#ytdlp = options.ytdlp ?? ytDlp();
+    this.#youtubeClient = options.youtubeClient;
+  }
+
+  /**
+   * Signing in to a channel, in place of pasting three secrets at it.
+   *
+   * Two halves: this hands back the address to send the browser to, and `finishYoutubeAuth` is what
+   * the browser comes back to. Without a client registered on this server there is no address to
+   * hand back, and the caller is told exactly that -- it is what the dialogue turns into a sentence
+   * about the one thing an operator has to do once.
+   */
+  startYoutubeAuth(name: string, redirectUri: string): { url: string; state: string } {
+    if (this.#youtubeClient === undefined) {
+      throw new ApiError(
+        400,
+        "noOAuthClient",
+        "this server has no YouTube client: set VIDEOLA_YOUTUBE_CLIENT_ID and VIDEOLA_YOUTUBE_CLIENT_SECRET",
+      );
+    }
+    const pending = this.#pending.start(name, redirectUri);
+    return { url: youtubeAuthUrl(this.#youtubeClient, pending), state: pending.state };
+  }
+
+  /** The other half: a code and the nonce that says this flow is ours. */
+  async finishYoutubeAuth(code: string, state: string): Promise<PublicDestination> {
+    const client = this.#youtubeClient;
+    if (client === undefined) {
+      throw new ApiError(400, "noOAuthClient", "this server has no YouTube client");
+    }
+    const pending = this.#pending.take(state);
+    if (pending === undefined) {
+      throw new ApiError(400, "badState", "that sign-in is not one this server started");
+    }
+    const granted = await exchangeCode(client, code, pending.redirectUri, this.#http);
+    const channel = await channelTitle(granted.accessToken, this.#http);
+    return await this.addDestination({
+      kind: "youtube",
+      name: channel ?? pending.name,
+      secrets: {
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+        refreshToken: granted.refreshToken,
+      },
+      // Said out loud on the row, because "which channel is this" is the question a list of
+      // destinations has to answer before anybody presses publish.
+      settings: channel === undefined ? {} : { channel },
+    });
+  }
+
+  /** Whether a sign-in can be offered at all, for a dialogue that has to decide what to show. */
+  canSignIn(): boolean {
+    return this.#youtubeClient !== undefined;
   }
 
   /**

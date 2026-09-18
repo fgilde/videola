@@ -156,6 +156,7 @@ import {
 import {
   addDestination,
   listDestinations,
+  startSignIn,
   publishVideo,
   readConnection,
   removeDestination,
@@ -348,6 +349,9 @@ export function App(): ReactElement {
   const [connection, setConnection] = useState<Connection>(() => readConnection());
   const [destinations, setDestinations] = useState<readonly DestinationSummary[]>([]);
   const [destinationError, setDestinationError] = useState<string>();
+  // Whether that server holds an OAuth client, and whether a consent page is open right now.
+  const [canSignIn, setCanSignIn] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   // Where the next export goes when it is finished. Empty means nowhere, which is what a browser with
   // no server behind it can offer and what the editor does today.
   const [publishTo, setPublishTo] = useState("");
@@ -1227,14 +1231,49 @@ export function App(): ReactElement {
   const loadDestinations = useCallback(
     async (using: Connection, loudly: boolean) => {
       try {
-        setDestinations(await listDestinations(using));
+        const listed = await listDestinations(using);
+        setDestinations(listed.destinations);
+        setCanSignIn(listed.canSignIn);
         setDestinationError(undefined);
+        return listed.destinations;
       } catch (err) {
         setDestinations([]);
+        setCanSignIn(false);
         if (loudly) setDestinationError(String((err as Error).message ?? err));
+        return [];
       }
     },
     [],
+  );
+
+  /**
+   * Signing in to a channel: open the account's own consent page, then watch for the destination.
+   *
+   * There is nothing to await -- the flow finishes on the server, in a redirect from Google that
+   * this tab never sees -- so what this does is look at the list every couple of seconds until it
+   * grows, and give up after a few minutes rather than poll a tab somebody closed forever.
+   */
+  const signIn = useCallback(
+    (name: string) => {
+      void (async () => {
+        setSigningIn(true);
+        setDestinationError(undefined);
+        try {
+          const had = destinations.length;
+          window.open(await startSignIn(connection, name), "_blank", "noopener,noreferrer");
+          for (let tries = 0; tries < 90; tries += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            const listed = await loadDestinations(connection, false);
+            if (listed.length > had) return;
+          }
+        } catch (err) {
+          setDestinationError(String((err as Error).message ?? err));
+        } finally {
+          setSigningIn(false);
+        }
+      })();
+    },
+    [connection, destinations.length, loadDestinations],
   );
 
   useEffect(() => {
@@ -2405,6 +2444,9 @@ export function App(): ReactElement {
           token={connection.token}
           destinations={destinations}
           error={destinationError}
+          canSignIn={canSignIn}
+          signingIn={signingIn}
+          onSignIn={signIn}
           onConnect={connectTo}
           onAdd={(draft) => {
             void (async () => {

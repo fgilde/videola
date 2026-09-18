@@ -24,6 +24,8 @@ geöffnet.
 | `VIDEOLA_WASM` | keiner | Der Kern. Ohne ihn kann der Server überhaupt kein Projekt öffnen |
 | `VIDEOLA_LOCALE` | `en` | `en` oder `de`: was der *Server* in erzeugte Namen schreibt. Der Editor folgt dem Browser |
 | `VIDEOLA_MAX_PROJECTS` | `8` | Wie viele Projekte im Speicher offen bleiben, jedes mit eigener Kerninstanz |
+| `VIDEOLA_YOUTUBE_CLIENT_ID` | keiner | Der OAuth-Client, über den die Anmeldung an einem Kanal läuft. Zusammen mit dem Geheimnis darunter, sonst gar nicht |
+| `VIDEOLA_YOUTUBE_CLIENT_SECRET` | keiner | Die zweite Hälfte davon. Ohne beide gibt es keine Anmeldung, nur die Felder im Dialog |
 
 **Der Token ist keine Härtungsoption.** Der Server prüft die Bind-Adresse beim Start und weigert sich,
 ohne Token auf etwas anderem als Loopback zu lauschen — denn ein offenes Videola gibt jeder Maschine, die
@@ -194,6 +196,34 @@ annimmt — einmal eingerichtet und danach benutzt.
 | `youtube` | `clientId`, `clientSecret`, `refreshToken` | ein fortsetzbarer Upload über die Data API |
 | `vimeo` | `accessToken` | ein tus-Upload ins Konto |
 | `webhook` | `url` | schickt die Datei als Formular, mit Kopfzeilen Ihrer Wahl |
+
+### Mit dem Konto anmelden statt Token abtippen
+
+Die drei YouTube-Werte stammen aus zwei verschiedenen Seiten der Google-Konsole, und der dritte wird
+überhaupt nur von einem Werkzeug ausgegeben, das kaum jemand installiert hat. Deshalb kann der Server
+die Anmeldung selbst führen: Im Dialog **Veröffentlichungsziele** steht dann *Mit YouTube anmelden*,
+der Browser geht zu Google, und was zurückkommt, ist genau der Refresh-Token, den der Publisher
+ohnehin benutzt — samt dem Kanalnamen, nach dem das Ziel dann heißt.
+
+Dafür braucht der Server einmalig einen eigenen OAuth-Client:
+
+```bash
+VIDEOLA_YOUTUBE_CLIENT_ID=…apps.googleusercontent.com
+VIDEOLA_YOUTUBE_CLIENT_SECRET=…
+```
+
+Als Redirect-URI wird in der Google-Konsole genau die Adresse eingetragen, unter der der Editor
+geöffnet wird, plus `/api/destinations/oauth/youtube/callback` — also etwa
+`http://localhost:7331/api/destinations/oauth/youtube/callback`.
+
+Ein Client wird **nicht mitgeliefert**: Ein OAuth-Geheimnis in einem offenen Repository ist ein
+veröffentlichtes Geheimnis, und das daran hängende Kontingent wäre ein einziger Topf für jede
+Installation der Welt. Ohne hinterlegten Client sagt der Dialog genau das und lässt die Felder
+stehen; mit hinterlegtem Client ist jedes weitere Ziel ein Knopf.
+
+Der Rückweg von Google trägt keinen Bearer-Token — er ist eine Weiterleitung und kein Aufruf des
+Editors. An dessen Stelle steht ein `state`: von der geschützten Hälfte des Ablaufs erzeugt, einmal
+gültig, zehn Minuten lang, nur im Speicher. Ein Rückruf mit unbekanntem `state` wird abgewiesen.
 
 ```bash
 curl -X POST localhost:7331/api/destinations \

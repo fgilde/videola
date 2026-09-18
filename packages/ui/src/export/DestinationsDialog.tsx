@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
+import { Icon, type IconName } from "../primitives/Icon";
 import "./HandOffDialog.css";
+import "./DestinationsDialog.css";
 
 export type DestinationKind = "youtube" | "vimeo" | "webhook";
 
@@ -11,7 +13,16 @@ export interface DestinationSummary {
   name: string;
   note?: string;
   holds: readonly string[];
+  /** What is safe to show: the channel a sign-in named, a privacy setting. */
+  settings?: Readonly<Record<string, string>>;
 }
+
+/** One shape per kind. Not a logo: a wordmark in a monochrome icon set is a trademark drawn badly. */
+const GLYPH: Record<DestinationKind, IconName> = {
+  youtube: "channel",
+  vimeo: "film",
+  webhook: "hook",
+};
 
 export interface NewDestinationDraft {
   kind: DestinationKind;
@@ -28,6 +39,11 @@ export interface DestinationsDialogProps {
   /** What went wrong last, in the server's own words. */
   error?: string;
   busy?: boolean;
+  /** Whether this server holds an OAuth client, and can therefore offer a sign-in at all. */
+  canSignIn?: boolean;
+  /** True while a browser tab is open on the account's consent page. */
+  signingIn?: boolean;
+  onSignIn?: (name: string) => void;
   onConnect: (url: string, token: string) => void;
   onAdd: (draft: NewDestinationDraft) => void;
   onRemove: (id: string) => void;
@@ -140,9 +156,14 @@ export function DestinationsDialog(props: DestinationsDialogProps): ReactElement
             <ul className="v-handoff__list">
               {props.destinations.map((destination) => (
                 <li key={destination.id} className="v-dest__row" data-destination={destination.id}>
+                  <span className="v-dest__glyph" aria-hidden="true">
+                    <Icon name={GLYPH[destination.kind]} />
+                  </span>
                   <span className="v-handoff__name">
                     {destination.name}
-                    <span className="v-handoff__ext">{destination.kind}</span>
+                    <span className="v-handoff__ext">
+                      {t(`destinations.kind.${destination.kind}`)}
+                    </span>
                   </span>
                   {/* What it holds, never what they are: the server does not say, and neither does
                       this. Shown at all because "did I paste the refresh token?" is a real question. */}
@@ -165,23 +186,55 @@ export function DestinationsDialog(props: DestinationsDialogProps): ReactElement
 
         <section className="v-dest__block">
           <h3 className="v-dest__heading">{t("destinations.add")}</h3>
-          <label className="v-dest__field">
-            <span>{t("destinations.kind")}</span>
-            <select
-              value={kind}
-              data-testid="destination-kind"
-              onChange={(event) => {
-                setKind(event.target.value as DestinationKind);
-                setValues({});
-              }}
-            >
-              {(["youtube", "vimeo", "webhook"] as const).map((entry) => (
-                <option key={entry} value={entry}>
-                  {t(`destinations.kind.${entry}`)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Three tiles rather than a dropdown: there are three of them, they are the first choice
+              somebody makes here, and each one has a shape worth showing. */}
+          <div className="v-dest__kinds" role="group" aria-label={t("destinations.kind")}>
+            {(["youtube", "vimeo", "webhook"] as const).map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                className="v-dest__kind"
+                data-kind={entry}
+                aria-pressed={kind === entry}
+                onClick={() => {
+                  setKind(entry);
+                  setValues({});
+                }}
+              >
+                <Icon name={GLYPH[entry]} />
+                <span>{t(`destinations.kind.${entry}`)}</span>
+              </button>
+            ))}
+          </div>
+          {/* The whole point of the sign-in: a client id, a client secret and a refresh token are
+              three values from two pages of a console, and this is the flow they exist for. The
+              paste-it-yourself fields stay, folded away, for a server with no client of its own. */}
+          {kind === "youtube" && (
+            <div className="v-dest__signin">
+              {props.canSignIn === true ? (
+                <>
+                  <button
+                    type="button"
+                    className="v-button v-button--primary"
+                    data-testid="destination-signin"
+                    disabled={props.signingIn === true || props.busy === true}
+                    onClick={() => props.onSignIn?.(name.trim() === "" ? "YouTube" : name.trim())}
+                  >
+                    {t("destinations.signIn")}
+                  </button>
+                  <p className="v-export__note">
+                    {props.signingIn === true
+                      ? t("destinations.signInWaiting")
+                      : t("destinations.signInNote")}
+                  </p>
+                </>
+              ) : (
+                <p className="v-export__note" data-testid="destination-no-client">
+                  {t("destinations.signInMissing")}
+                </p>
+              )}
+            </div>
+          )}
           <label className="v-dest__field">
             <span>{t("destinations.name")}</span>
             <input
@@ -191,6 +244,8 @@ export function DestinationsDialog(props: DestinationsDialogProps): ReactElement
               onChange={(event) => setName(event.target.value)}
             />
           </label>
+          <details className="v-dest__manual" open={kind !== "youtube"}>
+            <summary>{t("destinations.manual")}</summary>
           {fields.map((field) => (
             <label className="v-dest__field" key={field.key}>
               <span>{t(`destinations.field.${field.key}`)}</span>
@@ -205,6 +260,7 @@ export function DestinationsDialog(props: DestinationsDialogProps): ReactElement
             </label>
           ))}
           <p className="v-export__note">{t(`destinations.help.${kind}`)}</p>
+          </details>
           <button
             type="button"
             className="v-button v-button--primary"

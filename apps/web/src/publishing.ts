@@ -63,12 +63,37 @@ export function sameOrigin(): string {
   return typeof location === "undefined" ? "" : location.origin;
 }
 
-export async function listDestinations(
-  connection: Connection,
-): Promise<readonly DestinationSummary[]> {
+export interface DestinationList {
+  destinations: readonly DestinationSummary[];
+  /** Whether that server holds an OAuth client, and can therefore offer a sign-in at all. */
+  canSignIn: boolean;
+}
+
+export async function listDestinations(connection: Connection): Promise<DestinationList> {
   const answer = await call(connection, "/api/destinations");
-  const body = (await answer.json()) as { destinations?: DestinationSummary[] };
-  return body.destinations ?? [];
+  const body = (await answer.json()) as {
+    destinations?: DestinationSummary[];
+    canSignIn?: boolean;
+  };
+  return { destinations: body.destinations ?? [], canSignIn: body.canSignIn === true };
+}
+
+/**
+ * Where to send the browser so an account can say yes, and the nonce that comes back with it.
+ *
+ * The consent page is Google's, the redirect lands on the server, and the editor learns about it by
+ * seeing a destination it did not have -- which is why this returns nothing to wait on and the
+ * caller polls the list instead.
+ */
+export async function startSignIn(connection: Connection, name: string): Promise<string> {
+  const answer = await call(connection, "/api/destinations/oauth/youtube/start", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  const body = (await answer.json()) as { url?: string };
+  if (body.url === undefined) throw new Error("the server offered no sign-in address");
+  return body.url;
 }
 
 export async function addDestination(

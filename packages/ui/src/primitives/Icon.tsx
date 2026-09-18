@@ -43,6 +43,9 @@ const OUTLINED = {
 const FILLED = {
   play: "M8 5.2v13.6L19 12z",
   record: "M12 5.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13",
+  channel: "M3.2 7.5h17.6v9H3.2zM10.3 10.2l4 1.8-4 1.8z",
+  film: "M4 5h16v14H4zM8 5v14M16 5v14M4 9.7h4M4 14.3h4M16 9.7h4M16 14.3h4",
+  hook: "M7 8.5 3.5 12 7 15.5M17 8.5 20.5 12 17 15.5M14 5.5l-4 13",
   pause: "M8 5h3.2v14H8zM12.8 5H16v14h-3.2z",
   skipStart: "M6 6h2.2v12H6zM19 6v12l-9-6z",
   skipEnd: "M15.8 6H18v12h-2.2zM5 6v12l9-6z",

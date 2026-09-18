@@ -2,6 +2,14 @@ export interface ApiConfig {
   readonly storageRoot: string;
   readonly maxProjects: number;
   readonly locale: string;
+  /**
+   * The OAuth client a YouTube sign-in runs through, where the operator registered one.
+   *
+   * Not shipped and not optional-by-halves: an OAuth client secret in a public repository is a
+   * published secret, and one bucket of quota for every installation in the world. Registered once
+   * per server, and every destination after that is a button rather than three pasted values.
+   */
+  readonly youtubeClient: { clientId: string; clientSecret: string } | undefined;
 }
 
 export interface Config extends ApiConfig {
@@ -23,6 +31,10 @@ export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfi
     storageRoot: env.VIDEOLA_STORAGE_ROOT ?? process.cwd(),
     maxProjects: integer(env.VIDEOLA_MAX_PROJECTS, 8, "VIDEOLA_MAX_PROJECTS"),
     locale: env.VIDEOLA_LOCALE ?? "en",
+    youtubeClient: oauthClient(
+      env.VIDEOLA_YOUTUBE_CLIENT_ID,
+      env.VIDEOLA_YOUTUBE_CLIENT_SECRET,
+    ),
   };
 }
 
@@ -46,6 +58,16 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     maxBodyBytes: integer(env.VIDEOLA_MAX_BODY_BYTES, 512 * 1024 * 1024, "VIDEOLA_MAX_BODY_BYTES"),
     webRoot: env.VIDEOLA_WEB_ROOT === "" ? undefined : env.VIDEOLA_WEB_ROOT,
   };
+}
+
+// Both or neither. Half a client is a sign-in that gets as far as Google's page and fails on the
+// way back, which is the worst moment to find out.
+function oauthClient(
+  id: string | undefined,
+  secret: string | undefined,
+): { clientId: string; clientSecret: string } | undefined {
+  if (id === undefined || id === "" || secret === undefined || secret === "") return undefined;
+  return { clientId: id, clientSecret: secret };
 }
 
 function integer(raw: string | undefined, fallback: number, name: string): number {

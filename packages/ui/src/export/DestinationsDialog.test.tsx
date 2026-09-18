@@ -8,10 +8,12 @@ function show(over: Partial<DestinationsDialogProps> = {}): {
   connected: [string, string][];
   added: unknown[];
   removed: string[];
+  signedIn: string[];
 } {
   const connected: [string, string][] = [];
   const added: unknown[] = [];
   const removed: string[] = [];
+  const signedIn: string[] = [];
   render(
     <I18nProvider>
       <DestinationsDialog
@@ -21,18 +23,52 @@ function show(over: Partial<DestinationsDialogProps> = {}): {
         onConnect={(url, token) => connected.push([url, token])}
         onAdd={(draft) => added.push(draft)}
         onRemove={(id) => removed.push(id)}
+        onSignIn={(name) => signedIn.push(name)}
         onClose={vi.fn()}
         {...over}
       />
     </I18nProvider>,
   );
-  return { connected, added, removed };
+  return { connected, added, removed, signedIn };
 }
 
 const field = (key: string): HTMLInputElement =>
   document.querySelector<HTMLInputElement>(`[data-field="${key}"]`)!;
 
 describe("the destinations dialogue", () => {
+  // The whole reason this exists: three values from two pages of a console is what stopped people
+  // from ever setting a channel up.
+  it("offers a sign-in where the server can do one, and names it after what was typed", () => {
+    const { signedIn } = show({ canSignIn: true });
+
+    fireEvent.change(screen.getByTestId("destination-name"), { target: { value: "Mein Kanal" } });
+    fireEvent.click(screen.getByTestId("destination-signin"));
+
+    expect(signedIn).toEqual(["Mein Kanal"]);
+  });
+
+  it("says what an operator has to do where the server holds no client", () => {
+    show({ canSignIn: false });
+
+    expect(screen.queryByTestId("destination-signin")).toBeNull();
+    expect(screen.getByTestId("destination-no-client").textContent).toContain(
+      "VIDEOLA_YOUTUBE_CLIENT_ID",
+    );
+  });
+
+  // The paste-it-yourself fields are still there for that case, one fold away.
+  it("keeps the fields reachable behind the sign-in", () => {
+    show({ canSignIn: true });
+
+    expect(field("clientId")).toBeTruthy();
+  });
+
+  it("does not offer a sign-in while one is already open", () => {
+    show({ canSignIn: true, signingIn: true });
+
+    expect((screen.getByTestId("destination-signin") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("asks for a server first, because that is what holds them", () => {
     const { connected } = show();
 
@@ -53,7 +89,7 @@ describe("the destinations dialogue", () => {
     expect(field("clientId")).toBeTruthy();
     expect(field("refreshToken")).toBeTruthy();
 
-    fireEvent.change(screen.getByTestId("destination-kind"), { target: { value: "webhook" } });
+    fireEvent.click(screen.getByRole("button", { name: "Eigene Adresse" }));
 
     expect(document.querySelector('[data-field="clientId"]')).toBeNull();
     expect(field("url")).toBeTruthy();

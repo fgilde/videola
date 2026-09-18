@@ -9,6 +9,7 @@ const api = new Api({
   storageRoot: config.storageRoot,
   maxProjects: config.maxProjects,
   locale: config.locale,
+  ...(config.youtubeClient === undefined ? {} : { youtubeClient: config.youtubeClient }),
 });
 
 const server = createServer(

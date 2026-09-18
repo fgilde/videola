@@ -728,6 +728,35 @@ async function announce() {
   }
 
   /**
+   * Where a finished video goes, as far as a browser with no server behind it can ask.
+   *
+   * Setting up a channel used to mean three values from two pages of Google's console, pasted into
+   * three boxes. The dialogue now leads with a sign-in -- and on a server that holds no client of
+   * its own, which is what this run is, it has to say so plainly rather than offer a button that
+   * cannot work. The fields stay reachable behind it, because that is the way in until somebody
+   * registers one.
+   */
+  async function destinations() {
+    pickMenu("Veröffentlichungsziele …");
+    const dialog = await until("the destinations dialogue", () => q('[data-testid="destinations"]'));
+    check("opening it raised nothing", banner(), "");
+    check("the three kinds are shown as what they are",
+      [...dialog.querySelectorAll("[data-kind]")].map((node) => node.dataset.kind),
+      ["youtube", "vimeo", "webhook"]);
+    check("a server with no client of its own says so instead of offering a button",
+      dialog.querySelector('[data-testid="destination-signin"]'), null);
+    check("and names the two settings that would change that",
+      dialog.querySelector('[data-testid="destination-no-client"]').textContent
+        .includes("VIDEOLA_YOUTUBE_CLIENT_ID"),
+      true);
+    check("with the fields still reachable for whoever has the values",
+      dialog.querySelector('[data-field="refreshToken"]') !== null, true);
+    labelled("Schließen").click();
+    await until("the dialogue to close",
+      () => (q('[data-testid="destinations"]') === null ? true : null));
+  }
+
+  /**
    * A number typed rather than aimed at, and the way back.
    *
    * A slider two hundred pixels wide cannot be asked for -0.4, and somebody who has spent a minute
@@ -1408,6 +1437,7 @@ async function announce() {
     await recordMode();
     await stills();
     await fromALink();
+    await destinations();
 
     // The instruments and the grade, in that order: a scope is only worth anything if it moves
     // when the picture does, and only the built application can show both at once.
