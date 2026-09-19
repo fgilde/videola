@@ -1,16 +1,23 @@
-/* Three ways in, a list of what was found, and a look to give it: the dialogue is a sequence, so it
-   scrolls as one column rather than trying to be a grid. */
+/* Two questions, two columns: where the words come from, and what they look like. Stacked, the
+   looks sat below the fold and nobody scrolled to them. */
 .v-lyrics {
-  width: min(40rem, calc(100vw - 2 * var(--v-space-4)));
-  max-height: min(46rem, calc(100vh - 2 * var(--v-space-4)));
+  width: min(62rem, calc(100vw - 2 * var(--v-space-4)));
+  max-height: min(48rem, calc(100vh - 2 * var(--v-space-4)));
   overflow-y: auto;
+}
+
+.v-lyrics__columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--v-space-3);
+  margin-bottom: var(--v-space-3);
 }
 
 .v-lyrics__block {
   display: grid;
+  align-content: start;
   gap: var(--v-space-2);
   padding: var(--v-space-3);
-  margin-bottom: var(--v-space-3);
   background: var(--v-surface);
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-md);
@@ -28,12 +35,17 @@
   resize: vertical;
 }
 
+.v-lyrics__count {
+  margin: var(--v-space-1) 0 0;
+  font-weight: 600;
+}
+
 /* What was found, at a glance. Forty lines is enough to recognise a song; a scroll box with the
    whole of one in it is a second editor nobody asked for. */
 .v-lyrics__lines {
   margin: 0;
   padding: 0 0 0 var(--v-space-3);
-  max-height: 14rem;
+  max-height: 12rem;
   overflow-y: auto;
   font-size: var(--v-text-sm);
   color: var(--v-text-muted);
@@ -51,10 +63,48 @@
   flex: none;
 }
 
+/* The styles, each drawing itself. Three across on a desktop, which fits eleven of them into four
+   rows without a scrollbar of their own. */
 .v-lyrics__styles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--v-space-1);
+}
+
+.v-lyrics__style {
+  display: grid;
+  gap: 4px;
+  padding: 4px 4px 6px;
+  background: var(--v-bg-sunken, #05070c);
+  color: var(--v-text-muted);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.v-lyrics__style:hover {
+  border-color: var(--v-border-strong);
+  color: var(--v-text);
+}
+
+.v-lyrics__style[aria-pressed="true"] {
+  border-color: var(--v-accent);
+  background: var(--v-accent-soft);
+  color: var(--v-text);
+}
+
+.v-lyrics__preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  background: #05070c;
 }
 
 .v-lyrics__switch {
@@ -62,4 +112,12 @@
   align-items: center;
   gap: var(--v-space-2);
   font-size: var(--v-text-sm);
+}
+
+/* Under a tablet's width the two columns are one, and the looks come first: by then somebody has
+   usually already found their words and is choosing how they look. */
+@media (max-width: 900px) {
+  .v-lyrics__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

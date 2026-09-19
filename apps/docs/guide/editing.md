@@ -974,9 +974,21 @@ Over them sits a **lyrics clip** that draws whatever is being sung, in seven sty
 | Neon | glowing letters over whatever is behind them |
 | Flip (3D) | the words turn in out of the depth |
 | Caption bar | a plate with the line on it, at the top, the middle or the bottom |
+| Depth (3D) | the line comes at the camera from far away while the one before it flies past and is seen from behind |
+| Letters travel | every letter looks for itself in the line before and moves from there to where it belongs |
+| Wave | the line rides a wave, each letter a little further along it |
+| Glitch | the line tears into red and blue and puts itself back together |
 
 The same press can put a **visualiser** behind it, which makes it a finished lyric video in one go.
 And it is one go: a hundred lines, three tracks, one undo.
+
+Every tile in the dialogue draws its own style in the colours that are set, and runs it while the
+pointer is on it. The painter is the one that draws the real thing, so a preview cannot promise a
+look the video will not have.
+
+The length comes from the clip on the timeline, or from the length read out of the file at import,
+or from the end of the last line -- so a lyric video can be made before the song is on a track at
+all.
 
 The track is chosen and not asked for: the topmost unlocked track of the right kind with **nothing
 standing in the window the clip would occupy**, or a new one. `clip.add` overwrites what it covers, so

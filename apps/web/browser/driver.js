@@ -111,6 +111,9 @@ async function announce() {
   const importing = location.search.includes("import");
   // And one for the other dialogue somebody sets up once: where a finished video goes.
   const publishing = location.search.includes("destinations");
+  // And one for the dialogue that turns a song into a video, on an editor with nothing on its
+  // timeline -- which is where the refusal this run exists for came from.
+  const singing = location.search.includes("lyrics");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -818,6 +821,20 @@ async function announce() {
     labelled("Text übernehmen").click();
     const lines = await until("the lines it took", () => q('[data-testid="lyrics-lines"]'));
     check("the pasted lines are read with their times", lines.children.length, 3);
+
+    // Eleven styles, each drawing itself on a thumbnail: a list of names says nothing about what
+    // "kinetic" or "letters travel" look like, and the only other way to find out is to make a
+    // video. Read off the canvas, because a tile that draws nothing is the failure worth catching.
+    const tiles = [...dialog.querySelectorAll(".v-lyrics__style")];
+    check("every style shows itself", tiles.length, 11);
+    const picture = tiles[0].querySelector("canvas");
+    const ctx = picture.getContext("2d");
+    const pixels = ctx.getImageData(0, 0, picture.width, picture.height).data;
+    let ink = 0;
+    for (let at = 0; at < pixels.length; at += 4) {
+      if (pixels[at + 3] > 40 && pixels[at] > 60) ink += 1;
+    }
+    checkAtLeast("and the picture is a picture rather than an empty box", ink, 40);
 
     labelled("Lyric-Video anlegen").click();
     await until("the dialogue to close",
@@ -3317,6 +3334,46 @@ async function announce() {
     await sleep(400);
   }
 
+  /**
+   * A lyric video made before the song is anywhere near the timeline.
+   *
+   * The case the feature was reported broken on: an import fills the library and leaves the
+   * timeline alone, so a project can have a song in it and no clips at all -- and the length of
+   * the video had nowhere to come from. Asking the core for a clip of no length is a refusal, and
+   * the right one; what was wrong was asking.
+   */
+  async function runLyrics() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    const bytes = await (await fetch("/" + FIXTURE.name)).blob();
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], FIXTURE.name, { type: FIXTURE.type }));
+    drag("drop", q(".v-dropzone"), transfer);
+    await until("the library entry", () => q("[data-media-id]"));
+    check("the song is in the library and nothing is on the timeline",
+      [all("[data-media-id]").length, all("[data-clip-id]").length], [1, 0]);
+
+    pickMenu("Lyric-Video …");
+    const dialog = await until("the lyric dialogue", () => q('[data-testid="lyrics-dialog"]'));
+    const typed = dialog.querySelector('[data-testid="lyrics-text"]');
+    writeArea.call(typed, ["[00:00.20]Erste Zeile", "[00:01.20]Zweite Zeile"].join(String.fromCharCode(10)));
+    typed.dispatchEvent(new Event("input", { bubbles: true }));
+    await sleep(120);
+    labelled("Text übernehmen").click();
+    await until("the lines it took", () => q('[data-testid="lyrics-lines"]'));
+    labelled("Lyric-Video anlegen").click();
+    await until("the dialogue to close",
+      () => (q('[data-testid="lyrics-dialog"]') === null ? true : null));
+
+    check("a lyric video can be made before the song is on the timeline", banner(), "");
+    checkAtLeast("and the lines land all the same", all("[data-clip-id]").length, 3);
+
+    // Open again for the picture at the end of the budget: the styles are the half of this
+    // dialogue worth looking at.
+    pickMenu("Lyric-Video …");
+    await until("the dialogue again", () => q('[data-testid="lyrics-dialog"]'));
+    await sleep(400);
+  }
+
   // The destinations dialogue on a fresh editor, for the picture. Nothing is asserted here that
   // the run above does not already assert; what this is for is being able to look at it.
   async function runDestinations() {
@@ -3333,7 +3390,9 @@ async function announce() {
   pickFixture()
     .then(announce)
     .then(() =>
-      publishing
+      singing
+        ? runLyrics()
+        : publishing
         ? runDestinations()
         : importing
         ? runImport()

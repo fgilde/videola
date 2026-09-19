@@ -5,6 +5,7 @@ import {
   captionClips,
   captionCues,
   cmd,
+  frameDuration,
   millisecondsToTime,
   createProjectBackend,
   createTemplateBackend,
@@ -55,7 +56,9 @@ import {
   carriesSubtitles,
   formatSupport,
   measure as measureScopes,
+  lyricOptions,
   measureLoudness,
+  paintLyrics,
   spectrumOf,
   movedBy,
   normalizeToTarget,
@@ -127,6 +130,7 @@ import {
   LyricsDialog,
   type FoundLyrics,
   type LyricsDraft,
+  type PreviewRequest,
   PlaceMediaDialog,
   TemplateAuthor,
   TemplateGallery,
@@ -785,15 +789,31 @@ export function App(): ReactElement {
         const song = draft.media;
         const clip = song === undefined ? undefined : clipOfMedia(project, song);
         const from = clip?.start ?? 0;
-        const span = clip?.duration ?? projectEnd(project);
+        // How long the video is. The clip carries it where the song is already on the timeline; a
+        // song that has only been imported carries its own length in the library; and where even
+        // that is missing -- a stream with no duration in its header -- the last line is the end.
+        // Without this, a lyric video made before the song was placed asked the core for a clip of
+        // no length at all, and the core is right to refuse one.
+        const span = Math.max(
+          lengthOf(project, clip, song),
+          millisecondsToTime(lastEnd(lines)),
+          frameDuration(project.settings.fps),
+        );
         const cues = foundLyrics.timed
-          ? lines.map((line, index) => ({
-              start: from + millisecondsToTime(line.at),
-              end:
-                from +
-                millisecondsToTime(line.until ?? (lines[index + 1]?.at ?? line.at + 3000)),
-              text: line.text,
-            }))
+          ? lines.map((line, index) => {
+              const start = from + millisecondsToTime(line.at);
+              const until = line.until ?? lines[index + 1]?.at ?? line.at + 3000;
+              // Never shorter than a frame: two lines written at the same timestamp, or a file
+              // whose last line has no end, would otherwise be a clip the core refuses.
+              return {
+                start,
+                end: Math.max(
+                  from + millisecondsToTime(until),
+                  start + frameDuration(project.settings.fps),
+                ),
+                text: line.text,
+              };
+            })
           : lines.map((line, index) => ({
               start: from + Math.round((span * index) / lines.length),
               end: from + Math.round((span * (index + 1)) / lines.length),
@@ -2729,6 +2749,7 @@ export function App(): ReactElement {
             setLyricsError(undefined);
             setFoundLyrics(lyricsFromText(text));
           }}
+          onPaintPreview={paintLyricPreview}
           onCreate={createLyrics}
           onClose={() => setLyricsOpen(false)}
         />
@@ -2969,6 +2990,55 @@ function soundPrint(project: Project): string {
     }
   }
   return parts.join("|");
+}
+
+/**
+ * How long a lyric video should be.
+ *
+ * Three answers in the order they can be trusted: the clip on the timeline, the length the library
+ * read out of the file when it was imported, and -- for a file that carries none -- nothing, which
+ * the caller replaces with the end of the last line.
+ */
+function lengthOf(project: Project, clip: Clip | undefined, media: MediaId | undefined): Time {
+  if (clip !== undefined) return clip.duration;
+  const asset = media === undefined ? undefined : project.library.find((entry) => entry.id === media);
+  return asset?.duration ?? 0;
+}
+
+/** Where the last line stops, in milliseconds, for a song nothing else knows the length of. */
+function lastEnd(lines: readonly { at: number; until?: number }[]): number {
+  return lines.reduce((furthest, line) => Math.max(furthest, line.until ?? line.at + 3000), 0);
+}
+
+/**
+ * One style, on one thumbnail in the lyric dialogue.
+ *
+ * The application wires this rather than the panel importing it: the painter lives in the package
+ * that carries the decoders, and a row of thumbnails is no reason to pull a demuxer into the
+ * editor's panel code. The same painter draws the real thing, so a preview cannot promise a look
+ * the video will not have.
+ */
+function paintLyricPreview(request: PreviewRequest): void {
+  const ctx = request.canvas.getContext("2d");
+  if (ctx === null) return;
+  const size = { width: request.canvas.width, height: request.canvas.height };
+  paintLyrics(
+    ctx as unknown as OffscreenCanvasRenderingContext2D,
+    lyricOptions(request.style, {
+      color: request.look.color,
+      accent: request.look.accent,
+      // Only the one style trades ink and ground, so only it gets a ground in the thumbnail --
+      // the rest are drawn over whatever is underneath them in the real thing.
+      background: request.style === "kinetic" ? request.look.background : "",
+      position: request.look.position,
+      uppercase: request.look.uppercase,
+      // A thumbnail is a sixth of a frame wide, so the type has to be proportionally bigger to be
+      // legible at all.
+      size: 0.17,
+    }),
+    size,
+    { text: request.text, progress: request.progress, index: 0, previous: request.previous },
+  );
 }
 
 /** Which clip carries a medium, so a lyric video lands over the song rather than at zero. */

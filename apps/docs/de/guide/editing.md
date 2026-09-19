@@ -1039,9 +1039,21 @@ Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in s
 | Neon | leuchtende Schrift über allem, was darunter liegt |
 | Dreher (3D) | die Wörter drehen sich aus der Tiefe herein |
 | Leiste | eine Platte mit der Zeile darauf, oben, mittig oder unten |
+| Tiefe (3D) | die Zeile kommt aus der Ferne auf die Kamera zu, die vorherige fliegt vorbei und ist dahinter spiegelverkehrt zu sehen |
+| Buchstaben wandern | jeder Buchstabe sucht sich in der Zeile davor und wandert von dort an seinen neuen Platz |
+| Welle | die Zeile reitet auf einer Welle, jeder Buchstabe ein Stück weiter darauf |
+| Glitch | die Zeile zerreißt in Rot und Blau und setzt sich wieder zusammen |
 
 Auf Wunsch legt derselbe Druck einen **Visualizer** dahinter — dann ist es in einem Schritt ein
 fertiges Lyric-Video. Und es ist *ein* Schritt: hundert Zeilen, drei Spuren, ein Rückgängig.
+
+Jede Kachel im Dialog zeichnet ihren Stil selbst, mit den eingestellten Farben; wer mit dem Zeiger
+darauf geht, sieht ihn laufen. Gezeichnet wird von demselben Maler wie im Video, eine Vorschau kann
+also nichts versprechen, was danach anders aussieht.
+
+Die Länge kommt vom Clip auf der Zeitleiste, sonst von der Länge, die beim Import aus der Datei
+gelesen wurde, sonst vom Ende der letzten Zeile — ein Lyric-Video lässt sich also anlegen, bevor der
+Song überhaupt auf einer Spur liegt.
 
 Die Spur wird gewählt und nicht erfragt: die oberste nicht gesperrte Spur der passenden Art, in deren
 Fenster **nichts steht**, wo der Clip landen würde — sonst eine neue. `clip.add` überschreibt, was es

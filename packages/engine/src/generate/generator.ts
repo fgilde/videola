@@ -342,6 +342,7 @@ export function lineAt(project: Project, at: Time): LyricLineOnScreen | undefine
     progress: Math.min(1, Math.max(0, (at - cue.start) / span)),
     index,
     ...(cues[index + 1] === undefined ? {} : { next: cues[index + 1]!.text }),
+    ...(cues[index - 1] === undefined ? {} : { previous: cues[index - 1]!.text }),
   };
 }
 

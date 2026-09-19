@@ -23,7 +23,11 @@ export type LyricStyle =
   | "pop"
   | "neon"
   | "flip"
-  | "bar";
+  | "bar"
+  | "depth"
+  | "morph"
+  | "wave"
+  | "glitch";
 
 export const LYRIC_STYLES: readonly LyricStyle[] = [
   "kinetic",
@@ -33,6 +37,10 @@ export const LYRIC_STYLES: readonly LyricStyle[] = [
   "neon",
   "flip",
   "bar",
+  "depth",
+  "morph",
+  "wave",
+  "glitch",
 ];
 
 export interface LyricLineOnScreen {
@@ -43,6 +51,8 @@ export interface LyricLineOnScreen {
   index: number;
   /** The line after this one, for the styles that show what is coming. */
   next?: string;
+  /** And the one before it, for the styles that let the last line leave or take its letters. */
+  previous?: string;
 }
 
 export interface LyricOptions {
@@ -112,6 +122,10 @@ export function paintLyrics(
     neon: paintNeon,
     flip: paintFlip,
     bar: paintBar,
+    depth: paintDepth,
+    morph: paintMorph,
+    wave: paintWave,
+    glitch: paintGlitch,
   }[options.style];
   paint(ctx, { ...options, color: ink }, size, words, line);
   ctx.restore();
@@ -291,6 +305,153 @@ const paintBar: Painter = (ctx, options, size, words) => {
     ctx.fillText(row, size.width / 2, middle + index * rows.line);
   });
 };
+
+/**
+ * The line coming at the camera, and the one before it going past behind it.
+ *
+ * Two planes and a perspective divide: the line being sung starts far away and arrives, while the
+ * line before it keeps coming, overshoots the eye and carries on -- drawn mirrored once it is
+ * behind, because that is what the back of a word looks like.
+ */
+const paintDepth: Painter = (ctx, options, size, words, line) => {
+  const rows = layout(ctx, words, size, options, 1.2);
+  const middle = anchor(size, options, rows.length * rows.line, rows.line);
+  const draw = (text: string, z: number, alpha: number, behind: boolean): void => {
+    // A plane at z=1 is at the screen; nearer than 0.05 it is past the eye and not drawn at all.
+    if (z < 0.05) return;
+    const scale = 1 / z;
+    ctx.save();
+    ctx.translate(size.width / 2, middle);
+    // Seen from behind, a word is its own mirror image. That is the whole of "from behind", and it
+    // is what makes a line that has gone past read as having gone past rather than having vanished.
+    ctx.scale(behind ? -scale : scale, scale);
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    ctx.fillStyle = behind ? options.accent : options.color;
+    ctx.font = fontOf(options, rows.size);
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  };
+  // The one before it: from the screen, past the eye, and gone.
+  if (line.index > 0 && line.previous !== undefined) {
+    const gone = 1 - line.progress * 1.6;
+    draw(line.previous, gone, gone < 0.4 ? gone * 2 : 1, gone < 0.35);
+  }
+  // And this one, arriving from four planes back.
+  const coming = 4 - line.progress * 3;
+  rows.forEach((row, index) => {
+    ctx.save();
+    ctx.translate(0, index * rows.line);
+    draw(row, coming, Math.min(1, (4 - coming) / 1.5), false);
+    ctx.restore();
+  });
+};
+
+/**
+ * Letters that were in the line before travel to where they are needed now.
+ *
+ * Every letter of the new line looks for itself in the old one: the first "a" takes the place of
+ * the first "a" that was there, and one that finds no home fades in where it stands. Over a verse
+ * it reads as one line rearranging itself into the next, which is the trick nobody expects a video
+ * editor to do.
+ */
+const paintMorph: Painter = (ctx, options, size, words, line) => {
+  const rows = layout(ctx, words, size, options, 1.2);
+  const middle = anchor(size, options, rows.length * rows.line, rows.line);
+  ctx.font = fontOf(options, rows.size);
+  // Half the line's own time to travel, so the words stand still long enough to be read.
+  const travelled = Math.min(1, line.progress * 2);
+  const eased = travelled * travelled * (3 - 2 * travelled);
+  const before = letterPlaces(ctx, line.previous ?? "", size, middle, rows);
+  rows.forEach((row, rowIndex) => {
+    const places = letterPlaces(ctx, row, size, middle + rowIndex * rows.line, rows);
+    for (const place of places) {
+      const from = takeFrom(before, place.letter);
+      const x = from === undefined ? place.x : from.x + (place.x - from.x) * eased;
+      const y = from === undefined ? place.y : from.y + (place.y - from.y) * eased;
+      ctx.globalAlpha = from === undefined ? eased : 1;
+      ctx.fillStyle = options.color;
+      ctx.fillText(place.letter, x, y);
+    }
+  });
+  ctx.globalAlpha = 1;
+};
+
+/** The line riding a wave, each letter a little further along it than the one before. */
+const paintWave: Painter = (ctx, options, size, words, line) => {
+  const rows = layout(ctx, words, size, options, 1.3);
+  const middle = anchor(size, options, rows.length * rows.line, rows.line);
+  ctx.font = fontOf(options, rows.size);
+  ctx.fillStyle = options.color;
+  const height = rows.size * 0.28;
+  rows.forEach((row, rowIndex) => {
+    for (const place of letterPlaces(ctx, row, size, middle + rowIndex * rows.line, rows)) {
+      const phase = place.index * 0.45 - line.progress * Math.PI * 4;
+      ctx.fillText(place.letter, place.x, place.y + Math.sin(phase) * height);
+    }
+  });
+};
+
+/**
+ * The line, torn: three passes a few pixels apart in red, blue and the ink, and the tear opening
+ * and closing on the beat of the line rather than at random -- an export has to draw the same
+ * frame the preview did, and `Math.random` would make every pass a different video.
+ */
+const paintGlitch: Painter = (ctx, options, size, words, line) => {
+  const rows = layout(ctx, words, size, options, 1.2);
+  const middle = anchor(size, options, rows.length * rows.line, rows.line);
+  ctx.font = fontOf(options, rows.size);
+  // Hard at the start of a line, settling as it is sung, with a wobble on top of it.
+  const torn = (1 - line.progress) * 0.7 + Math.abs(Math.sin(line.progress * 17)) * 0.3;
+  const shift = torn * rows.size * 0.18;
+  rows.forEach((row, index) => {
+    const y = middle + index * rows.line;
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = "#ff0044";
+    ctx.fillText(row, size.width / 2 - shift, y);
+    ctx.fillStyle = "#00e5ff";
+    ctx.fillText(row, size.width / 2 + shift, y);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = options.color;
+    ctx.fillText(row, size.width / 2, y);
+  });
+};
+
+interface LetterPlace {
+  letter: string;
+  x: number;
+  y: number;
+  index: number;
+}
+
+/** Where every letter of a row stands, so a style can move them one at a time. */
+function letterPlaces(
+  ctx: OffscreenCanvasRenderingContext2D,
+  row: string,
+  size: { width: number; height: number },
+  y: number,
+  rows: { size: number },
+): LetterPlace[] {
+  if (row === "") return [];
+  const width = ctx.measureText(row).width;
+  let x = (size.width - width) / 2;
+  const places: LetterPlace[] = [];
+  for (const [index, letter] of [...row].entries()) {
+    const letterWidth = ctx.measureText(letter).width;
+    // The canvas draws centred here, so each letter is placed at the middle of its own box.
+    places.push({ letter, x: x + letterWidth / 2, y, index });
+    x += letterWidth;
+  }
+  void rows;
+  return places;
+}
+
+/** The first place that letter had in the line before, taken so two "a"s do not share one home. */
+function takeFrom(before: LetterPlace[], letter: string): LetterPlace | undefined {
+  const at = before.findIndex((place) => place.letter.toLowerCase() === letter.toLowerCase());
+  if (at < 0) return undefined;
+  const [found] = before.splice(at, 1);
+  return found;
+}
 
 /**
  * How many words have been sung, and how far into the newest one.

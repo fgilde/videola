@@ -1951,7 +1951,8 @@ function inkRows(ctx, size) {
 
 test("a lyric style draws the line it is given", () => {
   const line = { text: "Hall of fame", progress: 1, index: 0 };
-  for (const style of ["kinetic", "karaoke", "typewriter", "pop", "neon", "flip", "bar"]) {
+  for (const style of ["kinetic", "karaoke", "typewriter", "pop", "neon", "flip", "bar",
+                       "depth", "morph", "wave", "glitch"]) {
     const { total } = inkRows(lyricsDrawn(style, { size: 0.12 }, line, 240), 240);
     check(`${style} puts words on the frame`, total > 60, true);
   }
@@ -1975,6 +1976,56 @@ test("the kinetic style flips the ground on every other line", () => {
   const corner = (ctx) => [...ctx.getImageData(2, 2, 1, 1).data].slice(0, 3);
   check("the first line is ink on the ground", corner(first), [0, 0, 0]);
   check("and the second is the ground on the ink", corner(second), [255, 255, 255]);
+});
+
+// The two that read the line before this one. A word coming at the camera and a word going past it
+// are different pictures, and the letters that travel have to start where they were.
+test("the depth style shows the line before going the other way", () => {
+  const size = 160;
+  // Early in the line, while the one before it is still between the eye and the screen: by the
+  // two-thirds mark it has gone past and is drawn no more, which is the point of the style.
+  const arriving = inkRows(
+    lyricsDrawn("depth", { size: 0.12 }, { text: "now", progress: 0.2, index: 1, previous: "before" }, size),
+    size,
+  );
+  const alone = inkRows(
+    lyricsDrawn("depth", { size: 0.12 }, { text: "now", progress: 0.2, index: 0 }, size),
+    size,
+  );
+  check("a line with one behind it draws more than a line without",
+    arriving.total > alone.total, true);
+  const past = inkRows(
+    lyricsDrawn("depth", { size: 0.12 }, { text: "now", progress: 0.95, index: 1, previous: "before" }, size),
+    size,
+  );
+  check("and once it has gone past the eye it is gone", past.total < arriving.total, true);
+});
+
+test("the letters that travel start where they were and arrive where they belong", () => {
+  const size = 200;
+  const halfway = inkRows(
+    lyricsDrawn("morph", { size: 0.14 }, { text: "star", progress: 0.25, index: 1, previous: "rats" }, size),
+    size,
+  );
+  const settled = inkRows(
+    lyricsDrawn("morph", { size: 0.14 }, { text: "star", progress: 1, index: 1, previous: "rats" }, size),
+    size,
+  );
+  // The same four letters either way -- what changes is where they are, so both frames carry ink
+  // and neither is empty.
+  check("there are letters on the way", halfway.total > 40, true);
+  check("and letters at the end", settled.total > 40, true);
+});
+
+// Every frame of an export is drawn twice in practice -- once in the preview, once in the file --
+// and a style built on a random number would draw two different pictures.
+test("the glitch style draws the same frame twice", () => {
+  const line = { text: "torn", progress: 0.3, index: 0 };
+  const once = lyricsDrawn("glitch", { size: 0.16 }, line, 96).getImageData(0, 0, 96, 96).data;
+  const twice = lyricsDrawn("glitch", { size: 0.16 }, line, 96).getImageData(0, 0, 96, 96).data;
+  let same = true;
+  for (let at = 0; at < once.length; at += 4) if (once[at] !== twice[at]) same = false;
+  check("the same instant is the same picture", same, true);
 });
 
 test("a lyric line goes where the position says", () => {
