@@ -31,6 +31,13 @@ export { thumbnail, THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH } from "./decode/thumbnail
 export { clampColor, clampParam, effect, effectManifests, paramUniform, previewValues } from "./effects/registry";
 export type { ColorParam, EffectManifest, EffectParam, Rgba, Uniform, VideoParam } from "./effects/registry";
 export { GeneratorFrames, paintGenerator, paintsGenerator } from "./generate/generator";
+export { analyseSpectrum, spectrumOf, Spectrum, type SoundFrame } from "./audio/spectrum";
+export {
+  paintVisualizer,
+  visualizerOptions,
+  VISUALIZER_STYLES,
+  type VisualizerStyle,
+} from "./generate/visualizer";
 export { generatorMotion } from "./generate/motion";
 export { paintText, textStyle } from "./generate/text";
 export type { TextMove, TextStyle } from "./generate/text";

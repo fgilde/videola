@@ -983,6 +983,28 @@ Sekunden.
 | Abspann | eine zentrierte Karte mit Platz für mehrere Zeilen | eine Textspur |
 | Form | ein weißes Rechteck, das die Transformation dann platziert | eine Overlay-Spur |
 | Vorlauf | drei, zwei, eins — eine Zahl pro Sekunde, vom Renderer gezeichnet | eine Overlay-Spur |
+| Visualizer | ein Bild, das aus dem Ton gezeichnet wird | eine Overlay-Spur |
+
+### Der Visualizer
+
+Der Eintrag **Visualizer** legt einen Clip ab, dessen Bild aus dem Ton entsteht. Im
+Eigenschaften-Bereich stehen acht Stile — Balken, gespiegelt, Welle, Ring, Tunnel, Bühne, Partikel,
+Kugel —, dazu eine Farbpalette oder zwei eigene Farben, die Anzahl der Balken, Empfindlichkeit,
+Leuchten, wie stark er auf Beats reagiert, und eine Drehung für die runden Stile.
+
+**Reagiert auf** bestimmt, welcher Teil der Mischung gemeint ist: alles zusammen oder eine einzelne
+Spur — so bekommt eine Basslinie ihre eigenen Balken.
+
+Gezeichnet wird nicht aus einem `AnalyserNode`. Ein Analyser beantwortet „was kommt gerade aus den
+Lautsprechern", und das hängt davon ab, wann der Browser gefragt hat: dasselbe Video sähe in der
+Vorschau anders aus als in der Datei, auf jedem Rechner anders, bei jedem Lauf anders. Stattdessen
+wird die Mischung einmal offline gerendert und in eine Tabelle verwandelt: eine Zeile alle 16
+Millisekunden, 64 logarithmisch verteilte Bänder, Pegel und ein Beat-Wert. Vorschau und Export lesen
+dieselbe Tabelle — was auf dem Schirm steht, steht auch in der Datei.
+
+Die Analyse läuft, wenn ein Visualizer auf der Zeitleiste liegt und sich am Ton etwas geändert hat
+— ein Schnitt, ein Regler, eine stumme Spur. Das dauert bei einem Lied ein bis zwei Sekunden, und
+der Editor sagt es so lange. Einen Titel zu verschieben löst nichts aus.
 
 Die Spur wird gewählt und nicht erfragt: die oberste nicht gesperrte Spur der passenden Art, in deren
 Fenster **nichts steht**, wo der Clip landen würde — sonst eine neue. `clip.add` überschreibt, was es

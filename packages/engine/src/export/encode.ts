@@ -20,6 +20,8 @@ import type { AudioEncodingConfig, VideoEncodingConfig } from "mediabunny";
 
 import { MediaFrames } from "../decode/frames";
 import { GeneratorFrames } from "../generate/generator";
+import { analyseSpectrum, type Spectrum } from "../audio/spectrum";
+import { leafClips } from "../nesting";
 import { clipHashes } from "../playback";
 import { Compositor } from "../render/compositor";
 import { createContext } from "../render/context";
@@ -106,6 +108,16 @@ export async function runExport(
     hooks.createFrameSource ?? ((): FrameSource => new MediaFrames("master")),
   );
   const generated = new GeneratorFrames();
+  // The picture a visualiser draws is the one the preview drew, because both read a table computed
+  // from the same mix -- this one from the very samples about to be written into the file. Analysed
+  // only where something actually draws from it: it is a pass over the whole song.
+  const sound =
+    request.audio !== undefined && hasVisualizer(request.project)
+      ? {
+          spectrum: analyseSpectrum(request.audio.channels, request.audio.sampleRate),
+          from: request.frames[0]?.at ?? 0,
+        }
+      : undefined;
   const video = new CanvasSource(canvas, videoEncoding(request));
   output.addVideoTrack(video, { frameRate: request.fps.numerator / request.fps.denominator });
   const audio = request.audio && new AudioSampleSource(audioEncoding(request));
@@ -123,6 +135,7 @@ export async function runExport(
       video,
       sources,
       generated,
+      ...(sound === undefined ? {} : { sound }),
       onProgress: hooks.onProgress,
     });
     if (audio !== undefined && request.audio !== undefined) {
@@ -159,6 +172,8 @@ interface VideoPass extends PictureSources {
   compositor: Compositor;
   video: CanvasSource;
   onProgress?: (done: number, total: number) => void;
+  /** The analysed mix a visualiser draws from, and the instant its first row stands for. */
+  sound?: { spectrum: Spectrum; from: Time };
 }
 
 async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void> {
@@ -174,7 +189,7 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   await luts.ensure(request.project);
   let index = 0;
   for (const frame of request.frames) {
-    const pictures = await gatherPictures(pass, hashes, request.project, frame);
+    const pictures = await gatherPictures(pass, hashes, request.project, frame, pass.sound);
     // The smear is gathered after the pictures and from the same request: one decode per sample per
     // smeared clip, which is what a shutter costs and why it is off unless somebody asked for it.
     const smear = await gatherSmear(pass, hashes, request.project, frame, pictures);
@@ -200,6 +215,14 @@ async function writeVideo(request: ExportRequest, pass: VideoPass): Promise<void
   }
 }
 
+// Whether anything in the project draws from the sound. A song's worth of transforms is a second or
+// two of work, and an export with no visualiser in it should not pay for one.
+function hasVisualizer(project: Project): boolean {
+  return leafClips(project).some(
+    (clip) => clip.source.kind === "generator" && clip.source.generator.type === "visualizer",
+  );
+}
+
 // Both halves of the picture, through the same draw list the preview uses: decoded media and painted
 // generators. Two lists would be two answers to "what is on screen", and a title that appears in the
 // preview and not in the file is the kind of divergence nobody finds until the file is delivered.
@@ -208,9 +231,13 @@ export async function gatherPictures(
   hashes: ReadonlyMap<string, string>,
   project: Project,
   frame: ExportFrame,
+  sound?: { spectrum: Spectrum; from: Time },
 ): Promise<Map<string, VideoFrame>> {
   const clips = drawnClips(drawList(project, frame.at, frame.params, frame.transforms));
-  const pictures = pass.generated.pictures(project, new Set(clips), frame.sources);
+  // The analysed rows start where the render started, not where the timeline does: an export of the
+  // last chorus renders that chorus, and row zero is its first sample.
+  const heard = sound?.spectrum.at(timeToSeconds(frame.at - sound.from));
+  const pictures = pass.generated.pictures(project, new Set(clips), frame.sources, heard);
   for (const clip of clips) {
     const hash = hashes.get(clip);
     const at = frame.sources.get(clip);

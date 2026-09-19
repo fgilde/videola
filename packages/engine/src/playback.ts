@@ -1,4 +1,4 @@
-import { frameDuration } from "@videola/core";
+import { frameDuration, timeToSeconds } from "@videola/core";
 import { mediaHash } from "@videola/media";
 
 import type { Peaks } from "@videola/media";
@@ -17,6 +17,7 @@ import { leafClips } from "./nesting";
 import type { ClockSource } from "./clock";
 import { MediaFrames } from "./decode/frames";
 import { GeneratorFrames } from "./generate/generator";
+import type { Spectrum } from "./audio/spectrum";
 import { Compositor } from "./render/compositor";
 import { createContext } from "./render/context";
 import { drawList, drawnClips } from "./render/draw-list";
@@ -96,6 +97,7 @@ export class Playback {
   #hashes: ReadonlyMap<string, string> = new Map();
   #sources = new Map<string, Promise<FrameSource | undefined>>();
   #generated = new GeneratorFrames();
+  #spectrum: Spectrum | undefined;
   #luts = new LutStore();
   #rolling = false;
   #rate = 0;
@@ -126,6 +128,17 @@ export class Playback {
 
   get isPlaying(): boolean {
     return this.#clock.isPlaying;
+  }
+
+  /**
+   * The analysed sound a visualiser draws from, or nothing while none has been analysed.
+   *
+   * Handed in rather than computed here: the analysis is one pass over the whole mix and belongs to
+   * whoever knows when the audio last changed. Absent, a visualiser clip draws nothing at all --
+   * which is the honest picture of a song this editor has not listened to yet.
+   */
+  listenWith(spectrum: Spectrum | undefined): void {
+    this.#spectrum = spectrum;
   }
 
   /**
@@ -449,7 +462,13 @@ export class Playback {
     const frames = new Map(found.filter((entry) => entry !== undefined));
     // Painted rather than decoded, and painted last: nothing is awaited after this, so a generator's
     // picture cannot go stale between here and the upload the way a decoded one can.
-    for (const [clip, picture] of this.#generated.pictures(project, new Set(clips), sourceTimes)) {
+    const sound = this.#spectrum?.at(timeToSeconds(at));
+    for (const [clip, picture] of this.#generated.pictures(
+      project,
+      new Set(clips),
+      sourceTimes,
+      sound,
+    )) {
       frames.set(clip, picture);
     }
     return frames;

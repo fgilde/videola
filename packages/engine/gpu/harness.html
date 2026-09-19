@@ -1808,12 +1808,118 @@ function generated(generator, over) {
   const compositor = new R.Compositor(context);
   const frames = new R.GeneratorFrames();
   const at = spec.at || 0;
-  const pictures = frames.pictures(scene, new Set(["clp_0"]));
+  const pictures = frames.pictures(scene, new Set(["clp_0"]), undefined, spec.sound);
   compositor.render(scene, at, pictures, new Map(), new Map());
   const pixels = compositor.readPixels();
   frames.close();
   return { canvas, frames, scene, compositor, at: reader(pixels, size, size) };
 }
+
+// One row of the analysed sound, built by hand: which band is loud decides where the bars stand, and
+// a picture that has to be drawn from a real song would be a check nobody can read.
+function sound(loud, over) {
+  const bands = new Float32Array(64);
+  for (const [band, value] of Object.entries(loud || {})) bands[Number(band)] = value;
+  return { at: (over && over.at) || 0, bands, level: (over && over.level) || 0.5, beat: (over && over.beat) || 0 };
+}
+
+// The visualiser is the one generator whose picture is a different picture at every instant, and the
+// only one that needs something outside the project to draw at all.
+test("a visualiser draws the sound it was handed", () => {
+  const quiet = generated(
+    { type: "visualizer", style: "bars", source: "master", options: { glow: 0, palette: "mono" } },
+    { size: 64, background: "#ff0000", sound: sound({}) },
+  );
+  check("silence draws nothing, so the picture underneath is untouched",
+    quiet.at(32, 32), [255, 0, 0, 255]);
+
+  // Band 40 of 64 is in the upper half of a logarithmic scale, so its bar stands about two thirds
+  // of the way across the frame. Loud, so it reaches most of the way up.
+  const loud = generated(
+    { type: "visualizer", style: "bars", source: "master", options: { glow: 0, palette: "mono", bars: 8 } },
+    { size: 64, background: "#ff0000", sound: sound({ 40: 1, 41: 1, 42: 1, 43: 1, 44: 1, 45: 1, 46: 1, 47: 1 }) },
+  );
+  const lit = loud.at(42, 40);
+  check("a loud band stands as a bar where that band belongs", lit[0] > 200 && lit[1] > 200, true);
+  check("and the bands either side of it are still background", loud.at(4, 40), [255, 0, 0, 255]);
+});
+
+test("a visualiser with nothing analysed draws nothing at all", () => {
+  check("no sound, no picture",
+    generated(
+      { type: "visualizer", style: "bars", source: "master", options: {} },
+      { size: 32, background: "#00ff00" },
+    ).at(16, 16),
+    [0, 255, 0, 255]);
+});
+
+test("the styles are different pictures of the same sound", () => {
+  const heard = sound({ 10: 0.9, 20: 0.9, 30: 0.9, 40: 0.9, 50: 0.9 }, { level: 0.8 });
+  const shot = (style) =>
+    generated(
+      { type: "visualizer", style, source: "master", options: { glow: 0, palette: "mono" } },
+      { size: 48, background: "#000000", sound: heard },
+    );
+  const bars = shot("bars");
+  const ring = shot("radial");
+  const wave = shot("wave");
+  // The middle of the frame: bars stand on the floor and leave it black, a ring and a wave both
+  // cross it. Three styles, three different answers to the same row of numbers.
+  const middle = (picture) => picture.at(24, 24)[0];
+  check("bars leave the middle of the frame alone", middle(bars) < 40, true);
+  check("a ring draws through it", middle(ring) > 0 || middle(wave) > 0, true);
+  check("and a style this version has never heard of falls back to bars",
+    shot("hologram").at(24, 24), bars.at(24, 24));
+});
+
+test("a visualiser takes its colours from the palette it was given", () => {
+  const heard = sound({ 0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1 }, { level: 1 });
+  const ember = generated(
+    { type: "visualizer", style: "bars", source: "master", options: { glow: 0, palette: "ember", bars: 8 } },
+    { size: 48, background: "#000000", sound: heard },
+  ).at(3, 40);
+  const ice = generated(
+    { type: "visualizer", style: "bars", source: "master", options: { glow: 0, palette: "ice", bars: 8 } },
+    { size: 48, background: "#000000", sound: heard },
+  ).at(3, 40);
+  check("the warm palette is warm", ember[0] > ember[2], true);
+  check("and the cold one is cold", ice[2] > ice[0], true);
+});
+
+// The whole chain in one check: samples in, transform, bands, bars on a canvas. Nothing here knows
+// what a tone looks like -- only that a 200 Hz tone has to draw its bar somewhere left of a 6 kHz
+// one, which is what a logarithmic band scale means.
+test("a picture drawn from real samples puts the tone where it belongs", () => {
+  const rate = 48000;
+  const tone = (hz) => {
+    const samples = new Float32Array(rate / 2);
+    for (let i = 0; i < samples.length; i += 1) samples[i] = Math.sin((2 * Math.PI * hz * i) / rate) * 0.9;
+    return samples;
+  };
+  const brightest = (picture, size) => {
+    let best = 0;
+    let at = 0;
+    for (let x = 0; x < size; x += 1) {
+      const value = picture.at(x, size - 4)[0];
+      if (value > best) {
+        best = value;
+        at = x;
+      }
+    }
+    return best > 30 ? at : -1;
+  };
+  const drawn = (hz) => {
+    const spectrum = R.analyseSpectrum([tone(hz)], rate);
+    return generated(
+      { type: "visualizer", style: "bars", source: "master", options: { glow: 0, palette: "mono", bars: 32 } },
+      { size: 64, background: "#000000", sound: spectrum.at(0.25) },
+    );
+  };
+  const low = brightest(drawn(200), 64);
+  const high = brightest(drawn(6000), 64);
+  check("both tones drew something", low >= 0 && high >= 0, true);
+  check("and the low one stands left of the high one", low < high, true);
+});
 
 test("a solid generator paints the frame", () => {
   check("an opaque solid covers the background",

@@ -968,7 +968,9 @@ pub(crate) fn paints(generator: &Generator) -> bool {
         Generator::Text { .. }
         | Generator::Solid { .. }
         | Generator::Gradient { .. }
-        | Generator::Countdown { .. } => true,
+        | Generator::Countdown { .. }
+        | Generator::Visualizer { .. }
+        | Generator::Lyrics { .. } => true,
         Generator::Shape { shape, .. } => DRAWN_SHAPES.contains(&shape.as_str()),
     }
 }
@@ -989,6 +991,11 @@ fn recolour(generator: &mut Generator, color: &str) {
             style.insert("color".into(), json!(color));
         }
         Generator::Shape { color: fill, .. } => *fill = color.to_string(),
+        // Both of these draw from a palette rather than from one fill, and a template's colour slot
+        // sets the first colour of it -- the same "its colour" a gradient's start stop is.
+        Generator::Visualizer { options, .. } | Generator::Lyrics { options, .. } => {
+            options.insert("color".into(), json!(color));
+        }
         Generator::Countdown { .. } => {}
     }
 }

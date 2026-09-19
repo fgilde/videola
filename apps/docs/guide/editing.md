@@ -919,6 +919,28 @@ one question: a lower third, a full-frame title, a credits card, a shape, or a t
 | Credits | a centred card with room for several lines | a text track |
 | Shape | a white rectangle, which the transform then places | an overlay track |
 | Countdown | three, two, one — one number per second, drawn by the renderer | an overlay track |
+| Visualiser | a picture drawn from the sound | an overlay track |
+
+### The visualiser
+
+**Visualiser** lays down a clip whose picture is drawn from the sound. The properties panel offers
+eight styles — bars, mirrored, wave, ring, tunnel, stage, particles, orb — plus a palette or two
+colours of your own, the number of bars, sensitivity, glow, how hard it reacts to beats, and a
+rotation for the round ones.
+
+**Reacts to** decides which part of the mix it listens to: everything at once, or a single track,
+which is how a bass line gets bars of its own.
+
+It is not drawn from an `AnalyserNode`. An analyser answers "what is coming out of the speakers right
+now", which depends on when the browser got round to asking: the same video would look one way in the
+preview and another in the file, differently on every machine and on every run. Instead the mix is
+rendered offline once and turned into a table — one row every 16 milliseconds, 64 logarithmically
+spaced bands, a level and a beat value. The preview and the export read the same table, so what is on
+screen is what lands in the file.
+
+The analysis runs when a visualiser is on the timeline and something about the sound has changed: a
+cut, a fader, a muted track. On a song that is a second or two, and the editor says so while it
+happens. Moving a title sets nothing off.
 
 The track is chosen and not asked for: the topmost unlocked track of the right kind with **nothing
 standing in the window the clip would occupy**, or a new one. `clip.add` overwrites what it covers, so

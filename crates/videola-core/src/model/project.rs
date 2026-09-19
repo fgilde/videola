@@ -173,7 +173,12 @@ pub(crate) fn generator_bounded(generator: &Generator) -> Result<()> {
             hex_color(to)
         }
         Generator::Solid { color } | Generator::Shape { color, .. } => hex_color(color),
-        Generator::Text { .. } | Generator::Countdown { .. } => Ok(()),
+        // Same reasoning as `Text` below: an untyped options map is clamped field by field where
+        // it is read, and every unusable value falls back rather than reaching the canvas.
+        Generator::Text { .. }
+        | Generator::Countdown { .. }
+        | Generator::Visualizer { .. }
+        | Generator::Lyrics { .. } => Ok(()),
     }
 }
 

@@ -2,6 +2,9 @@ import { timeToSeconds } from "@videola/core";
 
 import { leafClips } from "../nesting";
 import { paintText } from "./text";
+import { paintVisualizer, visualizerOptions, VISUALIZER_STYLES } from "./visualizer";
+
+import type { SoundFrame } from "../audio/spectrum";
 
 import type { Clip, Generator, JsonValue, Project, Time } from "@videola/core";
 
@@ -19,6 +22,7 @@ const SHAPES: readonly string[] = ["rectangle", "square", "ellipse", "circle", "
 // drawn as an empty rectangle.
 export function paintsGenerator(generator: Generator): boolean {
   if (generator.type === "shape") return SHAPES.includes(generator.shape);
+  if (generator.type === "visualizer") return VISUALIZER_STYLES.includes(generator.style as never);
   return (
     generator.type === "text" ||
     generator.type === "solid" ||
@@ -34,7 +38,19 @@ export function paintGenerator(
   generator: Generator,
   size: Size,
   atSeconds = 0,
+  sound?: SoundFrame,
 ): void {
+  // The one generator whose picture is different at every instant, and the reason this function
+  // takes the sound at all: a visualiser with nothing analysed draws nothing, rather than a still
+  // chart of a song nobody has measured yet.
+  if (generator.type === "visualizer") {
+    if (sound === undefined) {
+      ctx.clearRect(0, 0, size.width, size.height);
+      return;
+    }
+    paintVisualizer(ctx, visualizerOptions(generator.style, generator.options), size, sound);
+    return;
+  }
   ctx.clearRect(0, 0, size.width, size.height);
   if (generator.type === "solid") {
     ctx.fillStyle = hex(generator.color, "#000000");
@@ -73,10 +89,20 @@ export function countdownNumber(fromSeconds: number, atSeconds: number): number 
 // number standing on screen: an edit to the content, a change of resolution or a second going by
 // repaints, and nothing else does. Two instants inside the same second give the same key, which is
 // what keeps a full text layout off every frame.
-export function generatorKey(generator: Generator, size: Size, atSeconds: number): string {
+export function generatorKey(
+  generator: Generator,
+  size: Size,
+  atSeconds: number,
+  sound?: SoundFrame,
+): string {
   const shown =
     generator.type === "countdown" ? countdownNumber(generator.fromSeconds, atSeconds) : 0;
-  return `${size.width}x${size.height}|${shown}|${JSON.stringify(generator)}`;
+  // A visualiser is the one picture that changes with the clock, so its key carries the instant the
+  // sound was sampled at -- rounded to a millisecond, which is finer than any frame rate and coarse
+  // enough that two draws of the same frame still hit the cache.
+  const heard =
+    generator.type === "visualizer" && sound !== undefined ? Math.round(sound.at * 1000) : 0;
+  return `${size.width}x${size.height}|${shown}|${heard}|${JSON.stringify(generator)}`;
 }
 
 // Big, centred, and heavy enough to read over anything. Not configurable: the model carries one field
@@ -186,11 +212,12 @@ export class GeneratorFrames {
     project: Project,
     visible: ReadonlySet<string>,
     sourceTimes?: ReadonlyMap<string, Time>,
+    sound?: SoundFrame,
   ): Map<string, VideoFrame> {
     const size = { width: project.settings.width, height: project.settings.height };
     const wanted = new Map<string, VideoFrame>();
     for (const clip of generatorClips(project, visible)) {
-      const frame = this.#frame(clip, size, timeToSeconds(sourceTimes?.get(clip.id) ?? 0));
+      const frame = this.#frame(clip, size, timeToSeconds(sourceTimes?.get(clip.id) ?? 0), sound);
       if (frame !== undefined) wanted.set(clip.id, frame);
     }
     for (const [id, held] of this.#painted) {
@@ -207,14 +234,19 @@ export class GeneratorFrames {
     this.#canvas = undefined;
   }
 
-  #frame(clip: Clip, size: Size, atSeconds: number): VideoFrame | undefined {
+  #frame(
+    clip: Clip,
+    size: Size,
+    atSeconds: number,
+    sound: SoundFrame | undefined,
+  ): VideoFrame | undefined {
     if (clip.source.kind !== "generator") return undefined;
     const generator = clip.source.generator;
-    const key = generatorKey(generator, size, atSeconds);
+    const key = generatorKey(generator, size, atSeconds, sound);
     const held = this.#painted.get(clip.id);
     if (held?.key === key) return held.frame;
     held?.frame.close();
-    const frame = this.#paint(generator, size, atSeconds);
+    const frame = this.#paint(generator, size, atSeconds, sound);
     if (frame === undefined) {
       this.#painted.delete(clip.id);
       return undefined;
@@ -230,14 +262,19 @@ export class GeneratorFrames {
   // A runtime without `OffscreenCanvas` or `VideoFrame` is a capability rather than a fault, so it is
   // silent: jsdom has neither, and a test driving playback there should see a project without titles
   // rather than a console full of errors.
-  #paint(generator: Generator, size: Size, atSeconds: number): VideoFrame | undefined {
+  #paint(
+    generator: Generator,
+    size: Size,
+    atSeconds: number,
+    sound: SoundFrame | undefined,
+  ): VideoFrame | undefined {
     if (!paintsGenerator(generator)) return undefined;
     if (typeof OffscreenCanvas === "undefined" || typeof VideoFrame === "undefined") return undefined;
     try {
       const canvas = this.#surface(size);
       const ctx = canvas.getContext("2d");
       if (ctx === null) return undefined;
-      paintGenerator(ctx, generator, size, atSeconds);
+      paintGenerator(ctx, generator, size, atSeconds, sound);
       return new VideoFrame(canvas, { timestamp: 0 });
     } catch (error) {
       console.error(error);

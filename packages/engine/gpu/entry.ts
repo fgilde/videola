@@ -7,6 +7,7 @@ export { CAPTION_STYLE } from "@videola/core/src/captions";
 // rather than from a table somebody typed out as bytes.
 export { parseCube } from "@videola/media";
 export { AudioGraph } from "../src/audio/graph";
+export { analyseSpectrum } from "../src/audio/spectrum";
 export { GeneratorFrames } from "../src/generate/generator";
 export { Playback } from "../src/playback";
 export { Compositor } from "../src/render/compositor";

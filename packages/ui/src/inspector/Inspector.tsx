@@ -26,10 +26,13 @@ import {
   type Time,
   type Transform,
   type TransformSnapshot,
+  type JsonValue,
   type Transition,
+  VISUALIZER_STYLES,
   volumeAt,
   VOLUME_TRACK,
 } from "@videola/core";
+
 
 import { useI18n, type Locale } from "../i18n/useI18n";
 import { IconButton } from "../primitives/Icon";
@@ -162,6 +165,7 @@ export function Inspector({
             {/* Above the presets, because on a caption clip it is the only thing anyone came here
                 for -- and it renders nothing at all on a clip that draws no words. */}
             <TextPanel clip={found.clip} send={dispatch} />
+            <VisualizerPanel clip={found.clip} project={project} send={dispatch} />
             <Playback
               clip={found.clip}
               playhead={playhead}
@@ -184,6 +188,166 @@ export function Inspector({
         )}
       </aside>
     </RecordingContext.Provider>
+  );
+}
+
+/**
+ * What a visualiser draws, and what it draws it from.
+ *
+ * Renders nothing at all on any other clip, the same rule the text panel follows: a panel of
+ * options for a generator the selected clip is not is a panel that lies about what it edits.
+ *
+ * Every control writes the whole generator back through one command, because that is what the model
+ * carries -- one value per field would be eight commands for a thing somebody changes by dragging.
+ */
+function VisualizerPanel({
+  clip,
+  project,
+  send,
+}: {
+  clip: Clip;
+  project: Project;
+  send: Send;
+}): ReactElement | null {
+  const { t } = useI18n();
+  if (clip.source.kind !== "generator" || clip.source.generator.type !== "visualizer") return null;
+  const generator = clip.source.generator;
+  const options = generator.options as Readonly<Record<string, JsonValue>>;
+  const set = (changes: Record<string, JsonValue>, coalesceKey?: string): void =>
+    send(
+      cmd.clipSetGenerator(clip.id, {
+        ...generator,
+        options: { ...options, ...changes },
+      }),
+      coalesceKey,
+    );
+  const restyle = (style: string): void =>
+    send(cmd.clipSetGenerator(clip.id, { ...generator, style }));
+  const number = (key: string, fallback: number): number =>
+    typeof options[key] === "number" ? (options[key] as number) : fallback;
+  const text = (key: string, fallback: string): string =>
+    typeof options[key] === "string" ? (options[key] as string) : fallback;
+
+  return (
+    <Group title={t("visualizer.title")}>
+      <label className="v-param v-param--text">
+        <span className="v-param__label">{t("visualizer.style")}</span>
+        <select
+          className="v-param__select"
+          value={generator.style}
+          onChange={(event) => restyle(event.target.value)}
+        >
+          {VISUALIZER_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {t(`visualizer.style.${style}`)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {/* Which part of the mix the picture reacts to. The master is everything anybody hears; a
+          track is the one thing on it, which is how a bass line gets its own bars. */}
+      <label className="v-param v-param--text">
+        <span className="v-param__label">{t("visualizer.source")}</span>
+        <select
+          className="v-param__select"
+          value={generator.source}
+          onChange={(event) =>
+            send(cmd.clipSetGenerator(clip.id, { ...generator, source: event.target.value }))
+          }
+        >
+          <option value="master">{t("visualizer.source.master")}</option>
+          {project.timeline.tracks
+            .filter((track) => track.kind === "audio" || track.kind === "video")
+            .map((track) => (
+              <option key={track.id} value={track.id}>
+                {track.name}
+              </option>
+            ))}
+        </select>
+      </label>
+
+      <label className="v-param v-param--text">
+        <span className="v-param__label">{t("visualizer.palette")}</span>
+        <select
+          className="v-param__select"
+          value={text("palette", "videola")}
+          onChange={(event) => set({ palette: event.target.value, color: "", colorTo: "" })}
+        >
+          {["videola", "sunset", "neon", "ember", "ice", "mono"].map((palette) => (
+            <option key={palette} value={palette}>
+              {t(`visualizer.palette.${palette}`)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {/* Two colours of your own, which win over the palette above as soon as the first is set.
+          The browser's own picker, like every other colour in this panel. */}
+      <div className="v-param v-param--text">
+        <span className="v-param__label">{t("visualizer.colors")}</span>
+        <input
+          type="color"
+          aria-label={t("visualizer.colorFrom")}
+          data-testid="visualizer-color"
+          value={text("color", "") === "" ? "#a048f8" : text("color", "#a048f8")}
+          onChange={(event) => set({ color: event.target.value }, `vis-color:${clip.id}`)}
+        />
+        <input
+          type="color"
+          aria-label={t("visualizer.colorTo")}
+          data-testid="visualizer-color-to"
+          value={text("colorTo", "") === "" ? "#5b8cff" : text("colorTo", "#5b8cff")}
+          onChange={(event) => set({ colorTo: event.target.value }, `vis-color-to:${clip.id}`)}
+        />
+        {/* Back to the palette, because two pickers cannot say "none" on their own. */}
+        <button type="button" className="v-button" onClick={() => set({ color: "", colorTo: "" })}>
+          {t("visualizer.usePalette")}
+        </button>
+      </div>
+
+      <ParamRow
+        label={t("visualizer.bars")}
+        value={number("bars", 48)}
+        min={4}
+        max={160}
+        reset={48}
+        onChange={(value, key) => set({ bars: Math.round(value) }, key)}
+      />
+      <ParamRow
+        label={t("visualizer.sensitivity")}
+        value={number("sensitivity", 1)}
+        min={0.1}
+        max={4}
+        reset={1}
+        onChange={(value, key) => set({ sensitivity: value }, key)}
+      />
+      <ParamRow
+        label={t("visualizer.glow")}
+        value={number("glow", 0.35)}
+        min={0}
+        max={1}
+        reset={0.35}
+        onChange={(value, key) => set({ glow: value }, key)}
+      />
+      <ParamRow
+        label={t("visualizer.punch")}
+        value={number("punch", 0.5)}
+        min={0}
+        max={1}
+        reset={0.5}
+        onChange={(value, key) => set({ punch: value }, key)}
+      />
+      <ParamRow
+        label={t("visualizer.rotate")}
+        value={number("rotate", 0)}
+        min={-4}
+        max={4}
+        reset={0}
+        onChange={(value, key) => set({ rotate: value }, key)}
+      />
+      <p className="v-inspector__note">{t("visualizer.note")}</p>
+    </Group>
   );
 }
 

@@ -779,6 +779,72 @@ async function announce() {
   }
 
   /**
+   * The sound, drawn.
+   *
+   * A visualiser is the one generator whose picture comes from outside the project file: the mix is
+   * rendered offline, analysed into a table of bands, and every frame reads the row for its own
+   * instant. What this run asks is the whole of that chain in the built application -- the entry
+   * lays a clip down, the editor says it is listening, and the picture that was black afterwards is
+   * not black any more.
+   */
+  async function visualizer() {
+    const was = new Set(all("[data-clip-id]").map((node) => node.dataset.clipId));
+    const before = was.size;
+    menuEntry("insert", "Visualizer").click();
+    closeMenus();
+    document.activeElement?.blur();
+    await sleep(250);
+    check("the sound can be put on the timeline as a picture",
+      all("[data-clip-id]").length, before + 1);
+    check("laying one down raised nothing", banner(), "");
+
+    // The analysis is a pass over the whole mix, so the editor says so while it runs -- and then
+    // stops saying it. Both halves matter: a banner that never goes is a job that never finished.
+    await until("the editor to listen to the mix and finish",
+      () => (q('[data-testid="listening"]') === null ? true : null), 30000);
+
+    // On the clip, where the bars are drawn, rather than at the head of the timeline where the
+    // fixture's own picture is. A visualiser with nothing analysed draws nothing at all, so a lit
+    // pixel here is the whole chain: samples, transform, bands, canvas, compositor.
+    toStart();
+    forward(10);
+    await sleep(600);
+    const drawn = q(".v-preview__canvas");
+    const gl = drawn.getContext("webgl2");
+    const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let lit = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i] > 24 || pixels[i + 1] > 24 || pixels[i + 2] > 24) lit += 1;
+    }
+    checkAtLeast("and something of the sound is on the picture", lit, 200);
+
+    // Every style is offered where the clip is selected, and switching one raises nothing: what each
+    // of them looks like is the GPU harness's claim, at the pixel.
+    // The clip that was just laid down, by its own id: the last strip in the document belongs to
+    // whichever row is drawn last, which is not the row an insert chose.
+    const laid = all("[data-clip-id]").find((node) => !was.has(node.dataset.clipId));
+    check("the clip it laid down can be found again", laid !== undefined, true);
+    pointer("pointerdown", laid);
+    pointer("pointerup", laid);
+    await sleep(250);
+    const styles = await until("the visualiser panel",
+      () => all(".v-inspector select").find((node) => node.querySelector('option[value="tunnel"]')));
+    check("all eight styles are offered", styles.options.length, 8);
+    styles.value = "radial";
+    styles.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(400);
+    check("switching the style raised nothing", banner(), "");
+
+    button("Rückgängig").click();
+    await sleep(200);
+    button("Rückgängig").click();
+    await sleep(250);
+    check("and the whole thing is two presses back out again",
+      all("[data-clip-id]").length, before);
+  }
+
+  /**
    * A number typed rather than aimed at, and the way back.
    *
    * A slider two hundred pixels wide cannot be asked for -0.4, and somebody who has spent a minute
@@ -1456,6 +1522,7 @@ async function announce() {
     await namedAndSized();
     await fromTheLibrary();
     await theTimeline();
+    await visualizer();
     await recordMode();
     await stills();
     await fromALink();
@@ -1703,7 +1770,7 @@ async function announce() {
        "Exportieren", "Weitergeben …", "Veröffentlichungsziele …"]);
     check("and the rest sit where they belong",
       [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
-      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 7,
+      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 8,
        ["Tastenkürzel", "Über Videola"]]);
     checkAtLeast("with rows a thumb can hit",
       Math.min(...all(".v-topbar__group[open] .v-topbar__group-items button")

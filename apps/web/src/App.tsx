@@ -54,6 +54,7 @@ import {
   formatSupport,
   measure as measureScopes,
   measureLoudness,
+  spectrumOf,
   movedBy,
   normalizeToTarget,
   Playback,
@@ -321,6 +322,9 @@ export function App(): ReactElement {
   // Record mode. Every setting made while this is on belongs to the playhead rather than to the
   // clip as a whole, and the window says so with a border nothing else in the interface uses.
   const [recording, setRecording] = useState(false);
+  // True while the mix is being analysed for a visualiser. The analysis itself lives in the
+  // playback object, which is what draws from it; this is only what the interface says about it.
+  const [listening, setListening] = useState(false);
   // The timeline owns the selection and reports it; keeping a second one here would be a
   // second answer to the same question. The export dialogue reads it too.
   const [selection, setSelection] = useState<readonly ClipId[]>([]);
@@ -639,6 +643,57 @@ export function App(): ReactElement {
       cancelled = true;
     };
   }, [playback, project]);
+
+  /**
+   * The analysed mix, for anything that draws from the sound.
+   *
+   * Run when a visualiser is on the timeline and the audio has changed, and not otherwise: it
+   * renders the whole edit offline and takes a transform every sixteen milliseconds, which is a
+   * second or two of work on a song. The fingerprint is what decides "has changed" -- a trim, a
+   * fader, a muted track or another clip, and nothing else. Moving a title does not re-listen.
+   */
+  const heard = useRef<string>("");
+  useEffect(() => {
+    if (playback === undefined || project === undefined || doc === undefined) return;
+    if (!drawsFromSound(project)) {
+      heard.current = "";
+      playback.listenWith(undefined);
+      return;
+    }
+    const print = soundPrint(project);
+    if (print === heard.current) return;
+    heard.current = print;
+    const seconds = timeToSeconds(projectEnd(project));
+    if (seconds <= 0) return;
+    let cancelled = false;
+    setListening(true);
+    const rate = project.settings.sampleRate;
+    spectrumOf(
+      new OfflineAudioContext(2, Math.ceil(seconds * rate), rate),
+      project,
+      new AudioSource(),
+      doc.effectParamsAt,
+    )
+      .then(
+        (analysed) => {
+          if (cancelled) return;
+          playback.listenWith(analysed);
+          playback.refresh();
+        },
+        (err: unknown) => {
+          // A failed analysis is a visualiser that draws nothing, not an editor that stops working:
+          // said once, and the next change tries again.
+          heard.current = "";
+          if (!cancelled) reportError("error.actionFailed", err);
+        },
+      )
+      .finally(() => {
+        if (!cancelled) setListening(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [playback, project, doc, reportError]);
 
   // Deliberately not wrapped in try/catch: the timeline decides which refusals are ordinary,
   // and it can only do that if they reach it. Catching here turned a trim held against its
@@ -2182,6 +2237,10 @@ export function App(): ReactElement {
         <div className="v-editor">
           <div className="v-banners">
             <PublishBanner notice={notice} onDismiss={() => setNotice(undefined)} />
+            {/* The one slow thing a visualiser costs, said while it happens: a song's worth of
+                transforms takes a second or two, and a picture that stays empty in the meantime
+                looks like a feature that does not work. */}
+            {listening && <ListeningBanner />}
             <ErrorBanner error={error} />
             <WarningBanner warnings={warnings} />
             {recovered !== undefined && (
@@ -2689,6 +2748,38 @@ function added(
 // What a grab on the picture can change, and the only fields record mode writes keys for.
 const TRANSFORM_KEYS = ["x", "y", "scaleX", "scaleY", "rotation", "opacity"] as const;
 
+/** Whether anything in the project is drawn from the sound. */
+function drawsFromSound(project: Project): boolean {
+  return project.timeline.tracks.some((track) =>
+    track.clips.some(
+      (clip) => clip.source.kind === "generator" && clip.source.generator.type === "visualizer",
+    ),
+  );
+}
+
+/**
+ * What the mix is made of, as a string.
+ *
+ * Everything that changes what comes out of the speakers and nothing that does not: an analysis
+ * costs a second, and re-running it because somebody nudged a title would make the editor feel
+ * broken. Keyframes count by how many there are rather than by their values -- a gain curve being
+ * drawn is a curve still being dragged, and the analysis can wait for the pointer to come up.
+ */
+function soundPrint(project: Project): string {
+  const parts: string[] = [`${project.master.volume}`, `${project.settings.sampleRate}`];
+  for (const track of project.timeline.tracks) {
+    parts.push(`${track.id}:${track.volume}:${track.muted}:${track.solo}:${track.pan}`);
+    for (const clip of track.clips) {
+      const media = clip.source.kind === "media" ? clip.source.media : clip.source.kind;
+      parts.push(
+        `${clip.id}:${media}:${clip.start}:${clip.duration}:${clip.inPoint}:${clip.volume}:` +
+          `${clip.speed.rate}:${clip.speed.reverse}:${(clip.keyframes.volume ?? []).length}`,
+      );
+    }
+  }
+  return parts.join("|");
+}
+
 function nextTrackName(doc: VideolaDocument, kind: TrackKind): string {
   const letter = kind === "audio" ? "A" : kind === "video" ? "V" : "T";
   const taken = doc.state.timeline.tracks.filter((track) => track.kind === kind).length;
@@ -2762,6 +2853,16 @@ function PublishBanner({
       <button type="button" className="v-button" onClick={onDismiss}>
         {t("session.discard")}
       </button>
+    </p>
+  );
+}
+
+/** What the slow part of a visualiser is doing, while it does it. */
+function ListeningBanner(): ReactElement {
+  const { t } = useI18n();
+  return (
+    <p role="status" className="v-banner" data-testid="listening">
+      {t("visualizer.listening")}
     </p>
   );
 }

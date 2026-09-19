@@ -257,6 +257,24 @@ pub enum Generator {
     Countdown {
         from_seconds: u32,
     },
+    /// A picture drawn from the sound: bars, a waveform, a ring, whatever `style` names.
+    ///
+    /// `source` is `master` or a track id -- which part of the mix the picture reacts to -- and
+    /// `options` is an untyped map for the same reason `Text`'s `style` is one: what a style takes
+    /// is a question for the renderer, and a roster here would be a second list to keep in step
+    /// with it. Every value is clamped where it is read, so an option this version has never heard
+    /// of is a value the next version can use rather than a project that refuses to load.
+    Visualizer {
+        style: String,
+        source: String,
+        options: BTreeMap<String, Value>,
+    },
+    /// The words of a song, drawn as they are sung. `style` is the look; the lines themselves live
+    /// on the clip's own caption track rather than in here, because they are edited as text.
+    Lyrics {
+        style: String,
+        options: BTreeMap<String, Value>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]

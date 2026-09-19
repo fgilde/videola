@@ -326,7 +326,29 @@ export function title(
 }
 
 /** Everything a person can put on the timeline that is not a medium. */
-export type InsertKind = TitleKind | "shape" | "countdown" | "colour" | "gradient";
+export type InsertKind = TitleKind | "shape" | "countdown" | "colour" | "gradient" | "visualizer";
+
+
+/**
+ * The visualiser styles, in the order they are offered.
+ *
+ * Here rather than in the renderer that draws them, because the surface has to offer the same list
+ * the renderer knows how to paint -- and the surface cannot import the renderer: that package
+ * carries the decoders, and a picker for a dropdown is no reason to pull a demuxer into the editor's
+ * panel code.
+ */
+export const VISUALIZER_STYLES = [
+  "bars",
+  "mirror",
+  "wave",
+  "radial",
+  "tunnel",
+  "floor",
+  "particles",
+  "orb",
+] as const;
+
+export type VisualizerStyle = (typeof VISUALIZER_STYLES)[number];
 
 export const INSERT_KINDS: readonly InsertKind[] = [
   "lowerThird",
@@ -336,6 +358,7 @@ export const INSERT_KINDS: readonly InsertKind[] = [
   "colour",
   "gradient",
   "countdown",
+  "visualizer",
 ];
 
 /**
@@ -381,6 +404,24 @@ export function insert(kind: InsertKind, text: string): {
         generator: { type: "gradient", from: "#101828", to: "#3b6ea5", angle: 90 },
       },
       duration: secondsToTime(3),
+      track: "overlay",
+    };
+  }
+  // The one insert that draws from the sound. Ten seconds and on an overlay, because a visualiser is
+  // a layer over an edit far more often than it is the edit -- and because the clip is trimmed to
+  // the song afterwards anyway, which is a drag rather than a decision to make now.
+  if (kind === "visualizer") {
+    return {
+      source: {
+        kind: "generator",
+        generator: {
+          type: "visualizer",
+          style: "bars",
+          source: "master",
+          options: { palette: "videola" },
+        },
+      },
+      duration: secondsToTime(10),
       track: "overlay",
     };
   }
