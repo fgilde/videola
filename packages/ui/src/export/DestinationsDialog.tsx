@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 
 import { useI18n } from "../i18n/useI18n";
-import { Icon, type IconName } from "../primitives/Icon";
+import { Icon } from "../primitives/Icon";
+import {
+  DestinationEditor,
+  GLYPH,
+  type DestinationDraft,
+  type DestinationKind,
+} from "./DestinationEditor";
 import "./HandOffDialog.css";
 import "./DestinationsDialog.css";
 
-export type DestinationKind = "youtube" | "vimeo" | "webhook";
+export type { DestinationKind } from "./DestinationEditor";
+export type NewDestinationDraft = DestinationDraft;
 
 export interface DestinationSummary {
   id: string;
@@ -13,22 +20,8 @@ export interface DestinationSummary {
   name: string;
   note?: string;
   holds: readonly string[];
-  /** What is safe to show: the channel a sign-in named, a privacy setting. */
+  /** What is safe to show: the channel a sign-in named, an instance, a privacy setting. */
   settings?: Readonly<Record<string, string>>;
-}
-
-/** One shape per kind. Not a logo: a wordmark in a monochrome icon set is a trademark drawn badly. */
-const GLYPH: Record<DestinationKind, IconName> = {
-  youtube: "channel",
-  vimeo: "film",
-  webhook: "hook",
-};
-
-export interface NewDestinationDraft {
-  kind: DestinationKind;
-  name: string;
-  secrets: Record<string, string>;
-  settings: Record<string, string>;
 }
 
 export interface DestinationsDialogProps {
@@ -46,52 +39,35 @@ export interface DestinationsDialogProps {
   onSignIn?: (name: string) => void;
   onConnect: (url: string, token: string) => void;
   onAdd: (draft: NewDestinationDraft) => void;
+  onChange?: (id: string, draft: NewDestinationDraft) => void;
   onRemove: (id: string) => void;
   onClose: () => void;
 }
 
-/** What each kind cannot work without, in the order somebody would paste them. */
-const FIELDS: Record<DestinationKind, readonly { key: string; secret: boolean }[]> = {
-  youtube: [
-    { key: "clientId", secret: true },
-    { key: "clientSecret", secret: true },
-    { key: "refreshToken", secret: true },
-    { key: "privacyStatus", secret: false },
-  ],
-  vimeo: [
-    { key: "accessToken", secret: true },
-    { key: "privacy", secret: false },
-  ],
-  webhook: [{ key: "url", secret: true }],
-};
-
 /**
- * Where finished videos go, and what it takes to send them there.
+ * Where finished videos go.
  *
- * Two halves, and they are in this order because the first is a precondition of the second: which
- * server holds the destinations, and then the destinations themselves. An editor in a browser cannot
- * upload to YouTube on its own -- that needs a client secret, and a secret in a browser is not a
- * secret -- so this panel is a remote control for a Videola server that can.
+ * A list, and a button that opens the form. It used to be three blocks stacked in one panel -- the
+ * server, the list, and a form with every field of every kind under it -- so the one line worth
+ * reading, which is "these are my channels", was the shortest thing on screen and the longest was a
+ * wall of boxes for a destination nobody was setting up at that moment.
  *
- * A secret is written and never read: the server says a destination holds a refresh token and never
- * what it is, so the fields are empty when a destination already exists and what is shown instead is
- * the list of what it holds. Rotating one means writing it again.
+ * The server block is first and folds itself away once it is answered: an editor in a browser
+ * cannot upload to a channel on its own -- that needs a secret, and a secret in a browser is not one
+ * -- so which server holds them is a precondition, asked once and then out of the way.
  */
 export function DestinationsDialog(props: DestinationsDialogProps): ReactElement {
   const { t } = useI18n();
   const panel = useRef<HTMLDivElement>(null);
   const [url, setUrl] = useState(props.url);
   const [token, setToken] = useState(props.token);
-  const [kind, setKind] = useState<DestinationKind>("youtube");
-  const [name, setName] = useState("");
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<DestinationSummary | "new">();
 
   useEffect(() => {
     panel.current?.focus();
   }, []);
 
-  const fields = FIELDS[kind];
-  const ready = name.trim() !== "" && fields.every((field) => !field.secret || (values[field.key] ?? "") !== "");
+  const connected = props.destinations.length > 0;
 
   return (
     <div className="v-export__scrim">
@@ -104,14 +80,14 @@ export function DestinationsDialog(props: DestinationsDialogProps): ReactElement
         tabIndex={-1}
         data-testid="destinations"
         onKeyDown={(event) => {
-          if (event.key === "Escape") props.onClose();
+          if (event.key === "Escape" && editing === undefined) props.onClose();
         }}
       >
         <h2 className="v-export__title">{t("destinations.title")}</h2>
         <p className="v-export__note">{t("destinations.intro")}</p>
 
-        <section className="v-dest__block">
-          <h3 className="v-dest__heading">{t("destinations.server")}</h3>
+        <details className="v-dest__server" open={!connected}>
+          <summary>{t("destinations.server")}</summary>
           <label className="v-dest__field">
             <span>{t("destinations.url")}</span>
             <input
@@ -140,156 +116,104 @@ export function DestinationsDialog(props: DestinationsDialogProps): ReactElement
           >
             {t("destinations.connect")}
           </button>
-        </section>
+        </details>
 
-        {props.error !== undefined && (
+        {props.error !== undefined && editing === undefined && (
           <p className="v-export__note" role="alert" data-testid="destination-error">
             {props.error}
           </p>
         )}
 
-        <section className="v-dest__block">
-          <h3 className="v-dest__heading">{t("destinations.known")}</h3>
-          {props.destinations.length === 0 ? (
-            <p className="v-export__note">{t("destinations.none")}</p>
-          ) : (
-            <ul className="v-handoff__list">
-              {props.destinations.map((destination) => (
-                <li key={destination.id} className="v-dest__row" data-destination={destination.id}>
-                  <span className="v-dest__glyph" aria-hidden="true">
-                    <Icon name={GLYPH[destination.kind]} />
+        {props.destinations.length === 0 ? (
+          <p className="v-export__note">{t("destinations.none")}</p>
+        ) : (
+          <ul className="v-dest__list">
+            {props.destinations.map((destination) => (
+              <li key={destination.id} className="v-dest__row" data-destination={destination.id}>
+                <span className="v-dest__glyph" aria-hidden="true">
+                  <Icon name={GLYPH[destination.kind]} />
+                </span>
+                <span className="v-dest__what">
+                  <span className="v-dest__name">{destination.name}</span>
+                  {/* What it is and where it goes, in one quiet line: the kind, and whatever the
+                      destination knows about itself -- a channel a sign-in named, an instance
+                      somebody typed. */}
+                  <span className="v-dest__where">
+                    {[t(`destinations.kind.${destination.kind}`), whereOf(destination)]
+                      .filter((part) => part !== undefined && part !== "")
+                      .join(" · ")}
                   </span>
-                  <span className="v-handoff__name">
-                    {destination.name}
-                    <span className="v-handoff__ext">
-                      {t(`destinations.kind.${destination.kind}`)}
-                    </span>
-                  </span>
-                  {/* What it holds, never what they are: the server does not say, and neither does
-                      this. Shown at all because "did I paste the refresh token?" is a real question. */}
-                  <span className="v-handoff__opens">
-                    {t("destinations.holds", { keys: destination.holds.join(", ") })}
-                  </span>
-                  <button
-                    type="button"
-                    className="v-button"
-                    data-remove={destination.id}
-                    onClick={() => props.onRemove(destination.id)}
-                  >
-                    {t("destinations.remove")}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="v-dest__block">
-          <h3 className="v-dest__heading">{t("destinations.add")}</h3>
-          {/* Three tiles rather than a dropdown: there are three of them, they are the first choice
-              somebody makes here, and each one has a shape worth showing. */}
-          <div className="v-dest__kinds" role="group" aria-label={t("destinations.kind")}>
-            {(["youtube", "vimeo", "webhook"] as const).map((entry) => (
-              <button
-                key={entry}
-                type="button"
-                className="v-dest__kind"
-                data-kind={entry}
-                aria-pressed={kind === entry}
-                onClick={() => {
-                  setKind(entry);
-                  setValues({});
-                }}
-              >
-                <Icon name={GLYPH[entry]} />
-                <span>{t(`destinations.kind.${entry}`)}</span>
-              </button>
+                </span>
+                <button
+                  type="button"
+                  className="v-button"
+                  data-edit={destination.id}
+                  onClick={() => setEditing(destination)}
+                >
+                  {t("destinations.editOne")}
+                </button>
+                <button
+                  type="button"
+                  className="v-button"
+                  data-remove={destination.id}
+                  onClick={() => props.onRemove(destination.id)}
+                >
+                  {t("destinations.remove")}
+                </button>
+              </li>
             ))}
-          </div>
-          {/* The whole point of the sign-in: a client id, a client secret and a refresh token are
-              three values from two pages of a console, and this is the flow they exist for. The
-              paste-it-yourself fields stay, folded away, for a server with no client of its own. */}
-          {kind === "youtube" && (
-            <div className="v-dest__signin">
-              {props.canSignIn === true ? (
-                <>
-                  <button
-                    type="button"
-                    className="v-button v-button--primary"
-                    data-testid="destination-signin"
-                    disabled={props.signingIn === true || props.busy === true}
-                    onClick={() => props.onSignIn?.(name.trim() === "" ? "YouTube" : name.trim())}
-                  >
-                    {t("destinations.signIn")}
-                  </button>
-                  <p className="v-export__note">
-                    {props.signingIn === true
-                      ? t("destinations.signInWaiting")
-                      : t("destinations.signInNote")}
-                  </p>
-                </>
-              ) : (
-                <p className="v-export__note" data-testid="destination-no-client">
-                  {t("destinations.signInMissing")}
-                </p>
-              )}
-            </div>
-          )}
-          <label className="v-dest__field">
-            <span>{t("destinations.name")}</span>
-            <input
-              type="text"
-              value={name}
-              data-testid="destination-name"
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-          <details className="v-dest__manual" open={kind !== "youtube"}>
-            <summary>{t("destinations.manual")}</summary>
-          {fields.map((field) => (
-            <label className="v-dest__field" key={field.key}>
-              <span>{t(`destinations.field.${field.key}`)}</span>
-              <input
-                type={field.secret ? "password" : "text"}
-                value={values[field.key] ?? ""}
-                data-field={field.key}
-                onChange={(event) =>
-                  setValues((held) => ({ ...held, [field.key]: event.target.value }))
-                }
-              />
-            </label>
-          ))}
-          <p className="v-export__note">{t(`destinations.help.${kind}`)}</p>
-          </details>
+          </ul>
+        )}
+
+        <div className="v-export__actions">
           <button
             type="button"
             className="v-button v-button--primary"
-            data-testid="destination-add"
-            disabled={!ready || props.busy === true}
-            onClick={() => {
-              const secrets: Record<string, string> = {};
-              const settings: Record<string, string> = {};
-              for (const field of fields) {
-                const value = (values[field.key] ?? "").trim();
-                if (value === "") continue;
-                if (field.secret) secrets[field.key] = value;
-                else settings[field.key] = value;
-              }
-              props.onAdd({ kind, name: name.trim(), secrets, settings });
-              setName("");
-              setValues({});
-            }}
+            data-testid="destination-new"
+            onClick={() => setEditing("new")}
           >
-            {t("destinations.save")}
+            {t("destinations.add")}
           </button>
-        </section>
-
-        <div className="v-export__actions">
+          <span className="v-templates__spacer" />
           <button type="button" className="v-button" onClick={props.onClose}>
             {t("destinations.close")}
           </button>
         </div>
       </div>
+
+      {editing !== undefined && (
+        <DestinationEditor
+          {...(editing === "new"
+            ? {}
+            : {
+                editing: {
+                  id: editing.id,
+                  kind: editing.kind,
+                  name: editing.name,
+                  settings: editing.settings ?? {},
+                  holds: editing.holds,
+                },
+              })}
+          canSignIn={props.canSignIn}
+          signingIn={props.signingIn}
+          busy={props.busy}
+          error={props.error}
+          onSignIn={props.onSignIn}
+          onSave={(draft) => {
+            if (editing === "new") props.onAdd(draft);
+            else props.onChange?.(editing.id, draft);
+            setEditing(undefined);
+          }}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
     </div>
   );
+}
+
+// The one thing a row can say about itself beyond its kind. Which setting that is depends on the
+// kind, and a row that showed all of them would be the wall of text the list replaced.
+function whereOf(destination: DestinationSummary): string | undefined {
+  const settings = destination.settings ?? {};
+  return settings.channel ?? settings.instance ?? settings.handle ?? settings.pageId;
 }

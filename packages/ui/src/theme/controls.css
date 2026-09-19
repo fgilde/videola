@@ -243,6 +243,51 @@ select:hover {
   outline-offset: 2px;
 }
 
+/* Every box somebody types in. The sliders, the selects and the textarea were taken over one at a
+   time and the plain text field was left behind: a white box with a blue focus ring in the middle
+   of a near-black dialogue, which is what a URL, a token and a client secret were all typed into.
+   Listed by what it is not, because the roster of what `type` can be grows and a field this sheet
+   has never heard of should look like the app rather than like the operating system. */
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]) {
+  min-height: 32px;
+  padding: 0 var(--v-space-2);
+  background: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  font: inherit;
+  font-size: var(--v-text-sm);
+  transition: border-color var(--v-transition);
+}
+
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):hover {
+  border-color: var(--v-border-strong);
+}
+
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):focus-visible {
+  border-color: var(--v-accent);
+}
+
+input::placeholder {
+  color: var(--v-text-muted);
+  opacity: 1;
+}
+
+/* The one native control with a box of its own that cannot be restyled from the inside: what can
+   be done is to stop it standing on a white plinth. */
+input[type="color"] {
+  padding: 2px;
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+}
+
+@media (pointer: coarse) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]) {
+    min-height: var(--v-touch-target);
+  }
+}
+
 /* The fourth native control, taken over for the same reason as the other three: left alone a
    textarea draws the operating system's box, in the operating system's font, on a panel that is
    neither. A textarea and not an input wherever words are typed -- an input drops a hard line

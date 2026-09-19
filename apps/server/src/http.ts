@@ -201,6 +201,18 @@ async function route(
   }
   if (segments[0] === "api" && segments[1] === "destinations" && segments[2] !== undefined) {
     const destination = segments[2];
+    if (segments[3] === undefined && method === "PATCH") {
+      const given = asObject(await body());
+      return {
+        status: 200,
+        body: await api.updateDestination(destination, {
+          ...(typeof given.name === "string" ? { name: given.name } : {}),
+          ...(typeof given.note === "string" ? { note: given.note } : {}),
+          ...(isStrings(given.secrets) ? { secrets: given.secrets } : {}),
+          ...(isStrings(given.settings) ? { settings: given.settings } : {}),
+        }),
+      };
+    }
     if (segments[3] === undefined && method === "DELETE") {
       await api.removeDestination(destination);
       return { status: 200, body: { removed: destination } };
@@ -509,6 +521,17 @@ function page(status: number, message: string): Reply {
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"]/g, (char) =>
     char === "&" ? "&amp;" : char === "<" ? "&lt;" : char === ">" ? "&gt;" : "&quot;",
+  );
+}
+
+// A record of strings and nothing else: a setting that is a number or an object is a setting the
+// publishers would have to guess at, and one that arrived as `null` is a crash waiting for a form.
+function isStrings(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === "string")
   );
 }
 

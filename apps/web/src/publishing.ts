@@ -1,3 +1,5 @@
+import type { DestinationKind } from "@videola/ui";
+
 /**
  * Talking to a Videola server about where finished videos go.
  *
@@ -21,7 +23,9 @@ export interface Connection {
 
 export interface DestinationSummary {
   id: string;
-  kind: "youtube" | "vimeo" | "webhook";
+  // The one roster, from the package that draws them: a kind the surface offers and the server
+  // refuses is a button that fails, and two lists is how that happens.
+  kind: DestinationKind;
   name: string;
   note?: string;
   settings: Readonly<Record<string, string>>;
@@ -104,6 +108,20 @@ export async function addDestination(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(given),
+  });
+  return (await answer.json()) as DestinationSummary;
+}
+
+/** Change one that exists. A secret left out is a secret kept: nothing here can read one back. */
+export async function updateDestination(
+  connection: Connection,
+  id: string,
+  changes: Partial<NewDestination>,
+): Promise<DestinationSummary> {
+  const answer = await call(connection, `/api/destinations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(changes),
   });
   return (await answer.json()) as DestinationSummary;
 }

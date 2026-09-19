@@ -162,6 +162,250 @@ describe("publishing to Vimeo", () => {
   });
 });
 
+// The instance kinds. Neither of these asks anybody's permission -- one is free software on
+// somebody's own machine, the other a network with no gatekeeper -- which is the reason they are
+// here at all.
+describe("publishing to a PeerTube instance", () => {
+  it("posts the file to the instance with the channel and a privacy it was given", async () => {
+    const { http, calls } = recorder([json({ video: { uuid: "uuid-1", shortUUID: "short1" } })]);
+
+    const result = await publish(
+      {
+        destination: destination({
+          kind: "peertube",
+          secrets: { accessToken: "tok" },
+          settings: { instance: "tube.example.org", channelId: "7", privacy: "1" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+      },
+      http,
+    );
+
+    expect(calls[0]?.url).toBe("https://tube.example.org/api/v1/videos/upload");
+    expect(calls[0]?.headers.authorization).toBe("Bearer tok");
+    const form = calls[0]?.body as FormData;
+    expect(form.get("name")).toBe("Sommer");
+    expect(form.get("channelId")).toBe("7");
+    expect(form.get("privacy")).toBe("1");
+    expect(result).toEqual({ id: "short1", url: "https://tube.example.org/w/short1" });
+  });
+
+  // Somebody types the host, not a URL, and a destination that only worked with the scheme typed
+  // would fail at the moment a finished video is waiting on it.
+  it("takes an instance typed without a scheme, and one with a trailing slash", async () => {
+    const { http, calls } = recorder([json({ video: { uuid: "u" } }), json({ video: { uuid: "u" } })]);
+    const send = (instance: string) =>
+      publish(
+        {
+          destination: destination({
+            kind: "peertube",
+            secrets: { accessToken: "tok" },
+            settings: { instance },
+          }),
+          bytes: BYTES,
+          title: "Sommer",
+        },
+        http,
+      );
+
+    await send("tube.example.org/");
+    await send("http://tube.example.org");
+
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://tube.example.org/api/v1/videos/upload",
+      "http://tube.example.org/api/v1/videos/upload",
+    ]);
+  });
+
+  // Private unless the destination says otherwise, the rule every publisher here follows.
+  it("uploads privately where nothing says otherwise", async () => {
+    const { http, calls } = recorder([json({ video: { uuid: "u" } })]);
+
+    await publish(
+      {
+        destination: destination({
+          kind: "peertube",
+          secrets: { accessToken: "tok" },
+          settings: { instance: "tube.example.org" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+      },
+      http,
+    );
+
+    expect((calls[0]?.body as FormData).get("privacy")).toBe("3");
+  });
+});
+
+describe("publishing to a Mastodon instance", () => {
+  it("uploads the file and then posts it, with the media it just made", async () => {
+    const { http, calls } = recorder([
+      json({ id: "media_1" }),
+      json({ id: "status_1", url: "https://chaos.social/@me/1" }),
+    ]);
+
+    const result = await publish(
+      {
+        destination: destination({
+          kind: "mastodon",
+          secrets: { accessToken: "tok" },
+          settings: { instance: "chaos.social", visibility: "unlisted" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+        description: "Ein Schnitt",
+      },
+      http,
+    );
+
+    expect(calls[0]?.url).toBe("https://chaos.social/api/v2/media");
+    expect(calls[1]?.url).toBe("https://chaos.social/api/v1/statuses");
+    const posted = JSON.parse(String(calls[1]?.body)) as Record<string, unknown>;
+    expect(posted.media_ids).toEqual(["media_1"]);
+    expect(posted.visibility).toBe("unlisted");
+    expect(posted.status).toBe("Sommer\n\nEin Schnitt");
+    expect(result).toEqual({ id: "status_1", url: "https://chaos.social/@me/1" });
+  });
+
+  // 202 is "still transcoding". Posting then attaches a media the instance has not finished with,
+  // which is a post with nothing in it.
+  it("waits for a file the instance is still transcoding", async () => {
+    const { http, calls } = recorder([
+      json({ id: "media_1" }, 202),
+      json({ id: "media_1" }, 200),
+      json({ id: "status_1" }),
+    ]);
+
+    await publish(
+      {
+        destination: destination({
+          kind: "mastodon",
+          secrets: { accessToken: "tok" },
+          settings: { instance: "chaos.social" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+      },
+      http,
+    );
+
+    expect(calls[1]?.url).toBe("https://chaos.social/api/v1/media/media_1");
+    expect(calls[2]?.url).toBe("https://chaos.social/api/v1/statuses");
+  });
+});
+
+describe("publishing to Bluesky", () => {
+  it("opens a session, takes a token for the video service, uploads and posts", async () => {
+    const { http, calls } = recorder([
+      json({ accessJwt: "jwt", did: "did:plc:me" }),
+      json({ token: "service-jwt" }),
+      json({ jobStatus: { jobId: "job_1" } }),
+      json({ jobStatus: { state: "JOB_STATE_COMPLETED", blob: { $type: "blob", ref: "r" } } }),
+      json({ uri: "at://did:plc:me/app.bsky.feed.post/3kabc" }),
+    ]);
+
+    const result = await publish(
+      {
+        destination: destination({
+          kind: "bluesky",
+          secrets: { appPassword: "abcd-efgh" },
+          settings: { handle: "me.bsky.social" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+      },
+      http,
+    );
+
+    expect(calls[0]?.url).toBe("https://bsky.social/xrpc/com.atproto.server.createSession");
+    expect(JSON.parse(String(calls[0]?.body)).password).toBe("abcd-efgh");
+    expect(calls[1]?.url).toContain("com.atproto.server.getServiceAuth");
+    expect(calls[2]?.url).toContain("app.bsky.video.uploadVideo");
+    expect(calls[2]?.headers.authorization).toBe("Bearer service-jwt");
+    const record = JSON.parse(String(calls[4]?.body)) as {
+      record: { embed: { video: unknown; $type: string } };
+    };
+    expect(record.record.embed.$type).toBe("app.bsky.embed.video");
+    expect(record.record.embed.video).toEqual({ $type: "blob", ref: "r" });
+    expect(result.url).toBe("https://bsky.app/profile/me.bsky.social/post/3kabc");
+  });
+
+  // A video the service could not process is not a post with a hole in it.
+  it("stops where the video service gives up", async () => {
+    const { http } = recorder([
+      json({ accessJwt: "jwt", did: "did:plc:me" }),
+      json({ token: "service-jwt" }),
+      json({ jobStatus: { jobId: "job_1" } }),
+      json({ jobStatus: { state: "JOB_STATE_FAILED", error: "too long" } }),
+    ]);
+
+    await expect(
+      publish(
+        {
+          destination: destination({
+            kind: "bluesky",
+            secrets: { appPassword: "abcd-efgh" },
+            settings: { handle: "me.bsky.social" },
+          }),
+          bytes: BYTES,
+          title: "Sommer",
+        },
+        http,
+      ),
+    ).rejects.toThrow(/too long/);
+  });
+});
+
+describe("publishing to a Telegram chat", () => {
+  it("sends the video to the chat the destination names", async () => {
+    const { http, calls } = recorder([json({ result: { message_id: 42 } })]);
+
+    const result = await publish(
+      {
+        destination: destination({
+          kind: "telegram",
+          secrets: { botToken: "123:abc" },
+          settings: { chatId: "-100999" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+      },
+      http,
+    );
+
+    expect(calls[0]?.url).toBe("https://api.telegram.org/bot123:abc/sendVideo");
+    expect((calls[0]?.body as FormData).get("chat_id")).toBe("-100999");
+    expect(result).toEqual({ id: "42" });
+  });
+});
+
+describe("publishing to a Facebook Page", () => {
+  it("posts the file to the Page, unpublished unless it was told otherwise", async () => {
+    const { http, calls } = recorder([json({ id: "1234" })]);
+
+    const result = await publish(
+      {
+        destination: destination({
+          kind: "facebook",
+          secrets: { pageToken: "page-tok" },
+          settings: { pageId: "99" },
+        }),
+        bytes: BYTES,
+        title: "Sommer",
+      },
+      http,
+    );
+
+    expect(calls[0]?.url).toBe("https://graph.facebook.com/v21.0/99/videos");
+    const form = calls[0]?.body as FormData;
+    expect(form.get("published")).toBe("false");
+    expect(form.get("access_token")).toBe("page-tok");
+    expect(result.id).toBe("1234");
+  });
+});
+
 describe("publishing to anywhere else", () => {
   it("posts the file as a form, with the headers the destination carries", async () => {
     const { http, calls } = recorder([json({ id: "abc", url: "https://mine.example/v/abc" })]);

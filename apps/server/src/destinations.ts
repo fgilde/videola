@@ -10,20 +10,40 @@ import { writeAtomic, type Storage } from "./paths";
  * export, open a browser, find the upload page, retype the title -- is the part they were paying
  * another tool for.
  *
- * Three kinds, and the third is the interesting one:
+ * The kinds, and the last one is the interesting one:
  *
  * * `youtube` uploads through the Data API, resumably, with the account's own refresh token.
  * * `vimeo` does the same through Vimeo's tus endpoint with a personal access token.
+ * * `peertube` posts the file to any PeerTube instance, which is the one that needs nobody's
+ *   permission at all: it is free software on somebody's own machine.
+ * * `mastodon` attaches the video to a post on any instance.
+ * * `bluesky` posts it through the AT Protocol's video service, with an app password -- no
+ *   developer account anywhere, which makes it the shortest setup on this list.
+ * * `telegram` sends it to a chat or a channel through a bot.
+ * * `facebook` posts it to a Page with that Page's own token.
  * * `webhook` posts the file to any URL with headers of your choosing, which is what makes this
- *   useful to anybody whose platform is not one of the two above -- a CMS, an S3 signer, a Discord
+ *   useful to anybody whose platform is not one of those above -- a CMS, an S3 signer, a Discord
  *   channel, a script on a NAS.
+ *
+ * What is deliberately not here: Instagram and TikTok. Instagram's publishing API takes a URL and
+ * fetches the video itself, so it cannot be reached from a server nobody can reach from outside;
+ * TikTok's needs an audited developer application before it will do anything but land in a draft
+ * folder. Both would be a button that fails for almost everybody who pressed it.
  *
  * Secrets go in and never come out. `list` returns what a destination *is*, never what it holds: a
  * refresh token that can be read back over the API is a refresh token that leaks through a screen
  * share, a log, or a browser history. Rotating one means writing it again, which is a click, and the
  * alternative is a class of accident this program refuses to make possible.
  */
-export type DestinationKind = "youtube" | "vimeo" | "webhook";
+export type DestinationKind =
+  | "youtube"
+  | "vimeo"
+  | "peertube"
+  | "mastodon"
+  | "bluesky"
+  | "telegram"
+  | "facebook"
+  | "webhook";
 
 export interface Destination {
   id: string;
@@ -68,10 +88,35 @@ const REQUIRED: Record<DestinationKind, readonly string[]> = {
   youtube: ["clientId", "clientSecret", "refreshToken"],
   // Vimeo issues a long-lived token with an upload scope from the account page, which is one field.
   vimeo: ["accessToken"],
+  // An instance, a channel and a token from that instance's own API -- no company in the middle.
+  peertube: ["accessToken"],
+  // Any instance: Settings, Development, New application, and the token it prints.
+  mastodon: ["accessToken"],
+  // An app password from the account's own settings page. No developer account, no review, no
+  // client: the shortest setup on this list by a distance.
+  bluesky: ["appPassword"],
+  // What BotFather hands out, and it is the whole credential -- hence a secret rather than a
+  // setting, the same rule the webhook's URL follows.
+  telegram: ["botToken"],
+  // A Page access token, which is what the Graph API wants and what an account holder can make for
+  // their own Page without an app review.
+  facebook: ["pageToken"],
   // A URL is a secret here rather than a setting: signed upload URLs carry their key in the query,
   // and the ones that do not lose nothing by being write-only.
   webhook: ["url"],
 };
+
+// An empty field is somebody who did not retype a secret, not somebody who wants it gone: the form
+// cannot show what is held, so blank has to mean "leave it".
+function blanksRemoved(
+  secrets: Readonly<Record<string, string>> | undefined,
+): Record<string, string> {
+  const kept: Record<string, string> = {};
+  for (const [key, value] of Object.entries(secrets ?? {})) {
+    if (value.trim() !== "") kept[key] = value;
+  }
+  return kept;
+}
 
 export class Destinations {
   #storage: Storage;
@@ -113,6 +158,38 @@ export class Destinations {
     const all = [...(await this.#all()), destination];
     await this.#write(all);
     return publicly(destination);
+  }
+
+  /**
+   * Change one that exists: its name, its settings, and the secrets somebody retyped.
+   *
+   * A secret left out is a secret kept, which is the only shape this can take -- nothing reads a
+   * secret back, so a form cannot show what is there and send it again. Rotating one means writing
+   * that one field; renaming a destination means touching nothing else.
+   */
+  async update(id: string, changes: Partial<NewDestination>): Promise<PublicDestination> {
+    const all = await this.#all();
+    const index = all.findIndex((entry) => entry.id === id);
+    const held = all[index];
+    if (held === undefined) throw new Error(`no destination ${id}`);
+    const name = (changes.name ?? held.name).trim();
+    if (name === "") throw new Error("a destination needs a name");
+    const secrets = { ...held.secrets, ...blanksRemoved(changes.secrets) };
+    const missing = REQUIRED[held.kind].filter((key) => (secrets[key] ?? "").trim() === "");
+    if (missing.length > 0) {
+      throw new Error(`a ${held.kind} destination needs ${missing.join(", ")}`);
+    }
+
+    const changed: Destination = {
+      ...held,
+      name,
+      ...(changes.note === undefined ? {} : { note: changes.note }),
+      secrets,
+      settings: changes.settings ?? held.settings,
+    };
+    all[index] = changed;
+    await this.#write(all);
+    return publicly(changed);
   }
 
   async remove(id: string): Promise<boolean> {

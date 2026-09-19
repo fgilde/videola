@@ -189,7 +189,25 @@ from then on.
 |---|---|---|
 | `youtube` | `clientId`, `clientSecret`, `refreshToken` | a resumable upload through the Data API |
 | `vimeo` | `accessToken` | a tus upload to the account |
+| `peertube` | `accessToken`, plus `instance` and `channelId` | uploads to any PeerTube instance |
+| `mastodon` | `accessToken`, plus `instance` | attaches the video to a post |
+| `bluesky` | `appPassword`, plus `handle` | posts through the AT Protocol's video service |
+| `telegram` | `botToken`, plus `chatId` | sends it as a video to a chat or a channel |
+| `facebook` | `pageToken`, plus `pageId` | uploads it to a page, unpublished by default |
 | `webhook` | `url` | posts the file as a multipart form, with any headers you name |
+
+What is deliberately **not** here: Instagram and TikTok. Instagram's publishing API takes a URL and
+fetches the video itself, which a server nobody can reach from outside cannot offer. TikTok wants an
+audited developer application before anything but a draft folder is reachable. Both would be a
+button that fails for almost everybody who pressed it.
+
+The shortest setup on the list is **Bluesky**: an app password from the account's own settings, no
+developer account and no review. **PeerTube** is next — free software on somebody's own machine,
+with no quota and no company in the middle.
+
+In the dialogue the destinations are a list, each under its own mark; **New destination** and
+**Edit** open the same form. A secret is never read back: editing shows the fields empty, and an
+empty field means "leave it".
 
 ### Signing in instead of pasting tokens
 

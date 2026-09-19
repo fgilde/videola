@@ -109,6 +109,8 @@ async function announce() {
   // A run of its own for one picture: the import dialogue, open, so what it looks like can be
   // looked at rather than asserted about.
   const importing = location.search.includes("import");
+  // And one for the other dialogue somebody sets up once: where a finished video goes.
+  const publishing = location.search.includes("destinations");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -740,17 +742,37 @@ async function announce() {
     pickMenu("Veröffentlichungsziele …");
     const dialog = await until("the destinations dialogue", () => q('[data-testid="destinations"]'));
     check("opening it raised nothing", banner(), "");
-    check("the three kinds are shown as what they are",
-      [...dialog.querySelectorAll("[data-kind]")].map((node) => node.dataset.kind),
-      ["youtube", "vimeo", "webhook"]);
+    check("the list is what the panel opens on", dialog.querySelector(".v-dest__list"), null);
+    check("and says so plainly while there is nothing in it",
+      dialog.textContent.includes("Noch kein Ziel eingerichtet"), true);
+
+    // The form is a dialogue of its own: "where do my videos go" is a list, and "set this one up"
+    // is a form, and the two in one panel made the list the shortest thing on screen.
+    labelled("Neues Ziel").click();
+    const editor = await until("the editor", () => q('[data-testid="destination-editor"]'));
+    check("every place a video can go is offered, each under its own mark",
+      [...editor.querySelectorAll("[data-kind]")].map((node) => node.dataset.kind),
+      ["youtube", "vimeo", "peertube", "mastodon", "bluesky", "telegram", "facebook", "webhook"]);
     check("a server with no client of its own says so instead of offering a button",
-      dialog.querySelector('[data-testid="destination-signin"]'), null);
+      editor.querySelector('[data-testid="destination-signin"]'), null);
     check("and names the two settings that would change that",
-      dialog.querySelector('[data-testid="destination-no-client"]').textContent
+      editor.querySelector('[data-testid="destination-no-client"]').textContent
         .includes("VIDEOLA_YOUTUBE_CLIENT_ID"),
       true);
     check("with the fields still reachable for whoever has the values",
-      dialog.querySelector('[data-field="refreshToken"]') !== null, true);
+      editor.querySelector('[data-field="refreshToken"]') !== null, true);
+
+    // The kind decides the fields, and the one that needs no developer account anywhere is the one
+    // worth checking: a handle and an app password, and nothing else.
+    [...editor.querySelectorAll("[data-kind]")].find((node) => node.dataset.kind === "bluesky").click();
+    await sleep(120);
+    check("choosing another kind asks for what that one needs",
+      [q('[data-field="handle"]') !== null, q('[data-field="appPassword"]') !== null,
+        q('[data-field="refreshToken"]')],
+      [true, true, null]);
+    labelled("Abbrechen").click();
+    await until("the editor to close",
+      () => (q('[data-testid="destination-editor"]') === null ? true : null));
     labelled("Schließen").click();
     await until("the dialogue to close",
       () => (q('[data-testid="destinations"]') === null ? true : null));
@@ -3169,10 +3191,25 @@ async function announce() {
     await sleep(400);
   }
 
+  // The destinations dialogue on a fresh editor, for the picture. Nothing is asserted here that
+  // the run above does not already assert; what this is for is being able to look at it.
+  async function runDestinations() {
+    await until("the editor", () => q('[data-testid="timeline"]'));
+    pickMenu("Veröffentlichungsziele …");
+    await until("the dialogue", () => q('[data-testid="destinations"]'));
+    // With the form open: the list is one line on a fresh editor, and the picture worth having is
+    // every place a video can go, each under its own mark.
+    labelled("Neues Ziel").click();
+    await until("the editor", () => q('[data-testid="destination-editor"]'));
+    await sleep(400);
+  }
+
   pickFixture()
     .then(announce)
     .then(() =>
-      importing
+      publishing
+        ? runDestinations()
+        : importing
         ? runImport()
         : shelves
         ? runEffects()

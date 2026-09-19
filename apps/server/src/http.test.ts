@@ -606,6 +606,50 @@ describe("destinations", () => {
 
   // The rule the whole feature stands on. Anything that answers a request may say a destination holds
   // a refresh token; nothing may say what it is.
+  // Editing one that exists. The form cannot show a secret, so a field left blank has to mean
+  // "leave it there" -- anything else would wipe a refresh token every time somebody renamed a
+  // destination.
+  it("renames one without touching the secrets it holds", async () => {
+    const id = await youtube();
+
+    const changed = await json(`/api/destinations/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Zweiter Kanal", secrets: { refreshToken: "" } }),
+    });
+
+    expect(changed.status).toBe(200);
+    expect(changed.body.name).toBe("Zweiter Kanal");
+    expect(changed.body.holds).toEqual(["clientId", "clientSecret", "refreshToken"]);
+    const listed = await json("/api/destinations");
+    expect(listed.body.destinations).toHaveLength(1);
+    expect(JSON.stringify(listed.body)).not.toContain("shh");
+  });
+
+  it("takes a rotated secret and leaves the rest alone", async () => {
+    const id = await youtube();
+
+    await json(`/api/destinations/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ secrets: { refreshToken: "neu" }, settings: { privacyStatus: "public" } }),
+    });
+
+    const listed = await json("/api/destinations");
+    expect(listed.body.destinations[0].settings).toEqual({ privacyStatus: "public" });
+    expect(listed.body.destinations[0].holds).toEqual(["clientId", "clientSecret", "refreshToken"]);
+  });
+
+  it("is a 404 for one that is not there", async () => {
+    const answer = await json("/api/destinations/dst_nope", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Egal" }),
+    });
+
+    expect(answer.status).toBe(404);
+  });
+
   it("never reads a secret back out", async () => {
     await youtube();
 

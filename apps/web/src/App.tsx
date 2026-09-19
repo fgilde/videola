@@ -157,6 +157,7 @@ import {
   addDestination,
   listDestinations,
   startSignIn,
+  updateDestination,
   publishVideo,
   readConnection,
   removeDestination,
@@ -2452,6 +2453,16 @@ export function App(): ReactElement {
             void (async () => {
               try {
                 await addDestination(connection, draft);
+                await loadDestinations(connection, true);
+              } catch (err) {
+                setDestinationError(String((err as Error).message ?? err));
+              }
+            })();
+          }}
+          onChange={(id, draft) => {
+            void (async () => {
+              try {
+                await updateDestination(connection, id, draft);
                 await loadDestinations(connection, true);
               } catch (err) {
                 setDestinationError(String((err as Error).message ?? err));

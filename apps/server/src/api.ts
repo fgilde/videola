@@ -255,6 +255,18 @@ export class Api {
     }
   }
 
+  async updateDestination(id: string, changes: Partial<NewDestination>): Promise<PublicDestination> {
+    try {
+      return await this.#destinations.update(id, changes);
+    } catch (error) {
+      const message = String((error as Error).message ?? error);
+      if (message.startsWith("no destination")) {
+        throw new ApiError(404, "noSuchDestination", message);
+      }
+      throw new ApiError(400, "badDestination", message);
+    }
+  }
+
   async removeDestination(id: string): Promise<void> {
     if (!(await this.#destinations.remove(id))) {
       throw new ApiError(404, "noSuchDestination", `no destination ${id}`);

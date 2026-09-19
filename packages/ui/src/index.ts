@@ -27,6 +27,7 @@ export * from "./timeline/geometry";
 export * from "./source/SourceBar";
 export * from "./export/ExportDialog";
 export * from "./export/HandOffDialog";
+export * from "./export/DestinationEditor";
 export * from "./export/DestinationsDialog";
 export * from "./media/ImportDialog";
 export * from "./media/PlaceMediaDialog";

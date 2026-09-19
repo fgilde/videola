@@ -36,9 +36,284 @@ export async function publish(request: PublishRequest, http: Fetch = fetch): Pro
       return await toYouTube(request, http);
     case "vimeo":
       return await toVimeo(request, http);
+    case "peertube":
+      return await toPeerTube(request, http);
+    case "mastodon":
+      return await toMastodon(request, http);
+    case "bluesky":
+      return await toBluesky(request, http);
+    case "telegram":
+      return await toTelegram(request, http);
+    case "facebook":
+      return await toFacebook(request, http);
     case "webhook":
       return await toWebhook(request, http);
   }
+}
+
+/**
+ * PeerTube: one multipart POST, and the only destination here that asks nobody's permission.
+ *
+ * The instance is somebody's own machine running free software, so there is no application to
+ * register, no review and no quota -- which makes it the one place a video editor under the GPL can
+ * send a video without a company in the middle.
+ */
+async function toPeerTube(request: PublishRequest, http: Fetch): Promise<PublishResult> {
+  const { secrets, settings } = request.destination;
+  const instance = instanceUrl(settings.instance);
+  const form = new FormData();
+  form.set("name", request.title);
+  if (request.description !== undefined) form.set("description", request.description);
+  if (settings.channelId !== undefined) form.set("channelId", settings.channelId);
+  // Private unless the destination says otherwise, the same default every publisher here takes: a
+  // mistake that puts a rough cut in front of the world cannot be taken back by an undo.
+  form.set("privacy", settings.privacy ?? "3");
+  form.set("videofile", videoBlob(request), `${safeName(request.title)}.mp4`);
+
+  const sent = await http(`${instance}/api/v1/videos/upload`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${secrets.accessToken ?? ""}` },
+    body: form,
+  });
+  if (!sent.ok) throw new Error(`peertube refused the video: ${await said(sent)}`);
+  const created = (await sent.json()) as { video?: { uuid?: string; shortUUID?: string } };
+  const uuid = created.video?.shortUUID ?? created.video?.uuid;
+  if (uuid === undefined) return {};
+  return { id: uuid, url: `${instance}/w/${uuid}` };
+}
+
+/**
+ * Mastodon: the file, then the post that carries it.
+ *
+ * Two requests and a wait between them -- the instance transcodes, and a status naming a media id
+ * the instance has not finished with is a status with nothing attached.
+ */
+async function toMastodon(request: PublishRequest, http: Fetch): Promise<PublishResult> {
+  const { secrets, settings } = request.destination;
+  const instance = instanceUrl(settings.instance);
+  const auth = { authorization: `Bearer ${secrets.accessToken ?? ""}` };
+  const form = new FormData();
+  form.set("file", videoBlob(request), `${safeName(request.title)}.mp4`);
+  if (request.description !== undefined) form.set("description", request.description);
+
+  const uploaded = await http(`${instance}/api/v2/media`, {
+    method: "POST",
+    headers: auth,
+    body: form,
+  });
+  if (!uploaded.ok) throw new Error(`mastodon refused the file: ${await said(uploaded)}`);
+  const media = (await uploaded.json()) as { id?: string };
+  if (media.id === undefined) throw new Error("mastodon returned no media id");
+  // 202 means "still transcoding": the media exists, and attaching it now posts an empty status.
+  // Asked for rather than slept through, so a fast instance costs nothing.
+  if (uploaded.status === 202) await settled(`${instance}/api/v1/media/${media.id}`, auth, http);
+
+  const posted = await http(`${instance}/api/v1/statuses`, {
+    method: "POST",
+    headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({
+      status: caption(request),
+      media_ids: [media.id],
+      visibility: settings.visibility ?? "private",
+    }),
+  });
+  if (!posted.ok) throw new Error(`mastodon refused the post: ${await said(posted)}`);
+  const status = (await posted.json()) as { id?: string; url?: string };
+  return {
+    ...(status.id === undefined ? {} : { id: status.id }),
+    ...(status.url === undefined ? {} : { url: status.url }),
+  };
+}
+
+/**
+ * Bluesky: an app password, a token for the video service, the file, and a post.
+ *
+ * No developer account anywhere -- the app password comes from the account's own settings page,
+ * which makes this the shortest setup on the list. The video goes to the network's video service
+ * rather than into the repository as a blob, because that is what every client knows how to play.
+ */
+async function toBluesky(request: PublishRequest, http: Fetch): Promise<PublishResult> {
+  const { secrets, settings } = request.destination;
+  const service = instanceUrl(settings.service ?? "https://bsky.social");
+  const opened = await http(`${service}/xrpc/com.atproto.server.createSession`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      identifier: settings.handle ?? "",
+      password: secrets.appPassword ?? "",
+    }),
+  });
+  if (!opened.ok) throw new Error(`bluesky refused the app password: ${await said(opened)}`);
+  const account = (await opened.json()) as { accessJwt?: string; did?: string };
+  if (account.accessJwt === undefined || account.did === undefined) {
+    throw new Error("bluesky returned no session");
+  }
+
+  // The video service is a different audience than the account's own server, so it takes a token of
+  // its own -- issued by that server, for that one method.
+  const granted = await http(
+    `${service}/xrpc/com.atproto.server.getServiceAuth?aud=did:web:video.bsky.app` +
+      `&lxm=app.bsky.video.uploadVideo`,
+    { headers: { authorization: `Bearer ${account.accessJwt}` } },
+  );
+  if (!granted.ok) throw new Error(`bluesky refused a video token: ${await said(granted)}`);
+  const issued = (await granted.json()) as { token?: string };
+  if (issued.token === undefined) throw new Error("bluesky returned no video token");
+
+  const name = `${safeName(request.title)}.mp4`;
+  const upload = await http(
+    `https://video.bsky.app/xrpc/app.bsky.video.uploadVideo` +
+      `?did=${encodeURIComponent(account.did)}&name=${encodeURIComponent(name)}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${issued.token}`,
+        "content-type": request.contentType ?? "video/mp4",
+      },
+      body: request.bytes as unknown as BodyInit,
+    },
+  );
+  if (!upload.ok) throw new Error(`bluesky rejected the video: ${await said(upload)}`);
+  const job = (await upload.json()) as { jobStatus?: { jobId?: string; blob?: unknown } };
+  const blob = await processed(job.jobStatus, http);
+
+  const posted = await http(`${service}/xrpc/com.atproto.repo.createRecord`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${account.accessJwt}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      repo: account.did,
+      collection: "app.bsky.feed.post",
+      record: {
+        $type: "app.bsky.feed.post",
+        // Three hundred graphemes is the whole post, so the title leads and the description
+        // follows it for as far as there is room.
+        text: caption(request).slice(0, 300),
+        createdAt: new Date().toISOString(),
+        embed: { $type: "app.bsky.embed.video", video: blob },
+      },
+    }),
+  });
+  if (!posted.ok) throw new Error(`bluesky refused the post: ${await said(posted)}`);
+  const record = (await posted.json()) as { uri?: string };
+  const rkey = record.uri?.split("/").pop();
+  const handle = settings.handle ?? account.did;
+  return {
+    ...(record.uri === undefined ? {} : { id: record.uri }),
+    ...(rkey === undefined ? {} : { url: `https://bsky.app/profile/${handle}/post/${rkey}` }),
+  };
+}
+
+/**
+ * Telegram: one request to a bot.
+ *
+ * The shortest publisher here, and the one that answers "send it to the team" rather than "publish
+ * it to the world": a chat id is a person, a group or a channel, and the bot has to be in it.
+ */
+async function toTelegram(request: PublishRequest, http: Fetch): Promise<PublishResult> {
+  const { secrets, settings } = request.destination;
+  const form = new FormData();
+  form.set("chat_id", settings.chatId ?? "");
+  form.set("caption", caption(request).slice(0, 1024));
+  form.set("video", videoBlob(request), `${safeName(request.title)}.mp4`);
+
+  const sent = await http(`https://api.telegram.org/bot${secrets.botToken ?? ""}/sendVideo`, {
+    method: "POST",
+    body: form,
+  });
+  if (!sent.ok) throw new Error(`telegram refused the video: ${await said(sent)}`);
+  const answer = (await sent.json()) as { result?: { message_id?: number } };
+  const id = answer.result?.message_id;
+  return id === undefined ? {} : { id: String(id) };
+}
+
+/** A Facebook Page, with that Page's own token: the Graph API takes the file in one form. */
+async function toFacebook(request: PublishRequest, http: Fetch): Promise<PublishResult> {
+  const { secrets, settings } = request.destination;
+  const form = new FormData();
+  form.set("title", request.title);
+  if (request.description !== undefined) form.set("description", request.description);
+  // Unpublished unless the destination says otherwise, for the same reason every other default
+  // here is private.
+  form.set("published", settings.published ?? "false");
+  form.set("access_token", secrets.pageToken ?? "");
+  form.set("source", videoBlob(request), `${safeName(request.title)}.mp4`);
+
+  const sent = await http(
+    `https://graph.facebook.com/v21.0/${encodeURIComponent(settings.pageId ?? "me")}/videos`,
+    { method: "POST", body: form },
+  );
+  if (!sent.ok) throw new Error(`facebook refused the video: ${await said(sent)}`);
+  const created = (await sent.json()) as { id?: string };
+  return created.id === undefined
+    ? {}
+    : { id: created.id, url: `https://www.facebook.com/${created.id}` };
+}
+
+// An instance address as a base URL: typed with or without a scheme, and never with a trailing
+// slash. Somebody types "chaos.social", and a destination that only worked when they typed the
+// scheme would be a destination that fails at the moment a video is waiting.
+function instanceUrl(raw: string | undefined): string {
+  const given = (raw ?? "").trim().replace(/\/+$/, "");
+  if (given === "") return "";
+  return /^https?:\/\//.test(given) ? given : `https://${given}`;
+}
+
+function videoBlob(request: PublishRequest): Blob {
+  return new Blob([request.bytes as unknown as BlobPart], {
+    type: request.contentType ?? "video/mp4",
+  });
+}
+
+// What the post says, where the platform is one that posts rather than one that hosts.
+function caption(request: PublishRequest): string {
+  return [request.title, request.description].filter((line) => line !== undefined && line !== "").join("\n\n");
+}
+
+/** Mastodon answers 202 while it is still transcoding and 200 once the file can be attached. */
+async function settled(
+  url: string,
+  auth: Record<string, string>,
+  http: Fetch,
+  tries = 30,
+): Promise<void> {
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    const asked = await http(url, { headers: auth });
+    if (asked.status === 200) return;
+    if (!asked.ok) throw new Error(`mastodon lost the file: ${await said(asked)}`);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error("mastodon is still transcoding after a minute");
+}
+
+/** The video service answers with a job; the blob it becomes is what a post can carry. */
+async function processed(
+  status: { jobId?: string; blob?: unknown } | undefined,
+  http: Fetch,
+  tries = 60,
+): Promise<unknown> {
+  if (status?.blob !== undefined) return status.blob;
+  const jobId = status?.jobId;
+  if (jobId === undefined) throw new Error("bluesky returned no upload job");
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    const asked = await http(
+      `https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=${encodeURIComponent(jobId)}`,
+    );
+    if (!asked.ok) throw new Error(`bluesky lost the upload: ${await said(asked)}`);
+    const job = (await asked.json()) as {
+      jobStatus?: { state?: string; blob?: unknown; error?: string };
+    };
+    if (job.jobStatus?.blob !== undefined) return job.jobStatus.blob;
+    if (job.jobStatus?.state === "JOB_STATE_FAILED") {
+      throw new Error(
+        `bluesky could not process the video: ${job.jobStatus.error ?? "no reason given"}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error("bluesky is still processing the video after two minutes");
 }
 
 /**

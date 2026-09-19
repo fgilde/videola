@@ -195,7 +195,25 @@ annimmt — einmal eingerichtet und danach benutzt.
 |---|---|---|
 | `youtube` | `clientId`, `clientSecret`, `refreshToken` | ein fortsetzbarer Upload über die Data API |
 | `vimeo` | `accessToken` | ein tus-Upload ins Konto |
+| `peertube` | `accessToken`, dazu `instance` und `channelId` | lädt auf eine beliebige PeerTube-Instanz |
+| `mastodon` | `accessToken`, dazu `instance` | hängt das Video an einen Beitrag |
+| `bluesky` | `appPassword`, dazu `handle` | postet über den Videodienst des AT-Protokolls |
+| `telegram` | `botToken`, dazu `chatId` | schickt es als Video in einen Chat oder Kanal |
+| `facebook` | `pageToken`, dazu `pageId` | lädt es auf eine Seite, standardmäßig unveröffentlicht |
 | `webhook` | `url` | schickt die Datei als Formular, mit Kopfzeilen Ihrer Wahl |
+
+Was bewusst **nicht** dabei ist: Instagram und TikTok. Instagrams Veröffentlichungs-API bekommt eine
+URL und holt sich das Video selbst — ein Server, den von außen niemand erreicht, kann das nicht
+bedienen. TikTok verlangt eine geprüfte Entwickleranwendung, bevor überhaupt etwas anderes als ein
+Entwurfsordner erreichbar ist. Beides wäre ein Knopf, der bei fast jedem, der ihn drückt, fehlschlägt.
+
+Die kürzeste Einrichtung auf der Liste ist **Bluesky**: ein App-Passwort aus den eigenen
+Kontoeinstellungen, kein Entwicklerkonto, keine Freigabe. Danach kommt **PeerTube** — freie Software
+auf einer Maschine, die jemandem gehört, ohne Kontingent und ohne Firma dazwischen.
+
+Im Dialog stehen die eingerichteten Ziele als Liste, jedes unter seinem eigenen Zeichen; **Neues
+Ziel** und **Bearbeiten** öffnen dasselbe Formular. Ein Geheimnis wird dabei nie zurückgelesen: Beim
+Bearbeiten bleiben die Felder leer, und ein leeres Feld heißt „so lassen“.
 
 ### Mit dem Konto anmelden statt Token abtippen
 
