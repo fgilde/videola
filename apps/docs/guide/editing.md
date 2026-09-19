@@ -386,6 +386,12 @@ The name in the header is the field: click it and type. V3 says nothing about wh
 is on it, and a rename that lives only in a context menu is a rename nobody finds. A typed name is
 one undo step, not one per letter.
 
+The name has the header row to itself, and the row under it says what the track is — until the
+pointer arrives, when the buttons take that row over: out of the picture, locked, taller, shorter,
+gone. Five of them standing on every header all the time is the loudest thing in a column of eight
+rows, and every one of them answers a question about the row under the hand. On a touch screen
+they are simply there, because a finger hovers nothing.
+
 The eye beside the padlock takes the row out of the picture. The clips stay where they are, the
 preview and the export leave them out, and the row goes quiet so the reason is on screen rather
 than in a menu. It is how a stack of four graded layers is taken apart to see what each one does —
@@ -394,6 +400,19 @@ and unlike deleting the row to look, it is one click back.
 On a sound track the same button is a loudspeaker and mutes the row, which is the same flag the
 mixer's **M** sets. A sound track paints nothing, and an eye on it would promise something it
 cannot do.
+
+### Names for what Videola makes itself
+
+A row somebody asks for is V1, A2, T3 — theirs to name. A row that arrives with something already
+on it says what that is: a lyric video lays down **Songtext** and **Lyric-Video**, and a visualiser
+with it **Visualizer**; imported subtitles land on **Untertitel**; an insert names its row after
+what was inserted. A template's rows carry the template's own names — background, title, kicker —
+and a name the project already uses is numbered rather than repeated.
+
+The same goes for what stands on them. A clip nobody has named says what it is rather than "unnamed":
+a title says its own first line, a colour field says it is one, a visualiser says so. Sixty clips
+reading "unnamed" is a timeline that has to be clicked through to be read at all, which is what a
+lyric video looked like. A name somebody types beats all of it.
 
 ### Carrying a medium over
 

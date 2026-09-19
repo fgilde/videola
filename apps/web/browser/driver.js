@@ -114,6 +114,8 @@ async function announce() {
   // And one for the dialogue that turns a song into a video, on an editor with nothing on its
   // timeline -- which is where the refusal this run exists for came from.
   const singing = location.search.includes("lyrics");
+  // And one for the page somebody reads once and then never again: how an agent gets in.
+  const wiring = location.search.includes("mcp");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2775,6 +2777,18 @@ async function announce() {
     await sleep(300);
     check("and puts it back", q(`[data-track-id="${id}"]`).hasAttribute("data-hidden"), false);
 
+    // The field and the buttons are on rows of their own now. Measured rather than asserted about
+    // the markup: what was wrong was pixels, an input lying across an eye.
+    const header = q(`[data-header-for="${id}"]`);
+    const nameBox = q(`[data-track-name="${id}"]`).getBoundingClientRect();
+    const toolBox = header.querySelector(".v-timeline__headerTools").getBoundingClientRect();
+    check("the name field and the row's buttons do not overlap",
+      Math.round(nameBox.bottom) <= Math.round(toolBox.top) + 1, true);
+    checkAtLeast("and the name has the width of the column to itself", nameBox.width, 100);
+    check("both stay inside the header",
+      Math.round(nameBox.top) >= Math.round(header.getBoundingClientRect().top) - 1
+      && Math.round(toolBox.bottom) <= Math.round(header.getBoundingClientRect().bottom) + 1, true);
+
     // Which project is open and whether it holds the work, over the middle of the bar. Measured,
     // because "centred" is a claim about pixels and nothing else can check it.
     const bar = q(".v-topbar").getBoundingClientRect();
@@ -2821,8 +2835,15 @@ async function announce() {
     await sleep(250);
   }
 
+  /** The same entry on a fresh editor, left standing for the picture. */
+  async function runMcp() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    await mcpHelp({ leaveOpen: true });
+    await sleep(400);
+  }
+
   /** The Help entry that says how an agent gets at all of this. */
-  async function mcpHelp() {
+  async function mcpHelp({ leaveOpen = false } = {}) {
     pickMenu("KI-Anbindung (MCP)");
     const dialog = await until("the MCP dialogue", () => q('[data-testid="mcp"]'));
     const written = JSON.parse(q('[data-testid="mcp-config"]').textContent);
@@ -2830,6 +2851,7 @@ async function announce() {
       [written.mcpServers.videola.command, written.mcpServers.videola.args[0].endsWith("mcp.mjs")],
       ["node", true]);
     check("and says where it goes", dialog.textContent.includes("claude_desktop_config.json"), true);
+    if (leaveOpen) return;
     dialog.close();
     await sleep(200);
     check("opening the MCP help raised nothing", banner(), "");
@@ -3456,6 +3478,16 @@ async function announce() {
     check("a lyric video can be made before the song is on the timeline", banner(), "");
     checkAtLeast("and the lines land all the same", all("[data-clip-id]").length, 3);
 
+    // A row called "Ü2" says nothing about which of two overlays carries the words. Videola names
+    // the rows it makes itself after what is on them.
+    const rowNames = all("[data-track-name]").map((field) => field.value);
+    check("the rows it made say what is on them",
+      ["Songtext", "Lyric-Video"].every((name) => rowNames.includes(name)), true);
+    // And the lines say themselves rather than "Ohne Namen", which is what sixty of them looked
+    // like before.
+    const labels = all(".v-clip__label").map((node) => node.textContent);
+    check("and no clip on them reads as unnamed", labels.includes("Ohne Namen"), false);
+
     // Open again for the picture at the end of the budget: the styles are the half of this
     // dialogue worth looking at.
     pickMenu("Lyric-Video …");
@@ -3479,7 +3511,9 @@ async function announce() {
   pickFixture()
     .then(announce)
     .then(() =>
-      singing
+      wiring
+        ? runMcp()
+        : singing
         ? runLyrics()
         : publishing
         ? runDestinations()

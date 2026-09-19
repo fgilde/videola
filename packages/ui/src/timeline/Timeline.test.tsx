@@ -126,6 +126,40 @@ describe("Timeline", () => {
     expect(screen.getByText("Ohne Namen")).toBeTruthy();
   });
 
+  // Sixty clips reading "Ohne Namen" is a timeline nobody can read without clicking through it,
+  // which is what a lyric video looked like. Nothing is renamed for this: what a drawn clip is
+  // says itself.
+  it("says what a drawn clip is when nobody has named it", () => {
+    const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND);
+    renderTimeline(
+      <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
+    );
+
+    expect(screen.getByText("Farbfläche")).toBeTruthy();
+  });
+
+  it("puts a title's own first line on it, cut where it stops being readable", () => {
+    const line = "Wir sind hier, und wir bleiben";
+    const title = makeClip("clp_1", 0, FLICKS_PER_SECOND, {
+      source: { kind: "generator", generator: { type: "text", content: `${line}
+zweite Zeile`, style: {} } },
+    } as Partial<Clip>);
+    renderTimeline(
+      <Timeline project={makeProject([makeTrack("trk_1", [title])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
+    );
+
+    expect(screen.getByText(line)).toBeTruthy();
+  });
+
+  it("keeps a name somebody typed over anything it could work out itself", () => {
+    const clip = makeClip("clp_1", 0, FLICKS_PER_SECOND, { label: "Vorspann" } as Partial<Clip>);
+    renderTimeline(
+      <Timeline project={makeProject([makeTrack("trk_1", [clip])])} playhead={0} dispatch={() => {}} onSeek={() => {}} />,
+    );
+
+    expect(screen.getByText("Vorspann")).toBeTruthy();
+  });
+
   it("places the playhead at its pixel position", () => {
     const project = makeProject([makeTrack("trk_1")]);
     renderTimeline(<Timeline project={project} playhead={2 * FLICKS_PER_SECOND} dispatch={() => {}} onSeek={() => {}} />);

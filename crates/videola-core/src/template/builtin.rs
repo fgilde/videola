@@ -67,7 +67,7 @@ pub const PRODUCT: &str = "product";
 /// A colour field opening onto a shot. What it shows: a title growing in over a gradient, a
 /// subtitle rising under it, and the zoom transition handing the frame to the material.
 fn bold_open() -> Template {
-    let mut back = video_track("trk_back", "V1");
+    let mut back = video_track("trk_back", "Hintergrund");
     back.clips.push(gradient_clip(
         "clp_bg", 0.0, 3.6, "#2f6fed", "#101625", 155.0,
     ));
@@ -75,7 +75,7 @@ fn bold_open() -> Template {
     shot.transition_in = Some(zoom(0.6, 1.45));
     back.clips.push(shot);
 
-    let mut title = text_track("trk_title", "T1");
+    let mut title = text_track("trk_title", "Titel");
     title.clips.push(text_clip(
         "clp_title",
         0.3,
@@ -96,7 +96,7 @@ fn bold_open() -> Template {
         ],
     ));
 
-    let mut sub = text_track("trk_sub", "T2");
+    let mut sub = text_track("trk_sub", "Unterzeile");
     sub.clips.push(text_clip(
         "clp_sub",
         0.9,
@@ -174,17 +174,17 @@ fn bold_open() -> Template {
 /// A circle opening onto the picture. What it shows: a mask whose size is keyframed — the one way
 /// this version has of revealing a shot out of a shape rather than out of a fade.
 fn iris_open() -> Template {
-    let mut back = video_track("trk_back", "V1");
+    let mut back = video_track("trk_back", "Hintergrund");
     // A strong colour rather than near-black: a circle cut out of a dark field over a dark card is
     // a circle nobody can see, and the reveal is the whole of what this template is.
     back.clips.push(solid_clip("clp_back", 0.0, 4.6, "#2f6fed"));
 
-    let mut front = video_track("trk_front", "V2");
+    let mut front = video_track("trk_front", "Vordergrund");
     let mut shot = placeholder("clp_shot", 0.0, 4.6);
     shot.effects.push(iris("eff_iris", 0.2, 3.4));
     front.clips.push(shot);
 
-    let mut word = text_track("trk_word", "T1");
+    let mut word = text_track("trk_word", "Wort");
     word.clips.push(text_clip(
         "clp_word",
         0.7,
@@ -260,7 +260,7 @@ const SOFT_DISSOLVE: f64 = 0.6;
 /// a masked band that lifts the words off the picture, and a two-line lower caption that stays put
 /// while everything under it changes.
 fn soft_slideshow() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     for index in 0..4 {
         let mut clip = placeholder(
             &format!("clp_slide{}", index + 1),
@@ -274,14 +274,14 @@ fn soft_slideshow() -> Template {
     }
     let total = 3.0 * SOFT_STEP + SOFT_HOLD;
 
-    let mut band = overlay_track("trk_band", "O1");
+    let mut band = overlay_track("trk_band", "Balken");
     let mut bar = solid_clip("clp_band", 0.0, total, "#05070c");
     bar.transform.opacity = 0.82;
     bar.effects
         .push(band_mask("eff_band", 0.5, 0.885, 1.0, 0.30, 0.06));
     band.clips.push(bar);
 
-    let mut kicker = text_track("trk_kicker", "T1");
+    let mut kicker = text_track("trk_kicker", "Dachzeile");
     kicker.clips.push(text_clip(
         "clp_kicker",
         0.4,
@@ -301,7 +301,7 @@ fn soft_slideshow() -> Template {
         ],
     ));
 
-    let mut caption = text_track("trk_caption", "T2");
+    let mut caption = text_track("trk_caption", "Bildunterschrift");
     caption.clips.push(text_clip(
         "clp_caption",
         0.4,
@@ -379,7 +379,7 @@ const BEAT_WIPE: f64 = 0.25;
 /// Five pictures on a short beat. What it shows: the wipe, and that its angle is a parameter — each
 /// hand-over comes from a different edge, which is the difference between a transition and a tic.
 fn beat_slideshow() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     let angles = [0.0, 90.0, 180.0, 270.0];
     for index in 0..5 {
         let mut clip = placeholder(
@@ -394,7 +394,7 @@ fn beat_slideshow() -> Template {
     }
     let total = 4.0 * BEAT_STEP + BEAT_HOLD;
 
-    let mut word = text_track("trk_word", "T1");
+    let mut word = text_track("trk_word", "Wort");
     word.clips.push(text_clip(
         "clp_word",
         0.0,
@@ -464,7 +464,7 @@ const STORY_HOLD: f64 = 2.4;
 /// Three shots upright. What it shows: the slide transition, the fit filling a 9:16 frame with
 /// landscape material instead of putting it in bars, and a headline on its own box.
 fn story_vertical() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     for index in 0..3 {
         let mut clip = placeholder(
             &format!("clp_story{}", index + 1),
@@ -478,7 +478,7 @@ fn story_vertical() -> Template {
     }
     let total = 2.0 * STORY_STEP + STORY_HOLD;
 
-    let mut hook = text_track("trk_hook", "T1");
+    let mut hook = text_track("trk_hook", "Aufhänger");
     hook.clips.push(text_clip(
         "clp_hook",
         0.2,
@@ -496,7 +496,7 @@ fn story_vertical() -> Template {
         ],
     ));
 
-    let mut call = text_track("trk_call", "T2");
+    let mut call = text_track("trk_call", "Aufruf");
     call.clips.push(text_clip(
         "clp_call",
         total - 2.2,
@@ -574,20 +574,20 @@ fn story_vertical() -> Template {
 /// Two pictures, one frame. What it shows: a cover fit into half the frame and a rectangular mask
 /// holding it there — the pair is what makes a split that has no seam.
 fn split_screen() -> Template {
-    let mut upper = video_track("trk_top", "V1");
+    let mut upper = video_track("trk_top", "Oben");
     let mut top = placeholder("clp_top", 0.0, 5.0);
     top.effects
         .push(band_mask("eff_top", 0.5, 0.25, 1.0, 0.5, 0.0));
     upper.clips.push(top);
 
-    let mut lower = video_track("trk_bottom", "V2");
+    let mut lower = video_track("trk_bottom", "Unten");
     let mut bottom = placeholder("clp_bottom", 0.0, 5.0);
     bottom
         .effects
         .push(band_mask("eff_bottom", 0.5, 0.75, 1.0, 0.5, 0.0));
     lower.clips.push(bottom);
 
-    let mut middle = text_track("trk_word", "T1");
+    let mut middle = text_track("trk_word", "Wort");
     middle.clips.push(text_clip(
         "clp_word",
         0.0,
@@ -681,10 +681,10 @@ fn split_screen() -> Template {
 /// A name and a role over a shot. What it shows: a bar that slides in because its *mask* moves, not
 /// the clip — and two lines timed a fraction apart so they read as one gesture rather than a jump.
 fn lower_third() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     lane.clips.push(placeholder("clp_shot", 0.0, 6.0));
 
-    let mut band = overlay_track("trk_band", "O1");
+    let mut band = overlay_track("trk_band", "Balken");
     let mut bar = gradient_clip("clp_bar", 0.6, 4.2, "#2f6fed", "#101625", 0.0);
     let mut mask = band_mask("eff_bar", 0.30, 0.80, 0.56, 0.14, 0.0);
     mask.keyframes.insert(
@@ -694,7 +694,7 @@ fn lower_third() -> Template {
     bar.effects.push(mask);
     band.clips.push(bar);
 
-    let mut name = text_track("trk_name", "T1");
+    let mut name = text_track("trk_name", "Name");
     name.clips.push(text_clip(
         "clp_name",
         0.85,
@@ -713,7 +713,7 @@ fn lower_third() -> Template {
         ],
     ));
 
-    let mut role = text_track("trk_role", "T2");
+    let mut role = text_track("trk_role", "Rolle");
     role.clips.push(text_clip(
         "clp_role",
         1.0,
@@ -794,7 +794,7 @@ fn lower_third() -> Template {
 /// The way out. What it shows: a keyframed brightness taking the picture down to nothing, the dip
 /// transition handing over to a card, and two closing lines arriving a beat apart.
 fn end_card() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     let mut shot = placeholder("clp_shot", 0.0, 4.0);
     shot.effects
         .push(brightness_ramp("eff_out", 2.8, 1.0, 4.0, 0.1));
@@ -804,7 +804,7 @@ fn end_card() -> Template {
     card.transition_in = Some(dip(0.4));
     lane.clips.push(card);
 
-    let mut closing = text_track("trk_closing", "T1");
+    let mut closing = text_track("trk_closing", "Schlusswort");
     closing.clips.push(text_clip(
         "clp_closing",
         4.1,
@@ -820,7 +820,7 @@ fn end_card() -> Template {
         ],
     ));
 
-    let mut handle = text_track("trk_handle", "T2");
+    let mut handle = text_track("trk_handle", "Kanal");
     handle.clips.push(text_clip(
         "clp_handle",
         4.5,
@@ -899,15 +899,15 @@ fn end_card() -> Template {
 /// line across the frame, which nothing else in this set does — plus a vignette and a contained fit
 /// that leaves the product room to breathe.
 fn product_reveal() -> Template {
-    let mut back = video_track("trk_back", "V1");
+    let mut back = video_track("trk_back", "Hintergrund");
     let mut field = gradient_clip("clp_back", 0.0, 7.0, "#2f6fed", "#0a0d15", 135.0);
     field.effects.push(vignette("eff_vignette", 0.5, 0.72));
     back.clips.push(field);
 
-    let mut front = video_track("trk_front", "V2");
+    let mut front = video_track("trk_front", "Vordergrund");
     front.clips.push(placeholder("clp_shot", 0.5, 6.5));
 
-    let mut claim = text_track("trk_claim", "T1");
+    let mut claim = text_track("trk_claim", "Versprechen");
     let mut line = text_clip(
         "clp_claim",
         1.0,
@@ -932,7 +932,7 @@ fn product_reveal() -> Template {
     );
     claim.clips.push(line);
 
-    let mut price = text_track("trk_price", "T2");
+    let mut price = text_track("trk_price", "Preis");
     price.clips.push(text_clip(
         "clp_price",
         2.3,
@@ -1019,7 +1019,7 @@ fn product_reveal() -> Template {
 /// the number is drawn by the renderer from one field rather than typed as three text clips -- over a
 /// colour field, handing off to the material on a dip.
 fn countdown_open() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
 
     let mut field = gradient_clip("clp_field", 0.0, 3.4, "#101625", "#05070c", 160.0);
     field.effects.push(vignette("eff_vignette", 0.45, 0.8));
@@ -1032,7 +1032,7 @@ fn countdown_open() -> Template {
     // The generator counts down on its own: one clip, one number, and the renderer does the rest.
     // Three text clips would be three clips to keep in step and a count that could disagree with its
     // own length.
-    let mut numbers = overlay_track("trk_count", "O1");
+    let mut numbers = overlay_track("trk_count", "Zähler");
     numbers.clips.push(generator_clip(
         "clp_count",
         0.2,
@@ -1040,7 +1040,7 @@ fn countdown_open() -> Template {
         Generator::Countdown { from_seconds: 3 },
     ));
 
-    let mut label = text_track("trk_label", "T1");
+    let mut label = text_track("trk_label", "Beschriftung");
     label.clips.push(text_clip(
         "clp_label",
         0.4,
@@ -1110,7 +1110,7 @@ fn countdown_open() -> Template {
 /// can be read off it, a large quotation that rises in, and a source line that follows -- the
 /// commonest single card in the trade and the one this set was missing.
 fn quote_card() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     let mut shot = placeholder("clp_shot", 0.0, 6.0);
     // Dimmed rather than covered by a black rectangle: the picture stays a picture, and type over it
     // is readable because the picture gave way, not because something was laid on top of it.
@@ -1119,7 +1119,7 @@ fn quote_card() -> Template {
     shot.effects.push(vignette("eff_vignette", 0.4, 0.85));
     lane.clips.push(shot);
 
-    let mut words = text_track("trk_quote", "T1");
+    let mut words = text_track("trk_quote", "Zitat");
     words.clips.push(text_clip(
         "clp_quote",
         1.0,
@@ -1136,7 +1136,7 @@ fn quote_card() -> Template {
         ],
     ));
 
-    let mut source = text_track("trk_source", "T2");
+    let mut source = text_track("trk_source", "Quelle");
     source.clips.push(text_clip(
         "clp_source",
         1.9,
@@ -1206,10 +1206,10 @@ fn quote_card() -> Template {
 /// animated -- the edge travels across the frame rather than a transition doing it -- so both
 /// pictures are on screen for the whole shot instead of one replacing the other.
 fn before_after() -> Template {
-    let mut under = video_track("trk_before", "V1");
+    let mut under = video_track("trk_before", "Vorher");
     under.clips.push(placeholder("clp_before", 0.0, 6.0));
 
-    let mut over = video_track("trk_after", "V2");
+    let mut over = video_track("trk_after", "Nachher");
     let mut after = placeholder("clp_after", 0.0, 6.0);
     // A band that starts off the left edge and ends off the right one. The mask travels; nothing is
     // cut, so both pictures are there the whole time and the edge between them is the story.
@@ -1221,7 +1221,7 @@ fn before_after() -> Template {
     after.effects.push(band);
     over.clips.push(after);
 
-    let mut marks = text_track("trk_marks", "T1");
+    let mut marks = text_track("trk_marks", "Markierungen");
     marks.clips.push(text_clip(
         "clp_before_label",
         0.4,
@@ -1315,12 +1315,12 @@ fn before_after() -> Template {
 /// Somebody talking, cut once. What it shows: the plainest thing in this set and the one most edits
 /// actually are -- two angles, a hard cut between them, and a name that arrives once and leaves.
 fn interview() -> Template {
-    let mut lane = video_track("trk_main", "V1");
+    let mut lane = video_track("trk_main", "Bild");
     lane.clips.push(placeholder("clp_wide", 0.0, 4.0));
     lane.clips.push(placeholder("clp_close", 4.0, 4.0));
 
     // A band along the bottom, dark enough to read a name off whatever is behind it.
-    let mut plate = overlay_track("trk_plate", "O1");
+    let mut plate = overlay_track("trk_plate", "Platte");
     let mut bar = solid_clip("clp_plate", 0.8, 3.2, "#0b0e16");
     bar.transform.scale_y = 0.14;
     bar.transform.y = 340.0;
@@ -1329,7 +1329,7 @@ fn interview() -> Template {
     bar.fades.out_duration = Time::from_seconds(0.4);
     plate.clips.push(bar);
 
-    let mut name = text_track("trk_name", "T1");
+    let mut name = text_track("trk_name", "Name");
     name.clips.push(text_clip(
         "clp_name",
         1.0,
@@ -1347,7 +1347,7 @@ fn interview() -> Template {
         ],
     ));
 
-    let mut role = text_track("trk_role", "T2");
+    let mut role = text_track("trk_role", "Rolle");
     role.clips.push(text_clip(
         "clp_role",
         1.2,
@@ -1437,7 +1437,7 @@ const PLACEHOLDER: &str = "med_awaiting_a_slot_answer";
 /// anything, and a title sequence does not have any.
 fn title_cards() -> Template {
     let lane = {
-        let mut lane = video_track("trk_field", "V1");
+        let mut lane = video_track("trk_field", "Feld");
         let mut field = gradient_clip("clp_field", 0.0, 6.7, "#141a2c", "#070a12", 200.0);
         field.effects.push(vignette("eff_vignette", 0.4, 0.85));
         lane.clips.push(field);
@@ -1446,7 +1446,7 @@ fn title_cards() -> Template {
 
     // One track and three clips rather than three tracks: they follow one another, and a card
     // overlapping the next would be two lines on the screen at once.
-    let mut cards = text_track("trk_cards", "T1");
+    let mut cards = text_track("trk_cards", "Karten");
     for (index, (id, words, at)) in [
         ("clp_one", "ERSTENS", 0.2),
         ("clp_two", "ZWEITENS", 2.2),
@@ -1480,7 +1480,7 @@ fn title_cards() -> Template {
         cards.clips.push(card);
     }
 
-    let mut counter = text_track("trk_step", "T2");
+    let mut counter = text_track("trk_step", "Schritt");
     counter.clips.push(text_clip(
         "clp_step",
         0.2,
@@ -1561,7 +1561,7 @@ fn title_cards() -> Template {
 /// at the top and a call to action along the bottom.
 fn social_hook() -> Template {
     let lane = {
-        let mut lane = video_track("trk_field", "V1");
+        let mut lane = video_track("trk_field", "Feld");
         lane.clips.push(gradient_clip(
             "clp_field",
             0.0,
@@ -1573,7 +1573,7 @@ fn social_hook() -> Template {
         lane
     };
 
-    let mut disc = overlay_track("trk_disc", "O1");
+    let mut disc = overlay_track("trk_disc", "Scheibe");
     let mut badge = generator_clip(
         "clp_disc",
         0.4,
@@ -1591,7 +1591,7 @@ fn social_hook() -> Template {
     // and a shape generator carries no move of its own. What arrives is the type on top of it.
     disc.clips.push(badge);
 
-    let mut words = text_track("trk_words", "T1");
+    let mut words = text_track("trk_words", "Worte");
     words.clips.push(text_clip(
         "clp_hook",
         0.2,
@@ -1608,7 +1608,7 @@ fn social_hook() -> Template {
         ],
     ));
 
-    let mut middle = text_track("trk_middle", "T2");
+    let mut middle = text_track("trk_middle", "Mittelzeile");
     middle.clips.push(text_clip(
         "clp_middle",
         0.9,
@@ -1624,7 +1624,7 @@ fn social_hook() -> Template {
         ],
     ));
 
-    let mut call = text_track("trk_call", "T3");
+    let mut call = text_track("trk_call", "Aufruf");
     call.clips.push(text_clip(
         "clp_call",
         1.6,

@@ -1,7 +1,10 @@
 /* A native dialog, so the browser owns the focus trap, the Escape key and the backdrop. What is
    styled here is only what it looks like. */
 .v-about {
-  width: min(460px, calc(100vw - 2 * var(--v-space-4)));
+  /* The same width the other panels have. A dialogue that is its own size reads as a dialogue from
+     another application, which is exactly what this one looked like. */
+  width: min(30rem, calc(100vw - 2 * var(--v-space-4)));
+  max-height: calc(100dvh - 2 * var(--v-space-4));
   /* No padding of its own: the head carries its own plate to the edges, and a band inset by the
      dialogue's padding is a band with a gap around it. */
   padding: 0;
@@ -25,7 +28,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--v-space-3);
-  padding: var(--v-space-4) var(--v-space-5);
+  padding: var(--v-space-5);
   background: linear-gradient(135deg, #05060a 0%, #05060a 55%, color-mix(in srgb, var(--v-accent) 45%, #05060a) 100%);
   border-bottom: 1px solid var(--v-border);
 }
@@ -52,15 +55,17 @@
 .v-about__what {
   margin: 0;
   padding: var(--v-space-4) var(--v-space-5) 0;
-  font-size: var(--v-text-sm);
+  /* One sentence, and the first thing anybody reads here: at the small size it was set in, it read
+     as a caption under the logo rather than as the answer to "what is this". */
+  font-size: var(--v-text-md);
   line-height: var(--v-leading);
-  color: var(--v-text-muted);
+  color: var(--v-text);
 }
 
 .v-about__links {
   display: flex;
   flex-direction: column;
-  margin: var(--v-space-4) var(--v-space-5) 0;
+  margin: var(--v-space-5) var(--v-space-5) 0;
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-md);
   overflow: hidden;
@@ -76,7 +81,7 @@
   padding: 0 var(--v-space-3);
   background: var(--v-surface);
   color: var(--v-text);
-  font-size: var(--v-text-sm);
+  font-size: var(--v-text-md);
   text-decoration: none;
 }
 
@@ -114,7 +119,7 @@
   justify-content: space-between;
   gap: var(--v-space-3);
   flex-wrap: wrap;
-  margin-top: var(--v-space-4);
+  margin-top: var(--v-space-5);
   padding: var(--v-space-3) var(--v-space-5);
   background: var(--v-surface);
   border-top: 1px solid var(--v-border);

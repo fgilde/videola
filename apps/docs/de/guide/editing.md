@@ -410,6 +410,12 @@ Der Name im Spurkopf ist das Eingabefeld: anklicken und tippen. V3 sagt nichts d
 drei Takes darauf liegt, und ein Umbenennen, das nur im Kontextmenü wohnt, findet niemand. Ein
 getippter Name ist ein Undo-Schritt, nicht einer pro Buchstabe.
 
+Der Name hat die obere Zeile des Kopfes für sich, darunter steht die Art der Spur — bis der Zeiger
+kommt, dann übernehmen die Knöpfe diese Zeile: aus dem Bild, gesperrt, höher, niedriger, weg. Fünf
+davon dauerhaft auf jedem Spurkopf sind das Lauteste in einer Spalte aus acht Zeilen, und jeder
+beantwortet eine Frage über die Spur unter der Hand. Auf dem Touchscreen stehen sie einfach da —
+ein Finger schwebt über nichts.
+
 Das Auge neben dem Schloss nimmt die Spur aus dem Bild. Die Clips bleiben liegen, Vorschau und
 Export lassen sie weg, und die Zeile wird still, damit der Grund auf dem Schirm steht statt in
 einem Menü. So nimmt man vier übereinanderliegende Ebenen auseinander, um zu sehen, was jede tut —
@@ -418,6 +424,20 @@ und anders als beim Löschen zum Nachsehen ist es ein Klick zurück.
 Auf einer Tonspur ist derselbe Knopf ein Lautsprecher und schaltet die Spur stumm — dieselbe
 Markierung, die auch das **M** im Mischer setzt. Eine Tonspur malt kein Bild, und ein Auge darauf
 verspräche etwas, das es nicht halten kann.
+
+### Namen für das, was Videola selbst anlegt
+
+Eine Spur, die jemand anlegt, heißt V1, A2, T3 — die gehört ihm, die benennt er selbst. Eine Spur,
+die schon gefüllt ankommt, sagt womit: ein Lyric-Video legt **Songtext** und **Lyric-Video** an, ein
+Visualizer dazu **Visualizer**; importierte Untertitel landen auf **Untertitel**; ein Einfügen
+benennt seine Spur nach dem, was eingefügt wurde. Die Spuren einer Vorlage tragen deren eigene Namen
+— Hintergrund, Titel, Dachzeile —, und ein Name, den das Projekt schon führt, wird nummeriert statt
+doppelt vergeben.
+
+Dasselbe gilt für das, was darauf liegt. Ein Clip, den niemand benannt hat, sagt, was er ist, statt
+„Ohne Namen“: ein Titel seine erste Zeile, eine Farbfläche, dass sie eine ist, ein Visualizer, dass
+er einer ist. Sechzig Clips mit „Ohne Namen“ sind eine Zeitleiste, die man durchklicken muss, um sie
+zu lesen — genau so sah ein Lyric-Video aus. Ein selbst getippter Name schlägt das alles.
 
 ### Ein Medium herübertragen
 

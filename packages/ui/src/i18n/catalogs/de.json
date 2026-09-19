@@ -786,5 +786,13 @@
   "mcp.note": "Der Server läuft auf diesem Rechner und sieht nur, was unter VIDEOLA_STORAGE_ROOT liegt. Er lauscht auf keinem Port.",
   "mcp.docs": "Alle Werkzeuge in der Dokumentation",
   "track.mute": "{name} stumm schalten",
-  "track.unmute": "{name} wieder hörbar machen"
+  "track.unmute": "{name} wieder hörbar machen",
+  "generator.text": "Titel",
+  "generator.solid": "Farbfläche",
+  "generator.shape": "Form",
+  "generator.gradient": "Verlauf",
+  "generator.countdown": "Vorlauf",
+  "generator.visualizer": "Visualizer",
+  "generator.lyrics": "Lyric-Video",
+  "track.auto.lyrics": "Songtext"
 }

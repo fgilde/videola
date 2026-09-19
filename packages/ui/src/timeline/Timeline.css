@@ -44,7 +44,7 @@
   position: sticky;
   left: 0;
   z-index: 2;
-  width: 140px;
+  width: 160px;
   background: var(--v-bg-elevated);
   border-right: 1px solid var(--v-border);
 }
@@ -59,16 +59,18 @@
      sight, the header column is sticky and keeps showing it. */
   border-left: 3px solid transparent;
   display: grid;
-  /* The name and the kind stack in the first column, the lock sits beside both. A flex column with
-     the lock in it would put the lock under the words and grow the row. */
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Two rows, both the full width. The name had shared its row with five buttons, which left it
+     about twenty pixels and a field overlapping an eye. Now it has the row to itself, and the
+     second row carries what the track is -- with the buttons taking that row over while the
+     pointer is on the header. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "name lock"
-    "kind lock";
+    "name"
+    "meta";
   align-content: center;
   align-items: center;
-  gap: 1px var(--v-space-1);
-  padding: 0 var(--v-space-2) 0 var(--v-space-3);
+  gap: 2px;
+  padding: 0 var(--v-space-2);
   border-bottom: 1px solid var(--v-border);
   overflow: hidden;
 }
@@ -83,12 +85,11 @@
 }
 
 .v-timeline__lock {
-  grid-area: lock;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   background: none;
   border: none;
@@ -102,8 +103,8 @@
 }
 
 .v-timeline__lock .v-icon {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .v-timeline__lock:hover {
@@ -142,24 +143,18 @@
   opacity: 0.35;
 }
 
-.v-timeline__headerName {
-  grid-area: name;
-  color: var(--v-text);
-  font-size: var(--v-text-sm);
-  font-weight: var(--v-weight-strong);
-  line-height: var(--v-leading-tight);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-}
-
 .v-timeline__headerKind {
-  grid-area: kind;
+  grid-area: meta;
+  min-width: 0;
   color: var(--v-text-muted);
   font-size: var(--v-text-xs);
   line-height: var(--v-leading-tight);
   text-transform: uppercase;
   letter-spacing: var(--v-tracking-wide);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--v-transition);
 }
 
 .v-timeline__scroll {
@@ -815,11 +810,43 @@
 
 /* The height steps. Stacked beside the lock, small on purpose: they are set once for a session and
    read never, which is the opposite of the lock next to them. */
+/* The controls share the second row with the kind and take it over on the way past. Five buttons
+   standing on every header all the time is the loudest thing in a column of eight rows, and the
+   question they answer -- lock it, hide it, resize it, drop it -- is one somebody asks of the row
+   under the pointer. Hidden, not gone: they keep their place in the layout and in the reading
+   order, and a keyboard brings them back through :focus-within. */
 .v-timeline__headerTools {
-  grid-area: lock;
+  grid-area: meta;
+  justify-self: end;
   display: flex;
   align-items: center;
-  gap: var(--v-space-1);
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--v-transition);
+}
+
+.v-timeline__header:hover .v-timeline__headerTools,
+.v-timeline__header:focus-within .v-timeline__headerTools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.v-timeline__header:hover .v-timeline__headerKind,
+.v-timeline__header:focus-within .v-timeline__headerKind {
+  opacity: 0;
+}
+
+/* A finger hovers nothing. There the buttons are simply there, and the kind gives up its row. */
+@media (pointer: coarse) {
+  .v-timeline__headerTools {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .v-timeline__headerKind {
+    display: none;
+  }
 }
 
 /* The same button the lock is, because they are the same kind of control: what this row is, not
@@ -828,8 +855,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   background: none;
   border: none;
@@ -865,7 +892,8 @@
 }
 
 .v-timeline__sizeStep {
-  min-width: 18px;
+  min-width: 16px;
+  height: 20px;
   padding: 0;
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-sm);
@@ -889,26 +917,35 @@
   }
 }
 
-/* The name is a field now, so it has to read as a label until somebody types in it. */
+/* The name is a field now, and it has to read as a label until somebody types in it: no box, no
+   fill, and the same weight the label had. The frame appears under the pointer, which is the whole
+   of "you can change this". */
 .v-timeline__headerName {
+  grid-area: name;
   width: 100%;
   min-width: 0;
-  padding: 1px 4px;
+  height: 20px;
+  padding: 0 4px;
   background: none;
   border: 1px solid transparent;
   border-radius: var(--v-radius-sm);
-  color: inherit;
+  color: var(--v-text);
   font: inherit;
-  font-weight: 600;
+  font-size: var(--v-text-sm);
+  font-weight: var(--v-weight-strong);
+  line-height: var(--v-leading-tight);
+  text-overflow: ellipsis;
 }
 
-.v-timeline__headerName:hover {
+.v-timeline__header:hover .v-timeline__headerName {
   border-color: var(--v-border);
 }
 
+.v-timeline__headerName:focus,
 .v-timeline__headerName:focus-visible {
   background: var(--v-surface);
   border-color: var(--v-accent);
+  outline: none;
 }
 
 /* A row taken out of the picture goes quiet: its clips are still there to be dragged, and the

@@ -139,6 +139,8 @@ import {
   Timeline,
   Transport,
   UpdateOffer,
+  namedTrack,
+  say,
   useI18n,
   useLayoutMode,
   type EditMode,
@@ -822,11 +824,11 @@ export function App(): ReactElement {
               text: line.text,
             }));
 
-        const captions = added(doc, "caption", nextTrackName(doc, "caption"), key);
+        const captions = added(doc, "caption", namedTrack(doc.state, say("track.auto.lyrics")), key);
         if (captions === undefined) return;
         for (const command of captionClips(captions.id, cues)) doc.dispatch(command, key);
 
-        const overlay = added(doc, "overlay", nextTrackName(doc, "overlay"), key);
+        const overlay = added(doc, "overlay", namedTrack(doc.state, say("generator.lyrics")), key);
         if (overlay !== undefined) {
           doc.dispatch(
             cmd.clipAdd(
@@ -853,7 +855,7 @@ export function App(): ReactElement {
         }
 
         if (draft.withVisualizer) {
-          const behind = added(doc, "overlay", nextTrackName(doc, "overlay"), key);
+          const behind = added(doc, "overlay", namedTrack(doc.state, say("generator.visualizer")), key);
           if (behind !== undefined) {
             doc.dispatch(
               cmd.clipAdd(
@@ -1316,7 +1318,7 @@ export function App(): ReactElement {
       try {
         const laid = insert(kind, text);
         const key = `insert-${kind}-${(actionSequence += 1)}`;
-        const track = freeTrack(doc, laid.track, playhead, laid.duration, key);
+        const track = freeTrack(doc, laid.track, playhead, laid.duration, key, say(`insert.${kind}`));
         if (track === undefined) return;
         doc.dispatch(cmd.clipAdd(track, laid.source, playhead, laid.duration), key);
         setError(undefined);
@@ -2032,7 +2034,9 @@ export function App(): ReactElement {
             // in when a slot is answered, and inserting nothing should not leave a bare track behind.
             for (const track of backend.state().timeline.tracks) {
               if (track.clips.length === 0) continue;
-              holder.dispatch(cmd.trackAdd(track.kind, track.name), key);
+              // The template's own name for the row, kept apart from what the project already
+              // has: two rows called "Titel" in one timeline is the thing names are meant to fix.
+              holder.dispatch(cmd.trackAdd(track.kind, namedTrack(holder.state, track.name)), key);
               // The track the core just minted, read back rather than guessed: ids are the core's to
               // hand out, and `trackAdd` without an index appends.
               const made = holder.state.timeline.tracks.at(-1);
@@ -2105,10 +2109,7 @@ export function App(): ReactElement {
             reportError("caption.none", new Error(file.name));
             continue;
           }
-          // A short code like every other track this file creates, not a translated phrase: `App`
-          // renders the shell that carries the i18n provider, so it stands above it and has no `t`
-          // -- and the header beside the name already says "Untertitel" in the reader's language.
-          const track = added(doc, "caption", `C${doc.state.timeline.tracks.length + 1}`);
+          const track = added(doc, "caption", namedTrack(doc.state, say("track.kind.caption")));
           if (track === undefined) continue;
           const key = `captions-${file.name}-${Date.now()}`;
           for (const command of captionClips(track.id, cues)) doc.dispatch(command, key);
@@ -3070,6 +3071,7 @@ function freeTrack(
   at: Time,
   duration: Time,
   key: string,
+  name: string,
 ): string | undefined {
   const free = doc.state.timeline.tracks.find(
     (track) =>
@@ -3078,8 +3080,7 @@ function freeTrack(
       track.clips.every((clip) => clip.start + clip.duration <= at || clip.start >= at + duration),
   );
   if (free !== undefined) return free.id;
-  const name = `${kind === "text" ? "T" : "O"}${doc.state.timeline.tracks.length + 1}`;
-  doc.dispatch(cmd.trackAdd(kind, name), key);
+  doc.dispatch(cmd.trackAdd(kind, namedTrack(doc.state, name)), key);
   return doc.state.timeline.tracks.at(-1)?.id;
 }
 

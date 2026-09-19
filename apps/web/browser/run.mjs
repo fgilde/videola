@@ -18,6 +18,7 @@ const effectShot = join(here, "effects.png");
 const importShot = join(here, "import.png");
 const destinationShot = join(here, "destinations.png");
 const lyricShot = join(here, "lyrics.png");
+const mcpShot = join(here, "mcp.png");
 const phoneShot = join(here, "phone.png");
 const phoneLibraryShot = join(here, "phone-library.png");
 const phoneInspectorShot = join(here, "phone-inspector.png");
@@ -366,6 +367,12 @@ try {
     [...desktop, `--screenshot=${lyricShot}`],
     RUN_BUDGET_MS,
   );
+  // The help entry that wires an agent in, open, so what it looks like can be looked at.
+  const wired = await drive(
+    `http://localhost:${PORT}/?mcp=1&virtual=1`,
+    [...desktop, `--screenshot=${mcpShot}`],
+    RUN_BUDGET_MS,
+  );
   const pocket = await driveTouch(PHONE, "phone=1", RUN_BUDGET_MS, "the phone");
   // The mode that had a layout rule and no run behind it. It is also the only viewport where a
   // drag from the library onto a track can be driven with a finger, because it is the only one
@@ -381,10 +388,11 @@ try {
     [brought, importShot],
     [sent, destinationShot],
     [sung, lyricShot],
+    [wired, mcpShot],
   ]) {
     cropHeight(path, viewport(results));
   }
-  const results = [...live, ...drawn, ...baked, ...shelved, ...brought, ...sent, ...sung, ...pocket, ...slate];
+  const results = [...live, ...drawn, ...baked, ...shelved, ...brought, ...sent, ...sung, ...wired, ...pocket, ...slate];
   // Printed whether the run passed or not: which container the browser could read, what viewport
   // the page was laid out in, and how tall every zone came out. Three layout checks read differently
   // on a CI runner than on a desktop, and a failure that says "216 px" without saying which row took
@@ -399,7 +407,7 @@ try {
   }
   const failed = results.filter((entry) => !entry.ok).length;
   console.log(`${results.length - failed}/${results.length} application checks passed`);
-  for (const path of [shot, templateShot, effectShot, importShot, destinationShot, lyricShot, phoneShot, phoneLibraryShot, phoneInspectorShot, tabletShot]) {
+  for (const path of [shot, templateShot, effectShot, importShot, destinationShot, lyricShot, mcpShot, phoneShot, phoneLibraryShot, phoneInspectorShot, tabletShot]) {
     console.log(`screenshot: ${path}`);
   }
   process.exitCode = failed === 0 ? 0 : 1;

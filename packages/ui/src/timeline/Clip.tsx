@@ -1,6 +1,6 @@
 import { useMemo, type ReactElement } from "react";
 
-import type { Clip as ClipModel, MediaAsset } from "@videola/core";
+import type { Clip as ClipModel, Generator, MediaAsset } from "@videola/core";
 import type { Peaks } from "@videola/media";
 
 import { useI18n } from "../i18n/useI18n";
@@ -97,6 +97,27 @@ function clipLabel(
   t: (key: string) => string,
 ): string {
   if (clip.label) return clip.label;
-  const fromMedia = clip.source.kind === "media" ? mediaNames.get(clip.source.media) : undefined;
-  return fromMedia ?? t("timeline.clipUnnamed");
+  if (clip.source.kind === "media") {
+    return mediaNames.get(clip.source.media) ?? t("timeline.clipUnnamed");
+  }
+  if (clip.source.kind === "generator") return generatorLabel(clip.source.generator, t);
+  return t("timeline.clipUnnamed");
+}
+
+// Longer than anybody reads off a clip at a glance; the box ellipsises the rest on its own, and
+// this only keeps a whole verse out of the DOM.
+const LABEL_CHARS = 48;
+
+/**
+ * What a drawn clip says on it when nobody has named it.
+ *
+ * A title says its own first line, which is the only label anybody would have written on it
+ * anyway; everything else says what it is. Sixty clips all reading "unnamed" is a timeline that
+ * has to be clicked through to be read at all, which is what a lyric video looked like.
+ */
+function generatorLabel(generator: Generator, t: (key: string) => string): string {
+  if (generator.type !== "text") return t(`generator.${generator.type}`);
+  const first = generator.content.split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
+  if (first === undefined) return t("generator.text");
+  return first.length > LABEL_CHARS ? `${first.slice(0, LABEL_CHARS - 1).trimEnd()}…` : first;
 }

@@ -786,5 +786,13 @@
   "mcp.note": "The server runs on your own machine and sees nothing outside VIDEOLA_STORAGE_ROOT. It listens on no port.",
   "mcp.docs": "Every tool, in the documentation",
   "track.mute": "Mute {name}",
-  "track.unmute": "Unmute {name}"
+  "track.unmute": "Unmute {name}",
+  "generator.text": "Title",
+  "generator.solid": "Colour",
+  "generator.shape": "Shape",
+  "generator.gradient": "Gradient",
+  "generator.countdown": "Countdown",
+  "generator.visualizer": "Visualiser",
+  "generator.lyrics": "Lyric video",
+  "track.auto.lyrics": "Lyrics"
 }
