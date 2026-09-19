@@ -236,6 +236,31 @@ The way back from Google carries no bearer token -- it is a redirect, not a call
 What stands in for it is the `state`: minted by the guarded half of the flow, single use, ten
 minutes, held only in memory. A callback with an unknown state is refused.
 
+#### Where the client comes from
+
+Once per server, in Google's console:
+
+1. Open [console.cloud.google.com](https://console.cloud.google.com/) and make a project -- the name
+   does not matter, it only ever shows up in the console.
+2. **APIs & Services, Library**, and enable the **YouTube Data API v3**.
+3. **OAuth consent screen**: user type *External*, an app name and a contact address. Add the scopes
+   `.../auth/youtube.upload` and `.../auth/youtube.readonly` -- the second is what lets Videola name
+   the destination after the channel. Add yourself as a **test user**.
+4. **Credentials, Create credentials, OAuth client ID**, application type **Web application**. As an
+   authorised redirect URI, enter the address the editor runs at plus
+   `/api/destinations/oauth/youtube/callback`.
+5. Put the client id and secret in the two environment variables above -- or straight into the
+   fields in the dialogue, on a server that has none.
+
+Two things Google does not say out loud. While the app is in *Testing*, **refresh tokens expire
+after seven days**; to avoid that, set it to *In production* and click through the unverified-app
+warning. And a project's quota is 10,000 points a day against an upload's 1,600 -- about six videos
+a day, per project. That is exactly why Videola ships no client of its own: it would be one bucket
+for everybody.
+
+For anyone who would rather not, two destinations on the list need no console at all: **Bluesky**
+takes an app password from the account's own settings, and **PeerTube** a token from your instance.
+
 ```bash
 curl -X POST localhost:7331/api/destinations \
   -H "authorization: Bearer $VIDEOLA_TOKEN" -H "content-type: application/json" \

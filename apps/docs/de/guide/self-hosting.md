@@ -243,6 +243,32 @@ Der Rückweg von Google trägt keinen Bearer-Token — er ist eine Weiterleitung
 Editors. An dessen Stelle steht ein `state`: von der geschützten Hälfte des Ablaufs erzeugt, einmal
 gültig, zehn Minuten lang, nur im Speicher. Ein Rückruf mit unbekanntem `state` wird abgewiesen.
 
+#### Woher der Client kommt
+
+Einmal pro Server, in Googles Konsole:
+
+1. [console.cloud.google.com](https://console.cloud.google.com/) öffnen und ein Projekt anlegen —
+   der Name ist gleichgültig, er taucht nur in der Konsole auf.
+2. **APIs & Dienste → Bibliothek**, dort die **YouTube Data API v3** aktivieren.
+3. **OAuth-Zustimmungsbildschirm**: Nutzertyp *Extern*, App-Name und Kontakt-E-Mail eintragen. Als
+   Bereiche `.../auth/youtube.upload` und `.../auth/youtube.readonly` hinzufügen — der zweite ist
+   der, mit dem Videola das Ziel nach dem Kanal benennt. Sich selbst als **Testnutzer** eintragen.
+4. **Anmeldedaten → Anmeldedaten erstellen → OAuth-Client-ID**, Anwendungstyp **Webanwendung**. Als
+   autorisierte Weiterleitungs-URI genau die Adresse eintragen, unter der der Editor läuft, plus
+   `/api/destinations/oauth/youtube/callback`.
+5. Client-ID und Client-Schlüssel in die beiden Umgebungsvariablen oben — oder direkt in die Felder
+   im Dialog, falls der Server keine bekommt.
+
+Zwei Dinge, die Google nicht dazusagt. Solange die App im Status *Test* steht, **verfallen
+Refresh-Token nach sieben Tagen**; wer das nicht will, stellt sie auf *In Produktion* und klickt sich
+durch die Warnung für nicht verifizierte Apps. Und das Kontingent eines Projekts sind 10.000 Punkte
+am Tag, ein Upload kostet 1.600 — also rund sechs Videos täglich, pro Projekt. Genau deshalb liefert
+Videola keinen eigenen Client mit: Der wäre ein Topf für alle zusammen.
+
+Wer das nicht will, hat auf dieser Liste zwei Ziele, die gar keine Konsole kennen: **Bluesky**
+braucht ein App-Passwort aus den eigenen Kontoeinstellungen, **PeerTube** ein Token aus der eigenen
+Instanz.
+
 ```bash
 curl -X POST localhost:7331/api/destinations \
   -H "authorization: Bearer $VIDEOLA_TOKEN" -H "content-type: application/json" \
