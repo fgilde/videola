@@ -1,8 +1,9 @@
-import { timeToSeconds } from "@videola/core";
+import { captionCues, timeToSeconds } from "@videola/core";
 
 import { leafClips } from "../nesting";
 import { paintText } from "./text";
 import { paintVisualizer, visualizerOptions, VISUALIZER_STYLES } from "./visualizer";
+import { lyricOptions, LYRIC_STYLES, paintLyrics, type LyricLineOnScreen } from "./lyrics";
 
 import type { SoundFrame } from "../audio/spectrum";
 
@@ -23,6 +24,7 @@ const SHAPES: readonly string[] = ["rectangle", "square", "ellipse", "circle", "
 export function paintsGenerator(generator: Generator): boolean {
   if (generator.type === "shape") return SHAPES.includes(generator.shape);
   if (generator.type === "visualizer") return VISUALIZER_STYLES.includes(generator.style as never);
+  if (generator.type === "lyrics") return LYRIC_STYLES.includes(generator.style as never);
   return (
     generator.type === "text" ||
     generator.type === "solid" ||
@@ -39,7 +41,15 @@ export function paintGenerator(
   size: Size,
   atSeconds = 0,
   sound?: SoundFrame,
+  line?: LyricLineOnScreen,
 ): void {
+  // The words of a song. They live on a caption track as clips -- which is what makes them
+  // draggable -- so what arrives here is the one line that is being sung, worked out by whoever
+  // knows what instant this is.
+  if (generator.type === "lyrics") {
+    paintLyrics(ctx, lyricOptions(generator.style, generator.options), size, line);
+    return;
+  }
   // The one generator whose picture is different at every instant, and the reason this function
   // takes the sound at all: a visualiser with nothing analysed draws nothing, rather than a still
   // chart of a song nobody has measured yet.
@@ -94,6 +104,7 @@ export function generatorKey(
   size: Size,
   atSeconds: number,
   sound?: SoundFrame,
+  line?: LyricLineOnScreen,
 ): string {
   const shown =
     generator.type === "countdown" ? countdownNumber(generator.fromSeconds, atSeconds) : 0;
@@ -102,7 +113,14 @@ export function generatorKey(
   // enough that two draws of the same frame still hit the cache.
   const heard =
     generator.type === "visualizer" && sound !== undefined ? Math.round(sound.at * 1000) : 0;
-  return `${size.width}x${size.height}|${shown}|${heard}|${JSON.stringify(generator)}`;
+  // A lyric picture is the line plus how far through it the singing is, rounded to a hundredth:
+  // every style here animates within a line, and a key that carried only the words would draw the
+  // first frame of a word and hold it.
+  const sung =
+    generator.type === "lyrics" && line !== undefined
+      ? `${line.index}:${Math.round(line.progress * 100)}`
+      : "";
+  return `${size.width}x${size.height}|${shown}|${heard}|${sung}|${JSON.stringify(generator)}`;
 }
 
 // Big, centred, and heavy enough to read over anything. Not configurable: the model carries one field
@@ -213,11 +231,21 @@ export class GeneratorFrames {
     visible: ReadonlySet<string>,
     sourceTimes?: ReadonlyMap<string, Time>,
     sound?: SoundFrame,
+    at?: Time,
   ): Map<string, VideoFrame> {
     const size = { width: project.settings.width, height: project.settings.height };
     const wanted = new Map<string, VideoFrame>();
+    // Worked out once for the whole set rather than per clip: two lyric layers -- a big line and a
+    // small one, say -- are two pictures of the same line.
+    const line = at === undefined ? undefined : lineAt(project, at);
     for (const clip of generatorClips(project, visible)) {
-      const frame = this.#frame(clip, size, timeToSeconds(sourceTimes?.get(clip.id) ?? 0), sound);
+      const frame = this.#frame(
+        clip,
+        size,
+        timeToSeconds(sourceTimes?.get(clip.id) ?? 0),
+        sound,
+        line,
+      );
       if (frame !== undefined) wanted.set(clip.id, frame);
     }
     for (const [id, held] of this.#painted) {
@@ -239,14 +267,15 @@ export class GeneratorFrames {
     size: Size,
     atSeconds: number,
     sound: SoundFrame | undefined,
+    line: LyricLineOnScreen | undefined,
   ): VideoFrame | undefined {
     if (clip.source.kind !== "generator") return undefined;
     const generator = clip.source.generator;
-    const key = generatorKey(generator, size, atSeconds, sound);
+    const key = generatorKey(generator, size, atSeconds, sound, line);
     const held = this.#painted.get(clip.id);
     if (held?.key === key) return held.frame;
     held?.frame.close();
-    const frame = this.#paint(generator, size, atSeconds, sound);
+    const frame = this.#paint(generator, size, atSeconds, sound, line);
     if (frame === undefined) {
       this.#painted.delete(clip.id);
       return undefined;
@@ -267,6 +296,7 @@ export class GeneratorFrames {
     size: Size,
     atSeconds: number,
     sound: SoundFrame | undefined,
+    line: LyricLineOnScreen | undefined,
   ): VideoFrame | undefined {
     if (!paintsGenerator(generator)) return undefined;
     if (typeof OffscreenCanvas === "undefined" || typeof VideoFrame === "undefined") return undefined;
@@ -274,7 +304,7 @@ export class GeneratorFrames {
       const canvas = this.#surface(size);
       const ctx = canvas.getContext("2d");
       if (ctx === null) return undefined;
-      paintGenerator(ctx, generator, size, atSeconds, sound);
+      paintGenerator(ctx, generator, size, atSeconds, sound, line);
       return new VideoFrame(canvas, { timestamp: 0 });
     } catch (error) {
       console.error(error);
@@ -292,6 +322,27 @@ export class GeneratorFrames {
     this.#canvas = new OffscreenCanvas(size.width, size.height);
     return this.#canvas;
   }
+}
+
+/**
+ * Which line is being sung at an instant, and how far through it.
+ *
+ * The captions are the lyrics: one clip per line on a caption track, which is why a line that lands
+ * late is dragged rather than retyped. Nothing is drawn between two lines -- a lyric video that
+ * holds the last line through an instrumental is a lyric video with a stuck picture.
+ */
+export function lineAt(project: Project, at: Time): LyricLineOnScreen | undefined {
+  const cues = captionCues(project);
+  const index = cues.findIndex((cue) => at >= cue.start && at < cue.end);
+  const cue = cues[index];
+  if (cue === undefined) return undefined;
+  const span = Math.max(1, cue.end - cue.start);
+  return {
+    text: cue.text,
+    progress: Math.min(1, Math.max(0, (at - cue.start) / span)),
+    index,
+    ...(cues[index + 1] === undefined ? {} : { next: cues[index + 1]!.text }),
+  };
 }
 
 // The visible set comes from the draw list, which names a nested clip by its own id, so this has to

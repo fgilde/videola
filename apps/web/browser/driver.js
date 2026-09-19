@@ -394,6 +394,9 @@ async function announce() {
   // whose value it believes it already knows, so the assignment has to go through the prototype
   // setter rather than through the element.
   const writeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  // A textarea is a different prototype, and its setter refuses an input with an "Illegal
+  // invocation" -- which is what a paste box needs.
+  const writeArea = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
 
   // One press, many moves, one release -- the shape a real drag has, and the only shape that can
   // show whether two hundred dispatches collapse into one entry on the undo stack.
@@ -776,6 +779,61 @@ async function announce() {
     labelled("Schließen").click();
     await until("the dialogue to close",
       () => (q('[data-testid="destinations"]') === null ? true : null));
+  }
+
+  /**
+   * A lyric video, from a song that has nothing written in it.
+   *
+   * The fixture carries no tag, no `.lrc` and no transcript, which is the case worth driving: the
+   * dialogue has to say so and still let somebody paste the words. What it lays down afterwards is
+   * three things at once -- a caption track of lines, a picture that draws them and a visualiser --
+   * in one press of undo.
+   */
+  async function lyricVideo() {
+    const before = all("[data-clip-id]").length;
+    const tracksBefore = all(".v-timeline__header").length;
+    pickMenu("Lyric-Video …");
+    const dialog = await until("the lyric dialogue", () => q('[data-testid="lyrics-dialog"]'));
+    check("opening it raised nothing", banner(), "");
+    check("the song it offers is the one that was imported",
+      dialog.querySelector('[data-testid="lyrics-song"]').options.length > 0, true);
+    // No server behind this run, so the way that needs one is a sentence rather than a button.
+    check("a server that cannot transcribe says so instead of offering it",
+      dialog.querySelector('[data-testid="lyrics-transcribe"]'), null);
+    check("and names what would change that",
+      dialog.querySelector('[data-testid="lyrics-no-transcriber"]').textContent
+        .includes("VIDEOLA_ELEVENLABS_KEY"),
+      true);
+
+    labelled("In der Datei suchen").click();
+    await until("the answer about the file",
+      () => q('[data-testid="lyrics-error"]') ?? q('[data-testid="lyrics-lines"]'), 20000);
+    check("a file with nothing in it is said out loud rather than left blank",
+      q('[data-testid="lyrics-error"]') !== null, true);
+
+    const typed = dialog.querySelector('[data-testid="lyrics-text"]');
+    writeArea.call(typed, ["[00:00.20]Erste Zeile", "[00:01.00]Zweite Zeile", "[00:01.60]Dritte Zeile"].join(String.fromCharCode(10)));
+    typed.dispatchEvent(new Event("input", { bubbles: true }));
+    await sleep(120);
+    labelled("Text übernehmen").click();
+    const lines = await until("the lines it took", () => q('[data-testid="lyrics-lines"]'));
+    check("the pasted lines are read with their times", lines.children.length, 3);
+
+    labelled("Lyric-Video anlegen").click();
+    await until("the dialogue to close",
+      () => (q('[data-testid="lyrics-dialog"]') === null ? true : null));
+    check("making one raised nothing", banner(), "");
+    check("a line per clip lands on a track of its own",
+      all("[data-clip-id]").length - before, 5);
+    checkAtLeast("with the tracks it needs", all(".v-timeline__header").length - tracksBefore, 3);
+
+    // One press, because it was one key: a hundred lines and three tracks are one thing somebody
+    // did, and undoing it line by line would be a hundred presses.
+    button("Rückgängig").click();
+    await sleep(300);
+    check("and the whole lyric video is one press back out",
+      [all("[data-clip-id]").length, all(".v-timeline__header").length],
+      [before, tracksBefore]);
   }
 
   /**
@@ -1523,6 +1581,7 @@ async function announce() {
     await fromTheLibrary();
     await theTimeline();
     await visualizer();
+    await lyricVideo();
     await recordMode();
     await stills();
     await fromALink();
@@ -1770,7 +1829,7 @@ async function announce() {
        "Exportieren", "Weitergeben …", "Veröffentlichungsziele …"]);
     check("and the rest sit where they belong",
       [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
-      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 8,
+      [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 9,
        ["Tastenkürzel", "Über Videola"]]);
     checkAtLeast("with rows a thumb can hit",
       Math.min(...all(".v-topbar__group[open] .v-topbar__group-items button")

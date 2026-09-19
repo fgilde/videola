@@ -25,6 +25,7 @@ opened over the API and a project opened in the editor are opened by the same co
 | `VIDEOLA_MAX_PROJECTS` | `8` | How many projects stay open in memory, each with its own core instance |
 | `VIDEOLA_YOUTUBE_CLIENT_ID` | none | The OAuth client a channel sign-in runs through. With the secret below, or not at all |
 | `VIDEOLA_YOUTUBE_CLIENT_SECRET` | none | The other half of it. Without both there is no sign-in, only the fields in the dialogue |
+| `VIDEOLA_ELEVENLABS_KEY` | none | The key transcription for lyric videos runs through. Without it the editor offers the other ways and says why this one is missing |
 
 **The token is not a hardening option.** The server checks the bind address at startup and refuses to
 listen on anything but loopback without one, because an open Videola hands every machine that can reach

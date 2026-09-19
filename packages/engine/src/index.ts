@@ -33,6 +33,16 @@ export type { ColorParam, EffectManifest, EffectParam, Rgba, Uniform, VideoParam
 export { GeneratorFrames, paintGenerator, paintsGenerator } from "./generate/generator";
 export { analyseSpectrum, spectrumOf, Spectrum, type SoundFrame } from "./audio/spectrum";
 export {
+  lineAt,
+} from "./generate/generator";
+export {
+  lyricOptions,
+  LYRIC_STYLES,
+  paintLyrics,
+  type LyricLineOnScreen,
+  type LyricStyle,
+} from "./generate/lyrics";
+export {
   paintVisualizer,
   visualizerOptions,
   VISUALIZER_STYLES,

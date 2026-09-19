@@ -5,6 +5,7 @@ import {
   captionClips,
   captionCues,
   cmd,
+  millisecondsToTime,
   createProjectBackend,
   createTemplateBackend,
   createWasmBackend,
@@ -24,6 +25,7 @@ import {
   timelineTimeAt,
   timeToSeconds,
   VideolaDocument,
+  type Clip,
   type ClipId,
   type Command,
   type Frame,
@@ -122,6 +124,9 @@ import {
   Stage,
   DestinationsDialog,
   ImportDialog,
+  LyricsDialog,
+  type FoundLyrics,
+  type LyricsDraft,
   PlaceMediaDialog,
   TemplateAuthor,
   TemplateGallery,
@@ -146,6 +151,7 @@ import {
 } from "@videola/ui";
 
 import { effectTiles, revokeTiles } from "./effectTiles";
+import { lyricsForMedia, lyricsFromText, transcribeMedia, transcriberReady } from "./lyrics";
 import { useTemplatePosters } from "./posters";
 import {
   describeLink,
@@ -322,6 +328,12 @@ export function App(): ReactElement {
   // Record mode. Every setting made while this is on belongs to the playhead rather than to the
   // clip as a whole, and the window says so with a border nothing else in the interface uses.
   const [recording, setRecording] = useState(false);
+  // The lyric-video dialogue: whether it is open, what was found, and what is taking a moment.
+  const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [foundLyrics, setFoundLyrics] = useState<FoundLyrics>();
+  const [lyricsBusy, setLyricsBusy] = useState<"file" | "transcribe">();
+  const [lyricsError, setLyricsError] = useState<string>();
+  const [canTranscribe, setCanTranscribe] = useState(false);
   // True while the mix is being analysed for a visualiser. The analysis itself lives in the
   // playback object, which is what draws from it; this is only what the interface says about it.
   const [listening, setListening] = useState(false);
@@ -694,6 +706,160 @@ export function App(): ReactElement {
       cancelled = true;
     };
   }, [playback, project, doc, reportError]);
+
+  /**
+   * The words of a song, from the file it is already in.
+   *
+   * First rather than last: an MP3 with a tag, an M4A with a `©lyr` atom and a FLAC with a comment
+   * all carry them, and asking somebody to paste what the editor is holding is the kind of thing
+   * that makes a feature feel like a form.
+   */
+  const lookInFile = useCallback(
+    (media: MediaId) => {
+      void (async () => {
+        setLyricsBusy("file");
+        setLyricsError(undefined);
+        try {
+          const found = await lyricsForMedia(media);
+          setFoundLyrics(found);
+          // A catalogue key: the dialogue translates what it is handed, and hands back
+          // anything it does not know -- which is how a server's own words get through.
+          if (found === undefined) setLyricsError("lyrics.none");
+        } catch (err) {
+          setLyricsError(String((err as Error).message ?? err));
+        } finally {
+          setLyricsBusy(undefined);
+        }
+      })();
+    },
+    [],
+  );
+
+  /** And the last resort: the audio goes to the server, which has the key and does the listening. */
+  const askForTranscript = useCallback(
+    (media: MediaId) => {
+      void (async () => {
+        setLyricsBusy("transcribe");
+        setLyricsError(undefined);
+        try {
+          setFoundLyrics(await transcribeMedia(connection, media));
+        } catch (err) {
+          setLyricsError(String((err as Error).message ?? err));
+        } finally {
+          setLyricsBusy(undefined);
+        }
+      })();
+    },
+    [connection],
+  );
+
+  // Asked when the dialogue opens rather than at start-up: a server that had no key this morning
+  // may have one now, and nobody should have to reload a tab to find out.
+  useEffect(() => {
+    if (!lyricsOpen) return;
+    let cancelled = false;
+    void transcriberReady(connection).then((ready) => {
+      if (!cancelled) setCanTranscribe(ready);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lyricsOpen, connection]);
+
+  /**
+   * The lyric video itself: a caption track of lines, a picture that draws them, and -- unless it
+   * was turned off -- a visualiser behind them.
+   *
+   * One coalesce key for the lot, so a hundred lines and three tracks are one press of undo. Lines
+   * that arrived without times are spread evenly over the song and can be dragged afterwards, which
+   * is the honest thing to do: guessing where a line falls is worse than putting it somewhere
+   * obvious and saying so.
+   */
+  const createLyrics = useCallback(
+    (draft: LyricsDraft) => {
+      if (doc === undefined || project === undefined || foundLyrics === undefined) return;
+      const lines = foundLyrics.lines;
+      if (lines.length === 0) return;
+      try {
+        const key = `lyrics-${(actionSequence += 1)}`;
+        const song = draft.media;
+        const clip = song === undefined ? undefined : clipOfMedia(project, song);
+        const from = clip?.start ?? 0;
+        const span = clip?.duration ?? projectEnd(project);
+        const cues = foundLyrics.timed
+          ? lines.map((line, index) => ({
+              start: from + millisecondsToTime(line.at),
+              end:
+                from +
+                millisecondsToTime(line.until ?? (lines[index + 1]?.at ?? line.at + 3000)),
+              text: line.text,
+            }))
+          : lines.map((line, index) => ({
+              start: from + Math.round((span * index) / lines.length),
+              end: from + Math.round((span * (index + 1)) / lines.length),
+              text: line.text,
+            }));
+
+        const captions = added(doc, "caption", nextTrackName(doc, "caption"), key);
+        if (captions === undefined) return;
+        for (const command of captionClips(captions.id, cues)) doc.dispatch(command, key);
+
+        const overlay = added(doc, "overlay", nextTrackName(doc, "overlay"), key);
+        if (overlay !== undefined) {
+          doc.dispatch(
+            cmd.clipAdd(
+              overlay.id,
+              {
+                kind: "generator",
+                generator: {
+                  type: "lyrics",
+                  style: draft.style,
+                  options: {
+                    color: draft.color,
+                    accent: draft.accent,
+                    background: draft.style === "kinetic" ? draft.background : "",
+                    position: draft.position,
+                    uppercase: draft.uppercase,
+                  },
+                },
+              },
+              from,
+              span,
+            ),
+            key,
+          );
+        }
+
+        if (draft.withVisualizer) {
+          const behind = added(doc, "overlay", nextTrackName(doc, "overlay"), key);
+          if (behind !== undefined) {
+            doc.dispatch(
+              cmd.clipAdd(
+                behind.id,
+                {
+                  kind: "generator",
+                  generator: {
+                    type: "visualizer",
+                    style: "mirror",
+                    source: "master",
+                    options: { color: draft.accent, colorTo: draft.color, glow: 0.5, bars: 56 },
+                  },
+                },
+                from,
+                span,
+              ),
+              key,
+            );
+          }
+        }
+        setLyricsOpen(false);
+        setError(undefined);
+      } catch (err) {
+        reportError("error.actionFailed", err);
+      }
+    },
+    [doc, project, foundLyrics, reportError],
+  );
 
   // Deliberately not wrapped in try/catch: the timeline decides which refusals are ordinary,
   // and it can only do that if they reach it. Catching here turned a trim held against its
@@ -2218,6 +2384,14 @@ export function App(): ReactElement {
       }
       onHandOff={doc === undefined ? undefined : () => setHandingOff(true)}
       onDestinations={() => setManagingDestinations(true)}
+      onLyrics={
+        doc === undefined
+          ? undefined
+          : () => {
+              setLyricsError(undefined);
+              setLyricsOpen(true);
+            }
+      }
       onExport={
         doc === undefined
           ? undefined
@@ -2542,6 +2716,23 @@ export function App(): ReactElement {
           onClose={() => setManagingDestinations(false)}
         />
       )}
+      {lyricsOpen && project !== undefined && (
+        <LyricsDialog
+          library={project.library}
+          found={foundLyrics}
+          busy={lyricsBusy}
+          canTranscribe={canTranscribe}
+          error={lyricsError}
+          onLookInFile={lookInFile}
+          onTranscribe={askForTranscript}
+          onText={(text) => {
+            setLyricsError(undefined);
+            setFoundLyrics(lyricsFromText(text));
+          }}
+          onCreate={createLyrics}
+          onClose={() => setLyricsOpen(false)}
+        />
+      )}
       {placing !== undefined && project !== undefined && (
         <PlaceMediaDialog
           library={project.library}
@@ -2778,6 +2969,16 @@ function soundPrint(project: Project): string {
     }
   }
   return parts.join("|");
+}
+
+/** Which clip carries a medium, so a lyric video lands over the song rather than at zero. */
+function clipOfMedia(project: Project, media: MediaId): Clip | undefined {
+  for (const track of project.timeline.tracks) {
+    for (const clip of track.clips) {
+      if (clip.source.kind === "media" && clip.source.media === media) return clip;
+    }
+  }
+  return undefined;
 }
 
 function nextTrackName(doc: VideolaDocument, kind: TrackKind): string {

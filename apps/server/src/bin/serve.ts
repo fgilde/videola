@@ -10,6 +10,7 @@ const api = new Api({
   maxProjects: config.maxProjects,
   locale: config.locale,
   ...(config.youtubeClient === undefined ? {} : { youtubeClient: config.youtubeClient }),
+  ...(config.elevenLabsKey === undefined ? {} : { elevenLabsKey: config.elevenLabsKey }),
 });
 
 const server = createServer(

@@ -1006,6 +1006,43 @@ Die Analyse läuft, wenn ein Visualizer auf der Zeitleiste liegt und sich am Ton
 — ein Schnitt, ein Regler, eine stumme Spur. Das dauert bei einem Lied ein bis zwei Sekunden, und
 der Editor sagt es so lange. Einen Titel zu verschieben löst nichts aus.
 
+### Lyric-Videos
+
+**Einfügen → Lyric-Video …** macht aus einem Song ein Video mit mitlaufendem Text. Der Dialog sucht
+die Wörter dort, wo sie meistens schon liegen, in dieser Reihenfolge:
+
+1. **In der Datei.** MP3s tragen sie in einem ID3-Frame — `SYLT` mit Zeitstempel pro Zeile, `USLT`
+   ohne, manchmal ein selbst gebautes `TXXX`. M4A hat das `©lyr`-Atom, FLAC einen
+   `LYRICS`-Kommentar. Videola liest alle vier, und eine `.lrc`, die jemand in einen Tag geklebt
+   hat, wird als das erkannt, was sie ist.
+2. **Eingefügt.** Text oder eine ganze `.lrc` ins Feld, fertig. `[00:12.50]` versteht der Leser
+   samt Hundertsteln, Millisekunden, mehreren Zeitstempeln für denselben Refrain und den
+   Wort-Zeitstempeln erweiterter Dateien.
+3. **Transkribieren lassen.** Nur, wenn ein Server mit hinterlegtem Schlüssel dahinter steht — und
+   nur dann steht der Knopf da. Dabei geht der Ton an ElevenLabs; das ist das Einzige in diesem
+   Editor, was den Rechner verlässt, und der Dialog sagt es vorher.
+
+Was dabei herauskommt, sind **Untertitel-Clips auf einer eigenen Spur**: eine Zeile, ein Clip. Genau
+deshalb liegen die Lyrics dort und nicht im Generator — eine Zeile, die einen Schlag zu spät kommt,
+zieht man auf der Zeitleiste zurecht, mit denselben Griffen wie alles andere. Ohne Zeiten werden die
+Zeilen gleichmäßig über den Song verteilt; der Dialog sagt das, statt so zu tun, als wüsste er es
+besser.
+
+Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in sieben Stilen:
+
+| Stil | Was er tut |
+|---|---|
+| Kinetisch | Wort für Wort, jedes kommt zu groß an und setzt sich; Schrift und Grund tauschen bei jeder Zeile die Plätze |
+| Karaoke | die ganze Zeile, von links nach rechts gefüllt, die nächste klein darunter |
+| Schreibmaschine | Zeichen für Zeichen, mit Cursor |
+| Pop | jedes Wort springt auf seinem eigenen Schlag herein |
+| Neon | leuchtende Schrift über allem, was darunter liegt |
+| Dreher (3D) | die Wörter drehen sich aus der Tiefe herein |
+| Leiste | eine Platte mit der Zeile darauf, oben, mittig oder unten |
+
+Auf Wunsch legt derselbe Druck einen **Visualizer** dahinter — dann ist es in einem Schritt ein
+fertiges Lyric-Video. Und es ist *ein* Schritt: hundert Zeilen, drei Spuren, ein Rückgängig.
+
 Die Spur wird gewählt und nicht erfragt: die oberste nicht gesperrte Spur der passenden Art, in deren
 Fenster **nichts steht**, wo der Clip landen würde — sonst eine neue. `clip.add` überschreibt, was es
 überdeckt; ein zweiter Titel am Abspielkopf derselben Spur würde den ersten löschen. Muss eine Spur

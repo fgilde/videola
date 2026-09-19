@@ -163,6 +163,23 @@ async function route(
   if (match(segments, ["api", "schema"]) && method === "GET") {
     return { status: 200, body: { commands: COMMAND_CATALOG } };
   }
+  // The words of a song, where the file itself carries none. A GET to ask whether this server can
+  // do it at all, so the dialogue can offer the other three ways instead of a button that fails.
+  if (match(segments, ["api", "lyrics", "ready"]) && method === "GET") {
+    return { status: 200, body: { available: api.canTranscribe() } };
+  }
+  if (match(segments, ["api", "lyrics", "transcribe"]) && method === "POST") {
+    const language = url.searchParams.get("language");
+    return {
+      status: 200,
+      body: {
+        lines: await api.transcribeAudio(await readBytes(request, maxBodyBytes), {
+          contentType: request.headers["content-type"] ?? "audio/mpeg",
+          ...(language === null ? {} : { language }),
+        }),
+      },
+    };
+  }
   // Signing in to a channel instead of pasting three secrets at it. Two routes: the editor asks
   // where to send the browser, and the browser comes back here with a code.
   if (match(segments, ["api", "destinations", "oauth", "youtube", "start"]) && method === "POST") {

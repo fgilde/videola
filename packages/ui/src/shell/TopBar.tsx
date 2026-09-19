@@ -20,6 +20,8 @@ export interface TopBarActions {
   onHandOff?: () => void;
   /** Where finished videos are sent, and the server that does the sending. */
   onDestinations?: () => void;
+  /** Opens the dialogue that turns a song into a video with its words on it. */
+  onLyrics?: () => void;
   onKeys?: () => void;
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
@@ -150,6 +152,10 @@ export function TopBar({
               }
             />
           ))}
+          <Rule />
+          {/* Not an insert like the others: it lays down a caption track, a picture and sometimes a
+              visualiser, so it asks first. Below the rule for exactly that reason. */}
+          <Action label={t("action.lyrics")} onClick={actions.onLyrics} />
         </>
       ),
     },

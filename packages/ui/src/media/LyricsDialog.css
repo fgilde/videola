@@ -1,0 +1,65 @@
+/* Three ways in, a list of what was found, and a look to give it: the dialogue is a sequence, so it
+   scrolls as one column rather than trying to be a grid. */
+.v-lyrics {
+  width: min(40rem, calc(100vw - 2 * var(--v-space-4)));
+  max-height: min(46rem, calc(100vh - 2 * var(--v-space-4)));
+  overflow-y: auto;
+}
+
+.v-lyrics__block {
+  display: grid;
+  gap: var(--v-space-2);
+  padding: var(--v-space-3);
+  margin-bottom: var(--v-space-3);
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+}
+
+.v-lyrics__ways {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--v-space-2);
+}
+
+.v-lyrics__paste textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* What was found, at a glance. Forty lines is enough to recognise a song; a scroll box with the
+   whole of one in it is a second editor nobody asked for. */
+.v-lyrics__lines {
+  margin: 0;
+  padding: 0 0 0 var(--v-space-3);
+  max-height: 14rem;
+  overflow-y: auto;
+  font-size: var(--v-text-sm);
+  color: var(--v-text-muted);
+}
+
+.v-lyrics__lines li {
+  display: flex;
+  gap: var(--v-space-2);
+  padding: 1px 0;
+}
+
+.v-lyrics__at {
+  font-family: var(--v-font-mono);
+  color: var(--v-accent);
+  flex: none;
+}
+
+.v-lyrics__styles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--v-space-1);
+}
+
+.v-lyrics__switch {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-2);
+  font-size: var(--v-text-sm);
+}

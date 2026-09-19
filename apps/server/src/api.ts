@@ -9,6 +9,7 @@ import type { Command, DispatchResult, LoadWarning, Project } from "@videola/cor
 import type { DocumentBackend } from "@videola/core";
 
 import { Destinations, type NewDestination, type PublicDestination } from "./destinations";
+import { transcribe, type TranscribedLine } from "./transcribe";
 import {
   channelTitle,
   exchangeCode,
@@ -92,6 +93,8 @@ export interface ApiOptions {
   readonly ytdlp?: RunYtDlp;
   /** The OAuth client a sign-in uses, where the operator has registered one. */
   readonly youtubeClient?: OAuthClient | undefined;
+  /** The key transcription runs through, where the operator set one. */
+  readonly elevenLabsKey?: string | undefined;
 }
 
 // The one place that turns a request into core calls, shared verbatim by the HTTP routes and the
@@ -106,6 +109,7 @@ export class Api {
   #http: Fetch;
   #ytdlp: RunYtDlp;
   #youtubeClient: OAuthClient | undefined;
+  #elevenLabsKey: string | undefined;
   #pending = new PendingAuths();
   #fetchProgress = new Map<string, number>();
 
@@ -119,6 +123,7 @@ export class Api {
     this.#http = options.fetch ?? fetch;
     this.#ytdlp = options.ytdlp ?? ytDlp();
     this.#youtubeClient = options.youtubeClient;
+    this.#elevenLabsKey = options.elevenLabsKey;
   }
 
   /**
@@ -170,6 +175,37 @@ export class Api {
   /** Whether a sign-in can be offered at all, for a dialogue that has to decide what to show. */
   canSignIn(): boolean {
     return this.#youtubeClient !== undefined;
+  }
+
+  /** Whether this server can listen to a song and write down the words. */
+  canTranscribe(): boolean {
+    return this.#elevenLabsKey !== undefined;
+  }
+
+  /**
+   * The words in a recording, with their times.
+   *
+   * The last resort, and said so in the dialogue: three places carry lyrics already, and a song
+   * whose file has them needs nobody's transcription. The audio goes out of this process; that is
+   * a thing worth knowing before pressing it, and the surface says so.
+   */
+  async transcribeAudio(
+    audio: Uint8Array,
+    options: { contentType?: string; language?: string } = {},
+  ): Promise<TranscribedLine[]> {
+    const key = this.#elevenLabsKey;
+    if (key === undefined) {
+      throw new ApiError(
+        400,
+        "noTranscriber",
+        "this server has no transcription key: set VIDEOLA_ELEVENLABS_KEY",
+      );
+    }
+    try {
+      return await transcribe(key, audio, options, this.#http);
+    } catch (error) {
+      throw new ApiError(502, "transcribeFailed", String((error as Error).message ?? error));
+    }
   }
 
   /**

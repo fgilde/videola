@@ -10,6 +10,14 @@ export interface ApiConfig {
    * per server, and every destination after that is a button rather than three pasted values.
    */
   readonly youtubeClient: { clientId: string; clientSecret: string } | undefined;
+  /**
+   * The key transcription runs through, where the operator set one.
+   *
+   * Here and not in the browser for the same reason the OAuth client is here: a key handed to a
+   * page is a key handed to everybody who opens it. Without one the editor offers the other three
+   * ways to lyrics and says why the fourth is missing.
+   */
+  readonly elevenLabsKey: string | undefined;
 }
 
 export interface Config extends ApiConfig {
@@ -35,6 +43,7 @@ export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfi
       env.VIDEOLA_YOUTUBE_CLIENT_ID,
       env.VIDEOLA_YOUTUBE_CLIENT_SECRET,
     ),
+    elevenLabsKey: env.VIDEOLA_ELEVENLABS_KEY === "" ? undefined : env.VIDEOLA_ELEVENLABS_KEY,
   };
 }
 

@@ -237,7 +237,7 @@ export async function gatherPictures(
   // The analysed rows start where the render started, not where the timeline does: an export of the
   // last chorus renders that chorus, and row zero is its first sample.
   const heard = sound?.spectrum.at(timeToSeconds(frame.at - sound.from));
-  const pictures = pass.generated.pictures(project, new Set(clips), frame.sources, heard);
+  const pictures = pass.generated.pictures(project, new Set(clips), frame.sources, heard, frame.at);
   for (const clip of clips) {
     const hash = hashes.get(clip);
     const at = frame.sources.get(clip);

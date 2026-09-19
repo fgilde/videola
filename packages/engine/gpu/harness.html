@@ -1921,6 +1921,97 @@ test("a picture drawn from real samples puts the tone where it belongs", () => {
   check("and the low one stands left of the high one", low < high, true);
 });
 
+// The words of a song, drawn. Straight onto a 2D canvas rather than through the compositor: what
+// is asked here is what the painter puts where, and a texture upload in between would only make
+// the numbers harder to read.
+function lyricsDrawn(style, options, line, size) {
+  const canvas = canvasOf(size || 240, size || 240);
+  const ctx = canvas.getContext("2d");
+  R.paintLyrics(ctx, R.lyricOptions(style, options || {}), { width: canvas.width, height: canvas.height }, line);
+  return ctx;
+}
+
+// How much ink there is, and where it sits. A lyric style is judged by exactly that: are the words
+// on screen, and are they where the option said they should be.
+function inkRows(ctx, size) {
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+  const rows = new Array(size).fill(0);
+  let total = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const at = (y * size + x) * 4;
+      if (pixels[at + 3] > 40 && (pixels[at] > 40 || pixels[at + 1] > 40 || pixels[at + 2] > 40)) {
+        rows[y] += 1;
+        total += 1;
+      }
+    }
+  }
+  return { rows, total };
+}
+
+test("a lyric style draws the line it is given", () => {
+  const line = { text: "Hall of fame", progress: 1, index: 0 };
+  for (const style of ["kinetic", "karaoke", "typewriter", "pop", "neon", "flip", "bar"]) {
+    const { total } = inkRows(lyricsDrawn(style, { size: 0.12 }, line, 240), 240);
+    check(`${style} puts words on the frame`, total > 60, true);
+  }
+  check("and nothing at all where no line is being sung",
+    inkRows(lyricsDrawn("kinetic", {}, undefined, 240), 240).total, 0);
+});
+
+// The one everybody means by a lyric video: the words arrive one at a time. A quarter of the way
+// through a four-word line there has to be less ink than at the end of it.
+test("the kinetic style brings the words in as they are sung", () => {
+  const early = inkRows(lyricsDrawn("kinetic", { size: 0.1 }, { text: "one two three four", progress: 0.1, index: 0 }, 240), 240);
+  const late = inkRows(lyricsDrawn("kinetic", { size: 0.1 }, { text: "one two three four", progress: 1, index: 0 }, 240), 240);
+  check("a line half sung is less than a line finished", early.total < late.total, true);
+});
+
+// Every other line trades the ink and the ground. That flip is the look, and a style that drew the
+// same picture for both would be a different style.
+test("the kinetic style flips the ground on every other line", () => {
+  const first = lyricsDrawn("kinetic", { background: "#000000", color: "#ffffff" }, { text: "a", progress: 1, index: 0 }, 64);
+  const second = lyricsDrawn("kinetic", { background: "#000000", color: "#ffffff" }, { text: "a", progress: 1, index: 1 }, 64);
+  const corner = (ctx) => [...ctx.getImageData(2, 2, 1, 1).data].slice(0, 3);
+  check("the first line is ink on the ground", corner(first), [0, 0, 0]);
+  check("and the second is the ground on the ink", corner(second), [255, 255, 255]);
+});
+
+test("a lyric line goes where the position says", () => {
+  const line = { text: "Hall of fame", progress: 1, index: 0 };
+  const middleOf = (where) => {
+    const { rows } = inkRows(lyricsDrawn("bar", { position: where, size: 0.1 }, line, 240), 240);
+    let weighted = 0;
+    let total = 0;
+    rows.forEach((count, y) => {
+      weighted += count * y;
+      total += count;
+    });
+    return total === 0 ? -1 : weighted / total;
+  };
+  const top = middleOf("top");
+  const middle = middleOf("middle");
+  const bottom = middleOf("bottom");
+  check("the three positions are three different heights", top < middle && middle < bottom, true);
+  check("and the top one is in the top half", top < 120, true);
+});
+
+// A line longer than the frame has to shrink rather than run off both edges, which is the first
+// thing anybody notices in a lyric video.
+test("a long line is made to fit rather than allowed to overflow", () => {
+  const long = { text: "Standing in the hall of fame and the world is gonna know your name because you burn with the brightest flame", progress: 1, index: 0 };
+  const ctx = lyricsDrawn("bar", { size: 0.14 }, long, 240);
+  const pixels = ctx.getImageData(0, 0, 240, 240).data;
+  let edge = 0;
+  for (let y = 0; y < 240; y += 1) {
+    for (const x of [0, 1, 238, 239]) {
+      const at = (y * 240 + x) * 4;
+      if (pixels[at + 3] > 40 && pixels[at] > 200 && pixels[at + 1] > 200) edge += 1;
+    }
+  }
+  check("no words are touching the edges", edge, 0);
+});
+
 test("a solid generator paints the frame", () => {
   check("an opaque solid covers the background",
     generated({ type: "solid", color: "#0000ff" }).at(16, 16), [0, 0, 255, 255]);

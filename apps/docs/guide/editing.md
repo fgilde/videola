@@ -942,6 +942,42 @@ The analysis runs when a visualiser is on the timeline and something about the s
 cut, a fader, a muted track. On a song that is a second or two, and the editor says so while it
 happens. Moving a title sets nothing off.
 
+### Lyric videos
+
+**Insert → Lyric video …** turns a song into a video with the words running on it. The dialogue
+looks for them where they usually already are, in this order:
+
+1. **In the file.** MP3s carry them in an ID3 frame — `SYLT` with a timestamp per line, `USLT`
+   without one, sometimes a `TXXX` somebody invented. M4A has the `©lyr` atom, FLAC a `LYRICS`
+   comment. Videola reads all four, and an `.lrc` somebody pasted into a tag is recognised for what
+   it is.
+2. **Pasted.** Text, or a whole `.lrc`, into the box. The reader takes `[00:12.50]` with hundredths
+   or milliseconds, several timestamps for the same chorus, and the per-word timings of enhanced
+   files.
+3. **Transcribed.** Only where a server with a key behind it exists — and only then is the button
+   there at all. That sends the audio to ElevenLabs, which is the one thing in this editor that
+   leaves the machine, and the dialogue says so first.
+
+What comes out is **caption clips on a track of their own**: one line, one clip. That is exactly why
+the lyrics live there rather than inside the generator — a line that lands a beat late is dragged on
+the timeline, with the same handles as everything else. Without times the lines are spread evenly
+over the song, and the dialogue says so rather than pretending to know better.
+
+Over them sits a **lyrics clip** that draws whatever is being sung, in seven styles:
+
+| Style | What it does |
+|---|---|
+| Kinetic | word by word, each arriving too big and settling; ink and ground trade places on every line |
+| Karaoke | the whole line, filled left to right, the next one small underneath |
+| Typewriter | character by character, with a caret |
+| Pop | each word lands on its own beat |
+| Neon | glowing letters over whatever is behind them |
+| Flip (3D) | the words turn in out of the depth |
+| Caption bar | a plate with the line on it, at the top, the middle or the bottom |
+
+The same press can put a **visualiser** behind it, which makes it a finished lyric video in one go.
+And it is one go: a hundred lines, three tracks, one undo.
+
 The track is chosen and not asked for: the topmost unlocked track of the right kind with **nothing
 standing in the window the clip would occupy**, or a new one. `clip.add` overwrites what it covers, so
 a second title dropped at the playhead of the track the first one is on would delete the first. Where a

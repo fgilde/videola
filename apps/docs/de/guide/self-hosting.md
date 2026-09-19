@@ -26,6 +26,7 @@ geöffnet.
 | `VIDEOLA_MAX_PROJECTS` | `8` | Wie viele Projekte im Speicher offen bleiben, jedes mit eigener Kerninstanz |
 | `VIDEOLA_YOUTUBE_CLIENT_ID` | keiner | Der OAuth-Client, über den die Anmeldung an einem Kanal läuft. Zusammen mit dem Geheimnis darunter, sonst gar nicht |
 | `VIDEOLA_YOUTUBE_CLIENT_SECRET` | keiner | Die zweite Hälfte davon. Ohne beide gibt es keine Anmeldung, nur die Felder im Dialog |
+| `VIDEOLA_ELEVENLABS_KEY` | keiner | Der Schlüssel, über den das Transkribieren für Lyric-Videos läuft. Ohne ihn bietet der Editor die anderen Wege an und sagt, warum dieser fehlt |
 
 **Der Token ist keine Härtungsoption.** Der Server prüft die Bind-Adresse beim Start und weigert sich,
 ohne Token auf etwas anderem als Loopback zu lauschen — denn ein offenes Videola gibt jeder Maschine, die

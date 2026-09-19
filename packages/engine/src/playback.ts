@@ -468,6 +468,7 @@ export class Playback {
       new Set(clips),
       sourceTimes,
       sound,
+      at,
     )) {
       frames.set(clip, picture);
     }

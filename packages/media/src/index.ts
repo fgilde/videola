@@ -18,6 +18,8 @@ export type {
 } from "./import";
 export { missingMedia, relinkMedia } from "./library";
 export { importLut, LUT_MIME, MAX_LUT_SIZE, parseCube } from "./lut";
+export { lyricsInFile, parseLrc, parseLyricText } from "./lyrics";
+export type { Lyrics, LyricLine } from "./lyrics";
 export type { LutTable } from "./lut";
 export {
   deleteMedia,
