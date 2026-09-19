@@ -41,6 +41,7 @@ export function Track({
       // known -- the clip itself only knows its own box.
       data-kind={track.kind}
       data-locked={track.locked || undefined}
+      data-hidden={track.hidden || undefined}
       data-drop-target={dropTarget || undefined}
       style={{ height: `${trackHeight(track)}px` }}
     >

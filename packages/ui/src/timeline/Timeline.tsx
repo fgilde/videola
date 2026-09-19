@@ -29,6 +29,7 @@ import {
   type MediaId,
   type Project,
   type Time,
+  type Track as TrackModel,
   type TrackId,
   type TrackKind,
 } from "@videola/core";
@@ -37,7 +38,7 @@ import type { Peaks } from "@videola/media";
 
 import { useI18n } from "../i18n/useI18n";
 import type { EffectDescriptor } from "../inspector/Inspector";
-import { Icon, IconButton } from "../primitives/Icon";
+import { Icon, IconButton, type IconName } from "../primitives/Icon";
 import { chosenTransition } from "../inspector/Inspector";
 import { mediaNameIndex } from "./Clip";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -91,6 +92,27 @@ const HEIGHT_STEP = 24;
 
 const EDGE_MODES: EdgeMode[] = ["trim", "ripple", "roll"];
 const DRAG_MODES: DragMode[] = ["move", "slip", "slide"];
+
+/** Whether this row is currently out: hidden where it paints, muted where it sounds. */
+function isOut(track: TrackModel): boolean {
+  return track.kind === "audio" ? track.muted : track.hidden;
+}
+
+function outLabel(track: TrackModel): string {
+  if (track.kind === "audio") return isOut(track) ? "track.unmute" : "track.mute";
+  return isOut(track) ? "track.show" : "track.hide";
+}
+
+function rowIcon(track: TrackModel): IconName {
+  if (track.kind === "audio") return isOut(track) ? "speakerOff" : "speaker";
+  return isOut(track) ? "eyeOff" : "eye";
+}
+
+function takeOut(track: TrackModel): Command {
+  return track.kind === "audio"
+    ? cmd.trackSetFlags(track.id, !track.muted)
+    : cmd.trackSetFlags(track.id, null, null, null, !track.hidden);
+}
 
 // One clipboard entry keeps the track it came from, so a paste lands where the material was cut
 // rather than always on the first track.
@@ -380,8 +402,8 @@ export function Timeline({
   }, [project, onSelectionChange]);
 
   // The view pages ahead of a running transport rather than following it pixel by pixel: a scroll
-  // that moves every frame is unreadable, and one that moves every frame under a finger fights the
-  // finger. A tenth of the width of lead-in, so the playhead arrives with the next few seconds
+  // that moves every frame is unreadable, and one that creeps a pixel at a time under a finger
+  // fights the finger. A drag held at an edge is the other case, and it is the hand asking. A tenth of the width of lead-in, so the playhead arrives with the next few seconds
   // already visible instead of glued to the left edge.
   //
   // Only while playing. Standing still, the timeline never scrolls itself -- somebody who scrolled
@@ -737,6 +759,7 @@ export function Timeline({
               key={track.id}
               className="v-timeline__header"
               data-active={track.id === activeTrack ? "" : undefined}
+              data-hidden={isOut(track) ? "" : undefined}
               data-drop-target={dropping?.track === track.id ? "" : undefined}
               data-header-for={track.id}
               style={{ height: `${trackHeight(track)}px`, borderLeftColor: track.colorHex }}
@@ -750,13 +773,42 @@ export function Timeline({
                 onActivateTrack?.(track.id);
               }}
             >
-              <span className="v-timeline__headerName">{track.name}</span>
+              {/* The name, typed in place. A row called "V3" tells nobody which of three takes is
+                  on it, and a rename that lives only in a context menu is a rename nobody finds:
+                  this is the label, and it is also the field. */}
+              <input
+                className="v-timeline__headerName"
+                value={track.name}
+                aria-label={t("track.name", { name: track.name })}
+                data-track-name={track.id}
+                onChange={(event) =>
+                  // One key per track, so typing a name is one press of undo rather than one per
+                  // letter -- the same rule a clip's own label follows.
+                  dispatch(cmd.trackRename(track.id, event.target.value), `rename:${track.id}`)
+                }
+              />
               <span className="v-timeline__headerKind">{t(`track.kind.${track.kind}`)}</span>
               {/* The lock and the two height steps in one cell. The header is a two-row grid with a
                   named area per cell, and a third child with no area of its own is auto-placed into a
                   row of its own -- which made every header taller than the row it stands beside and
                   pushed the tracks column down. The harness caught it as slack under the last track. */}
               <div className="v-timeline__headerTools">
+                {/* Taking a row out is how anybody checks what it was doing there, so it is a
+                    button on the row rather than a setting somewhere else. The clips stay where
+                    they are and the row goes quiet. What "out" means depends on the kind: a
+                    picture track is hidden, and a sound track is muted -- an eye on a row that
+                    paints nothing would promise something it cannot do. */}
+                <button
+                  type="button"
+                  className="v-timeline__lock"
+                  aria-label={t(outLabel(track), { name: track.name })}
+                  title={t(outLabel(track), { name: track.name })}
+                  aria-pressed={isOut(track)}
+                  data-hide={track.id}
+                  onClick={() => dispatch(takeOut(track))}
+                >
+                  <Icon name={rowIcon(track)} />
+                </button>
                 {/* On the header and not in a menu: a lock is read as often as it is set -- the
                     question "why will this clip not move" is answered by looking at the row. */}
                 <button

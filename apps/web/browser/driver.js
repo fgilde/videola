@@ -1593,6 +1593,9 @@ async function announce() {
     await detected();
     await inserted();
     await keysAndView();
+    await trackHeaders();
+    if (!virtual) await edgeScroll();
+    await mcpHelp();
     await soundAndChain();
     await namedAndSized();
     await fromTheLibrary();
@@ -1847,7 +1850,7 @@ async function announce() {
     check("and the rest sit where they belong",
       [under("Bearbeiten"), under("Einfügen").length, under("Hilfe")],
       [["Rückgängig", "Wiederholen", "Spur hinzufügen"], 9,
-       ["Tastenkürzel", "Über Videola"]]);
+       ["Tastenkürzel", "KI-Anbindung (MCP)", "Über Videola"]]);
     checkAtLeast("with rows a thumb can hit",
       Math.min(...all(".v-topbar__group[open] .v-topbar__group-items button")
         .map((node) => node.getBoundingClientRect().height)),
@@ -2746,6 +2749,92 @@ async function announce() {
   // that decides whether a clip is even on screen.
   //
   // It undoes itself, so what follows works on the project it was handed.
+  /**
+   * The row headers: a name that can be typed, and an eye that takes the row out of the picture.
+   *
+   * Both are about reading a timeline rather than editing one, so both are checked on the row
+   * itself rather than through a menu somewhere.
+   */
+  async function trackHeaders() {
+    const field = await until("a track name field", () => q("[data-track-name]"));
+    const id = field.dataset.trackName;
+    setValue(field, "Bauchbinden");
+    await sleep(250);
+    check("a track is renamed where its name is written", q(`[data-track-name="${id}"]`).value, "Bauchbinden");
+    button("Rückgängig").click();
+    await sleep(250);
+    check("and the whole name comes back in one step, not one letter at a time",
+      q(`[data-track-name="${id}"]`).value !== "Bauchbinden", true);
+
+    const eye = q(`[data-hide="${id}"]`);
+    eye.click();
+    await sleep(300);
+    check("the eye takes the row out of the picture", q(`[data-track-id="${id}"]`).hasAttribute("data-hidden"), true);
+    check("hiding a row raised nothing", banner(), "");
+    q(`[data-hide="${id}"]`).click();
+    await sleep(300);
+    check("and puts it back", q(`[data-track-id="${id}"]`).hasAttribute("data-hidden"), false);
+
+    // Which project is open and whether it holds the work, over the middle of the bar. Measured,
+    // because "centred" is a claim about pixels and nothing else can check it.
+    const bar = q(".v-topbar").getBoundingClientRect();
+    const readout = q(".v-topbar__file").getBoundingClientRect();
+    checkNear("the project readout sits over the middle of the bar",
+      (readout.left + readout.right) / 2, (bar.left + bar.right) / 2, 2);
+  }
+
+  /**
+   * A clip dragged against the right-hand edge takes the view with it.
+   *
+   * Wall clock only: the view follows the drag on `requestAnimationFrame`, and virtual time stops
+   * the frame clock -- there the loop would simply never be called.
+   */
+  async function edgeScroll() {
+    const surface = q(".v-timeline__scroll");
+    surface.focus();
+    // Far enough in that the edit is much wider than its window; otherwise there is nowhere to go.
+    for (let step = 0; step < 6; step += 1) key("+", surface);
+    await sleep(250);
+    surface.scrollLeft = 0;
+    const clip = q("[data-clip-id]");
+    const box = clip.getBoundingClientRect();
+    const view = surface.getBoundingClientRect();
+    const y = box.top + box.height / 2;
+
+    pointer("pointerdown", clip, { clientX: box.left + 12, clientY: y });
+    pointer("pointermove", surface, { clientX: box.left + 40, clientY: y });
+    // Held at the rim without moving another pixel: everything that happens from here is the view
+    // following the drag rather than the hand.
+    pointer("pointermove", surface, { clientX: view.right - 6, clientY: y });
+    await sleep(600);
+    const travelled = surface.scrollLeft;
+    pointer("pointerup", surface, { clientX: view.right - 6, clientY: y });
+    await sleep(200);
+
+    checkAtLeast("a drag held at the edge takes the view with it", travelled, 40);
+    check("and the view stops once the drag is let go",
+      Math.abs(surface.scrollLeft - travelled) < 40, true);
+    check("following an edge raised nothing", banner(), "");
+    button("Rückgängig").click();
+    await sleep(250);
+    key("0", surface);
+    await sleep(250);
+  }
+
+  /** The Help entry that says how an agent gets at all of this. */
+  async function mcpHelp() {
+    pickMenu("KI-Anbindung (MCP)");
+    const dialog = await until("the MCP dialogue", () => q('[data-testid="mcp"]'));
+    const written = JSON.parse(q('[data-testid="mcp-config"]').textContent);
+    check("the help entry hands over a configuration a client can take as it stands",
+      [written.mcpServers.videola.command, written.mcpServers.videola.args[0].endsWith("mcp.mjs")],
+      ["node", true]);
+    check("and says where it goes", dialog.textContent.includes("claude_desktop_config.json"), true);
+    dialog.close();
+    await sleep(200);
+    check("opening the MCP help raised nothing", banner(), "");
+  }
+
   async function keysAndView() {
     const surface = q(".v-timeline__scroll");
     const before = all("[data-clip-id]").length;
@@ -2962,14 +3051,14 @@ async function announce() {
     // the one the button belongs to.
     const headOf = (name) =>
       all(".v-timeline__header").find(
-        (head) => head.querySelector(".v-timeline__headerName").textContent === name);
+        (head) => head.querySelector(".v-timeline__headerName").value === name);
     // The style the layout is given rather than the rectangle it produced: under a virtual clock the
     // layout lags behind the DOM, and this claim is about the height a row was set to. That the layout
     // honours it is what the slack check further down measures.
     const tall = (name) => Math.round(Number.parseFloat(headOf(name).style.height));
     // Whichever track is on top by now: earlier steps in this run add and remove tracks, so a name
     // written into the check would be a name that stops existing.
-    const row = q(".v-timeline__headerName").textContent;
+    const row = q(".v-timeline__headerName").value;
     const resting = tall(row);
     button(`${row} höher`).click();
     await sleep(150);

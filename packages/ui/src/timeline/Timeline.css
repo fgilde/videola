@@ -888,3 +888,33 @@
     display: none;
   }
 }
+
+/* The name is a field now, so it has to read as a label until somebody types in it. */
+.v-timeline__headerName {
+  width: 100%;
+  min-width: 0;
+  padding: 1px 4px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--v-radius-sm);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+.v-timeline__headerName:hover {
+  border-color: var(--v-border);
+}
+
+.v-timeline__headerName:focus-visible {
+  background: var(--v-surface);
+  border-color: var(--v-accent);
+}
+
+/* A row taken out of the picture goes quiet: its clips are still there to be dragged, and the
+   export leaves them out. Half-lit rather than gone, because a row nobody can see is a row nobody
+   remembers to switch back on. */
+.v-timeline__header[data-hidden],
+.v-track[data-hidden] {
+  opacity: 0.45;
+}

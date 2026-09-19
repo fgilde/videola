@@ -170,12 +170,19 @@
    bar. Quiet until it has something to say -- the state goes bold only while there is something
    unwritten, because a permanent warning is a warning nobody reads. */
 .v-topbar__file {
+  /* Out of the row and over its middle: a title belongs in the centre of a title bar, and in the
+     flow it sat wherever the menus to its left happened to end. Nothing to click, so it lets
+     everything under it through. */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
   min-width: 0;
   max-width: 22ch;
-  margin-inline-end: var(--v-space-2);
   line-height: 1.15;
 }
 

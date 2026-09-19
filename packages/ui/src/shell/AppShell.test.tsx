@@ -86,6 +86,7 @@ describe("AppShell", () => {
     expect(under("insert", "Bauchbinde")).toBe(true);
     expect(under("project", "Format ändern")).toBe(true);
     expect(under("help", "Tastenkürzel")).toBe(true);
+    expect(under("help", "KI-Anbindung (MCP)")).toBe(true);
   });
 
   it("exposes the resolved layout mode on the root element", () => {

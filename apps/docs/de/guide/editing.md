@@ -7,6 +7,9 @@ die Namen, die jeder Editor benutzt, damit „wo ist der Import“ die Antwort h
 Rückgängig, Wiederholen, Exportieren und Speichern liegen auf der Leiste selbst: die braucht man
 ständig, und ein Menü wäre dafür ein Klick zu viel.
 
+Über der Mitte dieser Leiste steht der Name des Projekts und ob es die Arbeit hält — dort, wo ein
+Desktop-Editor seine Titelzeile hat, und still, solange nichts Ungeschriebenes offen ist.
+
 Auf dem Telefon werden dieselben sechs zu einer Aufklappliste mit sechs Gruppen darin. Derselbe
 Baum, eine Ebene tiefer — sechs Titel passen nicht in 390 px, wenn jeder einen Daumen breit ist.
 
@@ -401,6 +404,21 @@ er ist die Antwort auf ein Menü mit elf Medien darin, das niemand liest.
 Neue Spuren werden nach ihrer Art gezählt: Die dritte Bildspur heißt V3, auch wenn schon vier
 Tonspuren im Projekt liegen.
 
+### Der Name einer Spur, und eine Spur aus dem Bild nehmen
+
+Der Name im Spurkopf ist das Eingabefeld: anklicken und tippen. V3 sagt nichts darüber, welcher von
+drei Takes darauf liegt, und ein Umbenennen, das nur im Kontextmenü wohnt, findet niemand. Ein
+getippter Name ist ein Undo-Schritt, nicht einer pro Buchstabe.
+
+Das Auge neben dem Schloss nimmt die Spur aus dem Bild. Die Clips bleiben liegen, Vorschau und
+Export lassen sie weg, und die Zeile wird still, damit der Grund auf dem Schirm steht statt in
+einem Menü. So nimmt man vier übereinanderliegende Ebenen auseinander, um zu sehen, was jede tut —
+und anders als beim Löschen zum Nachsehen ist es ein Klick zurück.
+
+Auf einer Tonspur ist derselbe Knopf ein Lautsprecher und schaltet die Spur stumm — dieselbe
+Markierung, die auch das **M** im Mischer setzt. Eine Tonspur malt kein Bild, und ein Auge darauf
+verspräche etwas, das es nicht halten kann.
+
 ### Ein Medium herübertragen
 
 Ein Eintrag der Bibliothek wird mit gedrückter Maustaste auf die Zeitleiste getragen. Unterwegs hängt
@@ -660,11 +678,17 @@ bei einem Zoom stehen, der fast stimmt, statt bei dem, der passt.
 Während der Transport läuft, blättert die Zeitleiste voraus, damit der Abspielkopf auf dem Schirm
 bleibt: sie springt, wenn er auf ein Zehntel der Breite an den rechten Rand herankommt, und landet mit
 diesem Zehntel Vorlauf, damit die nächsten Sekunden schon zu sehen sind. Eine Ansicht, die pro Bild
-einen Pixel scrollt, ist unlesbar; eine, die mitten in einem Zug unter der Hand wegrutscht,
-unbenutzbar.
+einen Pixel scrollt, ist unlesbar; eine, die pixelweise unter der Hand wegkriecht, kämpft gegen
+die Hand.
 
-Im Stand scrollt die Zeitleiste nie von selbst. Wer weggescrollt ist, um etwas anderes anzusehen, hat
-das mit Absicht getan.
+Solange etwas gezogen wird, nimmt eine Hand nahe am linken oder rechten Rand die Ansicht mit, umso
+schneller, je näher am Rand. Der Clip folgt der Hand weiter, denn er folgt dem Zeitpunkt unter dem
+Zeiger und nicht dem Pixel: die Ansicht wandert darunter weg. Ohne das käme ein Clip nie weiter als
+das Fenster breit ist, und ihn eine Minute nach hinten zu schieben hieß loslassen, scrollen, neu
+aufnehmen.
+
+Im Stand und mit leerer Hand scrollt die Zeitleiste nie von selbst. Wer weggescrollt ist, um etwas
+anderes anzusehen, hat das mit Absicht getan.
 
 ### Was ein Zoomschritt ist
 

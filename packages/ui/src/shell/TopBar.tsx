@@ -23,6 +23,7 @@ export interface TopBarActions {
   /** Opens the dialogue that turns a song into a video with its words on it. */
   onLyrics?: () => void;
   onKeys?: () => void;
+  onMcp?: () => void;
   /** Where the browser build offers a desktop one. Absent in the desktop build itself. */
   getAppHref?: string;
   onNew?: () => void;
@@ -191,6 +192,9 @@ export function TopBar({
       items: (
         <>
           <Action label={t("action.keys")} onClick={actions.onKeys} />
+          {/* Under Help rather than under Project: nobody looks for this while editing, they look
+              for it once, on the day they want an agent to do the editing. */}
+          <Action label={t("mcp.label")} onClick={actions.onMcp} />
           <Action label={t("about.label")} onClick={actions.onAbout} />
           {actions.getAppHref !== undefined && (
             <a className="v-button" href={actions.getAppHref} target="_blank" rel="noreferrer">

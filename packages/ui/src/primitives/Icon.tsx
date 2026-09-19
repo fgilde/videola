@@ -26,6 +26,12 @@ const OUTLINED = {
   // A shackle over a body, closed and open. The open one leans its shackle to the right, which is
   // the difference a reader sees at 16 px -- a hole in the ring is not one.
   lock: "M8 10.5V7.5a4 4 0 0 1 8 0v3M6.2 10.5h11.6v9H6.2z",
+  // Whether a row reaches the picture at all. Drawn rather than borrowed, like every other
+  // symbol here: one outline, and the same outline with a stroke through it.
+  eye: "M2.5 12s3.6-6 9.5-6 9.5 6 9.5 6-3.6 6-9.5 6-9.5-6-9.5-6M12 9.4a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2",
+  eyeOff: "M2.5 12s3.6-6 9.5-6c1.6 0 3 .44 4.3 1.1M21.5 12s-3.6 6-9.5 6c-1.7 0-3.2-.5-4.5-1.2M4 4l16 16",
+  speaker: "M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9.2a4 4 0 0 1 0 5.6M18.6 6.6a7.6 7.6 0 0 1 0 10.8",
+  speakerOff: "M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 10l5 4M21 10l-5 4",
   unlock: "M8 10.5V7.5a4 4 0 0 1 7.6-1.8M6.2 10.5h11.6v9H6.2z",
   // A metronome: the case, and the arm leaning off centre. What "find the beat" is drawn as.
   metronome: "M9.5 4h5l3.5 16H6zM6.8 15.5h10.4M12 17V6.5l4-1.8",

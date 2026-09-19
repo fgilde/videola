@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect, useState, type ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   captionClips,
@@ -785,6 +785,149 @@ describe("merging two captions", () => {
     fireEvent.contextMenu(clipAt(0), { clientX: 20, clientY: 40 });
     const entry = screen.getByRole("menuitem", { name: "Mit naechstem Untertitel verbinden" });
     expect((entry as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+// Two rows of the same colour called V1 and V2 tell nobody which take is on which, and a row that
+// cannot be taken out of the picture cannot be answered the question "what is this one doing".
+describe("a track header", () => {
+  beforeEach(() => stubViewport());
+  afterEach(restoreViewport);
+
+  it("takes the row out of the picture and puts it back from the same button", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "V1 ausblenden" }));
+    expect(doc.state.timeline.tracks[0]?.hidden).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "V1 einblenden" }));
+    expect(doc.state.timeline.tracks[0]?.hidden).toBe(false);
+  });
+
+  it("says so on the row, so a missing picture has a visible reason", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "V1 ausblenden" }));
+    expect(document.querySelector("[data-track-id][data-hidden]")).not.toBeNull();
+  });
+
+  // A sound track paints nothing, so an eye on it would promise something it cannot do. What
+  // taking one out means there is muting it, and the mixer reads the same flag.
+  it("mutes a sound row rather than pretending to hide it", async () => {
+    const doc = await documentWithClips(1);
+    doc.dispatch(cmd.trackAdd("audio", "A1"));
+    render(<Harness doc={doc} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "A1 stumm schalten" }));
+    const audio = doc.state.timeline.tracks.find((track) => track.kind === "audio");
+    expect([audio?.muted, audio?.hidden]).toEqual([true, false]);
+
+    fireEvent.click(screen.getByRole("button", { name: "A1 wieder hörbar machen" }));
+    expect(doc.state.timeline.tracks.find((track) => track.kind === "audio")?.muted).toBe(false);
+  });
+
+  it("renames the track where its name is written", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Name der Spur V1" }), {
+      target: { value: "Bauchbinden" },
+    });
+    expect(doc.state.timeline.tracks[0]?.name).toBe("Bauchbinden");
+  });
+
+  it("keeps a typed name to one undo step rather than one per letter", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+
+    for (const name of ["B", "Ba", "Bau"]) {
+      fireEvent.change(screen.getByRole("textbox", { name: /Name der Spur/ }), {
+        target: { value: name },
+      });
+    }
+    doc.undo();
+    expect(doc.state.timeline.tracks[0]?.name).toBe("V1");
+  });
+});
+
+// A window is always narrower than a timeline. Without this, moving a clip a minute later meant
+// letting go of it, scrolling, and picking it up again.
+describe("a drag held against an edge", () => {
+  beforeEach(() => {
+    stubViewport();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreViewport();
+  });
+
+  /** jsdom lays nothing out, so the surface is told how wide it is and where. */
+  function widen(width: number): HTMLElement {
+    const view = surface();
+    view.getBoundingClientRect = (): DOMRect =>
+      ({ left: 0, top: 0, right: width, bottom: 80, width, height: 80, x: 0, y: 0 }) as DOMRect;
+    return view;
+  }
+
+  it("takes the view with it, and the clip keeps following the hand", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+    const view = widen(400);
+
+    down(clipAt(0), 20);
+    move(390);
+    const atTheEdge = starts(doc.state)[0] ?? 0;
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    up(390);
+
+    expect(view.scrollLeft).toBeGreaterThan(0);
+    // The hand has not moved a pixel since; everything the clip gained came from the view moving
+    // under it, which is the whole point of following an edge.
+    expect(starts(doc.state)[0] ?? 0).toBeGreaterThan(atTheEdge);
+  });
+
+  it("stops when the hand comes back into the middle", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+    const view = widen(400);
+
+    down(clipAt(0), 20);
+    move(390);
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    move(200);
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    const parked = view.scrollLeft;
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    up(200);
+
+    expect(parked).toBeGreaterThan(0);
+    expect(view.scrollLeft).toBe(parked);
+  });
+
+  it("leaves the view alone while the pointer is nowhere near an edge", async () => {
+    const doc = await documentWithClips(1);
+    render(<Harness doc={doc} />);
+    const view = widen(400);
+
+    down(clipAt(0), 20);
+    move(200);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    up(200);
+
+    expect(view.scrollLeft).toBe(0);
   });
 });
 

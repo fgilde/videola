@@ -113,6 +113,7 @@ import {
   EffectBrowser,
   ExportDialog,
   Inspector,
+  Mcp,
   Shortcuts,
   MediaLibrary,
   Mixer,
@@ -306,6 +307,7 @@ export function App(): ReactElement {
   const [mixerOpen, setMixerOpen] = useState(false);
   const [about, setAbout] = useState(false);
   const [keys, setKeys] = useState(false);
+  const [mcp, setMcp] = useState(false);
   // A browser tab left open for a week runs whatever was current when it was opened. The service
   // worker notices a new build and waits; nothing is swapped under a session with work in it, so
   // this is an offer and the reload is the answer to it.
@@ -2382,6 +2384,7 @@ export function App(): ReactElement {
       recording={recording}
       onAbout={() => setAbout(true)}
       onKeys={() => setKeys(true)}
+      onMcp={() => setMcp(true)}
       // Only in a browser: in the desktop build this would offer to install what is already
       // running. `insideTauri` is the same question the updater asks, and asked the same way.
       getAppHref={insideTauri() ? undefined : `${SITE}download`}
@@ -2868,6 +2871,7 @@ export function App(): ReactElement {
         <About version={APP_VERSION} desktop={insideTauri()} onClose={() => setAbout(false)} />
       )}
       {keys && <Shortcuts onClose={() => setKeys(false)} />}
+      {mcp && <Mcp onClose={() => setMcp(false)} />}
     </AppShell>
   );
 }

@@ -7,6 +7,9 @@ names every editor uses, so "where is import" has the answer somebody already kn
 export and save sit on the bar itself, because those are reached for constantly and a menu is one
 click too many for them.
 
+Over the middle of that bar stands the project's name and whether it holds the work — where a
+desktop editor puts a title bar, and quiet until there is something unwritten.
+
 On a phone the same six become one disclosure with six groups inside it. Same tree, one level
 deeper, because six titles do not fit 390 px at a thumb's width each.
 
@@ -377,6 +380,21 @@ for — and it is the answer to a menu with eleven media in it that nobody reads
 New tracks are counted by their kind: the third video track is V3, even where the project already
 holds four audio tracks.
 
+### A track's name, and taking a track out of the picture
+
+The name in the header is the field: click it and type. V3 says nothing about which of three takes
+is on it, and a rename that lives only in a context menu is a rename nobody finds. A typed name is
+one undo step, not one per letter.
+
+The eye beside the padlock takes the row out of the picture. The clips stay where they are, the
+preview and the export leave them out, and the row goes quiet so the reason is on screen rather
+than in a menu. It is how a stack of four graded layers is taken apart to see what each one does —
+and unlike deleting the row to look, it is one click back.
+
+On a sound track the same button is a loudspeaker and mutes the row, which is the same flag the
+mixer's **M** sets. A sound track paints nothing, and an eye on it would promise something it
+cannot do.
+
 ### Carrying a medium over
 
 A library entry is carried onto the timeline with the button held down. On the way its name hangs off
@@ -620,10 +638,16 @@ at a zoom that is nearly right instead of the one that fits.
 While the transport runs, the timeline pages ahead to keep the playhead on screen: it jumps when the
 playhead reaches within a tenth of the width of the right edge, and lands with that tenth as lead-in
 so the next few seconds are already visible. A view that scrolled a pixel per frame would be
-unreadable, and one that scrolled under a hand mid-drag would be unusable.
+unreadable, and one that crept a pixel at a time under a hand would fight it.
 
-Standing still, the timeline never scrolls itself. Somebody who scrolled away to look at something
-else did that on purpose.
+While something is being dragged, a hand held near the left or right edge of the timeline takes the
+view with it, faster the nearer the edge. The clip keeps following the hand, because what it follows
+is the instant under the pointer and not the pixel: the view moves underneath. Without it, a clip
+could only ever travel as far as the window is wide, and moving something a minute later meant
+letting go, scrolling, and picking it up again.
+
+Standing still and with nothing in hand, the timeline never scrolls itself. Somebody who scrolled
+away to look at something else did that on purpose.
 
 ### What a zoom step is
 

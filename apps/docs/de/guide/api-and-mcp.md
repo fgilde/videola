@@ -108,6 +108,24 @@ Der MCP-Server liest nur `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` und `VID
 auf nichts, also darf ihn eine Bindeadresse für den HTTP-Server nicht am Start hindern — genau das
 täte sonst ein Container, der `VIDEOLA_HOST` für seine Schnittstelle setzt.
 
+Für einen MCP-Client ist das ein stdio-Eintrag:
+
+```json
+{
+  "mcpServers": {
+    "videola": {
+      "command": "node",
+      "args": ["/pfad/zu/videola/apps/server/dist/mcp.mjs"],
+      "env": { "VIDEOLA_STORAGE_ROOT": "/pfad/zu/meinen/videos" }
+    }
+  }
+}
+```
+
+Denselben Block zeigt der Editor unter **Hilfe → KI-Anbindung (MCP)**, mit einem Knopf, der ihn in
+die Zwischenablage legt, und den drei Orten, an die er gehört. Niemand soll diese Seite finden
+müssen, um einen Client anzuschließen.
+
 Dieselben Bündel bringen eine CLI mit (`dist/cli.mjs`), die eine Command-Folge aus einer Datei auf ein
 Projekt anwendet und es speichert; siehe [Bauen und Ausliefern](./building-and-releasing.md).
 

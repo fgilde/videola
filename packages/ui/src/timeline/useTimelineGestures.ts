@@ -36,6 +36,11 @@ import {
 const LONG_PRESS_MS = 500;
 const DRAG_THRESHOLD_PX = 3;
 const WHEEL_ZOOM_FACTOR = 1.15;
+// How near an edge a drag has to be held before the view follows it, and how far the view travels
+// in one frame at the very edge. Roughly a second to cross a screen, which is fast enough to be
+// worth having and slow enough to stop where you meant to.
+const EDGE_SCROLL_ZONE_PX = 56;
+const EDGE_SCROLL_MAX_PX = 22;
 
 // Which command an edge drag and a clip drag turn into. Two plain choices instead of modifier keys
 // on the pointer: a finger has no modifiers, and shift-click already means "add to the selection".
@@ -145,6 +150,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const [menu, setMenu] = useState<TimelineMenu>();
   const [snapLine, setSnapLine] = useState<Time>();
   const [marquee, setMarquee] = useState<Marquee>();
+  const following = useRef<{ x: number; y: number; alt: boolean; frame: number } | undefined>(undefined);
 
   const cancelLongPress = useCallback(() => {
     clearTimeout(longPress.current);
@@ -283,6 +289,60 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
     [cancelLongPress, openMenu],
   );
 
+  // A drag held against an edge takes the view with it. Without this a clip can only travel as far
+  // as the window shows, and a timeline is always longer than the window -- moving something a
+  // minute later meant letting go, scrolling, and picking it up again.
+  const stopFollowing = useCallback(() => {
+    if (following.current === undefined) return;
+    cancelAnimationFrame(following.current.frame);
+    following.current = undefined;
+  }, []);
+
+  useEffect(() => stopFollowing, [stopFollowing]);
+
+  const followEdge = useCallback(
+    (x: number, y: number, alt: boolean) => {
+      const surface = latest.current.surface.current;
+      if (surface === null) return;
+      if (following.current !== undefined) {
+        // The loop already runs; it only ever needs to know where the hand is now.
+        following.current.x = x;
+        following.current.y = y;
+        following.current.alt = alt;
+        return;
+      }
+      if (edgeScrollStep(surface, x) === 0) return;
+      const tick = (): void => {
+        const point = following.current;
+        const active = drag.current;
+        const config = latest.current;
+        const view = config.surface.current;
+        if (point === undefined || view === null || !travelling(active)) {
+          stopFollowing();
+          return;
+        }
+        const step = edgeScrollStep(view, point.x);
+        if (step === 0) {
+          stopFollowing();
+          return;
+        }
+        const before = view.scrollLeft;
+        view.scrollLeft = before + step;
+        const moved = view.scrollLeft - before;
+        // The pointer stands still while the view moves under it, so the drag's origin moves the
+        // other way by the same amount: what the clip follows is the instant under the hand, not
+        // the pixel. At the end of the timeline nothing moves and there is nothing to re-apply.
+        if (moved !== 0) {
+          active.clientX -= moved;
+          setSnapLine(dragTo(config, active, point.x, point.y, point.alt));
+        }
+        point.frame = requestAnimationFrame(tick);
+      };
+      following.current = { x, y, alt, frame: requestAnimationFrame(tick) };
+    },
+    [stopFollowing],
+  );
+
   const onPointerMove = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       notePointerType(event.pointerType, setTrimZonePx);
@@ -328,18 +388,10 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
         active.live = true;
       }
 
-      const options = snapOptions(config, event.altKey);
-      if (active.mode === "keyframe") {
-        setSnapLine(applyKeyframe(config, active, dx, options)?.time);
-        return;
-      }
-      setSnapLine(
-        active.mode === "move"
-          ? applyMove(config, active, dx, dy, options)?.time
-          : applyTrim(config, active, dx, options)?.time,
-      );
+      setSnapLine(dragTo(config, active, event.clientX, event.clientY, event.altKey));
+      followEdge(event.clientX, event.clientY, event.altKey);
     },
-    [cancelLongPress],
+    [cancelLongPress, followEdge],
   );
 
   // Leaving the coalesce key off from here on is what closes the undo step; the next
@@ -347,6 +399,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
   const releasePointer = useCallback(
     (event: PointerEvent<HTMLElement>, revert: boolean) => {
       cancelLongPress();
+      stopFollowing();
       pointers.current.delete(event.pointerId);
       const active = drag.current;
       if (active === undefined) return;
@@ -382,7 +435,7 @@ export function useTimelineGestures(config: GestureConfig): TimelineGestures {
       drag.current = undefined;
       setSnapLine(undefined);
     },
-    [cancelLongPress],
+    [cancelLongPress, stopFollowing],
   );
 
   const onPointerUp = useCallback(
@@ -539,6 +592,47 @@ function clipsUnder(config: GestureConfig, drag: MarqueeDrag): ClipId[] {
 }
 
 type MarqueeDrag = Extract<Drag, { mode: "marquee" }>;
+
+/** Whether a drag is one that carries something along the timeline, and has begun to. */
+function travelling(active: Drag | undefined): active is MoveDrag | TrimDrag | KeyframeDrag {
+  if (active === undefined) return false;
+  if (active.mode !== "move" && active.mode !== "trim" && active.mode !== "keyframe") return false;
+  return active.live;
+}
+
+/** What the drag does with a pointer at this spot, whether the hand moved or the view did. */
+function dragTo(
+  config: GestureConfig,
+  active: MoveDrag | TrimDrag | KeyframeDrag,
+  x: number,
+  y: number,
+  alt: boolean,
+): Time | undefined {
+  const dx = x - active.clientX;
+  const options = snapOptions(config, alt);
+  if (active.mode === "keyframe") return applyKeyframe(config, active, dx, options)?.time;
+  return active.mode === "move"
+    ? applyMove(config, active, dx, y - active.clientY, options)?.time
+    : applyTrim(config, active, dx, options)?.time;
+}
+
+/**
+ * How far the view travels this frame with a drag held near one of its edges.
+ *
+ * Nothing at all until the pointer is inside the zone, then up the ramp to full speed at the very
+ * edge: a correction made just inside it stays controllable, and a hand parked at the rim covers
+ * ground.
+ */
+function edgeScrollStep(surface: HTMLElement, clientX: number): number {
+  const box = surface.getBoundingClientRect();
+  // A view narrower than two zones has no middle left, and everything in it would scroll.
+  if (box.width <= EDGE_SCROLL_ZONE_PX * 2) return 0;
+  const into = (past: number): number => Math.min(1, Math.max(0, past) / EDGE_SCROLL_ZONE_PX);
+  const back = into(box.left + EDGE_SCROLL_ZONE_PX - clientX);
+  const on = into(clientX - (box.right - EDGE_SCROLL_ZONE_PX));
+  return Math.round((on - back) * EDGE_SCROLL_MAX_PX);
+}
+
 type MoveDrag = Extract<Drag, { mode: "move" }>;
 type TrimDrag = Extract<Drag, { mode: "trim" }>;
 type KeyframeDrag = Extract<Drag, { mode: "keyframe" }>;

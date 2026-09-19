@@ -38,6 +38,7 @@ export * from "./templates/TemplateWizard";
 export * from "./templates/outline";
 export * from "./shell/About";
 export * from "./shell/AppShell";
+export * from "./shell/Mcp";
 export * from "./shell/Shortcuts";
 export * from "./shell/UpdateOffer";
 export * from "./shell/PanelTabs";

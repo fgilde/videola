@@ -107,6 +107,9 @@ The MCP server reads only `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` and `VI
 listens on nothing, so a bind address meant for the HTTP server cannot stop it from starting — which
 is what a container that sets `VIDEOLA_HOST` for its API would otherwise do.
 
+The editor has the same block under **Help → AI access (MCP)**, with a button that puts it on the
+clipboard and the three places it goes. Nobody should have to find this page to wire up a client.
+
 For an MCP client, that is a stdio server entry:
 
 ```json
