@@ -1,7 +1,7 @@
 # What Videola does
 
-A tour of the editor as it stands. Everything below is built and checked; the
-[architecture chapter](/guide/architecture) marks, decision by decision, what is planned instead.
+A walk through the editor. Everything on this page is finished and tested — what is still planned
+is in the [architecture chapter](/guide/architecture).
 
 ## The editing surface
 

@@ -1,23 +1,21 @@
 # Was Videola kann
 
-Ein Rundgang durch den Editor, wie er dasteht. Alles hier ist gebaut und geprüft; das
-[Architektur-Kapitel](/de/guide/architecture) hält Entscheidung für Entscheidung fest, was
-stattdessen geplant ist.
+Ein Rundgang durch den Editor. Alles auf dieser Seite ist fertig und getestet — was noch geplant
+ist, steht im [Architektur-Kapitel](/de/guide/architecture).
 
 ## Die Oberfläche
 
 ![Videola am Schreibtisch: Medienbibliothek links, ein dekodiertes Bild in der Vorschau, Eigenschaften rechts, unter dem Transport die Messgeräte und darunter die Zeitleiste](/editor-desktop.webp)
 
-Vier Bereiche, und das Bild ist der größte davon — dafür gibt es eine Prüfung, weil eine Rasterzeile,
-die mit ihrem Inhalt wächst, die Leinwand schon zweimal auf Briefmarkengröße geschrumpft hatte,
-ohne dass es jemandem auffiel.
+Vier Bereiche, und das Bild bekommt den meisten Platz. Ein automatischer Test wacht darüber — die
+Vorschau war schon zweimal auf Briefmarkengröße geschrumpft, ohne dass es jemand gemerkt hat.
 
-**Die Bibliothek** zeigt, was im Projekt liegt: Länge, Maße in Pixeln, Abtastrate und ein
-Vorschaubild, das aus der Datei selbst dekodiert wurde. **Die Eigenschaften** zeigen, was am
-gewählten Clip einstellbar ist, und lassen jeden Wert über die Zeit animieren. **Die Zeitleiste** ist
-der Ort der Arbeit. **Das Mischpult** trägt einen Streifen je Spur und einen Summenzug; es wird wie
-die Messgeräte im Transport aufgeklappt und beginnt zugeklappt, denn das Bild ist der größte Bereich
-auf dem Schirm, und keines von beidem ist es wert, das ungefragt aufzugeben.
+**Die Bibliothek** links zeigt alles, was im Projekt liegt: Länge, Auflösung, Abtastrate und ein
+Vorschaubild aus der Datei selbst. **Die Eigenschaften** rechts zeigen, was sich am gewählten Clip
+einstellen lässt; jeder Wert lässt sich über die Zeit animieren. **Die Zeitleiste** unten ist der
+Ort, an dem geschnitten wird. **Das Mischpult** hat einen Zug pro Spur plus Summe und klappt sich
+auf, wenn du es brauchst — zusammen mit den Messgeräten, damit das Bild groß bleibt, solange du
+beides nicht brauchst.
 
 **Video, Ton und Bilder** sind hier alles Medien. Ein PNG, JPEG, WebP, GIF, BMP oder AVIF landet wie
 alles andere in der Bibliothek, bekommt auf der Zeitleiste fünf Sekunden, weil einem Bild keine Länge

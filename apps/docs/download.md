@@ -5,9 +5,9 @@ description: Videola for Windows, macOS, Linux, Android and iOS — and in the b
 
 # Downloads
 
-Videola runs in the browser with nothing installed. The desktop builds are the same editor in a
-window of its own: they open and save files through the operating system's own dialogues, remember
-where they were, and can check for an update.
+Videola runs in the browser with nothing to install. The desktop builds are the same editor in a
+window of its own: you open and save files through your system's normal dialogues, the app remembers
+where you were, and it tells you when there is a new version.
 
 <Downloads lang="en" />
 

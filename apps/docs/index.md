@@ -1,193 +1,146 @@
 ---
 layout: home
 hero:
-  text: A cutting room that runs where your footage already is
+  text: Cut video in your browser
   tagline: >
-    Import, cut, keyframe, grade, mix and export — in a browser tab, on a desktop, on a phone.
-    The model is one Rust crate, the pictures are WebGL2, and the material stays in your own
-    browser storage until you send it somewhere.
+    Drop your clips in — or paste a YouTube link and pull the video straight down. Cut it, colour
+    it, mix the sound, export an MP4. Nothing is uploaded: your footage stays on your machine.
   image:
     src: /videola-logo.webp
     alt: Videola
   actions:
     - theme: brand
+      text: Try it now
+      link: https://video.nksoft.de/
+    - theme: alt
       text: Downloads
       link: /download
     - theme: alt
-      text: Try it live
-      link: https://video.nksoft.de/
-    - theme: alt
-      text: What it does
+      text: What it can do
       link: /guide/features
     - theme: alt
       text: Source
       link: https://github.com/fgilde/videola
 features:
-  - title: Nothing leaves the machine
+  - title: Import from YouTube and a thousand other sites
     details: >
-      A file dropped on the window is hashed and written into the browser's own storage under that
-      hash. No upload, no account, no project sitting on somebody else's disk — and the same file
-      twice is stored once.
+      Drag your own files onto the window, or paste a link — or just search. Videola pulls the
+      video down and you pick the format and quality first. Works for YouTube, Vimeo, TikTok and
+      most sites yt-dlp knows; you need the Videola server running for it.
+    link: /guide/editing#getting-media-in
+    linkText: Importing
+  - title: Your footage never leaves your machine
+    details: >
+      No upload, no account, no project sitting on someone else's server. Files go into your
+      browser's own storage and stay there until you decide to publish.
     link: /guide/editing
-    linkText: Editing
-  - title: Record mode
+    linkText: How it works
+  - title: Cuts, trims and everything around them
     details: >
-      Press the round button, move the playhead, change what you want changed. Every slider and
-      every drag across the picture becomes a key at that instant, the clip's start is pinned with
-      what was there before, and the window carries a purple border so you can see what mode you
-      are in.
+      Ripple, roll, slip, slide, groups, markers, snapping, copy and paste of attributes — and the
+      same gestures work with a finger on a phone.
+    link: /guide/editing#the-timeline
+    linkText: The timeline
+  - title: Keyframes without the busywork
+    details: >
+      Switch on record, move the playhead, change something. Videola writes the keyframes for you
+      and keeps everything before your change exactly as it was.
     link: /guide/editing#recording-keyframes
     linkText: Keyframes
-  - title: Eight ways out
+  - title: Colour and sound finished in the editor
     details: >
-      YouTube and Vimeo through their own APIs, and the ones that ask nobody's permission:
-      PeerTube on a machine you own, Bluesky with an app password from the account's settings,
-      Mastodon, Telegram, a Facebook page, or any URL you like.
+      Scopes, curves, colour wheels and your own LUTs. A mixer with EQ, compressor, limiter,
+      loudness to broadcast target, ducking and noise reduction that learns from the pauses in your
+      own recording.
+    link: /guide/audio
+    linkText: Sound
+  - title: Effects you can see before you pick one
+    details: >
+      Sixteen effects and seven transitions, and every tile in the browser shows your frame with
+      that effect on it. Anything you set can be animated.
+    link: /guide/effects-and-transitions
+    linkText: Effects
+  - title: Publish without leaving the editor
+    details: >
+      Send the finished file to YouTube, Vimeo, PeerTube, Mastodon, Bluesky, Telegram, a Facebook
+      page or any address of your own. Bluesky needs nothing but an app password.
     link: /guide/self-hosting#destinations
     linkText: Destinations
-  - title: One pointer path for mouse and touch
+  - title: Browser, desktop, phone, your own server
     details: >
-      Dragging, trimming, scrubbing, pinch-zoom and long-press all run through Pointer Events, so
-      the phone is not a second implementation. Hit areas grow to 44 px when the pointer is not a
-      mouse.
-    link: /guide/editing#the-timeline
-    linkText: Gestures
-  - title: One model, written once
-    details: >
-      The project model, the command bus and the .videola reader and writer live in
-      videola-core, a Rust crate. The browser drives the same crate through WASM, so there is no
-      second model in TypeScript to keep in step.
-    link: /guide/architecture
-    linkText: How it fits together
-  - title: Undo from diffs
-    details: >
-      Applying a command produces a JSON-Patch and its inverse. Undo replays the inverse, so no
-      command carries a hand-written reverse operation that can drift out of step with it.
-    link: /guide/commands-and-undo
-    linkText: Commands and undo
-  - title: Integer time
-    details: >
-      Positions and durations are flicks, not float seconds. One second is 705,600,000 flicks,
-      which divides evenly into every frame rate and audio sample rate the editor will meet.
-    link: /guide/architecture#time-is-an-integer
-    linkText: Why flicks
-  - title: Sound that is finished here
-    details: >
-      Stereo or 5.1 with a position per track, spectral noise reduction learned from the pauses in the
-      recording itself, loudness to a target, ducking and silence cutting. Measured against a real
-      renderer rather than asserted.
-    link: /guide/audio
-    linkText: Audio
-  - title: Motion blur that is motion
-    details: >
-      A shutter per clip, averaged over eight real instants of the exposure: each one asks the core
-      where the clip reads from then and where it stands there, so a layer smears along its own path
-      and the material smears with it.
-    link: /guide/effects-and-transitions#motion-blur
-    linkText: Effects
-  - title: A project file you can open with unzip
-    details: >
-      .videola is a ZIP holding a manifest, project.json and the media files, each named after
-      the SHA-256 hash of its own bytes. Reader and writer round-trip it losslessly.
-    link: /guide/videola-format
-    linkText: The container layout
-  - title: Types generated, not transcribed
-    details: >
-      ts-rs derives the TypeScript model types from the Rust types, and CI fails if the committed
-      output no longer matches the source.
-    link: /guide/architecture#the-typescript-facade
-    linkText: The facade
-  - title: Four ways to run it on your own machine
-    details: >
-      Docker, an Unraid template, an Umbrel app, and a Proxmox script that makes an unprivileged LXC
-      container with a systemd unit and a generated token. Every one of them sets the same variables,
-      and a deployment test holds all four against what the server actually does.
+      One codebase: a web app you can install, Windows, macOS and Linux builds, and a Docker image
+      for your NAS. Unraid, Umbrel and Proxmox have ready-made installs.
     link: /guide/self-hosting
     linkText: Running it yourself
-  - title: Web, desktop and Docker
-    details: >
-      One codebase produces the Vite web app, a Tauri shell with Windows, Linux and macOS
-      installers, and an image that serves the web app over nginx.
-    link: /guide/building-and-releasing
-    linkText: Building and releasing
 ---
 
-## What works today
+## What you can do with it today
 
-- **Editing** — ripple delete and trim, roll, slip, slide, multi-selection, groups, clipboard,
-  markers, snapping and zoom, paste attributes, with one pointer path for mouse, pen and finger.
-  Lockable tracks,
-  enforced by a single gate in front of the whole command dispatch.
-- **Compound clips** — fold a selection into one clip; the picture is proven not to change. Fade,
-  blend, grade, crop or dissolve the compound and it is isolated on a surface of its own first, so
-  all five meet the composed group once rather than each clip in it.
-- **Playback** — WebCodecs into a WebGL2 compositor, audio clock leading, frame-accurate transport.
-- **Geometry on the picture** — a box on the frame with corner and rotation handles, its corners
-  computed from the very matrix the compositor hands the GPU, and the motion path a series of
-  position keys traces, sampled from the core rather than drawn corner to corner.
-- **Cuts found by looking** — a card off a camera is one file with a dozen takes in it; the scan reads
-  every frame and splits where the picture changes far more than it did around it, in one undo step.
-- **Surround** — stereo or 5.1, a position per track rather than a knob between two speakers, pairwise
-  constant-power placement, and an LFE send that is a band.
-- **Noise reduction** — spectral, learned from the pauses in the clip itself: the noise inside a voice's
-  own band drops by more than 9 dB while the voice stays within 2 dB.
-- **Motion blur** — a shutter per clip, averaged over eight real instants of the exposure: the layer's
-  own path and whatever the material did between them, in the preview and in the file.
-- **Effects and transitions** — sixteen effects, seven transitions (any of them on every cut in one
-  choice), masks, a text generator, colour
-  curves and lift/gamma/gain wheels, chosen from a browser whose every tile is that effect's own
-  shader over the current frame. Every parameter keyframable, including a clip's position, scale and
-  rotation, all resolved in the Rust core so the preview and the export read the same values.
-- **Colour and sound finishing** — waveform, vectorscope and histogram; curves, lift/gamma/gain and
-  `.cube` lookup tables that travel inside the project file; a mixer with live meters,
-  EQ, low cut, high cut, compressor and limiter, loudness normalisation, ducking, silence detection and a marker on
-  every beat.
-- **Subtitles** — SRT and WebVTT in and out, on a caption track of their own.
-- **Classical editing** — freeze frames, in and out points, insert and overwrite, J/K/L, adjustment
-  tracks, speed
-  ramps whose time mapping is an integral rather than a multiplication.
-- **Proxies** — anything taller than 720 pixels is transcoded once into a 720p copy the preview
-  decodes; the export always reads the original, proven on the written file by ffprobe and ffmpeg.
-- **Audio** — mixer with volume, pan, mute and solo, fades as automation, waveforms, EBU R128
-  loudness checked against the Tech 3341 cases.
-- **Export** — MP4 or WebM in a worker, with progress and a cancel that stops it.
-- **The tool next door** — read and write `.audiola`, so a mix from [Audiola](https://www.audiola.de)
-  arrives as audio tracks and the sound of a cut leaves for it.
-- **Hand the cut on** — an EDL, FCPXML for Resolve and Final Cut, or Final Cut Pro 7 XML, which is the
-  file Premiere Pro imports as a real sequence. The assembly travels; the grade is done there.
-- **Another shape in one press** — portrait, square or 4:5, with every clip scaled to cover the new
-  frame in the same undo step.
-- **Templates** — fifteen of them across five categories, each card a rendered picture rather than a
-  painted promise. Every placeholder is optional, so a template works before a single file has been
-  imported and comes back as its graphics; and the wizard's last step can add it to the project already
-  open, as tracks of its own, in one press of undo.
-- **An API, an MCP server and a CLI** — the whole command catalogue, generated from the Rust enum,
-  plus stills and audio peaks so an agent can look at what it just did.
-- **Installable and offline** — a manifest and a service worker: the browser build installs as an
-  application, opens without a network, and offers a reload when a new build is waiting.
-- **Self-hosting** — one Node process serving the editor, the API, MCP and the CLI. Install it with
-  Docker, the Unraid template, the Umbrel app, or a Proxmox script that builds the container for you;
-  a server bundle needing nothing but Node 22 is attached to every release.
-- **Phone, tablet and desktop** — the same code, panels taking turns where there is no room.
+### Editing
 
-## What is not there yet
+Everything you expect from a timeline: ripple delete, trim, roll, slip and slide, multi-selection,
+groups, a clipboard, markers, snapping and zoom. Lock a track and nothing on it moves. Fold a
+selection into one compound clip and grade or fade the whole thing at once.
 
-The magnetic timeline is deliberately absent, and
-the [editing chapter](/guide/editing) argues why. FFmpeg is not bundled; the export uses the
-browser's own encoders.
+Undo covers all of it, including a hundred-step drag, which counts as one.
 
-The [architecture chapter](/guide/architecture) marks, decision by decision, which parts of the
-design are built and which are planned.
+### The picture
 
-## The editor
+Play back frame by frame, scrub, or run J/K/L at speed. Drag the clip around on the picture itself —
+the box on the frame is the real geometry, not a handle drawn near it. Freeze a frame, ramp the
+speed, add motion blur that follows the actual movement.
+
+Dropped a camera card with a dozen takes in one file? Videola can find the cuts for you and split
+them in a single step.
+
+### Sound
+
+A mixer with volume, pan, mute and solo, live meters, fades, EQ and dynamics. Stereo or 5.1 with a
+real position per track. Loudness normalisation to EBU R128, ducking under a voice, silence cutting,
+a marker on every beat, and spectral noise reduction learned from the quiet parts of your own clip.
+
+### Getting things in and out
+
+- **In:** your own files, a YouTube link or a search, images, subtitles as SRT or WebVTT, LUTs as
+  `.cube`, and mixes from [Audiola](https://www.audiola.de).
+- **Out:** MP4 or WebM with progress and a cancel that works. Or hand the cut on as an EDL, FCPXML
+  for Resolve and Final Cut, or the XML Premiere Pro imports as a real sequence.
+- **Another shape in one press:** portrait, square or 4:5, with every clip rescaled to fill the new
+  frame.
+- **Fifteen templates** — lower thirds, countdowns, picture-in-picture and the rest. They draw
+  themselves, so nothing here is stock footage with a licence attached.
+
+### Where it runs
+
+In a browser that can be installed as an app and opens offline. As a desktop build for Windows,
+macOS and Linux. As a Docker image on your own machine, with one-click installs for Unraid, Umbrel
+and Proxmox. On a phone and a tablet, with the panels taking turns where there is no room.
+
+There is also an HTTP API, an MCP server and a CLI, so an agent can cut and export without a
+browser at all.
+
+## What is missing
+
+No magnetic timeline — that is a decision, and the [editing chapter](/guide/editing) explains it.
+FFmpeg is not bundled either; exports use the browser's own encoders.
+
+The [architecture chapter](/guide/architecture) says, decision by decision, what is built and what
+is planned.
+
+## Built out in the open
+
+Videola is GPL-3.0 and the whole thing is on [GitHub](https://github.com/fgilde/videola). The model
+lives in a Rust crate that the browser drives through WebAssembly, so the preview and the export
+work from exactly the same numbers. Every screenshot on this site is taken by a test that builds the
+app, drives it in a real browser and measures what it sees.
 
 <figure class="shot">
   <img src="/editor-desktop.webp" alt="The Videola editor: a decoded video frame in the preview, a transport showing 00:00:00.00 of 00:00:02.00 with the pause button active, and a clip named fixture.mp4 on track V1">
-  <figcaption>A real frame, decoded and composited in the browser. The screenshot is taken by a test that builds the application, drives it in headless Chrome and drops a video file into it — the same run that caught a preview canvas which never grew past its intrinsic size.</figcaption>
+  <figcaption>A real frame, decoded and composited in the browser — from the run that builds the application, drops a video into it and reads the result back off the canvas.</figcaption>
 </figure>
 
-Theme and language switch without a reload. Every user-visible string comes from a catalogue,
-including the errors the Rust core reports as codes.
+Theme and language switch without a reload, and every word you see, errors included, comes from a
+catalogue rather than from the code.
 
 <section class="sibling">
   <a class="sibling-card" href="https://www.audiola.de" target="_blank" rel="noreferrer">
@@ -195,7 +148,7 @@ including the errors the Rust core reports as codes.
     <div class="sibling-copy">
       <p class="sibling-kicker">From the same workshop</p>
       <h2>Audiola</h2>
-      <p>The audio tool next door — and where Videola's own audio work comes from.</p>
+      <p>The audio tool next door — and where Videola's own sound work comes from.</p>
       <span class="sibling-cta">audiola.de →</span>
     </div>
   </a>

@@ -23,79 +23,79 @@ const SHOTS: Shot[] = [
     src: "/editor-desktop.webp",
     wide: true,
     en: {
-      title: "The picture is the biggest thing on screen",
-      text: "Grade on the shot itself: the curve field, the wheels and the three scopes all read the frame under the playhead, and the box on the picture is the clip's real geometry rather than a handle drawn near it.",
+      title: "Colour, with the scopes right there",
+      text: "Curves, colour wheels and your own LUTs, and a waveform, vectorscope and histogram that follow the frame you are on. The box on the picture is the clip itself — drag it, scale it, turn it.",
     },
     de: {
-      title: "Das Bild ist das Größte auf dem Schirm",
-      text: "Gradiert wird auf der Aufnahme: Kurvenfeld, Farbräder und die drei Messgeräte lesen das Bild unter dem Playhead, und der Rahmen darauf ist die echte Geometrie des Clips und kein danebengezeichneter Griff.",
+      title: "Farbe machen, mit den Messgeräten daneben",
+      text: "Kurven, Farbräder und eigene LUTs, dazu Waveform, Vektorskop und Histogramm, die immer das Bild unter dem Playhead zeigen. Der Rahmen im Bild ist der Clip selbst: verschieben, skalieren, drehen.",
     },
   },
   {
     src: "/editor-effects.webp",
     en: {
-      title: "Effects you can see before you choose",
-      text: "Every tile in the shelf is your own frame with that effect on it, rendered when the shelf opens and thrown away when it closes. A grid of words would make you apply six things to find one.",
+      title: "Pick an effect by looking at it",
+      text: "Every tile shows your own frame with that effect applied. Sixteen effects, seven transitions, and you can put a transition on every cut at once.",
     },
     de: {
-      title: "Effekte, die man vor der Wahl sieht",
-      text: "Jede Kachel im Regal ist das eigene Bild mit diesem Effekt darauf, gerendert beim Öffnen und danach weggeworfen. Ein Raster aus Wörtern hieße, sechs Sachen anzuwenden, um eine zu finden.",
+      title: "Effekte aussuchen, indem man sie ansieht",
+      text: "Jede Kachel zeigt dein eigenes Bild mit dem Effekt darauf. Sechzehn Effekte, sieben Übergänge — und einen Übergang auf alle Schnitte gleichzeitig legen geht auch.",
     },
   },
   {
     src: "/editor-templates.webp",
     en: {
-      title: "Templates that are generators, not stock footage",
-      text: "A lower third, a countdown, a picture-in-picture: each one draws itself from the project's own numbers, so nothing here is somebody else's clip with a licence attached to it.",
+      title: "Titles and lower thirds, ready to go",
+      text: "Fifteen templates: lower thirds, countdowns, picture-in-picture, end cards. Fill in the text, drop them into the project as their own tracks, undo in one press if you change your mind.",
     },
     de: {
-      title: "Vorlagen sind Generatoren, kein fremdes Material",
-      text: "Bauchbinde, Countdown, Bild-im-Bild: Jede zeichnet sich aus den Zahlen des Projekts, also liegt hier nirgends der Clip von jemand anderem mit einer Lizenz daran.",
+      title: "Titel und Bauchbinden, fertig zum Einsetzen",
+      text: "Fünfzehn Vorlagen: Bauchbinden, Countdowns, Bild-im-Bild, Abspanne. Text eintragen, als eigene Spuren ins Projekt legen, und ein Rückgängig nimmt alles wieder zurück.",
     },
   },
   {
     src: "/editor-import.webp",
     en: {
-      title: "One dialogue, both ways in",
-      text: "A file from this machine on the left, a link or a search on the right — codec, format and quality where you can see them. What arrives lands in the library and nowhere else; the timeline is yours to fill.",
+      title: "Your files, or a video from the web",
+      text: "Drag files in on the left. On the right, paste a link or search — YouTube, Vimeo, TikTok and most other sites — and choose the format and quality before it downloads.",
     },
     de: {
-      title: "Ein Dialog, beide Wege hinein",
-      text: "Links eine Datei von hier, rechts ein Link oder eine Suche — Codec, Format und Qualität sichtbar. Was ankommt, geht in die Bibliothek und sonst nirgendwohin; die Zeitleiste füllst du selbst.",
+      title: "Eigene Dateien oder ein Video aus dem Netz",
+      text: "Links Dateien hineinziehen. Rechts einen Link einfügen oder suchen — YouTube, Vimeo, TikTok und die meisten anderen Seiten — und vorher Format und Qualität wählen.",
     },
   },
   {
     src: "/editor-destinations.webp",
     en: {
-      title: "Eight places to send it",
-      text: "YouTube and Vimeo, and the ones that ask nobody's permission: PeerTube on a machine you own, Bluesky with an app password, Mastodon, Telegram, a page, or any URL of your own.",
+      title: "Upload straight from the editor",
+      text: "Set up a channel once, then send finished videos there with one press: YouTube, Vimeo, PeerTube, Mastodon, Bluesky, Telegram, a Facebook page or any address of your own.",
     },
     de: {
-      title: "Acht Orte, an die es gehen kann",
-      text: "YouTube und Vimeo — und die, die niemanden um Erlaubnis fragen: PeerTube auf der eigenen Maschine, Bluesky mit App-Passwort, Mastodon, Telegram, eine Seite oder jede eigene Adresse.",
+      title: "Hochladen direkt aus dem Editor",
+      text: "Einen Kanal einmal einrichten, danach geht das fertige Video mit einem Druck dorthin: YouTube, Vimeo, PeerTube, Mastodon, Bluesky, Telegram, eine Facebook-Seite oder eine eigene Adresse.",
     },
   },
   {
     src: "/editor-phone.webp",
     en: {
-      title: "The phone is the same editor",
-      text: "Not a viewer and not a second implementation: the same pointer path, with every target grown to 44 px because the pointer is a finger.",
+      title: "The same editor on a phone",
+      text: "Not a viewer and not a cut-down version: the same app, with every button grown to a size you can actually hit with a thumb.",
     },
     de: {
-      title: "Das Telefon ist derselbe Editor",
-      text: "Kein Betrachter und keine zweite Umsetzung: derselbe Zeigerweg, mit jedem Ziel auf 44 px gewachsen, weil der Zeiger ein Finger ist.",
+      title: "Derselbe Editor auf dem Telefon",
+      text: "Kein Betrachter und keine abgespeckte Fassung: dieselbe App, nur mit Knöpfen in einer Größe, die man mit dem Daumen auch trifft.",
     },
   },
 ];
 
 const german = computed(() => lang.value.startsWith("de"));
 const heading = computed(() =>
-  german.value ? "Was dabei herauskommt" : "What it actually looks like",
+  german.value ? "So sieht das aus" : "Here is what it looks like",
 );
 const note = computed(() =>
   german.value
-    ? "Jedes Bild hier stammt aus dem Browser-Prüflauf, der dieselbe Oberfläche vermisst. Handgemachte Screenshots veralten; diese können es nicht."
-    : "Every picture here was taken by the browser harness while it measured that same surface. Hand-made screenshots drift out of date; these cannot.",
+    ? "Alle Bilder kommen direkt aus den automatischen Tests, die den Editor bedienen — sie zeigen also immer den aktuellen Stand."
+    : "All of these come straight out of the automated tests that drive the editor, so they always show the current build.",
 );
 </script>
 
