@@ -158,7 +158,13 @@ import {
 } from "@videola/ui";
 
 import { effectTiles, revokeTiles } from "./effectTiles";
-import { lyricsForMedia, lyricsFromText, transcribeMedia, transcriberReady } from "./lyrics";
+import {
+  lyricsForMedia,
+  lyricsFromText,
+  transcribeMedia,
+  transcriberReady,
+  type Transcriber,
+} from "./lyrics";
 import { useTemplatePosters } from "./posters";
 import {
   describeLink,
@@ -341,7 +347,7 @@ export function App(): ReactElement {
   const [foundLyrics, setFoundLyrics] = useState<FoundLyrics>();
   const [lyricsBusy, setLyricsBusy] = useState<"file" | "transcribe">();
   const [lyricsError, setLyricsError] = useState<string>();
-  const [canTranscribe, setCanTranscribe] = useState(false);
+  const [transcriber, setTranscriber] = useState<Transcriber>();
   // True while the mix is being analysed for a visualiser. The analysis itself lives in the
   // playback object, which is what draws from it; this is only what the interface says about it.
   const [listening, setListening] = useState(false);
@@ -767,7 +773,7 @@ export function App(): ReactElement {
     if (!lyricsOpen) return;
     let cancelled = false;
     void transcriberReady(connection).then((ready) => {
-      if (!cancelled) setCanTranscribe(ready);
+      if (!cancelled) setTranscriber(ready);
     });
     return () => {
       cancelled = true;
@@ -827,6 +833,13 @@ export function App(): ReactElement {
         const captions = added(doc, "caption", namedTrack(doc.state, say("track.auto.lyrics")), key);
         if (captions === undefined) return;
         for (const command of captionClips(captions.id, cues)) doc.dispatch(command, key);
+        // The lines live on that row either way -- it is what the lyric video reads to know which
+        // line is being sung. Out of the picture, it draws no subtitle at the foot of the frame,
+        // which is the difference between a lyric video with subtitles and a lyric video. The eye
+        // on the row turns it back on afterwards.
+        if (!draft.subtitles) {
+          doc.dispatch(cmd.trackSetFlags(captions.id, null, null, null, true), key);
+        }
 
         const overlay = added(doc, "overlay", namedTrack(doc.state, say("generator.lyrics")), key);
         if (overlay !== undefined) {
@@ -844,6 +857,10 @@ export function App(): ReactElement {
                     background: draft.style === "kinetic" ? draft.background : "",
                     position: draft.position,
                     uppercase: draft.uppercase,
+                    size: draft.size,
+                    intensity: draft.intensity,
+                    glow: draft.glow,
+                    tilt: draft.tilt,
                   },
                 },
               },
@@ -2745,7 +2762,7 @@ export function App(): ReactElement {
           library={project.library}
           found={foundLyrics}
           busy={lyricsBusy}
-          canTranscribe={canTranscribe}
+          transcriber={transcriber}
           error={lyricsError}
           onLookInFile={lookInFile}
           onTranscribe={askForTranscript}
@@ -3037,9 +3054,14 @@ function paintLyricPreview(request: PreviewRequest): void {
       background: request.style === "kinetic" ? request.look.background : "",
       position: request.look.position,
       uppercase: request.look.uppercase,
-      // A thumbnail is a sixth of a frame wide, so the type has to be proportionally bigger to be
-      // legible at all.
-      size: 0.17,
+      // The three knobs the styles answer to, so the tile shows what the sliders are set to
+      // rather than what they were set to when the dialogue opened.
+      intensity: request.look.intensity,
+      glow: request.look.glow,
+      tilt: request.look.tilt,
+      // A thumbnail is a sixth of a frame wide, so the type has to be proportionally bigger than
+      // the setting to be legible at all -- the setting still moves it.
+      size: Math.min(0.32, request.look.size * 1.3),
     }),
     size,
     { text: request.text, progress: request.progress, index: 0, previous: request.previous },

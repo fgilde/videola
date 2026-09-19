@@ -43,7 +43,7 @@
   "lyrics.looking": "Wird gesucht …",
   "lyrics.transcribe": "Transkribieren lassen",
   "lyrics.transcribing": "Wird transkribiert …",
-  "lyrics.noTranscriber": "Transkribieren geht nur mit einem Server, bei dem VIDEOLA_ELEVENLABS_KEY hinterlegt ist. Dabei wird der Ton an ElevenLabs geschickt.",
+  "lyrics.noTranscriber": "Transkribieren braucht einen Server mit VIDEOLA_WHISPER (läuft lokal, der Ton bleibt hier) oder VIDEOLA_ELEVENLABS_KEY (der Ton geht an ElevenLabs).",
   "lyrics.paste": "Text oder .lrc einfügen",
   "lyrics.pasteHint": "[00:12.50]Standing in the hall of fame …",
   "lyrics.takeText": "Text übernehmen",
@@ -794,5 +794,13 @@
   "generator.countdown": "Vorlauf",
   "generator.visualizer": "Visualizer",
   "generator.lyrics": "Lyric-Video",
-  "track.auto.lyrics": "Songtext"
+  "track.auto.lyrics": "Songtext",
+  "lyrics.style.grow": "Wachsend (3D)",
+  "lyrics.subtitles": "Untertitel unten einblenden",
+  "lyrics.knob.size": "Schriftgröße",
+  "lyrics.knob.intensity": "Bewegung",
+  "lyrics.knob.glow": "Leuchten",
+  "lyrics.knob.tilt": "Perspektive",
+  "lyrics.transcribe.local": "Lokal transkribieren",
+  "lyrics.transcribe.cloud": "Bei ElevenLabs transkribieren"
 }

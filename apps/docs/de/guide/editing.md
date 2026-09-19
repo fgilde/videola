@@ -410,11 +410,11 @@ Der Name im Spurkopf ist das Eingabefeld: anklicken und tippen. V3 sagt nichts d
 drei Takes darauf liegt, und ein Umbenennen, das nur im Kontextmenü wohnt, findet niemand. Ein
 getippter Name ist ein Undo-Schritt, nicht einer pro Buchstabe.
 
-Der Name hat die obere Zeile des Kopfes für sich, darunter steht die Art der Spur — bis der Zeiger
-kommt, dann übernehmen die Knöpfe diese Zeile: aus dem Bild, gesperrt, höher, niedriger, weg. Fünf
-davon dauerhaft auf jedem Spurkopf sind das Lauteste in einer Spalte aus acht Zeilen, und jeder
-beantwortet eine Frage über die Spur unter der Hand. Auf dem Touchscreen stehen sie einfach da —
-ein Finger schwebt über nichts.
+Der Name hat die obere Zeile des Kopfes für sich, die Knöpfe die darunter: aus dem Bild, gesperrt,
+höher, niedriger, weg. Sie sind still, solange der Zeiger woanders ist, und hell, sobald er auf dem
+Kopf steht — drücken lassen sie sich immer. Sie erst beim Überfahren einzublenden und bis dahin aus
+der Trefferprüfung zu nehmen hieß, dass der erste Druck nach dem Ankommen auf dem Spurkopf landete
+statt auf dem Knopf: ein Bedienelement, das man zweimal treffen muss.
 
 Das Auge neben dem Schloss nimmt die Spur aus dem Bild. Die Clips bleiben liegen, Vorschau und
 Export lassen sie weg, und die Zeile wird still, damit der Grund auf dem Schirm steht statt in
@@ -1063,8 +1063,23 @@ die Wörter dort, wo sie meistens schon liegen, in dieser Reihenfolge:
    samt Hundertsteln, Millisekunden, mehreren Zeitstempeln für denselben Refrain und den
    Wort-Zeitstempeln erweiterter Dateien.
 3. **Transkribieren lassen.** Nur, wenn ein Server mit hinterlegtem Schlüssel dahinter steht — und
-   nur dann steht der Knopf da. Dabei geht der Ton an ElevenLabs; das ist das Einzige in diesem
-   Editor, was den Rechner verlässt, und der Dialog sagt es vorher.
+   nur dann steht der Knopf da, und er sagt, welcher der beiden Wege genommen würde.
+   **`VIDEOLA_WHISPER`** zeigt auf einen Transkribierer auf diesem Rechner — Whisper, über
+   whisper.cpp oder faster-whisper —, dann verlässt nichts die Maschine. **`VIDEOLA_ELEVENLABS_KEY`**
+   schickt den Ton stattdessen an ElevenLabs; das ist das Einzige in diesem
+   Editor, was den Rechner verlässt, und der Knopf sagt es, bevor man ihn drückt. Ein Server mit
+   beidem nimmt den lokalen Weg.
+
+   Lokal ist eine Kommandozeile und keine Abhängigkeit: ein Modell ist gigabyteweise groß und eine
+   Python-Umgebung gehört jemand anderem. Videola ruft
+
+   ```sh
+   $VIDEOLA_WHISPER --input <Audiodatei> --output <JSON-Datei> [--model $VIDEOLA_WHISPER_MODEL]
+   ```
+
+   und liest `{"segments":[{"start":1.2,"end":3.4,"text":"…"}]}` in Sekunden — genau das, was
+   faster-whisper liefert, ein Wrapper darum ist also drei Zeilen lang. Die `-oj`-Datei von
+   whisper.cpp, in Millisekunden unter `transcription`, wird ebenfalls gelesen.
 
 Was dabei herauskommt, sind **Untertitel-Clips auf einer eigenen Spur**: eine Zeile, ein Clip. Genau
 deshalb liegen die Lyrics dort und nicht im Generator — eine Zeile, die einen Schlag zu spät kommt,
@@ -1072,7 +1087,13 @@ zieht man auf der Zeitleiste zurecht, mit denselben Griffen wie alles andere. Oh
 Zeilen gleichmäßig über den Song verteilt; der Dialog sagt das, statt so zu tun, als wüsste er es
 besser.
 
-Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in sieben Stilen:
+Diese Spur zeichnet auch den **Untertitel am unteren Bildrand**, und **Untertitel unten einblenden**
+im Dialog entscheidet, ob sie es tut. Aus: die Spur entsteht trotzdem und wird aus dem Bild
+genommen. Das Lyric-Video liest diese Clips, um zu wissen, welche Zeile gerade gesungen wird — sie
+lässt sich also nicht löschen, aber eine Spur außerhalb des Bildes zeichnet nichts. Das Auge auf der
+Spur holt sie jederzeit zurück; es ist derselbe Schalter unter anderem Namen.
+
+Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in zwölf Stilen:
 
 | Stil | Was er tut |
 |---|---|
@@ -1087,6 +1108,13 @@ Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in s
 | Buchstaben wandern | jeder Buchstabe sucht sich in der Zeile davor und wandert von dort an seinen neuen Platz |
 | Welle | die Zeile reitet auf einer Welle, jeder Buchstabe ein Stück weiter darauf |
 | Glitch | die Zeile zerreißt in Rot und Blau und setzt sich wieder zusammen |
+| Wachsend (3D) | jedes Wort wächst aus einem Buchstaben eines schon stehenden Wortes heraus, die ganze Zeile in Perspektive |
+
+Unter den Kacheln stehen die Einstellungen, auf die der gewählte Stil reagiert, und nur die:
+**Schriftgröße** immer, **Bewegung** dafür, wie weit etwas wandert, **Leuchten** bei den Stilen mit
+Halo und **Perspektive** bei den beiden, die in die Tiefe gehen. Ein Regler für eine Einstellung,
+die der Stil ignoriert, würde beibringen, dass die Einstellungen nichts tun — deshalb wird jeder
+Stil gefragt, welche der vier er benutzt.
 
 Auf Wunsch legt derselbe Druck einen **Visualizer** dahinter — dann ist es in einem Schritt ein
 fertiges Lyric-Video. Und es ist *ein* Schritt: hundert Zeilen, drei Spuren, ein Rückgängig.

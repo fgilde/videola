@@ -199,10 +199,10 @@ export function captionClips(track: string, cues: readonly Cue[]): Command[] {
  * rule `paints` applies in the renderer, and the alternative is a subtitle file carrying lines the
  * viewer was never shown.
  */
-export function captionCues(project: Project, track?: string): Cue[] {
+export function captionCues(project: Project, track?: string, options: CueOptions = {}): Cue[] {
   const cues: Cue[] = [];
   for (const candidate of project.timeline.tracks) {
-    if (!isCaptionTrack(candidate, track)) continue;
+    if (!isCaptionTrack(candidate, track, options.includeHidden === true)) continue;
     for (const clip of candidate.clips) {
       const text = captionText(clip);
       if (text !== undefined && clip.duration > 0) {
@@ -213,8 +213,21 @@ export function captionCues(project: Project, track?: string): Cue[] {
   return cues.sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
-function isCaptionTrack(candidate: Track, track?: string): boolean {
-  if (candidate.kind !== "caption" || candidate.hidden) return false;
+/**
+ * Whether a row that has been taken out of the picture still counts.
+ *
+ * It does for one reader: the lyrics generator, which draws the words itself and reads the caption
+ * clips only to know which line is being sung. Hiding that row is how somebody turns the burned-in
+ * subtitle at the foot of the frame off -- and it must not take the lyric video with it. Everybody
+ * else, the export and the subtitle writer included, sees a hidden row as absent.
+ */
+export interface CueOptions {
+  includeHidden?: boolean;
+}
+
+function isCaptionTrack(candidate: Track, track: string | undefined, includeHidden: boolean): boolean {
+  if (candidate.kind !== "caption") return false;
+  if (candidate.hidden && !includeHidden) return false;
   return track === undefined || candidate.id === track;
 }
 

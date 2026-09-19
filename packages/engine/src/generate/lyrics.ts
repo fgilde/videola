@@ -27,7 +27,8 @@ export type LyricStyle =
   | "depth"
   | "morph"
   | "wave"
-  | "glitch";
+  | "glitch"
+  | "grow";
 
 export const LYRIC_STYLES: readonly LyricStyle[] = [
   "kinetic",
@@ -41,7 +42,37 @@ export const LYRIC_STYLES: readonly LyricStyle[] = [
   "morph",
   "wave",
   "glitch",
+  "grow",
 ];
+
+/**
+ * The knobs a style answers to.
+ *
+ * One set of four rather than a field per style: a dialogue with eleven different forms in it is a
+ * dialogue nobody reads twice, and these four are the four questions anybody actually has. Which
+ * of them a style uses is the style's own business -- a karaoke line has nothing to glow with and
+ * nothing to tilt -- and the surface asks here rather than guessing.
+ */
+export type LyricKnob = "size" | "intensity" | "glow" | "tilt";
+
+const KNOBS: Record<LyricStyle, readonly LyricKnob[]> = {
+  kinetic: ["size", "intensity"],
+  karaoke: ["size", "intensity"],
+  typewriter: ["size", "intensity"],
+  pop: ["size", "intensity"],
+  neon: ["size", "intensity", "glow"],
+  flip: ["size", "intensity"],
+  bar: ["size", "intensity"],
+  depth: ["size", "intensity", "tilt"],
+  morph: ["size", "intensity"],
+  wave: ["size", "intensity"],
+  glitch: ["size", "intensity", "glow"],
+  grow: ["size", "intensity", "glow", "tilt"],
+};
+
+export function lyricKnobs(style: string): readonly LyricKnob[] {
+  return KNOBS[style as LyricStyle] ?? KNOBS.kinetic;
+}
 
 export interface LyricLineOnScreen {
   text: string;
@@ -67,6 +98,12 @@ export interface LyricOptions {
   uppercase: boolean;
   font: string;
   weight: number;
+  /** How hard the style moves: travel, overshoot, tear, wave height. 0 is nearly still. */
+  intensity: number;
+  /** The halo behind the words, where the style has one. */
+  glow: number;
+  /** How far the words lean out of the frame, for the two styles drawn in perspective. */
+  tilt: number;
 }
 
 interface Size {
@@ -90,6 +127,9 @@ export function lyricOptions(style: string, raw: Readonly<Record<string, JsonVal
     // the right behaviour: the words are still drawn.
     font: text(raw.font, "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"),
     weight: Math.round(number(raw.weight, 800, 100, 900)),
+    intensity: number(raw.intensity, 0.6, 0, 1),
+    glow: number(raw.glow, 0.5, 0, 1),
+    tilt: number(raw.tilt, 0.5, 0, 1),
   };
 }
 
@@ -126,6 +166,7 @@ export function paintLyrics(
     morph: paintMorph,
     wave: paintWave,
     glitch: paintGlitch,
+    grow: paintGrow,
   }[options.style];
   paint(ctx, { ...options, color: ink }, size, words, line);
   ctx.restore();
@@ -147,12 +188,14 @@ const paintKinetic: Painter = (ctx, options, size, words, line) => {
   const shown = wordsSoFar(words, line.progress);
   if (shown.count === 0) return;
   const rows = layout(ctx, words.slice(0, shown.count), size, options, 1.18);
-  // The newest word arrives at 130% and settles over the first fifth of its own time.
+  // The newest word arrives too big and settles over the first fifth of its own time; how much
+  // too big is what "Bewegung" asks.
   const settling = Math.min(1, shown.within * 5);
+  const overshoot = 0.5 * options.intensity;
   const middle = anchor(size, options, rows.length * rows.line, rows.line);
   rows.forEach((row, index) => {
     const last = index === rows.length - 1;
-    const scale = last ? 1.3 - 0.3 * settling : 1;
+    const scale = last ? 1 + overshoot * (1 - settling) : 1;
     ctx.save();
     ctx.translate(size.width / 2, middle + index * rows.line);
     ctx.scale(scale, scale);
@@ -172,8 +215,9 @@ const paintKaraoke: Painter = (ctx, options, size, words, line) => {
   rows.forEach((row, index) => {
     const y = middle + index * rows.line;
     ctx.font = fontOf(options, rows.size);
-    // The row behind: the words that are not being sung yet, in the ink at a quarter strength.
-    ctx.globalAlpha = 0.35;
+    // The row behind: the words not sung yet. How far they fall back is the contrast the style
+    // lives on, so it is what "Bewegung" moves here.
+    ctx.globalAlpha = 0.55 - 0.35 * options.intensity;
     ctx.fillStyle = options.color;
     ctx.fillText(row, size.width / 2, y);
     ctx.globalAlpha = 1;
@@ -201,7 +245,10 @@ const paintKaraoke: Painter = (ctx, options, size, words, line) => {
 /** One character at a time, with a block where the next one lands. */
 const paintTypewriter: Painter = (ctx, options, size, words, line) => {
   const whole = words.join(" ");
-  const shown = Math.max(1, Math.round(whole.length * Math.min(1, line.progress * 1.25)));
+  // Ahead of the singing rather than with it, because a caret that lands on the last letter as the
+  // line ends reads as lagging. How far ahead is the knob.
+  const lead = 1 + 0.5 * options.intensity;
+  const shown = Math.max(1, Math.round(whole.length * Math.min(1, line.progress * lead)));
   const rows = layout(ctx, whole.slice(0, shown).split(" "), size, options, 1.2);
   const middle = anchor(size, options, rows.length * rows.line, rows.line);
   ctx.fillStyle = options.color;
@@ -224,8 +271,8 @@ const paintPop: Painter = (ctx, options, size, words, line) => {
     for (const word of row.words) {
       if (index < shown.count) {
         const age = index === shown.count - 1 ? Math.min(1, shown.within * 6) : 1;
-        // Overshoot and settle: 1.35 at the moment it lands, 1 a sixth of a word later.
-        const scale = 1 + 0.35 * (1 - age) * Math.cos(age * Math.PI * 0.5);
+        // Overshoot and settle: too big at the moment it lands, right a sixth of a word later.
+        const scale = 1 + 0.6 * options.intensity * (1 - age) * Math.cos(age * Math.PI * 0.5);
         ctx.save();
         ctx.translate(x + word.width / 2, middle + rowIndex * rows.line);
         ctx.scale(scale, scale);
@@ -244,15 +291,15 @@ const paintPop: Painter = (ctx, options, size, words, line) => {
 const paintNeon: Painter = (ctx, options, size, words, line) => {
   const rows = layout(ctx, words, size, options, 1.25);
   const middle = anchor(size, options, rows.length * rows.line, rows.line);
-  const pulse = 0.75 + 0.25 * Math.sin(line.progress * Math.PI);
+  const pulse = 1 - 0.35 * options.intensity * (1 - Math.sin(line.progress * Math.PI));
   ctx.font = fontOf(options, rows.size);
   rows.forEach((row, index) => {
     const y = middle + index * rows.line;
     ctx.shadowColor = options.accent;
-    ctx.shadowBlur = rows.size * 0.7 * pulse;
+    ctx.shadowBlur = rows.size * 1.4 * options.glow * pulse;
     ctx.fillStyle = options.accent;
     ctx.fillText(row, size.width / 2, y);
-    ctx.shadowBlur = rows.size * 0.3 * pulse;
+    ctx.shadowBlur = rows.size * 0.6 * options.glow * pulse;
     ctx.fillStyle = options.color;
     ctx.fillText(row, size.width / 2, y);
   });
@@ -272,7 +319,7 @@ const paintFlip: Painter = (ctx, options, size, words, line) => {
         const age = index === shown.count - 1 ? Math.min(1, shown.within * 5) : 1;
         // A quarter turn about the horizontal axis, faked by squashing: the face of a word turning
         // towards the camera is exactly a cosine of its height, and a canvas can do that.
-        const turn = (1 - age) * (Math.PI / 2);
+        const turn = (1 - age) * (Math.PI / 2) * (0.35 + 0.65 * options.intensity);
         ctx.save();
         ctx.translate(x + word.width / 2, middle + rowIndex * rows.line);
         ctx.transform(1, 0, 0, Math.max(0.02, Math.cos(turn)), 0, 0);
@@ -296,7 +343,7 @@ const paintBar: Painter = (ctx, options, size, words) => {
   const middle = anchor(size, options, block, rows.line);
   const top = middle - rows.line / 2 - rows.size * 0.35;
   ctx.fillStyle = options.accent;
-  ctx.globalAlpha = 0.72;
+  ctx.globalAlpha = 0.45 + 0.5 * options.intensity;
   ctx.fillRect(size.width * 0.06, top, size.width * 0.88, block + rows.size * 0.7);
   ctx.globalAlpha = 1;
   ctx.fillStyle = options.color;
@@ -332,16 +379,18 @@ const paintDepth: Painter = (ctx, options, size, words, line) => {
     ctx.restore();
   };
   // The one before it: from the screen, past the eye, and gone.
+  const travel = 0.9 + 1.4 * options.intensity;
   if (line.index > 0 && line.previous !== undefined) {
-    const gone = 1 - line.progress * 1.6;
+    const gone = 1 - line.progress * travel;
     draw(line.previous, gone, gone < 0.4 ? gone * 2 : 1, gone < 0.35);
   }
-  // And this one, arriving from four planes back.
-  const coming = 4 - line.progress * 3;
+  // And this one, arriving from however far back the perspective was set to.
+  const back = 1.8 + 4 * options.tilt;
+  const coming = back - line.progress * (back - 1);
   rows.forEach((row, index) => {
     ctx.save();
     ctx.translate(0, index * rows.line);
-    draw(row, coming, Math.min(1, (4 - coming) / 1.5), false);
+    draw(row, coming, Math.min(1, (back - coming) / 1.5), false);
     ctx.restore();
   });
 };
@@ -358,8 +407,9 @@ const paintMorph: Painter = (ctx, options, size, words, line) => {
   const rows = layout(ctx, words, size, options, 1.2);
   const middle = anchor(size, options, rows.length * rows.line, rows.line);
   ctx.font = fontOf(options, rows.size);
-  // Half the line's own time to travel, so the words stand still long enough to be read.
-  const travelled = Math.min(1, line.progress * 2);
+  // Part of the line's own time to travel, so the words stand still long enough to be read. More
+  // movement means a slower, longer journey.
+  const travelled = Math.min(1, line.progress / (0.2 + 0.5 * options.intensity));
   const eased = travelled * travelled * (3 - 2 * travelled);
   const before = letterPlaces(ctx, line.previous ?? "", size, middle, rows);
   rows.forEach((row, rowIndex) => {
@@ -382,7 +432,7 @@ const paintWave: Painter = (ctx, options, size, words, line) => {
   const middle = anchor(size, options, rows.length * rows.line, rows.line);
   ctx.font = fontOf(options, rows.size);
   ctx.fillStyle = options.color;
-  const height = rows.size * 0.28;
+  const height = rows.size * 0.5 * options.intensity;
   rows.forEach((row, rowIndex) => {
     for (const place of letterPlaces(ctx, row, size, middle + rowIndex * rows.line, rows)) {
       const phase = place.index * 0.45 - line.progress * Math.PI * 4;
@@ -402,19 +452,209 @@ const paintGlitch: Painter = (ctx, options, size, words, line) => {
   ctx.font = fontOf(options, rows.size);
   // Hard at the start of a line, settling as it is sung, with a wobble on top of it.
   const torn = (1 - line.progress) * 0.7 + Math.abs(Math.sin(line.progress * 17)) * 0.3;
-  const shift = torn * rows.size * 0.18;
+  const shift = torn * rows.size * 0.3 * options.intensity;
   rows.forEach((row, index) => {
     const y = middle + index * rows.line;
+    if (options.glow > 0) {
+      ctx.shadowColor = options.accent;
+      ctx.shadowBlur = rows.size * 0.5 * options.glow;
+    }
     ctx.globalCompositeOperation = "lighter";
     ctx.fillStyle = "#ff0044";
     ctx.fillText(row, size.width / 2 - shift, y);
     ctx.fillStyle = "#00e5ff";
     ctx.fillText(row, size.width / 2 + shift, y);
     ctx.globalCompositeOperation = "source-over";
+    ctx.shadowBlur = 0;
     ctx.fillStyle = options.color;
     ctx.fillText(row, size.width / 2, y);
   });
 };
+
+/**
+ * Words growing out of the words before them, seen from an angle.
+ *
+ * Each word starts as one letter of a word already on screen -- the third letter of "world", the
+ * first of "hall" -- and grows out of it into its own place, turning as it goes. The whole line
+ * stands in perspective: every word has its own depth and its own yaw, so a chorus reads as a
+ * thing built in space rather than a caption.
+ *
+ * Nothing here is random. A word's depth, its seed letter and the angle it arrives at all come out
+ * of a hash of the line and the word, so the preview, the timeline and the export draw the same
+ * frame -- which `Math.random` would make three different videos.
+ */
+const paintGrow: Painter = (ctx, options, size, words, line) => {
+  const places = growPlaces(ctx, options, size, words, line.progress);
+  if (places.length === 0) return;
+  const laid = layoutWords(ctx, words, size, options);
+  ctx.font = fontOf(options, laid.size);
+
+  for (const place of places) {
+    const { home, newest, arrived, x, y, growth, turn } = place;
+
+    ctx.save();
+    ctx.translate(x, y);
+    // The perspective: a word further back is smaller and leans more, and the lean is a skew
+    // rather than a matrix through a projection -- one axis is all a line of text needs to read as
+    // standing at an angle.
+    ctx.transform(
+      Math.cos(home.yaw + turn) * home.depth * growth,
+      Math.sin(home.yaw + turn) * 0.35 * options.tilt,
+      -home.lean * options.tilt,
+      home.depth * growth,
+      0,
+      0,
+    );
+    ctx.globalAlpha = newest ? 0.15 + 0.85 * arrived : 0.9;
+    if (options.glow > 0) {
+      ctx.shadowColor = options.accent;
+      ctx.shadowBlur = laid.size * 0.5 * options.glow;
+    }
+    ctx.fillStyle = newest ? options.accent : options.color;
+    ctx.fillText(home.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+};
+
+/** Where each word of the line stands at this instant, and how far along its journey it is. */
+export interface GrowPlace {
+  home: WordHome;
+  newest: boolean;
+  /** 0 the moment the word appears on its seed letter, 1 once it is in its own place. */
+  arrived: number;
+  x: number;
+  y: number;
+  /** The scale it is drawn at: a fifth of full size on the seed letter, full at home. */
+  growth: number;
+  turn: number;
+  /** Where it came from, which is a letter of a word already standing. */
+  seed: { x: number; y: number } | undefined;
+}
+
+/**
+ * The arithmetic behind the growing style, apart from the drawing.
+ *
+ * Exported because "this word starts on a letter of an earlier word" is a claim about where things
+ * are, and a check that can only count lit pixels cannot tell that from a word that fades in where
+ * it already belongs -- which is exactly the mistake this style would be worth nothing with.
+ */
+export function growPlaces(
+  ctx: OffscreenCanvasRenderingContext2D,
+  options: LyricOptions,
+  size: Size,
+  words: readonly string[],
+  progress: number,
+): GrowPlace[] {
+  const shown = wordsSoFar(words, progress);
+  if (shown.count === 0) return [];
+  const laid = layoutWords(ctx, words, size, options);
+  const homes = wordHomes(laid, size, options);
+  const places: GrowPlace[] = [];
+  for (let index = 0; index < Math.min(shown.count, homes.length); index += 1) {
+    const home = homes[index]!;
+    const newest = index === shown.count - 1;
+    // The newest word takes the first two thirds of its own slice to arrive; after that it stands.
+    const arrived = newest ? ease(Math.min(1, shown.within / 0.66)) : 1;
+    const seed = seedPlace(ctx, homes, index, laid, options);
+    const from = seed ?? { x: home.x, y: home.y };
+    places.push({
+      home,
+      newest,
+      arrived,
+      x: from.x + (home.x - from.x) * arrived,
+      y: from.y + (home.y - from.y) * arrived,
+      // Out of a letter means out of a letter's size: a fifth of the line at the start.
+      growth: 0.2 + 0.8 * arrived,
+      turn: home.yaw * (1 - arrived) * 2.2 * options.intensity,
+      seed,
+    });
+  }
+  return places;
+}
+
+export interface WordHome {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  /** How far back this word stands, as a scale: 1 is at the screen. */
+  depth: number;
+  /** How far it is turned away, in radians. */
+  yaw: number;
+  /** The vertical skew that reads as the word leaning out of the frame. */
+  lean: number;
+}
+
+/** Where every word of the line comes to rest, and how it stands there. */
+function wordHomes(laid: WordRows, size: Size, options: LyricOptions): WordHome[] {
+  const middle = anchor(size, options, laid.rows.length * laid.line, laid.line);
+  const homes: WordHome[] = [];
+  let index = 0;
+  laid.rows.forEach((row, rowIndex) => {
+    let x = (size.width - row.width) / 2;
+    const y = middle + rowIndex * laid.line;
+    for (const word of row.words) {
+      const spin = hash(`${word.text}:${index}`);
+      homes.push({
+        text: word.text,
+        x: x + word.width / 2,
+        y,
+        width: word.width,
+        // A quarter of a step of depth either way, scaled by how much perspective was asked for.
+        depth: 1 - (spin % 5) * 0.045 * options.tilt,
+        yaw: (((spin >> 3) % 9) - 4) * 0.055 * options.tilt,
+        lean: (((spin >> 7) % 7) - 3) * 0.06,
+      });
+      x += word.width + laid.space;
+      index += 1;
+    }
+  });
+  return homes;
+}
+
+/**
+ * The letter this word grows out of.
+ *
+ * One of the letters of a word already standing, picked by the same hash every time. The first
+ * word of a line has nothing to grow from and simply arrives, which is what makes the second one
+ * read as having come out of the first.
+ */
+function seedPlace(
+  ctx: OffscreenCanvasRenderingContext2D,
+  homes: readonly WordHome[],
+  index: number,
+  laid: WordRows,
+  options: LyricOptions,
+): { x: number; y: number } | undefined {
+  if (index === 0) return undefined;
+  const spin = hash(`${homes[index]!.text}:seed:${index}`);
+  const parent = homes[spin % index]!;
+  const letters = [...parent.text];
+  if (letters.length === 0) return undefined;
+  const at = spin % letters.length;
+  ctx.font = fontOf(options, laid.size);
+  // Measured rather than divided by the letter count: "il" and "MW" are not the same width, and a
+  // word that grows out of the middle of the wrong letter looks like a word that grows out of air.
+  const before = ctx.measureText(letters.slice(0, at).join("")).width;
+  const own = ctx.measureText(letters[at]!).width;
+  return { x: parent.x - parent.width / 2 + before + own / 2, y: parent.y };
+}
+
+/** Smooth at both ends, so a word neither jumps off its letter nor slams into its place. */
+function ease(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+/** A stable number from a string: the same frame twice, in the preview and in the export. */
+function hash(key: string): number {
+  let value = 2166136261;
+  for (let index = 0; index < key.length; index += 1) {
+    value ^= key.charCodeAt(index);
+    value = Math.imul(value, 16777619);
+  }
+  return Math.abs(value);
+}
 
 interface LetterPlace {
   letter: string;

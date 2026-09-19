@@ -98,6 +98,9 @@ Configuration is environment only:
 | `VIDEOLA_MAX_PROJECTS` | `8` | Projects held open at once. Each can hold up to 2 GiB of media. |
 | `VIDEOLA_MAX_BODY_BYTES` | `536870912` | Counted as chunks arrive, not taken from `Content-Length`. |
 | `VIDEOLA_LOCALE` | `en` | Written into the manifest of saved archives. |
+| `VIDEOLA_ELEVENLABS_KEY` | unset | Transcription for the lyric dialogue, at ElevenLabs. The audio leaves the machine. |
+| `VIDEOLA_WHISPER` | unset | A transcriber on this machine instead, called as `<cmd> --input <wav> --output <json> [--model …]` and expected to write `{"segments":[{start,end,text}]}` in seconds. Whisper.cpp's `-oj` file is read too. Preferred over the key when both are set. |
+| `VIDEOLA_WHISPER_MODEL` | unset | Passed to it as `--model`, for a runner that needs to be told. |
 | `VIDEOLA_WASM` | resolved from `@videola/core` | Path to `videola_core_bg.wasm`, if it is not where the package resolver finds it. |
 | `CHROME_PATH` | the usual install locations | The browser `project_getFrame` renders in. When set it is an instruction, not a candidate: a path that points at nothing is an error rather than a fallback. |
 | `VIDEOLA_RENDERER` | `apps/server/renderer/bundle.js` | The page bundle, if it is not beside the server. |

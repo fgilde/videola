@@ -9,7 +9,7 @@ export { parseCube } from "@videola/media";
 export { AudioGraph } from "../src/audio/graph";
 export { analyseSpectrum } from "../src/audio/spectrum";
 export { GeneratorFrames } from "../src/generate/generator";
-export { lyricOptions, paintLyrics } from "../src/generate/lyrics";
+export { growPlaces, lyricOptions, paintLyrics } from "../src/generate/lyrics";
 export { Playback } from "../src/playback";
 export { Compositor } from "../src/render/compositor";
 export { createContext } from "../src/render/context";

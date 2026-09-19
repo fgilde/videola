@@ -143,18 +143,19 @@
   opacity: 0.35;
 }
 
+/* What kind of row this is, for a reader rather than for the eye. The name says it now -- V1,
+   Songtext, Untertitel -- and the colour on the left edge says it again, so the word was competing
+   with the buttons for a row 160 px wide and winning nothing. It stays in the tree, because a
+   screen reader has neither the colour nor the convention. */
 .v-timeline__headerKind {
-  grid-area: meta;
-  min-width: 0;
-  color: var(--v-text-muted);
-  font-size: var(--v-text-xs);
-  line-height: var(--v-leading-tight);
-  text-transform: uppercase;
-  letter-spacing: var(--v-tracking-wide);
-  white-space: nowrap;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  transition: opacity var(--v-transition);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .v-timeline__scroll {
@@ -810,43 +811,24 @@
 
 /* The height steps. Stacked beside the lock, small on purpose: they are set once for a session and
    read never, which is the opposite of the lock next to them. */
-/* The controls share the second row with the kind and take it over on the way past. Five buttons
-   standing on every header all the time is the loudest thing in a column of eight rows, and the
-   question they answer -- lock it, hide it, resize it, drop it -- is one somebody asks of the row
-   under the pointer. Hidden, not gone: they keep their place in the layout and in the reading
-   order, and a keyboard brings them back through :focus-within. */
+/* The buttons have the second row to themselves and are always there to be pressed. They were
+   revealed on hover and taken out of the hit test in between, which meant the first press after
+   arriving on a header landed on the header instead of on the button under the pointer -- a
+   control that needs to be aimed at twice. Quiet at rest, lit under the pointer, and clickable
+   throughout. */
 .v-timeline__headerTools {
   grid-area: meta;
   justify-self: end;
   display: flex;
   align-items: center;
   gap: 2px;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.55;
   transition: opacity var(--v-transition);
 }
 
 .v-timeline__header:hover .v-timeline__headerTools,
 .v-timeline__header:focus-within .v-timeline__headerTools {
   opacity: 1;
-  pointer-events: auto;
-}
-
-.v-timeline__header:hover .v-timeline__headerKind,
-.v-timeline__header:focus-within .v-timeline__headerKind {
-  opacity: 0;
-}
-
-/* A finger hovers nothing. There the buttons are simply there, and the kind gives up its row. */
-@media (pointer: coarse) {
-  .v-timeline__headerTools {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .v-timeline__headerKind {
-    display: none;
-  }
 }
 
 /* The same button the lock is, because they are the same kind of control: what this row is, not
@@ -914,6 +896,13 @@
 @media (any-pointer: coarse) {
   .v-timeline__size {
     display: none;
+  }
+
+  /* With the two height steps gone there is room in the row, and a finger needs it. */
+  .v-timeline__lock,
+  .v-timeline__remove {
+    width: 30px;
+    height: 30px;
   }
 }
 

@@ -332,7 +332,10 @@ export class GeneratorFrames {
  * holds the last line through an instrumental is a lyric video with a stuck picture.
  */
 export function lineAt(project: Project, at: Time): LyricLineOnScreen | undefined {
-  const cues = captionCues(project);
+  // Hidden rows included: a caption row taken out of the picture is how the burned-in subtitle at
+  // the foot of the frame is turned off, and the lyric video reads the same clips to know which
+  // line is being sung.
+  const cues = captionCues(project, undefined, { includeHidden: true });
   const index = cues.findIndex((cue) => at >= cue.start && at < cue.end);
   const cue = cues[index];
   if (cue === undefined) return undefined;

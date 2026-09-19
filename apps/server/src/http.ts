@@ -166,7 +166,7 @@ async function route(
   // The words of a song, where the file itself carries none. A GET to ask whether this server can
   // do it at all, so the dialogue can offer the other three ways instead of a button that fails.
   if (match(segments, ["api", "lyrics", "ready"]) && method === "GET") {
-    return { status: 200, body: { available: api.canTranscribe() } };
+    return { status: 200, body: { available: api.canTranscribe(), engine: api.transcriber() } };
   }
   if (match(segments, ["api", "lyrics", "transcribe"]) && method === "POST") {
     const language = url.searchParams.get("language");

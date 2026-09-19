@@ -11,6 +11,7 @@ const api = new Api({
   locale: config.locale,
   ...(config.youtubeClient === undefined ? {} : { youtubeClient: config.youtubeClient }),
   ...(config.elevenLabsKey === undefined ? {} : { elevenLabsKey: config.elevenLabsKey }),
+  ...(config.whisper === undefined ? {} : { whisper: config.whisper }),
 });
 
 const server = createServer(

@@ -18,6 +18,15 @@ export interface ApiConfig {
    * ways to lyrics and says why the fourth is missing.
    */
   readonly elevenLabsKey: string | undefined;
+  /**
+   * A transcriber that runs on this machine, where the operator installed one.
+   *
+   * The other way to the words of a song, and the one that sends nothing anywhere: a command that
+   * takes an audio file and writes a JSON transcript beside it. Whisper is what everybody runs,
+   * through whisper.cpp or faster-whisper, and neither of them is Videola's business to ship --
+   * so the contract is a command line, not a dependency.
+   */
+  readonly whisper: { command: string; model: string | undefined } | undefined;
 }
 
 export interface Config extends ApiConfig {
@@ -44,6 +53,7 @@ export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfi
       env.VIDEOLA_YOUTUBE_CLIENT_SECRET,
     ),
     elevenLabsKey: env.VIDEOLA_ELEVENLABS_KEY === "" ? undefined : env.VIDEOLA_ELEVENLABS_KEY,
+    whisper: localTranscriber(env.VIDEOLA_WHISPER, env.VIDEOLA_WHISPER_MODEL),
   };
 }
 
@@ -67,6 +77,16 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     maxBodyBytes: integer(env.VIDEOLA_MAX_BODY_BYTES, 512 * 1024 * 1024, "VIDEOLA_MAX_BODY_BYTES"),
     webRoot: env.VIDEOLA_WEB_ROOT === "" ? undefined : env.VIDEOLA_WEB_ROOT,
   };
+}
+
+// The model is optional: a wrapper script that knows which model it loads needs no second setting,
+// and whisper.cpp needs one. The command is what decides whether there is a local transcriber.
+function localTranscriber(
+  command: string | undefined,
+  model: string | undefined,
+): { command: string; model: string | undefined } | undefined {
+  if (command === undefined || command.trim() === "") return undefined;
+  return { command: command.trim(), model: model === "" ? undefined : model };
 }
 
 // Both or neither. Half a client is a sign-in that gets as far as Google's page and fails on the

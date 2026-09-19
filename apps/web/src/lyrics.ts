@@ -42,17 +42,25 @@ export function lyricsFromText(text: string): FoundLines | undefined {
   return { lines: [...plain.lines], timed: false, from: "text" };
 }
 
-/** Whether the server behind this editor can transcribe at all. */
-export async function transcriberReady(connection: Connection): Promise<boolean> {
+/**
+ * Which transcriber the server behind this editor has, if it has one.
+ *
+ * Not a yes or a no: one of the two sends the song to a company and the other one does not, and
+ * the sentence beside the button has to say which.
+ */
+export async function transcriberReady(connection: Connection): Promise<Transcriber> {
   try {
     const answer = await call(connection, "/api/lyrics/ready");
-    const body = (await answer.json()) as { available?: boolean };
-    return body.available === true;
+    const body = (await answer.json()) as { available?: boolean; engine?: string };
+    if (body.available !== true) return undefined;
+    return body.engine === "local" ? "local" : "cloud";
   } catch {
     // No server, or one that has never heard of this route: the dialogue offers the other ways.
-    return false;
+    return undefined;
   }
 }
+
+export type Transcriber = "local" | "cloud" | undefined;
 
 /** The audio, sent to the server, which has the key and does the listening. */
 export async function transcribeMedia(

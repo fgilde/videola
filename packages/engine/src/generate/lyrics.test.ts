@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { lineAt } from "./generator";
-import { lyricOptions, LYRIC_STYLES } from "./lyrics";
+import { lyricKnobs, lyricOptions, LYRIC_STYLES } from "./lyrics";
 
 import type { Clip, Project, Track } from "@videola/core";
 
@@ -107,5 +107,25 @@ describe("what a lyric style was asked for", () => {
   it("takes a position it knows and ignores one it does not", () => {
     expect(lyricOptions("bar", { position: "top" }).position).toBe("top");
     expect(lyricOptions("bar", { position: "sideways" }).position).toBe("middle");
+  });
+
+  it("holds the three new knobs between nothing and everything", () => {
+    const wild = lyricOptions("grow", { intensity: 12, glow: -4, tilt: 0.25 });
+
+    expect([wild.intensity, wild.glow, wild.tilt]).toEqual([1, 0, 0.25]);
+  });
+
+  // A slider for a setting the style ignores teaches somebody that the settings do nothing, so
+  // every style says which of the four it answers to -- and every style answers to at least one.
+  it("says which knobs each style answers to", () => {
+    for (const style of LYRIC_STYLES) {
+      const knobs = lyricKnobs(style);
+      expect(knobs.length).toBeGreaterThan(0);
+      expect(knobs).toContain("size");
+    }
+    expect(lyricKnobs("grow")).toContain("tilt");
+    expect(lyricKnobs("karaoke")).not.toContain("tilt");
+    // A style nobody has heard of is drawn kinetic, so it is asked the kinetic questions.
+    expect(lyricKnobs("hologram")).toEqual(lyricKnobs("kinetic"));
   });
 });

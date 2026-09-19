@@ -386,11 +386,11 @@ The name in the header is the field: click it and type. V3 says nothing about wh
 is on it, and a rename that lives only in a context menu is a rename nobody finds. A typed name is
 one undo step, not one per letter.
 
-The name has the header row to itself, and the row under it says what the track is — until the
-pointer arrives, when the buttons take that row over: out of the picture, locked, taller, shorter,
-gone. Five of them standing on every header all the time is the loudest thing in a column of eight
-rows, and every one of them answers a question about the row under the hand. On a touch screen
-they are simply there, because a finger hovers nothing.
+The name has the header row to itself, and the buttons have the row under it: out of the picture,
+locked, taller, shorter, gone. They are quiet until the pointer is on the header and lit while it
+is — but they are always there to be pressed. Revealing them on hover and taking them out of the
+hit test in between meant the first press after arriving landed on the header instead, which is a
+control that has to be aimed at twice.
 
 The eye beside the padlock takes the row out of the picture. The clips stay where they are, the
 preview and the export leave them out, and the row goes quiet so the reason is on screen rather
@@ -997,16 +997,35 @@ looks for them where they usually already are, in this order:
 2. **Pasted.** Text, or a whole `.lrc`, into the box. The reader takes `[00:12.50]` with hundredths
    or milliseconds, several timestamps for the same chorus, and the per-word timings of enhanced
    files.
-3. **Transcribed.** Only where a server with a key behind it exists — and only then is the button
-   there at all. That sends the audio to ElevenLabs, which is the one thing in this editor that
-   leaves the machine, and the dialogue says so first.
+3. **Transcribed.** Only where the server behind the editor can listen, and the button says which
+   of the two ways it would use. **`VIDEOLA_WHISPER`** points at a transcriber on that machine —
+   Whisper, through whisper.cpp or faster-whisper — and then nothing leaves it. **`VIDEOLA_ELEVENLABS_KEY`**
+   sends the song to ElevenLabs instead, which is the one thing in this editor that leaves the
+   machine, and the button says so before it is pressed. A server with both uses the local one.
+
+   The local contract is a command line rather than a dependency: a model is gigabytes and a Python
+   environment is somebody else's. Videola calls
+
+   ```sh
+   $VIDEOLA_WHISPER --input <audio file> --output <json file> [--model $VIDEOLA_WHISPER_MODEL]
+   ```
+
+   and reads `{"segments":[{"start":1.2,"end":3.4,"text":"…"}]}` in seconds, which is what
+   faster-whisper hands back — so a wrapper around it is three lines. whisper.cpp's own `-oj` file,
+   in milliseconds under `transcription`, is read as well.
 
 What comes out is **caption clips on a track of their own**: one line, one clip. That is exactly why
 the lyrics live there rather than inside the generator — a line that lands a beat late is dragged on
 the timeline, with the same handles as everything else. Without times the lines are spread evenly
 over the song, and the dialogue says so rather than pretending to know better.
 
-Over them sits a **lyrics clip** that draws whatever is being sung, in seven styles:
+That row is also what draws the **subtitle at the foot of the frame**, and **Burn subtitles in at
+the foot** in the dialogue decides whether it does. Off, the row is made all the same and taken out
+of the picture: the lyric video reads those clips to know which line is being sung, so it cannot be
+deleted — but a row out of the picture draws nothing. The eye on the row turns it back on at any
+time, which is the same switch under another name.
+
+Over them sits a **lyrics clip** that draws whatever is being sung, in twelve styles:
 
 | Style | What it does |
 |---|---|
@@ -1021,6 +1040,12 @@ Over them sits a **lyrics clip** that draws whatever is being sung, in seven sty
 | Letters travel | every letter looks for itself in the line before and moves from there to where it belongs |
 | Wave | the line rides a wave, each letter a little further along it |
 | Glitch | the line tears into red and blue and puts itself back together |
+| Growing (3D) | every word grows out of a letter of a word already standing, the whole line in perspective |
+
+Under the tiles are the settings the chosen style answers to, and only those: **type size** always,
+**movement** for how hard it travels, **glow** where a style has a halo, and **perspective** for the
+two drawn in depth. A slider for a setting a style ignores would teach somebody that the settings do
+nothing, so each style is asked which of the four it uses.
 
 The same press can put a **visualiser** behind it, which makes it a finished lyric video in one go.
 And it is one go: a hundred lines, three tracks, one undo.

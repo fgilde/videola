@@ -9,6 +9,7 @@ import type { Command, DispatchResult, LoadWarning, Project } from "@videola/cor
 import type { DocumentBackend } from "@videola/core";
 
 import { Destinations, type NewDestination, type PublicDestination } from "./destinations";
+import { transcribeLocally, type LocalTranscriber, type Run } from "./listen";
 import { transcribe, type TranscribedLine } from "./transcribe";
 import {
   channelTitle,
@@ -95,6 +96,10 @@ export interface ApiOptions {
   readonly youtubeClient?: OAuthClient | undefined;
   /** The key transcription runs through, where the operator set one. */
   readonly elevenLabsKey?: string | undefined;
+  /** A transcriber installed on this machine, which sends the audio nowhere. */
+  readonly whisper?: LocalTranscriber | undefined;
+  /** What runs it. Injected like `ytdlp`, so a check needs no Whisper on the machine. */
+  readonly runWhisper?: Run;
 }
 
 // The one place that turns a request into core calls, shared verbatim by the HTTP routes and the
@@ -110,6 +115,8 @@ export class Api {
   #ytdlp: RunYtDlp;
   #youtubeClient: OAuthClient | undefined;
   #elevenLabsKey: string | undefined;
+  #whisper: LocalTranscriber | undefined;
+  #runWhisper: Run | undefined;
   #pending = new PendingAuths();
   #fetchProgress = new Map<string, number>();
 
@@ -124,6 +131,8 @@ export class Api {
     this.#ytdlp = options.ytdlp ?? ytDlp();
     this.#youtubeClient = options.youtubeClient;
     this.#elevenLabsKey = options.elevenLabsKey;
+    this.#whisper = options.whisper;
+    this.#runWhisper = options.runWhisper;
   }
 
   /**
@@ -179,7 +188,19 @@ export class Api {
 
   /** Whether this server can listen to a song and write down the words. */
   canTranscribe(): boolean {
-    return this.#elevenLabsKey !== undefined;
+    return this.transcriber() !== undefined;
+  }
+
+  /**
+   * Which of the two does the listening, for a dialogue that has to say what happens.
+   *
+   * The difference is not a detail: one of them sends the song to a company, and the other one
+   * does not. A button that says "transcribe" without saying which is a button nobody should
+   * press, so the surface asks and puts the answer in the sentence next to it.
+   */
+  transcriber(): "local" | "cloud" | undefined {
+    if (this.#whisper !== undefined) return "local";
+    return this.#elevenLabsKey === undefined ? undefined : "cloud";
   }
 
   /**
@@ -193,12 +214,24 @@ export class Api {
     audio: Uint8Array,
     options: { contentType?: string; language?: string } = {},
   ): Promise<TranscribedLine[]> {
+    // The one on this machine first where there is one: it costs nothing, it needs no key, and
+    // the audio stays here. The cloud is the fallback rather than the default.
+    const local = this.#whisper;
+    if (local !== undefined) {
+      try {
+        return this.#runWhisper === undefined
+          ? await transcribeLocally(local, audio, options.contentType)
+          : await transcribeLocally(local, audio, options.contentType, this.#runWhisper);
+      } catch (error) {
+        throw new ApiError(502, "transcribeFailed", String((error as Error).message ?? error));
+      }
+    }
     const key = this.#elevenLabsKey;
     if (key === undefined) {
       throw new ApiError(
         400,
         "noTranscriber",
-        "this server has no transcription key: set VIDEOLA_ELEVENLABS_KEY",
+        "this server has no transcriber: set VIDEOLA_WHISPER, or VIDEOLA_ELEVENLABS_KEY",
       );
     }
     try {

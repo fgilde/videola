@@ -32,7 +32,40 @@ export const LYRIC_STYLE_NAMES = [
   "morph",
   "wave",
   "glitch",
+  "grow",
 ] as const;
+
+/**
+ * Which of the four knobs a style answers to.
+ *
+ * The same table the painter keeps, and it has to stay the same: a slider for a setting the style
+ * ignores is worse than no slider. It is repeated rather than imported because this package draws
+ * the dialogue and the other one draws the picture -- the engine is not a dependency here.
+ */
+const KNOBS: Record<string, readonly LyricKnob[]> = {
+  kinetic: ["size", "intensity"],
+  karaoke: ["size", "intensity"],
+  typewriter: ["size", "intensity"],
+  pop: ["size", "intensity"],
+  neon: ["size", "intensity", "glow"],
+  flip: ["size", "intensity"],
+  bar: ["size", "intensity"],
+  depth: ["size", "intensity", "tilt"],
+  morph: ["size", "intensity"],
+  wave: ["size", "intensity"],
+  glitch: ["size", "intensity", "glow"],
+  grow: ["size", "intensity", "glow", "tilt"],
+};
+
+export type LyricKnob = "size" | "intensity" | "glow" | "tilt";
+
+/** What each knob may be, and the step a slider moves it by. */
+const RANGE: Record<LyricKnob, { low: number; high: number; step: number }> = {
+  size: { low: 0.05, high: 0.3, step: 0.005 },
+  intensity: { low: 0, high: 1, step: 0.05 },
+  glow: { low: 0, high: 1, step: 0.05 },
+  tilt: { low: 0, high: 1, step: 0.05 },
+};
 
 export interface LyricsDraft {
   media?: MediaId;
@@ -44,13 +77,26 @@ export interface LyricsDraft {
   uppercase: boolean;
   /** Whether a visualiser goes in behind them, which is what makes it a lyric *video*. */
   withVisualizer: boolean;
+  /**
+   * Whether the words are also burned in at the foot of the frame.
+   *
+   * The lines live on a caption row either way -- that row is what the lyric video reads to know
+   * which line is being sung -- but a caption row taken out of the picture draws nothing. On, this
+   * is a lyric video with subtitles; off, it is a lyric video.
+   */
+  subtitles: boolean;
+  /** How big, how much movement, how much glow, how far it leans. Per style, and clamped there. */
+  size: number;
+  intensity: number;
+  glow: number;
+  tilt: number;
 }
 
 /** What a tile asks for when it wants a picture of a style. */
 export interface PreviewRequest {
   canvas: HTMLCanvasElement;
   style: string;
-  look: Omit<LyricsDraft, "media" | "style" | "withVisualizer">;
+  look: Omit<LyricsDraft, "media" | "style" | "withVisualizer" | "subtitles">;
   /** How far through its line the sample is, 0 to 1. */
   progress: number;
   /** The words to draw, and the line before them for the styles that use one. */
@@ -63,8 +109,13 @@ export interface LyricsDialogProps {
   found?: FoundLyrics;
   /** What is happening right now, for the two things that take a moment. */
   busy?: "file" | "transcribe";
-  /** Whether the server behind this editor can transcribe at all. */
-  canTranscribe?: boolean;
+  /**
+   * What the server behind this editor listens with, if it can listen at all.
+   *
+   * `local` is a transcriber on that machine and the audio goes nowhere; `cloud` sends the song to
+   * ElevenLabs. The button is the same button, and the line under it is not.
+   */
+  transcriber?: "local" | "cloud";
   error?: string;
   /**
    * Paints one style onto one canvas.
@@ -115,6 +166,11 @@ export function LyricsDialog(props: LyricsDialogProps): ReactElement {
     position: "middle",
     uppercase: false,
     withVisualizer: true,
+    subtitles: true,
+    size: 0.13,
+    intensity: 0.6,
+    glow: 0.5,
+    tilt: 0.5,
   });
 
   useEffect(() => {
@@ -128,6 +184,10 @@ export function LyricsDialog(props: LyricsDialogProps): ReactElement {
     background: draft.background,
     position: draft.position,
     uppercase: draft.uppercase,
+    size: draft.size,
+    intensity: draft.intensity,
+    glow: draft.glow,
+    tilt: draft.tilt,
   };
 
   return (
@@ -176,15 +236,19 @@ export function LyricsDialog(props: LyricsDialogProps): ReactElement {
               >
                 {props.busy === "file" ? t("lyrics.looking") : t("lyrics.fromFile")}
               </button>
-              {props.canTranscribe === true ? (
+              {props.transcriber !== undefined ? (
                 <button
                   type="button"
                   className="v-button"
                   data-testid="lyrics-transcribe"
+                  data-engine={props.transcriber}
                   disabled={media === undefined || props.busy !== undefined}
                   onClick={() => media !== undefined && props.onTranscribe(media)}
+                  title={t(`lyrics.transcribe.${props.transcriber}`)}
                 >
-                  {props.busy === "transcribe" ? t("lyrics.transcribing") : t("lyrics.transcribe")}
+                  {props.busy === "transcribe"
+                    ? t("lyrics.transcribing")
+                    : t(`lyrics.transcribe.${props.transcriber}`)}
                 </button>
               ) : (
                 <p className="v-export__note" data-testid="lyrics-no-transcriber">
@@ -327,6 +391,36 @@ export function LyricsDialog(props: LyricsDialogProps): ReactElement {
                 }
               />
               <span>{t("lyrics.uppercase")}</span>
+            </label>
+            {/* Only the knobs this style answers to. A slider that does nothing is a slider that
+                teaches somebody the settings do nothing. */}
+            {(KNOBS[draft.style] ?? KNOBS.kinetic!).map((knob) => (
+              <label className="v-dest__field" key={knob}>
+                <span>{t(`lyrics.knob.${knob}`)}</span>
+                <input
+                  type="range"
+                  min={RANGE[knob].low}
+                  max={RANGE[knob].high}
+                  step={RANGE[knob].step}
+                  value={draft[knob]}
+                  data-testid={`lyrics-knob-${knob}`}
+                  onChange={(event) =>
+                    setDraft((held) => ({ ...held, [knob]: Number(event.target.value) }))
+                  }
+                />
+              </label>
+            ))}
+
+            <label className="v-lyrics__switch">
+              <input
+                type="checkbox"
+                checked={draft.subtitles}
+                data-testid="lyrics-subtitles"
+                onChange={(event) =>
+                  setDraft((held) => ({ ...held, subtitles: event.target.checked }))
+                }
+              />
+              <span>{t("lyrics.subtitles")}</span>
             </label>
             <label className="v-lyrics__switch">
               <input

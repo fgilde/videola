@@ -43,7 +43,7 @@
   "lyrics.looking": "Looking …",
   "lyrics.transcribe": "Have it transcribed",
   "lyrics.transcribing": "Transcribing …",
-  "lyrics.noTranscriber": "Transcribing needs a server with VIDEOLA_ELEVENLABS_KEY set, and it sends the audio to ElevenLabs.",
+  "lyrics.noTranscriber": "Transcribing needs a server with VIDEOLA_WHISPER (runs here, the audio stays on this machine) or VIDEOLA_ELEVENLABS_KEY (the audio goes to ElevenLabs).",
   "lyrics.paste": "Paste text or an .lrc",
   "lyrics.pasteHint": "[00:12.50]Standing in the hall of fame …",
   "lyrics.takeText": "Take this text",
@@ -794,5 +794,13 @@
   "generator.countdown": "Countdown",
   "generator.visualizer": "Visualiser",
   "generator.lyrics": "Lyric video",
-  "track.auto.lyrics": "Lyrics"
+  "track.auto.lyrics": "Lyrics",
+  "lyrics.style.grow": "Growing (3D)",
+  "lyrics.subtitles": "Burn subtitles in at the foot",
+  "lyrics.knob.size": "Type size",
+  "lyrics.knob.intensity": "Movement",
+  "lyrics.knob.glow": "Glow",
+  "lyrics.knob.tilt": "Perspective",
+  "lyrics.transcribe.local": "Transcribe on this machine",
+  "lyrics.transcribe.cloud": "Transcribe at ElevenLabs"
 }

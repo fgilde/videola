@@ -824,11 +824,11 @@ async function announce() {
     const lines = await until("the lines it took", () => q('[data-testid="lyrics-lines"]'));
     check("the pasted lines are read with their times", lines.children.length, 3);
 
-    // Eleven styles, each drawing itself on a thumbnail: a list of names says nothing about what
-    // "kinetic" or "letters travel" look like, and the only other way to find out is to make a
-    // video. Read off the canvas, because a tile that draws nothing is the failure worth catching.
+    // Every style draws itself on a thumbnail: a list of names says nothing about what "kinetic"
+    // or "growing" look like, and the only other way to find out is to make a video. Read off the
+    // canvas, because a tile that draws nothing is the failure worth catching.
     const tiles = [...dialog.querySelectorAll(".v-lyrics__style")];
-    check("every style shows itself", tiles.length, 11);
+    check("every style shows itself", tiles.length, 12);
     const picture = tiles[0].querySelector("canvas");
     const ctx = picture.getContext("2d");
     const pixels = ctx.getImageData(0, 0, picture.width, picture.height).data;
@@ -2431,8 +2431,14 @@ async function announce() {
       about.getBoundingClientRect().bottom <= innerHeight &&
         about.getBoundingClientRect().right <= innerWidth,
       true);
+    // The browser's own flag rather than React having taken the node away. `close()` is what the
+    // button calls and `open` is what it sets, and a closed dialog is `display: none` whatever is
+    // still in the tree -- while under virtual time the unmount that follows is a task the page
+    // may not get a turn for until the run has moved on. That the host hears the close and forgets
+    // the dialogue is checked where it can be: in the unit tests.
     about.querySelector(".v-about__close").click();
-    await until("it to close", () => q('[data-testid="about"]') === null);
+    await until("it to close", () => about.open === false);
+    check("and a closed dialogue shows nothing", getComputedStyle(about).display, "none");
 
     // A second template on top of the first, without answering anything at all: its graphics arrive
     // as tracks of their own over an edit already made. This is the whole of "insert" -- the tracks
@@ -2785,6 +2791,19 @@ async function announce() {
     check("the name field and the row's buttons do not overlap",
       Math.round(nameBox.bottom) <= Math.round(toolBox.top) + 1, true);
     checkAtLeast("and the name has the width of the column to itself", nameBox.width, 100);
+
+    // What is actually under the pointer at the middle of each button. They used to be taken out
+    // of the hit test until the header was hovered, so the first press after arriving landed on
+    // the header and the button had to be aimed at twice.
+    for (const control of [...header.querySelectorAll(".v-timeline__lock, .v-timeline__remove")]) {
+      const box = control.getBoundingClientRect();
+      const under = document.elementFromPoint(
+        Math.round(box.left + box.width / 2),
+        Math.round(box.top + box.height / 2),
+      );
+      check(`the ${control.getAttribute("aria-label")} button is what the pointer finds`,
+        under === control || control.contains(under), true);
+    }
     check("both stay inside the header",
       Math.round(nameBox.top) >= Math.round(header.getBoundingClientRect().top) - 1
       && Math.round(toolBox.bottom) <= Math.round(header.getBoundingClientRect().bottom) + 1, true);
@@ -3476,6 +3495,12 @@ async function announce() {
       () => (q('[data-testid="lyrics-dialog"]') === null ? true : null));
 
     check("a lyric video can be made before the song is on the timeline", banner(), "");
+    // The row the words live on, which is also what draws the subtitle at the foot of the frame.
+    // It is created either way -- the lyric video reads it to know which line is being sung.
+    const captionRow = () => q('[data-kind="caption"]');
+    check("the words land on a caption row", captionRow() !== null, true);
+    check("and it is in the picture, because subtitles were left on",
+      captionRow().hasAttribute("data-hidden"), false);
     checkAtLeast("and the lines land all the same", all("[data-clip-id]").length, 3);
 
     // A row called "Ü2" says nothing about which of two overlays carries the words. Videola names
@@ -3488,10 +3513,38 @@ async function announce() {
     const labels = all(".v-clip__label").map((node) => node.textContent);
     check("and no clip on them reads as unnamed", labels.includes("Ohne Namen"), false);
 
+    // And again with the subtitles turned off: the same words, the same row, out of the picture.
+    // Somebody who wants the big words and not a caption strip at the foot has to be able to say
+    // so when the video is made, rather than hunting for the row afterwards.
+    for (let step = 0; step < 4 && all("[data-clip-id]").length > 0; step += 1) {
+      button("Rückgängig").click();
+      await sleep(200);
+    }
+    pickMenu("Lyric-Video …");
+    await until("the lyric dialogue again", () => q('[data-testid="lyrics-dialog"]'));
+    q('[data-testid="lyrics-subtitles"]').click();
+    await sleep(120);
+    labelled("Lyric-Video anlegen").click();
+    await until("the dialogue to close",
+      () => (q('[data-testid="lyrics-dialog"]') === null ? true : null));
+    check("the subtitles can be turned off when the video is made",
+      q('[data-kind="caption"]')?.hasAttribute("data-hidden"), true);
+    check("and the words are still there to be sung",
+      all('[data-kind="caption"] [data-clip-id]').length >= 2, true);
+    check("turning them off raised nothing", banner(), "");
+
     // Open again for the picture at the end of the budget: the styles are the half of this
     // dialogue worth looking at.
     pickMenu("Lyric-Video …");
     await until("the dialogue again", () => q('[data-testid="lyrics-dialog"]'));
+    // The style with the most to show, and the sliders that belong to it.
+    const grow = q('[data-style="grow"]');
+    if (grow !== null) {
+      grow.click();
+      await sleep(200);
+      check("the growing style offers the perspective it is built on",
+        q('[data-testid="lyrics-knob-tilt"]') !== null, true);
+    }
     await sleep(400);
   }
 

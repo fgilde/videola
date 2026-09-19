@@ -1949,6 +1949,28 @@ function inkRows(ctx, size) {
   return { rows, total };
 }
 
+/** Whether a number lies between two others, whichever way round they are. */
+function between(value, one, other) {
+  return value >= Math.min(one, other) - 1 && value <= Math.max(one, other) + 1;
+}
+
+// The right-hand edge of the ink, which is where a word that has arrived stands and a word still
+// growing out of an earlier letter does not.
+function inkEdge(ctx, size) {
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+  let right = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = size - 1; x > right; x -= 1) {
+      const at = (y * size + x) * 4;
+      if (pixels[at + 3] > 40 && (pixels[at] > 40 || pixels[at + 1] > 40 || pixels[at + 2] > 40)) {
+        right = x;
+        break;
+      }
+    }
+  }
+  return right;
+}
+
 test("a lyric style draws the line it is given", () => {
   const line = { text: "Hall of fame", progress: 1, index: 0 };
   for (const style of ["kinetic", "karaoke", "typewriter", "pop", "neon", "flip", "bar",
@@ -2015,6 +2037,77 @@ test("the letters that travel start where they were and arrive where they belong
   // and neither is empty.
   check("there are letters on the way", halfway.total > 40, true);
   check("and letters at the end", settled.total > 40, true);
+});
+
+// The words grow out of the words before them: a word on its way is somewhere between the letter
+// it came from and the place it belongs, and the whole line stands at an angle.
+test("a word grows out of a letter of the words already standing", () => {
+  const size = 240;
+  const line = { text: "hall of fame", progress: 0.55, index: 0 };
+  const growing = inkRows(lyricsDrawn("grow", { size: 0.12, tilt: 0.6 }, line, size), size);
+  const settled = inkRows(
+    lyricsDrawn("grow", { size: 0.12, tilt: 0.6 }, { ...line, progress: 1 }, size),
+    size,
+  );
+  check("there are words on the way", growing.total > 40, true);
+
+  // Where the words are, not how many pixels are lit: a word fading in where it already belongs
+  // would light the same pixels, and that is the one thing this style must not do.
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext("2d");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const options = R.lyricOptions("grow", { size: 0.12, tilt: 0 });
+  const places = R.growPlaces(ctx, options, { width: size, height: size }, ["hall", "of", "fame"], 0.72);
+  const arriving = places[places.length - 1];
+  check("the newest word has a seed to grow out of", arriving.seed !== undefined, true);
+  check("and it is on its way rather than in its place",
+    arriving.arrived > 0 && arriving.arrived < 1, true);
+  check("and it stands between that letter and its own place",
+    Math.abs(arriving.x - arriving.home.x) > 1 &&
+      between(arriving.x, arriving.seed.x, arriving.home.x), true);
+  // The letter it came from belongs to a word that is already standing, which is what makes the
+  // line read as growing out of itself rather than as words appearing next to each other.
+  const earlier = places.slice(0, -1).map((place) => place.home);
+  check("and that letter belongs to a word already on screen",
+    earlier.some((home) => Math.abs(arriving.seed.x - home.x) <= home.width / 2 + 2), true);
+  // The whole line by the end, and a word still arriving in the middle of it: more ink once it
+  // has all landed.
+  check("and more of them once they have all arrived", settled.total > growing.total, true);
+
+  // An export draws every frame the preview drew. A style that leaned on a random number would
+  // draw two different pictures of the same instant.
+  const once = lyricsDrawn("grow", { size: 0.12 }, line, 96).getImageData(0, 0, 96, 96).data;
+  const twice = lyricsDrawn("grow", { size: 0.12 }, line, 96).getImageData(0, 0, 96, 96).data;
+  let same = true;
+  for (let at = 0; at < once.length; at += 4) if (once[at] !== twice[at]) same = false;
+  check("and the same instant is the same picture", same, true);
+});
+
+// A slider that does nothing is a slider that teaches somebody the settings do nothing.
+test("the settings move what they say they move", () => {
+  const size = 200;
+  const line = { text: "riding the wave", progress: 0.6, index: 0 };
+  const still = inkRows(lyricsDrawn("wave", { size: 0.1, intensity: 0 }, line, size), size);
+  const riding = inkRows(lyricsDrawn("wave", { size: 0.1, intensity: 1 }, line, size), size);
+  // A wave with no movement is a straight line of text; with movement it covers more rows.
+  check("movement spreads the wave over more of the frame", riding.rows > still.rows, true);
+
+  const small = inkRows(lyricsDrawn("karaoke", { size: 0.06 }, line, size), size);
+  const large = inkRows(lyricsDrawn("karaoke", { size: 0.16 }, line, size), size);
+  check("and the type size is the type size", large.total > small.total * 1.5, true);
+
+  const dark = inkRows(lyricsDrawn("neon", { size: 0.12, glow: 0 }, line, size), size);
+  const lit = inkRows(lyricsDrawn("neon", { size: 0.12, glow: 1 }, line, size), size);
+  check("and the glow puts light around the letters", lit.total > dark.total, true);
+
+  // Perspective leans the words out of the frame, so the block of ink is not the same shape.
+  const covered = (ctx) => inkRows(ctx, size).rows.filter((count) => count > 0).length;
+  const flat = covered(lyricsDrawn("grow", { size: 0.12, tilt: 0 }, { ...line, progress: 1 }, size));
+  const leaning = covered(lyricsDrawn("grow", { size: 0.12, tilt: 1 }, { ...line, progress: 1 }, size));
+  // Not bigger or smaller, *different*: the words lean and stand back at once, which spreads them
+  // over the frame one way and shrinks them the other.
+  check("and the perspective changes how the line stands", Math.abs(leaning - flat) > 2, true);
 });
 
 // Every frame of an export is drawn twice in practice -- once in the preview, once in the file --
