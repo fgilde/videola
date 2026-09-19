@@ -120,7 +120,13 @@ export function rateKey(rate: Rate): string {
 export function ExportDialog(props: ExportDialogProps): ReactElement {
   const { t, formatNumber } = useI18n();
   const usable = props.formats.filter((format) => format.video);
-  const [formatId, setFormatId] = useState(usable[0]?.id ?? "");
+  // What somebody picked, if they have picked. The format itself is worked out below rather than
+  // held here: the list arrives from an asynchronous probe of the machine's encoders, and this
+  // dialogue is on screen before the answer is. A state initialised from the first render held the
+  // empty string for ever, so on the first export after a page load there was no chosen format and
+  // the button stayed disabled -- and opening the dialogue a second time fixed it, because by then
+  // the list from the first probe was still in the editor's hands.
+  const [picked, setPicked] = useState<string>();
   const [width, setWidth] = useState(props.settings.width);
   const [height, setHeight] = useState(props.settings.height);
   const [fpsKey, setFpsKey] = useState(rateKey(props.settings.fps));
@@ -134,7 +140,7 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
   const rates = useMemo(() => withProjectRate(props.settings.fps), [props.settings.fps]);
   const fps = rates.find((rate) => rateKey(rate) === fpsKey) ?? props.settings.fps;
   const running = props.progress !== undefined;
-  const chosen = usable.find((format) => format.id === formatId);
+  const chosen = usable.find((format) => format.id === picked) ?? usable[0];
   const suggested = defaultBitrate(width, height, fps);
   // Escape leaves the dialog, but never abandons a run: cancelling an export is a decision, and
   // a key pressed to dismiss something is not one.
@@ -145,8 +151,9 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
   }, []);
 
   const start = (): void => {
+    if (chosen === undefined) return;
     props.onExport({
-      formatId,
+      formatId: chosen.id,
       width,
       height,
       fps,
@@ -184,9 +191,9 @@ export function ExportDialog(props: ExportDialogProps): ReactElement {
         <label className="v-export__row">
           {t("export.format")}
           <select
-            value={formatId}
+            value={chosen?.id ?? ""}
             disabled={running}
-            onChange={(event) => setFormatId(event.target.value)}
+            onChange={(event) => setPicked(event.target.value)}
           >
             {usable.map((format) => (
               <option key={format.id} value={format.id}>

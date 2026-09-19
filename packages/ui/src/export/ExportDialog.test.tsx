@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Rate } from "@videola/core";
@@ -36,6 +37,28 @@ function show(overrides: Partial<ExportDialogProps> = {}): {
     </I18nProvider>,
   );
   return { exported, props };
+}
+
+/** The dialogue opened before the probe has answered, and a way to hand it the answer. */
+function later(): {
+  rerender: (formats: ExportDialogProps["formats"]) => void;
+  props: { exported: ExportSelection[] };
+} {
+  const exported: ExportSelection[] = [];
+  const of = (formats: ExportDialogProps["formats"]): ReactElement => (
+    <I18nProvider>
+      <ExportDialog
+        formats={formats}
+        settings={{ width: 1920, height: 1080, fps: FLAT }}
+        hasSelection={false}
+        onExport={(selection) => exported.push(selection)}
+        onCancel={vi.fn()}
+        onClose={vi.fn()}
+      />
+    </I18nProvider>
+  );
+  const view = render(of([]));
+  return { rerender: (formats) => view.rerender(of(formats)), props: { exported } };
 }
 
 function field(label: string): HTMLInputElement | HTMLSelectElement {
@@ -94,6 +117,32 @@ describe("ExportDialog", () => {
   it("warns when the sound cannot be encoded", () => {
     show({ formats: [{ id: "mp4", video: true, audio: false }] });
     expect(screen.getByText(/stumm/)).toBeTruthy();
+  });
+
+  // The list comes from an asynchronous probe of the machine's encoders, and this dialogue is on
+  // screen before the answer is. It used to read the first format on its first render and keep the
+  // empty string it found, so the first export after a page load had no chosen format and a button
+  // that stayed disabled -- and a second opening worked, because the editor still held the list.
+  it("takes the formats that arrive after it is already on screen", () => {
+    const { rerender, props } = later();
+
+    expect((screen.getByText("Export starten") as HTMLButtonElement).disabled).toBe(true);
+    rerender(BOTH);
+
+    expect((screen.getByText("Export starten") as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByText("Export starten"));
+    expect(props.exported[0]?.formatId).toBe("mp4");
+  });
+
+  it("keeps the one somebody picked when the list is asked again", () => {
+    const { rerender, props } = later();
+    rerender(BOTH);
+
+    fireEvent.change(field("Format"), { target: { value: "webm" } });
+    rerender([...BOTH]);
+    fireEvent.click(screen.getByText("Export starten"));
+
+    expect(props.exported[0]?.formatId).toBe("webm");
   });
 
   it("refuses to start when nothing can be encoded at all", () => {
