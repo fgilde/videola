@@ -1053,20 +1053,21 @@ function libraryEntry(id) {
   return libraryHost.querySelector('[data-media-id="med_' + id + '"]');
 }
 
-test("the proxy switch is a control a thumb can hit", function () {
+test("the preview quality is a control a thumb can hit", function () {
   drawLibrary(new Map(), false);
-  const button = libraryHost.querySelector(".v-library__proxies");
-  const box = button.getBoundingClientRect();
-  check("it is there, and it says what state the preview is in",
-    button.textContent, "Originale benutzen");
+  const picker = libraryHost.querySelector(".v-library__quality select");
+  const box = picker.getBoundingClientRect();
+  check("it offers both answers rather than one state to guess at",
+    [...picker.options].map(function (option) { return option.value; }), ["proxy", "original"]);
   checkAtLeast("and it is tall enough for the pointer in use",
     Math.round(box.height), POINTER === "coarse" ? 44 : 32);
-  // Its own row across the rail. Sharing a line with Import would leave both of them at about a
-  // hundred pixels, which is where "Originale benutzen" starts overflowing.
+  // Its own row across the rail. In one column of the two-column toolbar it came out as a clipped
+  // select under four lines of wrapped label.
   const toolbar = libraryHost.querySelector(".v-library__toolbar").getBoundingClientRect();
   checkAtLeast("across the whole toolbar rather than beside the import",
     Math.round(box.width), Math.round(toolbar.width) - 24);
-  checkAtMost("and its label fits inside it", button.scrollWidth, Math.ceil(box.width) + 1);
+  checkAtMost("and the option it is showing fits inside it",
+    picker.scrollWidth, Math.ceil(box.width) + 1);
 });
 
 test("a medium says whether it has a proxy, and one without is no worse off", function () {
@@ -1092,13 +1093,13 @@ test("a medium says whether it has a proxy, and one without is no worse off", fu
     libraryHost.querySelector(".v-library__list").clientWidth);
 });
 
-test("the switch shows the state it is in", function () {
+test("the picker shows the state it is in", function () {
   drawLibrary(new Map(), true);
-  check("pressed while the preview is on the originals",
-    libraryHost.querySelector(".v-library__proxies").getAttribute("aria-pressed"), "true");
+  check("sharp while the preview is on the originals",
+    libraryHost.querySelector(".v-library__quality select").value, "original");
   drawLibrary(new Map(), false);
-  check("and not pressed while it is on the proxies",
-    libraryHost.querySelector(".v-library__proxies").getAttribute("aria-pressed"), "false");
+  check("and smooth while it is on the proxies",
+    libraryHost.querySelector(".v-library__quality select").value, "proxy");
 });
 
 document.getElementById("out").textContent = JSON.stringify(results);

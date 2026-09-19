@@ -207,6 +207,8 @@
 
 .v-library__quality select {
   width: 100%;
+  /* The global sheet already grows every select to a touch target under a coarse pointer; a floor
+     of its own here undid that and left a 36 px control on a tablet. */
   min-height: var(--v-control-height, 2.25rem);
   padding: 0 var(--v-space-2);
   background: var(--v-surface);
@@ -219,4 +221,10 @@
 .v-library__quality small {
   font-size: var(--v-text-xs);
   color: var(--v-text-muted);
+}
+
+@media (pointer: coarse) {
+  .v-library__quality select {
+    min-height: var(--v-touch-target);
+  }
 }
