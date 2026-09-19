@@ -21,6 +21,8 @@ const SHOTS = {
   "phone.png": "editor-phone.webp",
   "phone-library.png": "editor-phone-library.webp",
   "phone-inspector.png": "editor-phone-inspector.webp",
+  "import.png": "editor-import.webp",
+  "destinations.png": "editor-destinations.webp",
 };
 
 const missing = Object.keys(SHOTS).filter((name) => !existsSync(join(from, name)));

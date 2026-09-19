@@ -1,10 +1,11 @@
 ---
 layout: home
 hero:
-  text: Ein Video-Editor auf einem Rust-Kern
+  text: Ein Schneideraum, der dort läuft, wo das Material schon liegt
   tagline: >
-    Importieren, schneiden, keyframen, mischen und exportieren — im Browser, am Schreibtisch, auf
-    Tablet und Telefon. Mit HTTP-Schnittstelle und MCP-Server für Agenten.
+    Importieren, schneiden, keyframen, gradieren, mischen und exportieren — im Browser-Tab, am
+    Schreibtisch, auf dem Telefon. Das Modell ist eine Rust-Crate, die Bilder sind WebGL2, und das
+    Material bleibt im Speicher des eigenen Browsers, bis es jemand irgendwohin schickt.
   image:
     src: /videola-logo.webp
     alt: Videola
@@ -22,13 +23,28 @@ hero:
       text: Quellcode
       link: https://github.com/fgilde/videola
 features:
-  - title: Importieren, schneiden, abspielen
+  - title: Nichts verlässt den Rechner
     details: >
-      Ein Video auf das Fenster ziehen oder über den Knopf auswählen. Es landet in OPFS unter dem
-      Hash seiner eigenen Bytes, wird zum Clip und läuft über WebCodecs und einen
-      WebGL2-Compositor, wobei die Audio-Uhr führt.
+      Eine Datei, die aufs Fenster fällt, wird gehasht und unter diesem Hash in den Speicher des
+      Browsers geschrieben. Kein Upload, kein Konto, kein Projekt auf fremder Platte — und dieselbe
+      Datei zweimal liegt einmal da.
     link: /de/guide/editing
     linkText: Schneiden
+  - title: Aufnahmemodus
+    details: >
+      Den runden Knopf drücken, den Playhead setzen, ändern, was sich ändern soll. Jeder Schieber
+      und jeder Zug über das Bild wird zu einem Keyframe an dieser Stelle, der Clipanfang wird mit
+      dem vorherigen Wert festgehalten, und ein lila Rahmen ums Fenster sagt, in welchem Modus man
+      gerade ist.
+    link: /de/guide/editing#keyframes-aufzeichnen
+    linkText: Keyframes
+  - title: Acht Wege hinaus
+    details: >
+      YouTube und Vimeo über deren eigene APIs — und die, die niemanden um Erlaubnis fragen:
+      PeerTube auf der eigenen Maschine, Bluesky mit einem App-Passwort aus den Kontoeinstellungen,
+      Mastodon, Telegram, eine Facebook-Seite oder jede beliebige Adresse.
+    link: /de/guide/self-hosting#veroffentlichungsziele
+    linkText: Ziele
   - title: Ein Zeigerpfad für Maus und Finger
     details: >
       Verschieben, Trimmen, Scrubben, Pinch-Zoom und langes Drücken laufen alle über Pointer

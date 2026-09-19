@@ -1,10 +1,11 @@
 ---
 layout: home
 hero:
-  text: A video editor built on a Rust core
+  text: A cutting room that runs where your footage already is
   tagline: >
-    Import, cut, keyframe, mix and export — in a browser, on a desktop, a tablet or a phone.
-    With an HTTP API and an MCP server for agents.
+    Import, cut, keyframe, grade, mix and export — in a browser tab, on a desktop, on a phone.
+    The model is one Rust crate, the pictures are WebGL2, and the material stays in your own
+    browser storage until you send it somewhere.
   image:
     src: /videola-logo.webp
     alt: Videola
@@ -22,13 +23,28 @@ hero:
       text: Source
       link: https://github.com/fgilde/videola
 features:
-  - title: Import, cut, play
+  - title: Nothing leaves the machine
     details: >
-      Drag a video onto the window or pick it from the button. It lands in OPFS under the hash of
-      its own bytes, becomes a clip, and plays back through WebCodecs and a WebGL2 compositor with
-      the audio clock in the lead.
+      A file dropped on the window is hashed and written into the browser's own storage under that
+      hash. No upload, no account, no project sitting on somebody else's disk — and the same file
+      twice is stored once.
     link: /guide/editing
     linkText: Editing
+  - title: Record mode
+    details: >
+      Press the round button, move the playhead, change what you want changed. Every slider and
+      every drag across the picture becomes a key at that instant, the clip's start is pinned with
+      what was there before, and the window carries a purple border so you can see what mode you
+      are in.
+    link: /guide/editing#recording-keyframes
+    linkText: Keyframes
+  - title: Eight ways out
+    details: >
+      YouTube and Vimeo through their own APIs, and the ones that ask nobody's permission:
+      PeerTube on a machine you own, Bluesky with an app password from the account's settings,
+      Mastodon, Telegram, a Facebook page, or any URL you like.
+    link: /guide/self-hosting#destinations
+    linkText: Destinations
   - title: One pointer path for mouse and touch
     details: >
       Dragging, trimming, scrubbing, pinch-zoom and long-press all run through Pointer Events, so

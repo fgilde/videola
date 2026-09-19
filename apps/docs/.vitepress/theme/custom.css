@@ -296,3 +296,141 @@
   font-size: 0.85rem;
   color: var(--vp-c-text-2);
 }
+
+/* ------------------------------------------------------------------- the mark in the footer */
+
+/* Drawn rather than placed: both strokes carry pathLength="1", so one dash the length of the whole
+   path walks along them and the mark writes itself once, when the footer first comes into view.
+   Hover draws it again, which is the only reason anybody scrolls back down to a footer. */
+.VPFooter .gilde-mark {
+  vertical-align: -0.3em;
+  margin-right: 0.45rem;
+  filter: drop-shadow(0 0 6px rgb(224 162 78 / 0.35));
+}
+
+.VPFooter .gilde-mark path {
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  animation: gilde-draw 1.6s ease forwards;
+}
+
+.VPFooter .gilde-mark path:last-child {
+  animation-delay: 0.55s;
+}
+
+.VPFooter a:hover .gilde-mark path {
+  animation: gilde-draw 0.9s ease forwards;
+}
+
+.VPFooter .message a {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+@keyframes gilde-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPFooter .gilde-mark path,
+  .VPFooter a:hover .gilde-mark path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ------------------------------------------------------------------- the hero, with a reel under it */
+
+/* The wash follows the reel down the page rather than stopping at the hero's own box. */
+.VPHome::before {
+  height: 48rem;
+}
+
+/* The hero sits closer to the strip: the two are one picture, and a default page's worth of air
+   between them would read as a heading and an unrelated decoration. */
+.VPHome .VPHero {
+  padding-bottom: 0;
+}
+
+.VPHome .VPHero .actions {
+  margin-top: 1.5rem;
+}
+
+/* A button that lifts. Small, and only where a pointer can hover: a touch device has no hover
+   state to lift out of, and an actions row that jumped under a thumb would be a nuisance. */
+@media (hover: hover) {
+  .VPHome .VPButton.brand {
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .VPHome .VPButton.brand:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.75rem 1.5rem rgb(91 140 255 / 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPHome .VPButton.brand:hover {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------- the feature cards */
+
+/* A hairline of the brand gradient along the top edge, lit on hover. The cards were flat panels of
+   text in a dark column, which is what a documentation site looks like -- this page has to look
+   like the thing it is about. */
+.VPFeature {
+  position: relative;
+  overflow: hidden;
+}
+
+.VPFeature::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--v-gradient);
+  opacity: 0.25;
+  transition: opacity 0.25s ease;
+}
+
+.VPFeature:hover::before {
+  opacity: 1;
+}
+
+.VPFeature .title {
+  letter-spacing: -0.01em;
+}
+
+/* The sprocket rail that separates the cards from the pictures: the one piece of decoration on this
+   page that says what the page is about without a word. */
+.VPHome .VPFeatures + div::before,
+.VPHome .vp-doc > h2:first-of-type::before {
+  content: "";
+  display: block;
+  height: 7px;
+  margin: 0 0 2.5rem;
+  background: repeating-linear-gradient(
+    90deg,
+    rgb(147 170 255 / 0.35) 0 8px,
+    transparent 8px 26px
+  );
+  mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
+}
+
+/* The reel is full-bleed through negative inline margins, and a viewport narrower than the page
+   would otherwise widen the document rather than clip it -- which on a phone put the headline half
+   off the screen. Clipped here, where the full-bleed is introduced. */
+.VPHome {
+  overflow-x: clip;
+}

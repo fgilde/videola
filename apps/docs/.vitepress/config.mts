@@ -2,16 +2,27 @@ import { defineConfig, type DefaultTheme } from "vitepress";
 
 const REPO = "https://github.com/fgilde/videola";
 
-// The footer links the owner asked for. `message` and `copyright` are rendered as HTML, so the
-// anchors live here rather than needing a theme slot. Both marks are served from public/ rather
-// than from their own sites, so a page load never reaches a third party.
-const GILDE_ICON = '<img src="/videola/gilde-icon.webp" alt="" width="16" height="16">';
+// The footer link the owner asked for. `message` and `copyright` are rendered as HTML, so the mark
+// is written out here rather than needing a theme slot -- and inline rather than as an <img>,
+// because a file in a tag cannot be drawn on: the two strokes carry `pathLength="1"`, and the
+// stylesheet walks a dash along them. The artwork is gilde.org's own, served from public/ so a page
+// load never reaches a third party.
+const GILDE_MARK = `<svg class="gilde-mark" viewBox="0 0 512 512" width="20" height="20" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="gildeGold" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ffe6a8"/><stop offset="0.45" stop-color="#e0a24e"/><stop offset="1" stop-color="#a9761f"/>
+  </linearGradient></defs>
+  <g fill="none" stroke="url(#gildeGold)" stroke-width="56" stroke-linecap="square" stroke-linejoin="miter">
+    <path pathLength="1" d="M376 88H112v264l144 112 144-112v-96H280"/>
+    <path pathLength="1" d="M280 216h120"/>
+  </g>
+</svg>`;
 
 const link = (href: string, text: string) =>
   `<a href="${href}" target="_blank" rel="noreferrer">${text}</a>`;
 
-const footerMessage = (licence: string) =>
-  `${licence} · ${link("https://www.gilde.org", `${GILDE_ICON}www.gilde.org`)}`;
+// The licence used to lead this line. It belongs in the repository and on the licence page, not
+// under every page of a guide: what a reader wants at the bottom of a page is who made the thing.
+const FOOTER = link("https://www.gilde.org", `${GILDE_MARK}<span>gilde.org</span>`);
 
 const COPYRIGHT = `Copyright © 2026 ${link("https://florian.gilde.org", "Florian Gilde")}`;
 
@@ -74,7 +85,10 @@ export default defineConfig({
   appearance: "force-dark",
 
   head: [
-    ["link", { rel: "icon", type: "image/png", href: "/videola/videola-icon.png" }],
+    // Without the leading path of the old github.io address, which is where this had been pointing
+    // since the site moved to its own domain -- a favicon nobody ever saw.
+    ["link", { rel: "icon", type: "image/png", href: "/videola-icon.png" }],
+    ["link", { rel: "apple-touch-icon", href: "/videola-icon.png" }],
     ["meta", { name: "theme-color", content: "#050609" }],
   ],
 
@@ -124,7 +138,7 @@ export default defineConfig({
         },
         lastUpdatedText: "Last updated",
         footer: {
-          message: footerMessage("GPL-3.0-or-later"),
+          message: FOOTER,
           copyright: COPYRIGHT,
         },
       },
@@ -154,7 +168,7 @@ export default defineConfig({
         sidebarMenuLabel: "Kapitel",
         langMenuLabel: "Sprache wechseln",
         footer: {
-          message: footerMessage("GPL-3.0-or-later"),
+          message: FOOTER,
           copyright: COPYRIGHT,
         },
       },
