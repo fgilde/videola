@@ -1595,6 +1595,7 @@ async function announce() {
     await detected();
     await inserted();
     await keysAndView();
+    if (!virtual) await exportsAFile();
     await trackHeaders();
     if (!virtual) await edgeScroll();
     await mcpHelp();
@@ -2859,6 +2860,61 @@ async function announce() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
     await mcpHelp({ leaveOpen: true });
     await sleep(400);
+  }
+
+/**
+   * The whole point of the thing: a file at the end.
+   *
+   * Everything else in this run is about what the editor shows. This is the one check about what
+   * it produces, and it is the one nobody had: the export harness next door drives the encoder
+   * from Node, which says nothing about whether the editor's own button reaches it. A run that
+   * stalls at nought per cent looks exactly like a run that is working, for ever.
+   */
+  async function exportsAFile() {
+    // One clip's worth rather than the whole project: by this point the run has built an edit with
+    // a visualiser and a lyric video in it, and a software renderer encoding every frame of that
+    // is minutes of a check that would still only be proving what the first seconds prove. The
+    // range switch is the editor's own, so this is a real export either way.
+    const clip = q("[data-clip-id]");
+    pointer("pointerdown", clip);
+    pointer("pointerup", clip);
+    await sleep(200);
+    labelled("Exportieren").click();
+    const dialog = await until("the export dialogue", () => q(".v-export"));
+    const selection = [...dialog.querySelectorAll('input[name="v-export-range"]')]
+      .find((radio) => radio.value === "selection");
+    check("a selected clip can be exported on its own", selection !== undefined, true);
+    if (selection !== undefined) {
+      selection.click();
+      await sleep(120);
+    }
+    // Asked of the document rather than of the node this run is holding: when the export ends the
+    // editor takes the whole dialogue away, and a detached node keeps its children -- so a reading
+    // taken from it would report the last percentage it ever showed, for ever.
+    const percent = () => {
+      const line = q(".v-export__progress");
+      return line === null ? -1 : Number((line.textContent.match(/(\d+)/) || [0, -1])[1]);
+    };
+    const start = labelled("Export starten");
+    // The button the whole thing hangs on. It used to be disabled on the first export after a page
+    // load: the list of formats comes from an asynchronous probe of the machine's encoders, and the
+    // dialogue had read it once, before the answer arrived.
+    check("the export button is ready as soon as the dialogue is", start.disabled, false);
+    start.click();
+
+    // Nought per cent means the encoder has not reported a frame yet, and everything before that --
+    // decoding the sound, rendering it offline, starting the worker -- happens with the bar standing
+    // still. So the first thing to prove is that it moves at all.
+    await until("the export to get past nought", () => (percent() > 0 ? percent() : null), 180000);
+    check("the export starts rather than standing at nought", percent() > 0, true);
+
+    // And then that it ends. The file goes to the browser's own downloads, which a headless run has
+    // no view of; what it can see is the progress line going away, which is the editor saying the
+    // run is over.
+    await until("the export to finish", () => (percent() === -1 ? true : null), 240000);
+    check("and it finishes", banner(), "");
+    if (q(".v-export") !== null) labelled("Schließen").click();
+    await sleep(200);
   }
 
   /** The Help entry that says how an agent gets at all of this. */
