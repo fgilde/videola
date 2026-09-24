@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "videola-core"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "json-patch",
  "schemars",
@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "videola-core-wasm"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "js-sys",
  "serde",
