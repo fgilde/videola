@@ -802,5 +802,10 @@
   "lyrics.knob.glow": "Glow",
   "lyrics.knob.tilt": "Perspective",
   "lyrics.transcribe.local": "Transcribe on this machine",
-  "lyrics.transcribe.cloud": "Transcribe at ElevenLabs"
+  "lyrics.transcribe.cloud": "Transcribe at ElevenLabs",
+  "connect.label": "Contact & support",
+  "connect.what": "Write to us when something is missing or in the way — or support the work on Videola.",
+  "connect.contact": "Contact",
+  "connect.support": "Support Videola",
+  "connect.note": "Nothing is fetched from connect.gilde.org until this window is opened."
 }

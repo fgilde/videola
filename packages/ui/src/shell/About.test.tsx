@@ -64,6 +64,31 @@ describe("the about dialogue", () => {
     expect(screen.queryByRole("link", { name: "Desktop-Version holen" })).toBeNull();
   });
 
+  // Two errands, two dialogues, and this is where they are chosen between -- a colophon nobody can
+  // answer back to is a page of addresses.
+  it("offers a way to write and a way to support, each on its own", () => {
+    const contact = vi.fn();
+    const support = vi.fn();
+    render(
+      <I18nProvider>
+        <About version="0.5.0" desktop={false} onContact={contact} onSupport={support} onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("about-contact"));
+    fireEvent.click(screen.getByTestId("about-support"));
+
+    expect([contact.mock.calls.length, support.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("signs off with the workshop, drawn rather than fetched", () => {
+    show(false);
+
+    const gilde = document.querySelector(".v-about__gilde");
+    expect(gilde?.getAttribute("href")).toBe("https://www.gilde.org");
+    expect(gilde?.querySelector("svg.v-gilde")).toBeTruthy();
+  });
+
   it("tells its host when it has closed, so the host can forget it", () => {
     const onClose = vi.fn();
     show(false, onClose);

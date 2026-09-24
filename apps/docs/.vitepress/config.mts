@@ -84,12 +84,20 @@ export default defineConfig({
   // matting the assets or maintaining a second set of them.
   appearance: "force-dark",
 
+  // The two gilde.org widgets are custom elements, and Vue has to be told so -- otherwise it
+  // resolves <gilde-contact> as a component nobody registered and warns on every build.
+  vue: {
+    template: { compilerOptions: { isCustomElement: (tag: string) => tag.startsWith("gilde-") } },
+  },
+
   head: [
     // Without the leading path of the old github.io address, which is where this had been pointing
     // since the site moved to its own domain -- a favicon nobody ever saw.
     ["link", { rel: "icon", type: "image/png", href: "/videola-icon.png" }],
     ["link", { rel: "apple-touch-icon", href: "/videola-icon.png" }],
     ["meta", { name: "theme-color", content: "#050609" }],
+    // What defines those elements. A module tag, so it loads without blocking the page.
+    ["script", { type: "module", src: "https://connect.gilde.org/widgets/v1.js" }],
   ],
 
   themeConfig: {

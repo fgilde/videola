@@ -153,3 +153,5 @@ catalogue rather than from the code.
     </div>
   </a>
 </section>
+
+<Connect inline />

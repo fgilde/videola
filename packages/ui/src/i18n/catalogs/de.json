@@ -802,5 +802,10 @@
   "lyrics.knob.glow": "Leuchten",
   "lyrics.knob.tilt": "Perspektive",
   "lyrics.transcribe.local": "Lokal transkribieren",
-  "lyrics.transcribe.cloud": "Bei ElevenLabs transkribieren"
+  "lyrics.transcribe.cloud": "Bei ElevenLabs transkribieren",
+  "connect.label": "Kontakt & Unterstützen",
+  "connect.what": "Schreib uns, wenn etwas fehlt oder klemmt — oder unterstütze die Arbeit an Videola.",
+  "connect.contact": "Kontakt",
+  "connect.support": "Videola unterstützen",
+  "connect.note": "Erst beim Öffnen dieses Fensters wird etwas von connect.gilde.org geladen."
 }

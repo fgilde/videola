@@ -1,0 +1,49 @@
+/* The application's own panel, from the export dialogue. What is here is the room the two widgets
+   stand in and nothing about the widgets themselves -- they carry their own look, and the accent
+   they are handed is the one the editor is wearing. */
+.v-connect {
+  width: min(36rem, calc(100vw - 2 * var(--v-space-4)));
+  border: 1px solid var(--v-border);
+  color: var(--v-text);
+  overflow: hidden;
+}
+
+.v-connect[open] {
+  display: flex;
+}
+
+.v-connect::backdrop {
+  background: rgb(0 0 0 / 55%);
+  backdrop-filter: blur(2px);
+}
+
+/* One widget, and the room it stands in. The panel scrolls rather than the page. */
+.v-connect__widget {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--v-space-1);
+}
+
+/* A custom element is inline by default, which leaves a gap under it that nobody put there. */
+.v-connect__widget gilde-contact,
+.v-connect__widget gilde-support {
+  display: block;
+  max-width: 100%;
+}
+
+.v-connect__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v-space-3);
+  flex-wrap: wrap;
+  margin: var(--v-space-1) calc(-1 * var(--v-space-4)) calc(-1 * var(--v-space-4));
+  padding: var(--v-space-3) var(--v-space-4);
+  background: var(--v-surface);
+  border-top: 1px solid var(--v-border);
+}
+
+.v-connect__note {
+  font-size: var(--v-text-xs);
+  color: var(--v-text-muted);
+}

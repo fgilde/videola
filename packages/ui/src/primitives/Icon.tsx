@@ -33,6 +33,14 @@ const OUTLINED = {
   speaker: "M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9.2a4 4 0 0 1 0 5.6M18.6 6.6a7.6 7.6 0 0 1 0 10.8",
   speakerOff: "M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 10l5 4M21 10l-5 4",
   copy: "M9 9h10v11H9zM15 9V4H5v11h4",
+  // Where a row goes and what it is: the about dialogue is a list of places, and a list of places
+  // reads as a list once each line carries its own mark.
+  globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3.4 12h17.2M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9s1.2-6.4 3.6-9",
+  book: "M4.8 5.6A2 2 0 0 1 6.8 3.6H19v13.2H6.8a2 2 0 0 0-2 2zM19 16.8v3.6H6.8",
+  code: "M9.2 7.8 4 12l5.2 4.2M14.8 7.8 20 12l-5.2 4.2",
+  scale: "M12 4.4v15.2M4.6 8h14.8M7.4 8l-3 6h6zM16.6 8l-3 6h6z",
+  mail: "M3.6 6.4h16.8v11.2H3.6zM3.6 7l8.4 5.9 8.4-5.9",
+  heart: "M12 19.8S5.2 15.3 5.2 10.8A3.9 3.9 0 0 1 12 8.2a3.9 3.9 0 0 1 6.8 2.6c0 4.5-6.8 9-6.8 9z",
   check: "M5 12.5 10 17.5 19.5 7",
   unlock: "M8 10.5V7.5a4 4 0 0 1 7.6-1.8M6.2 10.5h11.6v9H6.2z",
   // A metronome: the case, and the arm leaning off centre. What "find the beat" is drawn as.

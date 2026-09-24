@@ -113,6 +113,8 @@ import {
   EffectBrowser,
   ExportDialog,
   Inspector,
+  Connect,
+  type ConnectWidget,
   Mcp,
   Shortcuts,
   MediaLibrary,
@@ -316,6 +318,8 @@ export function App(): ReactElement {
   const [about, setAbout] = useState(false);
   const [keys, setKeys] = useState(false);
   const [mcp, setMcp] = useState(false);
+  // Which of the two is open, if either: they are separate errands and separate dialogues.
+  const [connecting, setConnecting] = useState<ConnectWidget>();
   // A browser tab left open for a week runs whatever was current when it was opened. The service
   // worker notices a new build and waits; nothing is swapped under a session with work in it, so
   // this is an offer and the reload is the answer to it.
@@ -2886,10 +2890,19 @@ export function App(): ReactElement {
         />
       )}
       {about && (
-        <About version={APP_VERSION} desktop={insideTauri()} onClose={() => setAbout(false)} />
+        <About
+          version={APP_VERSION}
+          desktop={insideTauri()}
+          onContact={() => setConnecting("contact")}
+          onSupport={() => setConnecting("support")}
+          onClose={() => setAbout(false)}
+        />
       )}
       {keys && <Shortcuts onClose={() => setKeys(false)} />}
       {mcp && <Mcp onClose={() => setMcp(false)} />}
+      {connecting !== undefined && (
+        <Connect widget={connecting} onClose={() => setConnecting(undefined)} />
+      )}
     </AppShell>
   );
 }

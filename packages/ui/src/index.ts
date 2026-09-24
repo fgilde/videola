@@ -39,6 +39,8 @@ export * from "./templates/TemplateAuthor";
 export * from "./templates/TemplateWizard";
 export * from "./templates/outline";
 export * from "./shell/About";
+export * from "./shell/Connect";
+export * from "./shell/connectWidgets";
 export * from "./shell/AppShell";
 export * from "./shell/Mcp";
 export * from "./shell/Shortcuts";

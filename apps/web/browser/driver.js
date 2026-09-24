@@ -116,6 +116,8 @@ async function announce() {
   const singing = location.search.includes("lyrics");
   // And one for the page somebody reads once and then never again: how an agent gets in.
   const wiring = location.search.includes("mcp");
+  // And one for the page with the project's name on it, which is also where somebody finds a person.
+  const colophon = location.search.includes("about");
   const sleep = virtual
     ? (ms) => fetch("/wait?ms=" + ms).then(() => undefined)
     : (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1599,6 +1601,7 @@ async function announce() {
     await trackHeaders();
     if (!virtual) await edgeScroll();
     await mcpHelp();
+    await connectWidgets();
     await soundAndChain();
     await namedAndSized();
     await fromTheLibrary();
@@ -2855,6 +2858,14 @@ async function announce() {
     await sleep(250);
   }
 
+  /** The about dialogue on a fresh editor, left open for the picture. */
+  async function runAbout() {
+    await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
+    pickMenu("Über Videola");
+    await until("the about dialogue", () => q('[data-testid="about"]'));
+    await sleep(600);
+  }
+
   /** The same entry on a fresh editor, left standing for the picture. */
   async function runMcp() {
     await until("the editor", () => q(".v-dropzone") && q('[data-testid="timeline"]'));
@@ -2914,6 +2925,59 @@ async function announce() {
     await until("the export to finish", () => (percent() === -1 ? true : null), 240000);
     check("and it finishes", banner(), "");
     if (q(".v-export") !== null) labelled("Schließen").click();
+    await sleep(200);
+  }
+
+  /**
+   * The two gilde.org widgets, drawn into a dialogue of ours.
+   *
+   * Only their attributes are read. The script that turns them into anything is fetched from
+   * another machine, which a run on a closed network will not have -- and the editor must be whole
+   * either way, which is the half of this worth checking.
+   */
+  async function connectWidgets() {
+    check("nothing is fetched from connect.gilde.org before it is asked for",
+      q("script[data-gilde-widgets]") === null, true);
+
+    // Through the about dialogue, which is where the two are chosen between.
+    pickMenu("Über Videola");
+    const about = await until("the about dialogue", () => q('[data-testid="about"]'));
+    check("the about dialogue offers both ways to reach a person",
+      [q('[data-testid="about-contact"]') !== null, q('[data-testid="about-support"]') !== null],
+      [true, true]);
+    check("and signs off with the workshop",
+      about.querySelector('.v-about__gilde svg') !== null, true);
+    checkAtLeast("with rows a finger can hit",
+      Math.min(...[...about.querySelectorAll(".v-about__links a")]
+        .map((row) => row.getBoundingClientRect().height)), 44);
+    check("and the whole dialogue inside the window",
+      about.getBoundingClientRect().bottom <= innerHeight + 1, true);
+
+    q('[data-testid="about-contact"]').click();
+    const dialog = await until("the contact dialogue", () => q('[data-testid="connect"]'));
+    const contact = q('[data-testid="connect-contact"]');
+    check("one widget, for the errand that was chosen",
+      [contact !== null, q('[data-testid="connect-support"]')], [true, null]);
+    check("naming this project", contact.getAttribute("project"), "fgilde/videola");
+    check("drawn in place rather than behind a button of its own",
+      [contact.hasAttribute("inline"), contact.getAttribute("show-footer")], [true, "false"]);
+    check("in the language the editor is in", contact.getAttribute("language"), "de");
+    // The accent the editor is wearing, read off the theme rather than written into the markup.
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--v-accent").trim();
+    check("and wearing the editor's own accent", contact.getAttribute("accent"), accent);
+    check("the script is fetched once the dialogue is open",
+      q("script[data-gilde-widgets]") !== null, true);
+    check("opening it raised nothing", banner(), "");
+    dialog.close();
+    await sleep(200);
+
+    q('[data-testid="about-support"]').click();
+    await until("the support dialogue", () => q('[data-testid="connect-support"]'));
+    check("and the other button opens the other one",
+      q('[data-testid="connect-contact"]'), null);
+    q('[data-testid="connect"]').close();
+    await sleep(200);
+    about.close();
     await sleep(200);
   }
 
@@ -3620,7 +3684,9 @@ async function announce() {
   pickFixture()
     .then(announce)
     .then(() =>
-      wiring
+      colophon
+        ? runAbout()
+        : wiring
         ? runMcp()
         : singing
         ? runLyrics()
