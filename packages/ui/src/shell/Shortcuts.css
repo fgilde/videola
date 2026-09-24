@@ -2,7 +2,7 @@
   width: min(560px, calc(100vw - 2 * var(--v-space-4)));
   max-height: 80vh;
   overflow-y: auto;
-  padding: var(--v-space-5);
+  padding: var(--v-space-6);
   background: var(--v-bg-elevated);
   color: var(--v-text);
   border: 1px solid var(--v-border);
