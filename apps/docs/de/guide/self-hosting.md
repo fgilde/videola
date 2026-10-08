@@ -165,7 +165,9 @@ das Fenster gezogen hat.
 Dafür muss nichts zusätzlich installiert werden außer dem Server selbst. Das Image bringt `yt-dlp`
 und `ffmpeg` mit, ein mit der Zeile oben gestarteter Container kann also sofort laden. Der Editor
 findet den Server, von dem er ausgeliefert wurde, von allein; ein Editor, der auf videola.app
-geöffnet wurde, bekommt seinen unter **Veröffentlichungsziele** genannt.
+geöffnet wurde, bekommt seinen unter **Veröffentlichungsziele** genannt. Läuft der Server mit
+`VIDEOLA_TOKEN` — und das tut jeder, der nicht nur auf `127.0.0.1` lauscht —, fragt der Dialog beim
+ersten Mal direkt nach dem Token; danach bleibt er in diesem Browser.
 
 Das Image bringt `yt-dlp` und `ffmpeg` mit. Überall sonst: beides installieren, der Server findet es
 über `PATH`; `VIDEOLA_YTDLP` zeigt auf ein anderes Binary. Ohne die beiden funktioniert alles andere

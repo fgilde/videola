@@ -180,6 +180,18 @@ describe("ImportDialog", () => {
     expect(screen.getByTestId("import-drop")).not.toBeNull();
   });
 
+  it("asks a server that wants a token for the token, not for a server", () => {
+    const onToken = vi.fn();
+    show({ canFetch: false, needsToken: true, onToken });
+
+    expect(screen.queryByTestId("import-no-server")).toBeNull();
+    const field = screen.getByLabelText("Token");
+    fireEvent.change(field, { target: { value: "  s3cret " } });
+    fireEvent.submit(field.closest("form")!);
+
+    expect(onToken).toHaveBeenCalledWith("s3cret");
+  });
+
   it("puts the server's own words up when something failed", () => {
     show({ error: "Video unavailable" });
 

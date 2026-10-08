@@ -30,16 +30,22 @@ export interface FetchChoice {
   quality: string;
 }
 
+export interface FetchReadiness {
+  available: boolean;
+  version?: string;
+  /** The server is there and answered, but wants the token this browser does not hold yet. */
+  locked?: boolean;
+}
+
 /** Whether the server behind this editor can fetch at all, and with which version of the tool. */
-export async function fetchReady(
-  connection: Connection,
-): Promise<{ available: boolean; version?: string }> {
+export async function fetchReady(connection: Connection): Promise<FetchReadiness> {
   try {
     const answer = await call(connection, "/api/fetch/ready");
-    return (await answer.json()) as { available: boolean; version?: string };
-  } catch {
-    // No server, no connection, no answer. All three mean the same thing to the dialogue.
-    return { available: false };
+    return (await answer.json()) as FetchReadiness;
+  } catch (error) {
+    // A 401 is a server that is right there -- every deployed one wants a token, a local one does
+    // not -- and telling that person to go and start a server sends them after one they already run.
+    return { available: false, locked: (error as { status?: number }).status === 401 };
   }
 }
 

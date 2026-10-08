@@ -161,7 +161,9 @@ imported exactly like a file somebody dropped on the window.
 Nothing has to be installed for this beyond the server itself. The image carries `yt-dlp` and
 `ffmpeg`, so a container started with the line above can already fetch; the editor finds the server
 it was served from on its own, and an editor opened at videola.app is pointed at one under
-**Publishing destinations**.
+**Publishing destinations**. When the server runs with `VIDEOLA_TOKEN` — and every one that listens
+beyond `127.0.0.1` does — the dialogue asks for the token the first time, right there; after that it
+stays in this browser.
 
 The image carries `yt-dlp` and `ffmpeg`. Anywhere else, install both and the server finds them on
 `PATH`; `VIDEOLA_YTDLP` points at a different binary. Without them every other part of the editor

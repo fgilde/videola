@@ -31,6 +31,9 @@ export interface ImportDialogProps {
   canFetch?: boolean;
   /** Where to point somebody who has no server yet, shown with the set-up note. */
   serverHint?: string;
+  /** The server answered but wants a token: asked for here rather than sent off to another dialogue. */
+  needsToken?: boolean;
+  onToken?: (token: string) => void;
   results: readonly FoundVideo[];
   busy?: "searching" | "reading" | "fetching";
   percent?: number;
@@ -79,6 +82,7 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
   const [format, setFormat] = useState<string>("any");
   const [quality, setQuality] = useState<string>("best");
   const [over, setOver] = useState(false);
+  const [token, setToken] = useState("");
   const panel = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
 
@@ -152,7 +156,32 @@ export function ImportDialog(props: ImportDialogProps): ReactElement {
           <section className="v-import__way v-import__way--net" aria-label={t("import.fromNet")}>
             <h3 className="v-import__wayTitle">{t("import.fromNet")}</h3>
 
-            {props.canFetch === false ? (
+            {props.canFetch === false && props.needsToken === true ? (
+              <form
+                className="v-import__setup"
+                data-testid="import-needs-token"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (token.trim() !== "") props.onToken?.(token.trim());
+                }}
+              >
+                <p>{t("import.needsToken")}</p>
+                <div className="v-import__ask">
+                  <input
+                    className="v-input v-import__query"
+                    type="password"
+                    autoComplete="off"
+                    value={token}
+                    aria-label={t("import.token")}
+                    placeholder="VIDEOLA_TOKEN"
+                    onChange={(event) => setToken(event.target.value)}
+                  />
+                  <button className="v-button v-button--primary" disabled={token.trim() === ""}>
+                    {t("import.unlock")}
+                  </button>
+                </div>
+              </form>
+            ) : props.canFetch === false ? (
               <div className="v-import__setup" data-testid="import-no-server">
                 <p>{t("import.noServer")}</p>
                 <pre className="v-import__command">{props.serverHint ?? DEFAULT_HINT}</pre>

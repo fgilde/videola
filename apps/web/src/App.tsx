@@ -173,6 +173,7 @@ import {
   fetchMedium,
   fetchReady,
   searchVideos,
+  type FetchReadiness,
   type FoundVideo,
 } from "./fetching";
 import {
@@ -376,7 +377,7 @@ export function App(): ReactElement {
   // Material from a link, which is a thing only a server can do. The dialogue asks whether this one
   // can before it offers to, so nobody types a link into a field that was never going to work.
   const [fetching, setFetching] = useState(false);
-  const [fetcher, setFetcher] = useState<{ available: boolean; version?: string }>();
+  const [fetcher, setFetcher] = useState<FetchReadiness>();
   const [found, setFound] = useState<readonly FoundVideo[]>([]);
   const [fetchBusy, setFetchBusy] = useState<"searching" | "reading" | "fetching">();
   const [fetchError, setFetchError] = useState<string>();
@@ -2798,6 +2799,11 @@ export function App(): ReactElement {
       {fetching && (
         <ImportDialog
           canFetch={fetcher?.available}
+          needsToken={fetcher?.locked}
+          onToken={(token) => {
+            connectTo(connection.url, token);
+            void fetchReady({ url: connection.url, token }).then(setFetcher);
+          }}
           results={found}
           // Closed once something has actually arrived. The library fills up behind the dialogue,
           // and a dialogue still standing there afterwards reads as "nothing happened" -- which is

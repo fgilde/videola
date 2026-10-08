@@ -183,7 +183,7 @@ export async function call(
       ...(connection.token === "" ? {} : { authorization: `Bearer ${connection.token}` }),
     },
   });
-  if (!answer.ok) throw new Error(await reason(answer));
+  if (!answer.ok) throw Object.assign(new Error(await reason(answer)), { status: answer.status });
   return answer;
 }
 
