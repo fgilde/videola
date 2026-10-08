@@ -86,11 +86,10 @@ describe("what every deployment agrees on", () => {
     expect(UNRAID).toContain(`Target="${IMAGE_STORAGE}"`);
   });
 
-  // A published port reaches a process bound to 0.0.0.0, and the server refuses that address without a
-  // token. Every platform that binds one therefore has to set it, or the container starts and stops.
-  it("requires a token wherever the address is reachable", () => {
-    expect(() => configFromEnv({ VIDEOLA_HOST: "0.0.0.0" })).toThrow(/token/);
-    expect(configFromEnv({ VIDEOLA_HOST: "0.0.0.0", VIDEOLA_TOKEN: "x" }).host).toBe("0.0.0.0");
+  // A server without a token is open, which the host may choose for a demo. The templates install
+  // onto somebody's network unattended, so they choose for them and set one.
+  it("sets a token in every template that binds a reachable address", () => {
+    expect(configFromEnv({ VIDEOLA_HOST: "0.0.0.0", VIDEOLA_TOKEN: "x" }).token).toBe("x");
 
     expect(COMPOSE).toMatch(/VIDEOLA_TOKEN:/);
     expect(INSTALL).toMatch(/VIDEOLA_TOKEN=\$\(openssl rand -hex 24\)/);

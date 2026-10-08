@@ -53,10 +53,8 @@ ENV NODE_ENV=production \
     VIDEOLA_WEB_ROOT=/app/web \
     VIDEOLA_WASM=/app/videola_core_bg.wasm
 
-# A published port only reaches a process bound to 0.0.0.0, and the server
-# refuses that address without a token. The container therefore does not start
-# until VIDEOLA_TOKEN is set, which is the intended answer: an unauthenticated
-# Videola on a reachable address hands out its storage root.
+# A published port only reaches a process bound to 0.0.0.0. With VIDEOLA_TOKEN
+# set, /api needs it; without, the server is open and says so when it starts.
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

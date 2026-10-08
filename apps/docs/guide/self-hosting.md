@@ -3,8 +3,8 @@
 ::: info Summary
 One Node process serves the editor, the HTTP API and the MCP server. There are four ways to install it
 — Docker, an Unraid template, an Umbrel app, and a Proxmox script that makes an LXC container — and all
-four set the same handful of variables. Every /api call needs a token, and the server refuses to listen
-on a reachable address without one.
+four set the same handful of variables. With `VIDEOLA_TOKEN` set every /api call needs
+it; without one the server is open.
 :::
 
 ## What is being installed
@@ -29,11 +29,11 @@ opened over the API and a project opened in the editor are opened by the same co
 | `VIDEOLA_WHISPER` | none | A transcriber on this machine instead — Whisper through whisper.cpp or faster-whisper. Called as `<cmd> --input <audio> --output <json> [--model …]`, and the audio goes nowhere. Used in preference to the key |
 | `VIDEOLA_WHISPER_MODEL` | none | Handed to it as `--model`, for a runner that has to be told which one to load |
 
-**The token is not a hardening option.** The server checks the bind address at startup and refuses to
-listen on anything but loopback without one, because an open Videola hands every machine that can reach
-it read and write access to the storage root. That check is in `configFromEnv`, and the deployment test
-in `apps/server/src/deploy.test.ts` asserts it against every file below — so a template that offered the
-token as optional would fail the build rather than ship.
+**Whoever hosts it decides about the token.** Set, every /api call needs it — the server-side projects,
+the publishing destinations, fetching from a link, transcription. Unset, the server is open, on any
+address: right for a demo, or behind a login you put in front of it yourself. The start-up line says
+which (`open, no token` or `bearer token required`). The templates below all set one, and the
+deployment test in `apps/server/src/deploy.test.ts` keeps it that way.
 
 The storage root has to **exist**; the server does not create it. Every installer below makes it, and a
 server that made it itself would silently write a projects directory into whatever `cwd` happened to be.

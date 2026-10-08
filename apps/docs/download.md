@@ -30,5 +30,5 @@ makes the container for you — are in [Running it yourself](/guide/self-hosting
 carries a **server bundle** that needs nothing but Node 22: no dependencies to install, because they are
 already bundled into the entry points.
 
-One thing worth knowing before you start: the server refuses to listen on anything but loopback without a
-token. That is deliberate, and the installers generate one for you.
+One thing worth knowing before you start: with `VIDEOLA_TOKEN` set, every /api call needs it; without
+one the server is open. The installers generate one for you.

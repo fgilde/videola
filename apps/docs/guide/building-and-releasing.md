@@ -257,13 +257,11 @@ Static files are served **without** the token. The editor holds its projects in 
 browser and reads nothing from the server; everything under `/api`, which is where the storage root
 is, stays behind the bearer token.
 
-### Why the container refuses to start without a token
+### The container and its token
 
-A published port only reaches a process bound to `0.0.0.0`, and `configFromEnv` refuses that address
-unless `VIDEOLA_TOKEN` is set. The image therefore sets `VIDEOLA_HOST=0.0.0.0` and no token, and a
-`docker run` without one stops immediately with the reason. That is the intended answer rather than
-an oversight: a container that binds a reachable address and hopes hands its storage root to every
-machine that can see it.
+A published port only reaches a process bound to `0.0.0.0`, so the image sets `VIDEOLA_HOST=0.0.0.0`
+and no token. With `VIDEOLA_TOKEN` passed in, `/api` needs it; without, the container runs open and
+says so on its start-up line — for a demo, or behind a login the host puts in front of it.
 
 The MCP server listens on nothing, so it reads no bind address at all — `apiConfigFromEnv` gives it
 only the storage root, the project limit and the locale. Otherwise the image's `VIDEOLA_HOST` would

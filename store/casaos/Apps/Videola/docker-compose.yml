@@ -80,9 +80,8 @@ x-casaos:
       detection that splits a camera card into its takes, and an HTTP API plus an MCP server so
       an agent can edit a project and look at what it did.
 
-      Set a token. Every /api call needs it as an Authorization: Bearer header, and the server
-      refuses to listen on anything but loopback without one - an open Videola hands out read
-      and write access to its storage.
+      Set a token. Every /api call needs it as an Authorization: Bearer header; without one
+      the server is open, and an open Videola hands out read and write access to its storage.
     de_DE: |
       Ein Video-Editor im Browser, dessen Projektmodell, Kommando-Bus und Dateiformat in einem
       Rust-Kern stecken, der zu WebAssembly kompiliert ist. Material importieren, auf der

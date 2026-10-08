@@ -431,8 +431,8 @@ Siehe [Schnittstelle und MCP](/de/guide/api-and-mcp).
 
 ## Selbst hosten
 
-Ein Node-Prozess liefert Editor, HTTP-Schnittstelle, MCP-Server und CLI. Er verweigert den Start auf
-einer öffentlichen Adresse ohne Token und sagt warum. Siehe
+Ein Node-Prozess liefert Editor, HTTP-Schnittstelle, MCP-Server und CLI. Mit `VIDEOLA_TOKEN`
+schützt er die Schnittstelle damit, ohne ist sie offen. Siehe
 [Bauen und Ausliefern](/de/guide/building-and-releasing).
 
 <style scoped>

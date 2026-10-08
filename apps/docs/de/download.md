@@ -30,5 +30,5 @@ Container gleich mit anlegt — stehen unter [Selbst betreiben](/de/guide/self-h
 hängt außerdem ein **Serverpaket**, das nichts außer Node 22 braucht: keine Abhängigkeiten zu
 installieren, denn sie sind schon in die Einsprungpunkte gebündelt.
 
-Eines vorweg: der Server weigert sich, ohne Token auf etwas anderem als Loopback zu lauschen. Das ist so
-gewollt, und die Installer erzeugen einen für Sie.
+Eines vorweg: Ist `VIDEOLA_TOKEN` gesetzt, braucht jeder /api-Aufruf ihn; ohne ist der Server offen. Die
+Installer erzeugen einen für Sie.

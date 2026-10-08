@@ -37,8 +37,6 @@ export interface Config extends ApiConfig {
   readonly webRoot: string | undefined;
 }
 
-const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
-
 export class ConfigError extends Error {}
 
 // What a host needs whether or not it listens on a socket. The MCP server speaks over stdio and
@@ -59,15 +57,10 @@ export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfi
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const host = env.VIDEOLA_HOST ?? "127.0.0.1";
+  // Whoever hosts it decides: a token set is a token required, none set is an open server -- for a
+  // demo, or behind a login the host put in front of it. The start-up line says which.
   const token = env.VIDEOLA_TOKEN === "" ? undefined : env.VIDEOLA_TOKEN;
 
-  // Refusing to bind rather than binding and hoping: an unauthenticated Videola on a LAN address
-  // hands every reachable machine read and write access to the storage root.
-  if (!LOOPBACK.has(host) && token === undefined) {
-    throw new ConfigError(
-      `refusing to bind ${host} without a token: set VIDEOLA_TOKEN, or leave VIDEOLA_HOST at 127.0.0.1`,
-    );
-  }
 
   return {
     ...apiConfigFromEnv(env),

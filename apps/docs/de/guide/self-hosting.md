@@ -3,8 +3,8 @@
 ::: info Zusammenfassung
 Ein Node-Prozess liefert den Editor, die HTTP-Schnittstelle und den MCP-Server. Es gibt vier Wege zur
 Installation — Docker, eine Unraid-Vorlage, eine Umbrel-App und ein Proxmox-Skript, das einen
-LXC-Container anlegt — und alle vier setzen dieselbe Handvoll Variablen. Jeder /api-Aufruf braucht einen
-Token, und der Server weigert sich, ohne einen auf einer erreichbaren Adresse zu lauschen.
+LXC-Container anlegt — und alle vier setzen dieselbe Handvoll Variablen. Mit `VIDEOLA_TOKEN` braucht jeder
+/api-Aufruf ihn; ohne ist der Server offen.
 :::
 
 ## Was da installiert wird
@@ -30,11 +30,11 @@ geöffnet.
 | `VIDEOLA_WHISPER` | keiner | Stattdessen ein Transkribierer auf diesem Rechner — Whisper über whisper.cpp oder faster-whisper. Aufgerufen als `<cmd> --input <Audio> --output <JSON> [--model …]`; der Ton verlässt die Maschine nicht. Wird dem Schlüssel vorgezogen |
 | `VIDEOLA_WHISPER_MODEL` | keiner | Wird als `--model` übergeben, für einen Runner, dem man sagen muss, welches Modell er laden soll |
 
-**Der Token ist keine Härtungsoption.** Der Server prüft die Bind-Adresse beim Start und weigert sich,
-ohne Token auf etwas anderem als Loopback zu lauschen — denn ein offenes Videola gibt jeder Maschine, die
-es erreicht, Lese- und Schreibzugriff auf den Speicherort. Diese Prüfung steht in `configFromEnv`, und
-der Deployment-Test in `apps/server/src/deploy.test.ts` hält jede der folgenden Dateien dagegen: eine
-Vorlage, die den Token als optional anbietet, fällt im Build durch, statt ausgeliefert zu werden.
+**Über den Token entscheidet, wer hostet.** Gesetzt, braucht jeder /api-Aufruf ihn — Server-Projekte,
+Veröffentlichungsziele, Laden aus einem Link, Transkription. Nicht gesetzt, ist der Server offen, auf
+jeder Adresse: richtig für eine Demo oder hinter einem Login, den man selbst davorsetzt. Die Startzeile
+sagt, welcher Fall gilt (`open, no token` oder `bearer token required`). Die Vorlagen unten setzen alle
+einen, und der Deployment-Test in `apps/server/src/deploy.test.ts` hält das so.
 
 Der Speicherort muss **existieren**; der Server legt ihn nicht an. Jeder Installer unten legt ihn an, und
 ein Server, der es selbst täte, schriebe stillschweigend ein Projektverzeichnis in irgendein `cwd`.

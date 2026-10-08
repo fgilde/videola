@@ -11,8 +11,11 @@ describe("configFromEnv", () => {
     expect(config.port).toBe(7331);
   });
 
-  it("refuses a public bind without a token", () => {
-    expect(() => configFromEnv({ VIDEOLA_HOST: "0.0.0.0" })).toThrow(ConfigError);
+  it("binds a public address without a token when the host leaves it unset", () => {
+    const config = configFromEnv({ VIDEOLA_HOST: "0.0.0.0" });
+
+    expect(config.host).toBe("0.0.0.0");
+    expect(config.token).toBeUndefined();
   });
 
   it("allows a public bind once a token is set", () => {
@@ -22,12 +25,10 @@ describe("configFromEnv", () => {
     expect(config.token).toBe("s3cret");
   });
 
-  // An empty variable is how a shell hands over "unset"; treating it as a token would let a public
-  // bind through guarded by a password of zero length.
+  // An empty variable is how a shell hands over "unset", so it is no token rather than a password of
+  // zero length that nobody could ever send.
   it("treats an empty token as no token", () => {
-    expect(() => configFromEnv({ VIDEOLA_HOST: "10.0.0.5", VIDEOLA_TOKEN: "" })).toThrow(
-      ConfigError,
-    );
+    expect(configFromEnv({ VIDEOLA_HOST: "10.0.0.5", VIDEOLA_TOKEN: "" }).token).toBeUndefined();
   });
 
   it("takes the web root from the environment and treats an empty one as absent", () => {

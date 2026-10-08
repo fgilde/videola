@@ -225,13 +225,12 @@ Statische Dateien gehen **ohne** Token raus. Der Editor hält seine Projekte im 
 und liest nichts vom Server; alles unter `/api`, und dort liegt die Speicherwurzel, bleibt hinter dem
 Bearer-Token.
 
-### Warum der Container ohne Token nicht startet
+### Der Container und sein Token
 
-Ein veröffentlichter Port erreicht nur einen Prozess, der an `0.0.0.0` gebunden ist, und
-`configFromEnv` lehnt diese Adresse ohne `VIDEOLA_TOKEN` ab. Das Image setzt darum
-`VIDEOLA_HOST=0.0.0.0` und kein Token, und ein `docker run` ohne eines hält sofort mit der Begründung
-an. Das ist die beabsichtigte Antwort und kein Versehen: ein Container, der eine erreichbare Adresse
-bindet und hofft, verschenkt seine Speicherwurzel an jede Maschine, die ihn sieht.
+Ein veröffentlichter Port erreicht nur einen Prozess, der an `0.0.0.0` gebunden ist, darum setzt das
+Image `VIDEOLA_HOST=0.0.0.0` und keinen Token. Mit `VIDEOLA_TOKEN` braucht `/api` ihn; ohne läuft der
+Container offen und sagt das in seiner Startzeile — für eine Demo oder hinter einem Login, den der
+Hostende davorsetzt.
 
 Der MCP-Server hört auf nichts und liest darum gar keine Bindeadresse — `apiConfigFromEnv` gibt ihm
 nur Speicherwurzel, Projektgrenze und Sprache. Sonst hätte das `VIDEOLA_HOST` des Images einen

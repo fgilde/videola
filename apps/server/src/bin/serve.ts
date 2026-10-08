@@ -31,7 +31,7 @@ process.on("SIGTERM", () => {
 });
 
 server.listen(config.port, config.host, () => {
-  const guard = config.token === undefined ? "no token" : "bearer token required";
+  const guard = config.token === undefined ? "open, no token" : "bearer token required";
   const app = config.webRoot === undefined ? "api only" : `app from ${config.webRoot}`;
   process.stdout.write(
     `videola on http://${config.host}:${config.port} (${guard}, ${app}), storage root ${config.storageRoot}\n`,

@@ -18,9 +18,8 @@ description: >-
   takes, and an HTTP API plus an MCP server so an agent can edit a project and look at what it did.
 
 
-  Every /api call needs the token this app generates. That is not decoration: the server refuses to
-  listen on anything but loopback without one, because an open Videola hands out read and write access
-  to its storage.
+  Every /api call needs the token this app generates, because an open Videola hands out read and write
+  access to its storage.
 developer: gilde.org
 website: https://videola.app/
 submitter: gilde.org

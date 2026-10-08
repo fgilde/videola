@@ -400,8 +400,8 @@ See [The API and MCP](/guide/api-and-mcp).
 
 ## Self-hosting
 
-One Node process serves the editor, the HTTP API, the MCP server and the CLI. It refuses to start on
-a public address without a token and says why. See
+One Node process serves the editor, the HTTP API, the MCP server and the CLI. With `VIDEOLA_TOKEN` set
+it guards the API with it, without one it is open. See
 [Building and releasing](/guide/building-and-releasing).
 
 <style scoped>
