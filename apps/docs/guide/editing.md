@@ -61,6 +61,11 @@ or the active one does not take this material, behind whatever is on the first t
 medium can be placed as often as you like without importing it again, and a click on a track header
 decides which row it lands on.
 
+The bin on an entry takes the medium out of the project. Where clips are made from it, a question
+comes first and says how many, and on which tracks — those clips go with it, compound clips
+included. Undo brings back both. The bytes stay in the browser's store, because another project may
+use the same file.
+
 Each entry carries a thumbnail decoded from the file itself, and audio clips draw their waveform
 from the buffers the graph already decoded — no second decode, and a reversed clip shows itself the
 way it plays.
@@ -987,7 +992,7 @@ happens. Moving a title sets nothing off.
 
 ### Lyric videos
 
-**Insert → Lyric video …** turns a song into a video with the words running on it. The dialogue
+**Insert → Lyric video …** turns a song — or a video with singing in it — into a video with the words running on it. The dialogue
 looks for them where they usually already are, in this order:
 
 1. **In the file.** MP3s carry them in an ID3 frame — `SYLT` with a timestamp per line, `USLT`
@@ -997,14 +1002,41 @@ looks for them where they usually already are, in this order:
 2. **Pasted.** Text, or a whole `.lrc`, into the box. The reader takes `[00:12.50]` with hundredths
    or milliseconds, several timestamps for the same chorus, and the per-word timings of enhanced
    files.
-3. **Transcribed.** Only where the server behind the editor can listen, and the button says which
-   of the two ways it would use. **`VIDEOLA_WHISPER`** points at a transcriber on that machine —
-   Whisper, through whisper.cpp or faster-whisper — and then nothing leaves it. **`VIDEOLA_ELEVENLABS_KEY`**
-   sends the song to ElevenLabs instead, which is the one thing in this editor that leaves the
-   machine, and the button says so before it is pressed. A server with both uses the local one.
+3. **Heard.** **Find the lyrics** listens to the song — or to the sound of a video — and writes the
+   words down with their times. There is always at least one way to do that:
 
-   The local contract is a command line rather than a dependency: a model is gigabytes and a Python
-   environment is somebody else's. Videola calls
+   - **Here in the browser (Whisper).** Always there, needs no server, no key and no installation,
+     and the audio never leaves the device. The model comes from Hugging Face the first time it is
+     used and from the browser's cache after that. Three sizes, chosen under the button:
+
+     | Size | First download | Good for |
+     |---|---|---|
+     | base | about 200 MB | speech, quick tries |
+     | small | about 300 MB | most songs (the default) |
+     | large-v3-turbo | about 760 MB | singing over a band, and the most exact times |
+
+     With a graphics card that WebGPU can reach it runs there; otherwise on the processor, which is
+     slower but gets there.
+   - **At ElevenLabs**, where the server holds `VIDEOLA_ELEVENLABS_KEY`. The audio goes to
+     ElevenLabs, and the menu says so before it is chosen. See
+     [Self-hosting](./self-hosting#lyrics-through-elevenlabs) for setting it up.
+   - **On the server (Whisper)**, where it has `VIDEOLA_WHISPER` — a transcriber on that machine;
+     the audio stays there.
+
+   With one way it is one button; with more it is a button with a menu, each entry saying where the
+   song would go. **Language of the song** is said rather than guessed: left to guess, Whisper takes
+   most songs for English and translates them.
+
+   What is sent is the sound alone, at 16 kHz mono — a tenth of a video file, which is what makes a
+   video work as well as a song. A bar shows how far it has got: reading the sound, loading the model
+   (once), listening. **Stop** stops it.
+
+   What was heard is **kept**, per medium, transcriber, model and language. Asking again for the same
+   one costs nothing — no second upload to ElevenLabs, no second run of Whisper — and a run in the
+   browser that was stopped halfway carries on where it stopped: the song is heard in pieces of
+   twenty to thirty seconds, each cut at its quietest moment, and every finished piece is kept.
+
+   The server's own transcriber is a command line rather than a dependency. Videola calls
 
    ```sh
    $VIDEOLA_WHISPER --input <audio file> --output <json file> [--model $VIDEOLA_WHISPER_MODEL]
@@ -1013,6 +1045,11 @@ looks for them where they usually already are, in this order:
    and reads `{"segments":[{"start":1.2,"end":3.4,"text":"…"}]}` in seconds, which is what
    faster-whisper hands back — so a wrapper around it is three lines. whisper.cpp's own `-oj` file,
    in milliseconds under `transcription`, is read as well.
+
+Whatever was found can be **corrected in the dialogue** before the video is made: every line has
+its start, its end and its text in a field of its own, a line can be removed and one added after the
+last. Times are typed the way they are read — `1:23.45`, `83.45` or `83,45` — and one that is not a
+time goes back to what it was.
 
 What comes out is **caption clips on a track of their own**: one line, one clip. That is exactly why
 the lyrics live there rather than inside the generator — a line that lands a beat late is dragged on
@@ -1025,7 +1062,7 @@ of the picture: the lyric video reads those clips to know which line is being su
 deleted — but a row out of the picture draws nothing. The eye on the row turns it back on at any
 time, which is the same switch under another name.
 
-Over them sits a **lyrics clip** that draws whatever is being sung, in twelve styles:
+Over them sits a **lyrics clip** that draws whatever is being sung, in thirteen styles:
 
 | Style | What it does |
 |---|---|
@@ -1041,6 +1078,7 @@ Over them sits a **lyrics clip** that draws whatever is being sung, in twelve st
 | Wave | the line rides a wave, each letter a little further along it |
 | Glitch | the line tears into red and blue and puts itself back together |
 | Growing (3D) | every word grows out of a letter of a word already standing, the whole line in perspective |
+| Word tree | every line grows out of a letter of a line already standing — down, across or at a slant, crossing it at right angles like a crossword — and arrives by growing out of that letter, by folding open, or by swinging in; the picture follows the newest branch, and the tree stands through the breath between two lines |
 
 Under the tiles are the settings the chosen style answers to, and only those: **type size** always,
 **movement** for how hard it travels, **glow** where a style has a halo, and **perspective** for the

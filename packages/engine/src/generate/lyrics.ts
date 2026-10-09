@@ -1,5 +1,7 @@
 import type { JsonValue } from "@videola/core";
 
+import { paintTree } from "./lyric-tree";
+
 /**
  * The words of a song, drawn as they are sung.
  *
@@ -28,7 +30,8 @@ export type LyricStyle =
   | "morph"
   | "wave"
   | "glitch"
-  | "grow";
+  | "grow"
+  | "tree";
 
 export const LYRIC_STYLES: readonly LyricStyle[] = [
   "kinetic",
@@ -43,6 +46,7 @@ export const LYRIC_STYLES: readonly LyricStyle[] = [
   "wave",
   "glitch",
   "grow",
+  "tree",
 ];
 
 /**
@@ -68,6 +72,7 @@ const KNOBS: Record<LyricStyle, readonly LyricKnob[]> = {
   wave: ["size", "intensity"],
   glitch: ["size", "intensity", "glow"],
   grow: ["size", "intensity", "glow", "tilt"],
+  tree: ["size", "intensity", "glow"],
 };
 
 export function lyricKnobs(style: string): readonly LyricKnob[] {
@@ -84,6 +89,13 @@ export interface LyricLineOnScreen {
   next?: string;
   /** And the one before it, for the styles that let the last line leave or take its letters. */
   previous?: string;
+  /** Every line before this one, in order, for the style that builds on all of them. */
+  before?: readonly string[];
+  /**
+   * Between two lines: the last one has been sung and the next has not begun. Only a picture that
+   * is built line by line keeps standing then; every other style draws nothing.
+   */
+  resting?: boolean;
 }
 
 export interface LyricOptions {
@@ -147,6 +159,14 @@ export function paintLyrics(
     ctx.fillRect(0, 0, size.width, size.height);
   }
   if (line === undefined || line.text.trim() === "") return;
+  if (options.style === "tree") {
+    const texts = [...(line.before ?? []), line.text].map((one) => (options.uppercase ? one.toUpperCase() : one));
+    ctx.save();
+    paintTree(ctx, options, size, texts, line.resting === true ? 1 : line.progress);
+    ctx.restore();
+    return;
+  }
+  if (line.resting === true) return;
   const ink = flipped ? (options.background ?? options.accent) : options.color;
   const words = (options.uppercase ? line.text.toUpperCase() : line.text).split(/\s+/).filter(Boolean);
   if (words.length === 0) return;

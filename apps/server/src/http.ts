@@ -71,6 +71,9 @@ export function createRequestListener(options: HttpOptions): RequestListener {
 const STATIC_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  // The transcriber's runtime is an ES module with this extension; served as anything but
+  // JavaScript, the browser refuses to import it and Whisper never starts.
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   // The one type a browser refuses to guess: without it `WebAssembly.instantiateStreaming` throws
   // and the editor never starts.
@@ -166,16 +169,19 @@ async function route(
   // The words of a song, where the file itself carries none. A GET to ask whether this server can
   // do it at all, so the dialogue can offer the other three ways instead of a button that fails.
   if (match(segments, ["api", "lyrics", "ready"]) && method === "GET") {
-    return { status: 200, body: { available: api.canTranscribe(), engine: api.transcriber() } };
+    const engines = api.transcribers();
+    return { status: 200, body: { available: engines.length > 0, engines } };
   }
   if (match(segments, ["api", "lyrics", "transcribe"]) && method === "POST") {
     const language = url.searchParams.get("language");
+    const engine = url.searchParams.get("engine");
     return {
       status: 200,
       body: {
         lines: await api.transcribeAudio(await readBytes(request, maxBodyBytes), {
           contentType: request.headers["content-type"] ?? "audio/mpeg",
           ...(language === null ? {} : { language }),
+          ...(engine === null ? {} : { engine }),
         }),
       },
     };

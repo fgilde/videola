@@ -92,6 +92,25 @@ export async function deleteMedia(hash: string): Promise<void> {
   await removeEntry(MEDIA_DIR, hash);
 }
 
+// What a transcriber heard, kept per medium and per transcriber so that asking a second time for the
+// same song costs nothing -- and a run that was stopped halfway carries on from where it stopped.
+export type TranscriptStore = "local" | "cloud" | "server";
+
+export async function transcriptText(
+  hash: string,
+  store: TranscriptStore,
+): Promise<string | undefined> {
+  return (await storedFile(`transcript-${store}`, hash))?.text();
+}
+
+export async function putTranscript(
+  hash: string,
+  store: TranscriptStore,
+  text: string,
+): Promise<void> {
+  await put(`transcript-${store}`, hash, new Blob([text], { type: "application/json" }));
+}
+
 export async function storageEstimate(): Promise<{ usage: number; quota: number }> {
   const estimate = await navigator.storage.estimate();
   return { usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 };

@@ -17,7 +17,7 @@
 // somebody that a new version is ready.
 const CACHE = "videola-v1";
 
-const IMMUTABLE = /-[A-Za-z0-9_]{8,}\.(?:js|css|wasm|woff2|png|webp|jpg|svg)$/;
+const IMMUTABLE = /-[A-Za-z0-9_]{8,}\.(?:m?js|css|wasm|woff2|png|webp|jpg|svg)$/;
 
 // What may be cached at all, beyond the document. Anything else is left to the network untouched --
 // this worker answers requests for *files*, and a request that is not one is somebody's business, not
@@ -25,7 +25,7 @@ const IMMUTABLE = /-[A-Za-z0-9_]{8,}\.(?:js|css|wasm|woff2|png|webp|jpg|svg)$/;
 // test harness makes; under a virtual clock every one of them is a pause, and a cache write hung on
 // each meant the editor never got a turn to draw. The narrow rule is also the correct one for a real
 // session: an API answer in an offline cache is a wrong answer served confidently.
-const CACHEABLE = /\.(?:js|css|wasm|woff2|png|webp|jpg|jpeg|svg|ico|webmanifest|html|mp4)$/;
+const CACHEABLE = /\.(?:m?js|css|wasm|woff2|png|webp|jpg|jpeg|svg|ico|webmanifest|html|mp4)$/;
 
 self.addEventListener("install", () => {
   // Nothing is precached: the asset names are decided by a build this file knows nothing about, and

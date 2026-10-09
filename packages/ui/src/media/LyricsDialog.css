@@ -53,7 +53,8 @@
 
 .v-lyrics__lines li {
   display: flex;
-  gap: var(--v-space-2);
+  align-items: center;
+  gap: var(--v-space-1);
   padding: 1px 0;
 }
 
@@ -61,13 +62,41 @@
   font-family: var(--v-font-mono);
   color: var(--v-accent);
   flex: none;
+  /* "12:34.56" whole, with the field's own padding around it. */
+  width: calc(8ch + 2 * var(--v-space-2));
+  padding: 2px var(--v-space-1);
+}
+
+.v-lyrics__text {
+  flex: 1;
+  min-width: 0;
+  padding: 2px var(--v-space-1);
+}
+
+.v-lyrics__edit {
+  display: grid;
+  gap: var(--v-space-2);
+  justify-items: start;
+}
+
+.v-lyrics__edit .v-lyrics__lines {
+  width: 100%;
+  max-height: 18rem;
+  padding: 0;
+  list-style: none;
+}
+
+.v-lyrics__listen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-2);
 }
 
 /* The styles, each drawing itself. Three across on a desktop, which fits eleven of them into four
    rows without a scrollbar of their own. */
 .v-lyrics__styles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
   gap: var(--v-space-1);
 }
 
@@ -80,7 +109,7 @@
   border: 1px solid var(--v-border);
   border-radius: var(--v-radius-sm);
   font: inherit;
-  font-size: var(--v-text-sm);
+  font-size: var(--v-text-xs);
   cursor: pointer;
   transition:
     border-color 0.2s ease,
@@ -120,4 +149,96 @@
   .v-lyrics__columns {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Where the song would go, chosen before it goes: one button with a menu of the ways there are. */
+.v-lyrics__engines {
+  position: relative;
+}
+
+.v-lyrics__engines > summary {
+  list-style: none;
+}
+
+.v-lyrics__engines > summary::-webkit-details-marker {
+  display: none;
+}
+
+.v-lyrics__engines > summary[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.v-lyrics__engineMenu {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + var(--v-space-1));
+  left: 0;
+  display: grid;
+  gap: var(--v-space-1);
+  min-width: 18rem;
+  padding: var(--v-space-1);
+  background: var(--v-bg-elevated);
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-md);
+  box-shadow: var(--v-shadow);
+}
+
+.v-lyrics__engineMenu .v-button {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+
+.v-lyrics__hearing {
+  display: grid;
+  gap: var(--v-space-2);
+}
+
+.v-lyrics__hearing .v-update__bar {
+  margin-top: 0;
+}
+
+/* Everything that is not a style, in two columns of short rows: the colours were a whole row each,
+   and the settings pushed the button that makes the video below the fold. */
+.v-lyrics__settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--v-space-2) var(--v-space-3);
+  align-items: center;
+  font-size: var(--v-text-sm);
+}
+
+.v-lyrics__colors {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v-space-3);
+}
+
+.v-lyrics__swatch {
+  display: flex;
+  align-items: center;
+  gap: var(--v-space-1);
+  cursor: pointer;
+}
+
+.v-lyrics__swatch input {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.v-lyrics__setting {
+  display: grid;
+  gap: 2px;
+  color: var(--v-text-muted);
+}
+
+.v-lyrics__setting input[type="range"] {
+  width: 100%;
 }

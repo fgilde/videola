@@ -38,6 +38,7 @@ import {
   type SlotAnswer,
   type Template,
   type Time,
+  type Timeline as TimelineData,
   type Track,
   type Transform,
   type TrackKind,
@@ -135,6 +136,7 @@ import {
   type LyricsDraft,
   type PreviewRequest,
   PlaceMediaDialog,
+  RemoveMediaDialog,
   TemplateAuthor,
   TemplateGallery,
   TemplateWizard,
@@ -164,8 +166,10 @@ import {
   lyricsForMedia,
   lyricsFromText,
   transcribeMedia,
-  transcriberReady,
-  type Transcriber,
+  transcribers as transcribersOf,
+  type Engine,
+  type Hearing,
+  type ListenOptions,
 } from "./lyrics";
 import { useTemplatePosters } from "./posters";
 import {
@@ -344,6 +348,8 @@ export function App(): ReactElement {
   const [activeTrack, setActiveTrack] = useState<string>();
   // Which row and instant the "put a medium here" dialogue is answering for.
   const [placing, setPlacing] = useState<{ track: string; at: Time }>();
+  // A medium that is in use and about to go, held while the question about its clips is asked.
+  const [removing, setRemoving] = useState<{ media: MediaId; name: string; use: MediaUse }>();
   // Record mode. Every setting made while this is on belongs to the playhead rather than to the
   // clip as a whole, and the window says so with a border nothing else in the interface uses.
   const [recording, setRecording] = useState(false);
@@ -352,7 +358,9 @@ export function App(): ReactElement {
   const [foundLyrics, setFoundLyrics] = useState<FoundLyrics>();
   const [lyricsBusy, setLyricsBusy] = useState<"file" | "transcribe">();
   const [lyricsError, setLyricsError] = useState<string>();
-  const [transcriber, setTranscriber] = useState<Transcriber>();
+  const [transcribers, setTranscribers] = useState<Engine[]>(["local"]);
+  const [hearing, setHearing] = useState<Hearing>();
+  const stopHearing = useRef<AbortController>(undefined);
   // True while the mix is being analysed for a visualiser. The analysis itself lives in the
   // playback object, which is what draws from it; this is only what the interface says about it.
   const [listening, setListening] = useState(false);
@@ -754,31 +762,42 @@ export function App(): ReactElement {
     [],
   );
 
-  /** And the last resort: the audio goes to the server, which has the key and does the listening. */
+  /** And when the file has none: the song is listened to, here or by the server. */
   const askForTranscript = useCallback(
-    (media: MediaId) => {
+    (media: MediaId, engine: Engine, listen: ListenOptions) => {
+      const asset = project?.library.find((entry) => entry.id === media);
+      if (asset === undefined) return;
+      const stop = new AbortController();
+      stopHearing.current = stop;
       void (async () => {
         setLyricsBusy("transcribe");
         setLyricsError(undefined);
         try {
-          setFoundLyrics(await transcribeMedia(connection, media));
+          setFoundLyrics(await transcribeMedia(connection, asset, engine, listen, setHearing, stop.signal));
         } catch (err) {
-          setLyricsError(String((err as Error).message ?? err));
+          if (!stop.signal.aborted) setLyricsError(String((err as Error).message ?? err));
         } finally {
+          if (stopHearing.current === stop) stopHearing.current = undefined;
           setLyricsBusy(undefined);
+          setHearing(undefined);
         }
       })();
     },
-    [connection],
+    [connection, project],
   );
+
+  const closeLyrics = useCallback(() => {
+    stopHearing.current?.abort();
+    setLyricsOpen(false);
+  }, []);
 
   // Asked when the dialogue opens rather than at start-up: a server that had no key this morning
   // may have one now, and nobody should have to reload a tab to find out.
   useEffect(() => {
     if (!lyricsOpen) return;
     let cancelled = false;
-    void transcriberReady(connection).then((ready) => {
-      if (!cancelled) setTranscriber(ready);
+    void transcribersOf(connection).then((ready) => {
+      if (!cancelled) setTranscribers(ready);
     });
     return () => {
       cancelled = true;
@@ -925,6 +944,28 @@ export function App(): ReactElement {
       doc?.dispatch(command, coalesceKey);
     },
     [doc],
+  );
+
+  const removeMedia = useCallback(
+    (media: MediaId) => {
+      setArmed((current) => (current === media ? undefined : current));
+      edit(cmd.mediaRemove(media));
+    },
+    [edit],
+  );
+
+  const askToRemoveMedia = useCallback(
+    (media: MediaId) => {
+      if (project === undefined) return;
+      const use = clipsOfMedia(project.timeline, media);
+      if (use.clips === 0) {
+        removeMedia(media);
+        return;
+      }
+      const name = project.library.find((asset) => asset.id === media)?.originalName ?? media;
+      setRemoving({ media, name, use });
+    },
+    [project, removeMedia],
   );
 
   // Measuring means rendering the whole timeline offline, so it happens when it is asked for and
@@ -2578,6 +2619,7 @@ export function App(): ReactElement {
                   onCapture={layout === "desktop" ? undefined : (files) => void importMedia(files)}
                   onAdd={addToTimeline}
                   onRelink={(media) => void relink(media)}
+                  onRemove={askToRemoveMedia}
                   onGrab={setGrab}
                   armed={armed}
                   onArm={(media) => setArmed((current) => (current === media ? undefined : media))}
@@ -2762,22 +2804,34 @@ export function App(): ReactElement {
           onClose={() => setManagingDestinations(false)}
         />
       )}
+      {removing !== undefined && (
+        <RemoveMediaDialog
+          name={removing.name}
+          clips={removing.use.clips}
+          tracks={removing.use.tracks}
+          onRemove={() => removeMedia(removing.media)}
+          onClose={() => setRemoving(undefined)}
+        />
+      )}
       {lyricsOpen && project !== undefined && (
         <LyricsDialog
           library={project.library}
           found={foundLyrics}
           busy={lyricsBusy}
-          transcriber={transcriber}
+          transcribers={transcribers}
+          hearing={hearing}
           error={lyricsError}
           onLookInFile={lookInFile}
           onTranscribe={askForTranscript}
+          onStopTranscribing={() => stopHearing.current?.abort()}
           onText={(text) => {
             setLyricsError(undefined);
             setFoundLyrics(lyricsFromText(text));
           }}
+          onLines={setFoundLyrics}
           onPaintPreview={paintLyricPreview}
           onCreate={createLyrics}
-          onClose={() => setLyricsOpen(false)}
+          onClose={closeLyrics}
         />
       )}
       {placing !== undefined && project !== undefined && (
@@ -3083,7 +3137,13 @@ function paintLyricPreview(request: PreviewRequest): void {
       size: Math.min(0.32, request.look.size * 1.3),
     }),
     size,
-    { text: request.text, progress: request.progress, index: 0, previous: request.previous },
+    {
+      text: request.text,
+      progress: request.progress,
+      index: 0,
+      previous: request.previous,
+      before: [request.previous],
+    },
   );
 }
 
@@ -3095,6 +3155,26 @@ function clipOfMedia(project: Project, media: MediaId): Clip | undefined {
     }
   }
   return undefined;
+}
+
+interface MediaUse {
+  clips: number;
+  tracks: string[];
+}
+
+// Into compound clips as well, because the core's `media.remove` takes those clips too.
+function clipsOfMedia(timeline: TimelineData, media: MediaId, use: MediaUse = { clips: 0, tracks: [] }): MediaUse {
+  for (const track of timeline.tracks) {
+    for (const clip of track.clips) {
+      if (clip.source.kind === "media" && clip.source.media === media) {
+        use.clips += 1;
+        if (!use.tracks.includes(track.name)) use.tracks.push(track.name);
+      } else if (clip.source.kind === "compound") {
+        clipsOfMedia(clip.source.timeline, media, use);
+      }
+    }
+  }
+  return use;
 }
 
 function nextTrackName(doc: VideolaDocument, kind: TrackKind): string {

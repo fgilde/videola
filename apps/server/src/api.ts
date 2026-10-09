@@ -35,6 +35,8 @@ import { describeProject, validateProject, type Finding } from "./inspect";
 import { PathOutsideRoot, Storage, writeAtomic } from "./paths";
 import { openBackend } from "./wasm";
 
+export type Transcriber = "server" | "cloud";
+
 export const APP_VERSION = "0.0.0";
 
 export class ApiError extends Error {
@@ -186,59 +188,49 @@ export class Api {
     return this.#youtubeClient !== undefined;
   }
 
-  /** Whether this server can listen to a song and write down the words. */
-  canTranscribe(): boolean {
-    return this.transcriber() !== undefined;
-  }
-
   /**
-   * Which of the two does the listening, for a dialogue that has to say what happens.
+   * The ways this server can listen to a song and write down the words.
    *
-   * The difference is not a detail: one of them sends the song to a company, and the other one
-   * does not. A button that says "transcribe" without saying which is a button nobody should
-   * press, so the surface asks and puts the answer in the sentence next to it.
+   * `server` is a transcriber on this machine and the audio stays here; `cloud` sends it to
+   * ElevenLabs. The editor offers each by name, because one of them sends the song to a company.
    */
-  transcriber(): "local" | "cloud" | undefined {
-    if (this.#whisper !== undefined) return "local";
-    return this.#elevenLabsKey === undefined ? undefined : "cloud";
+  transcribers(): Transcriber[] {
+    const engines: Transcriber[] = [];
+    if (this.#whisper !== undefined) engines.push("server");
+    if (this.#elevenLabsKey !== undefined) engines.push("cloud");
+    return engines;
   }
 
   /**
-   * The words in a recording, with their times.
-   *
-   * The last resort, and said so in the dialogue: three places carry lyrics already, and a song
-   * whose file has them needs nobody's transcription. The audio goes out of this process; that is
-   * a thing worth knowing before pressing it, and the surface says so.
+   * The words in a recording, with their times, from the transcriber that was asked for -- or, where
+   * none was named, from the one on this machine before the one that sends the audio away.
    */
   async transcribeAudio(
     audio: Uint8Array,
-    options: { contentType?: string; language?: string } = {},
+    options: { contentType?: string; language?: string; engine?: string } = {},
   ): Promise<TranscribedLine[]> {
-    // The one on this machine first where there is one: it costs nothing, it needs no key, and
-    // the audio stays here. The cloud is the fallback rather than the default.
+    const engine = options.engine ?? this.transcribers()[0];
     const local = this.#whisper;
-    if (local !== undefined) {
-      try {
+    const key = this.#elevenLabsKey;
+    try {
+      if (engine === "server" && local !== undefined) {
         return this.#runWhisper === undefined
           ? await transcribeLocally(local, audio, options.contentType)
           : await transcribeLocally(local, audio, options.contentType, this.#runWhisper);
-      } catch (error) {
-        throw new ApiError(502, "transcribeFailed", String((error as Error).message ?? error));
       }
-    }
-    const key = this.#elevenLabsKey;
-    if (key === undefined) {
-      throw new ApiError(
-        400,
-        "noTranscriber",
-        "this server has no transcriber: set VIDEOLA_WHISPER, or VIDEOLA_ELEVENLABS_KEY",
-      );
-    }
-    try {
-      return await transcribe(key, audio, options, this.#http);
+      if (engine === "cloud" && key !== undefined) {
+        return await transcribe(key, audio, options, this.#http);
+      }
     } catch (error) {
       throw new ApiError(502, "transcribeFailed", String((error as Error).message ?? error));
     }
+    throw new ApiError(
+      400,
+      "noTranscriber",
+      engine === undefined
+        ? "this server has no transcriber: set VIDEOLA_WHISPER, or VIDEOLA_ELEVENLABS_KEY"
+        : `this server has no transcriber called ${engine}`,
+    );
   }
 
   /**

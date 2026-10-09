@@ -350,6 +350,7 @@ describe("serving the web app", () => {
     await writeFile(join(web, "index.html"), "<title>Videola</title>");
     await writeFile(join(web, "assets", "index-abc123.js"), "export const a = 1;");
     await writeFile(join(web, "assets", "videola_core_bg-abc123.wasm"), Buffer.from([0, 97, 115, 109]));
+    await writeFile(join(web, "assets", "ort-abc123.mjs"), "export const b = 2;");
     await writeFile(join(web, "sw.js"), "self.addEventListener('fetch', () => {});");
   });
 
@@ -373,6 +374,15 @@ describe("serving the web app", () => {
 
     expect(wasm.headers.get("content-type")).toBe("application/wasm");
     expect(script.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+  });
+
+  // The transcriber's runtime: refused as a module under any other type, and Whisper never loads.
+  it("names an .mjs module as a script", async () => {
+    await start({ webRoot: web });
+
+    const module = await fetch(`${base}/assets/ort-abc123.mjs`);
+
+    expect(module.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
   });
 
   it("caches hashed assets forever and the document never", async () => {

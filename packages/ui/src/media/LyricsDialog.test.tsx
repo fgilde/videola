@@ -1,8 +1,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "../i18n/I18nProvider";
-import { LyricsDialog, type LyricsDialogProps, type LyricsDraft } from "./LyricsDialog";
+import {
+  LyricsDialog,
+  parseClock,
+  type FoundLyrics,
+  type LyricsDialogProps,
+  type LyricsDraft,
+} from "./LyricsDialog";
 
 const SONGS = [
   { id: "med_a", originalName: "hall-of-fame.mp3", kind: "audio" },
@@ -11,12 +17,14 @@ const SONGS = [
 
 function show(over: Partial<LyricsDialogProps> = {}): {
   looked: string[];
-  transcribed: string[];
+  transcribed: unknown[][];
   taken: string[];
   created: LyricsDraft[];
+  edited: FoundLyrics[];
 } {
+  const edited: FoundLyrics[] = [];
   const looked: string[] = [];
-  const transcribed: string[] = [];
+  const transcribed: unknown[][] = [];
   const taken: string[] = [];
   const created: LyricsDraft[] = [];
   render(
@@ -24,18 +32,37 @@ function show(over: Partial<LyricsDialogProps> = {}): {
       <LyricsDialog
         library={SONGS}
         onLookInFile={(media) => looked.push(media)}
-        onTranscribe={(media) => transcribed.push(media)}
+        transcribers={["local"]}
+        onTranscribe={(media, transcriber, listen) => transcribed.push([media, transcriber, listen])}
+        onStopTranscribing={vi.fn()}
         onText={(text) => taken.push(text)}
+        onLines={(found) => edited.push(found)}
         onCreate={(draft) => created.push(draft)}
         onClose={vi.fn()}
         {...over}
       />
     </I18nProvider>,
   );
-  return { looked, transcribed, taken, created };
+  return { looked, transcribed, taken, created, edited };
 }
 
+beforeEach(() => {
+  localStorage.clear();
+});
+
 describe("the lyric video dialogue", () => {
+  it("remembers the language and the size for the next time", () => {
+    show();
+    fireEvent.change(screen.getByTestId("lyrics-language"), { target: { value: "fr" } });
+    fireEvent.change(screen.getByTestId("lyrics-size"), { target: { value: "base" } });
+    cleanup();
+
+    show();
+
+    expect((screen.getByTestId("lyrics-language") as HTMLSelectElement).value).toBe("fr");
+    expect((screen.getByTestId("lyrics-size") as HTMLSelectElement).value).toBe("base");
+  });
+
   // A lookup table is not a song. Offering one would be a picker that fails on the press.
   it("offers the songs and nothing else", () => {
     show();
@@ -53,34 +80,77 @@ describe("the lyric video dialogue", () => {
     expect(looked).toEqual(["med_a"]);
   });
 
-  // Sending the audio away is the last resort, and on a server that cannot do it the button is not
-  // there at all -- with a sentence saying what would make it appear.
-  it("says why transcription is missing rather than offering it", () => {
-    show();
+  // Whisper in the browser is always there, so there is always a way to have the words heard.
+  it("offers one button where there is one way to listen", () => {
+    const { transcribed } = show();
 
-    expect(screen.queryByTestId("lyrics-transcribe")).toBeNull();
-    expect(screen.getByTestId("lyrics-no-transcriber").textContent).toContain(
-      "VIDEOLA_ELEVENLABS_KEY",
-    );
+    const button = screen.getByTestId("lyrics-transcribe");
+    expect(button.tagName).toBe("BUTTON");
+    expect(button.getAttribute("title")).toContain("bleibt auf diesem Gerät");
+
+    fireEvent.click(button);
+
+    expect(transcribed).toEqual([["med_a", "local", { language: "de", size: "small" }]]);
   });
 
-  it("offers transcription where the server can do it", () => {
-    const { transcribed } = show({ transcriber: "cloud" });
+  // Left to guess, Whisper took a German song for English and translated it.
+  it("tells the transcriber the language and the size that were chosen", () => {
+    const { transcribed } = show();
 
+    fireEvent.change(screen.getByTestId("lyrics-language"), { target: { value: "en" } });
+    fireEvent.change(screen.getByTestId("lyrics-size"), { target: { value: "turbo" } });
     fireEvent.click(screen.getByTestId("lyrics-transcribe"));
 
-    expect(transcribed).toEqual(["med_a"]);
+    expect(transcribed).toEqual([["med_a", "local", { language: "en", size: "turbo" }]]);
   });
 
-  // One of the two sends the song to a company and the other does not. The button has to say
-  // which before it is pressed, not in a release note.
-  it("says which of the two would do the listening", () => {
-    show({ transcriber: "local" });
-    expect(screen.getByTestId("lyrics-transcribe").textContent).toBe("Lokal transkribieren");
+  it("offers no browser model where nothing listens in the browser", () => {
+    show({ transcribers: ["cloud"] });
 
-    cleanup();
-    show({ transcriber: "cloud" });
-    expect(screen.getByTestId("lyrics-transcribe").textContent).toBe("Bei ElevenLabs transkribieren");
+    expect(screen.queryByTestId("lyrics-size")).toBeNull();
+    expect(screen.getByTestId("lyrics-language")).toBeTruthy();
+  });
+
+  // One of them sends the song to a company. Which one is chosen, and the menu says where it goes.
+  it("offers a menu where there is more than one, each saying where the song goes", () => {
+    const { transcribed } = show({ transcribers: ["local", "cloud"] });
+
+    const menu = screen.getByTestId("lyrics-transcribe");
+    expect(menu.tagName).toBe("DETAILS");
+    const items = screen.getAllByRole("menuitem");
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Hier im Browser (Whisper) — der Ton bleibt auf diesem Gerät",
+      "Bei ElevenLabs — der Ton geht an ElevenLabs",
+    ]);
+
+    fireEvent.click(items[1]!);
+
+    expect(transcribed).toEqual([["med_a", "cloud", { language: "de", size: "small" }]]);
+  });
+
+  it("says how far a transcription has got, and can stop it", () => {
+    const onStopTranscribing = vi.fn();
+    show({ busy: "transcribe", hearing: { phase: "listening", fraction: 0.42 }, onStopTranscribing });
+
+    expect(screen.getByTestId("lyrics-hearing").textContent).toContain("42 %");
+    expect((document.querySelector("progress") as HTMLProgressElement).value).toBe(42);
+
+    fireEvent.click(screen.getByTestId("lyrics-stop"));
+
+    expect(onStopTranscribing).toHaveBeenCalledOnce();
+  });
+
+  it("draws the bar without a number where nobody can know one", () => {
+    show({ busy: "transcribe", hearing: { phase: "sending" } });
+
+    expect(screen.getByTestId("lyrics-hearing").textContent).toContain("Wird transkribiert");
+    expect(document.querySelector("progress")?.hasAttribute("value")).toBe(false);
+  });
+
+  it("does not start a second one while one runs", () => {
+    show({ busy: "transcribe", hearing: { phase: "decoding" } });
+
+    expect((screen.getByTestId("lyrics-transcribe") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("takes pasted words when there are some to take", () => {
@@ -99,7 +169,7 @@ describe("the lyric video dialogue", () => {
   it("says whether what it found carries times", () => {
     show({ found: { lines: [{ at: 1000, text: "one" }], timed: true, from: "sylt" } });
 
-    expect(screen.getByTestId("lyrics-lines").textContent).toContain("one");
+    expect((screen.getByLabelText("Text von Zeile 1") as HTMLInputElement).value).toBe("one");
     expect(document.body.textContent).toContain("Mit Zeiten");
   });
 
@@ -170,5 +240,80 @@ describe("the lyric video dialogue", () => {
     expect(created[0]?.intensity).toBe(0.9);
     // Off, because the words are already the size of the frame; the row stays, out of the picture.
     expect(created[0]?.subtitles).toBe(false);
+  });
+
+  describe("correcting the lines by hand", () => {
+    const found: FoundLyrics = {
+      lines: [
+        { at: 1000, until: 2500, text: "Ich stehe hier" },
+        { at: 3000, until: 4000, text: "Die Stat" },
+      ],
+      timed: true,
+      from: "transcript",
+    };
+
+    it("takes a corrected word", () => {
+      const { edited } = show({ found });
+
+      fireEvent.change(screen.getByLabelText("Text von Zeile 2"), { target: { value: "Die Stadt" } });
+
+      expect(edited.at(-1)?.lines[1]).toEqual({ at: 3000, until: 4000, text: "Die Stadt" });
+      expect(edited.at(-1)?.lines[0]).toEqual(found.lines[0]);
+    });
+
+    it("takes a corrected start and end", () => {
+      const { edited } = show({ found });
+
+      fireEvent.blur(screen.getByLabelText("Beginn von Zeile 1"), { target: { value: "0:01.20" } });
+      fireEvent.blur(screen.getByLabelText("Ende von Zeile 1"), { target: { value: "2,75" } });
+
+      expect(edited[0]?.lines[0]?.at).toBe(1200);
+      expect(edited[1]?.lines[0]?.until).toBe(2750);
+    });
+
+    it("ignores a time that is not one", () => {
+      const { edited } = show({ found });
+
+      fireEvent.blur(screen.getByLabelText("Beginn von Zeile 1"), { target: { value: "gleich" } });
+
+      expect(edited).toEqual([]);
+    });
+
+    it("shows the times it has, to the hundredth", () => {
+      show({ found: { ...found, lines: [{ at: 83450, until: 84000, text: "x" }] } });
+
+      expect((screen.getByLabelText("Beginn von Zeile 1") as HTMLInputElement).value).toBe("1:23.45");
+    });
+
+    it("removes a line and adds one after the last", () => {
+      const { edited } = show({ found });
+
+      fireEvent.click(screen.getByRole("button", { name: "Zeile 1 entfernen" }));
+      fireEvent.click(screen.getByTestId("lyrics-add-line"));
+
+      expect(edited[0]?.lines).toEqual([found.lines[1]]);
+      expect(edited[1]?.lines.at(-1)).toEqual({ at: 4500, until: 6500, text: "" });
+    });
+
+    it("offers no times for lines that came without any", () => {
+      show({ found: { lines: [{ at: 0, text: "one" }], timed: false, from: "text" } });
+
+      expect(screen.queryByLabelText("Beginn von Zeile 1")).toBeNull();
+      expect(screen.getByLabelText("Text von Zeile 1")).toBeTruthy();
+    });
+  });
+});
+
+describe("reading a typed time", () => {
+  it("reads minutes and seconds, seconds alone, and a decimal comma", () => {
+    expect(parseClock("1:23.45")).toBe(83450);
+    expect(parseClock("83.45")).toBe(83450);
+    expect(parseClock(" 2,5 ")).toBe(2500);
+  });
+
+  it("reads nothing else", () => {
+    expect(parseClock("")).toBeUndefined();
+    expect(parseClock("1:2:3")).toBeUndefined();
+    expect(parseClock("-1")).toBeUndefined();
   });
 });

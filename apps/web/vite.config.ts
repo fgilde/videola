@@ -15,5 +15,7 @@ export default defineConfig({
   plugins: [react()],
   server: { port: 5173 },
   build: { target: "es2022" },
+  // The transcriber's worker imports its runtime on demand, which a classic worker script cannot.
+  worker: { format: "es" },
   define: { __VIDEOLA_VERSION__: JSON.stringify(version) },
 });

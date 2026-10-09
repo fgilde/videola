@@ -25,8 +25,8 @@ opened over the API and a project opened in the editor are opened by the same co
 | `VIDEOLA_MAX_PROJECTS` | `8` | How many projects stay open in memory, each with its own core instance |
 | `VIDEOLA_YOUTUBE_CLIENT_ID` | none | The OAuth client a channel sign-in runs through. With the secret below, or not at all |
 | `VIDEOLA_YOUTUBE_CLIENT_SECRET` | none | The other half of it. Without both there is no sign-in, only the fields in the dialogue |
-| `VIDEOLA_ELEVENLABS_KEY` | none | The key transcription for lyric videos runs through. The audio goes to ElevenLabs, and the button in the editor says so |
-| `VIDEOLA_WHISPER` | none | A transcriber on this machine instead — Whisper through whisper.cpp or faster-whisper. Called as `<cmd> --input <audio> --output <json> [--model …]`, and the audio goes nowhere. Used in preference to the key |
+| `VIDEOLA_ELEVENLABS_KEY` | none | Offers ElevenLabs in the lyric dialogue, beside Whisper in the browser. The audio goes to ElevenLabs, and the menu says so. See [Lyrics through ElevenLabs](#lyrics-through-elevenlabs) |
+| `VIDEOLA_WHISPER` | none | A transcriber on this machine instead — Whisper through whisper.cpp or faster-whisper. Called as `<cmd> --input <audio> --output <json> [--model …]`, and the audio stays on this machine. Offered beside the other two |
 | `VIDEOLA_WHISPER_MODEL` | none | Handed to it as `--model`, for a runner that has to be told which one to load |
 
 **Whoever hosts it decides about the token.** Set, every /api call needs it — the server-side projects,
@@ -301,6 +301,49 @@ here, and this end talks to the platform.
 would have to outlive the request, which is a job queue and a different feature. There is no schedule,
 no thumbnail upload and no playlist. Adding a kind is one function in `publish.ts` and one row in the
 table of what it requires.
+
+## Lyrics through ElevenLabs
+
+The lyric dialogue can always hear a song itself — Whisper runs in the browser and needs nothing
+from the server. ElevenLabs is the second way: its transcription (`scribe_v1`) is quick, reads a
+song in one go and sets times per word. It appears in the dialogue's menu as soon as the server
+holds a key.
+
+1. Sign in at [elevenlabs.io](https://elevenlabs.io) and open **Developers → API Keys**.
+2. **Create API key.** Restrict it: of all the permissions, **Speech to Text** is the only one
+   Videola uses. A key that can do nothing else is a key that costs little when it leaks.
+3. Hand it to the server as `VIDEOLA_ELEVENLABS_KEY`:
+
+   ```sh
+   docker run -d --name videola -p 7331:7331 \
+     -e VIDEOLA_TOKEN="$(openssl rand -hex 24)" \
+     -e VIDEOLA_ELEVENLABS_KEY=sk_… \
+     -v videola-data:/data ghcr.io/fgilde/videola:latest
+   ```
+
+   or, in a compose file, under `environment:` of the `videola` service:
+
+   ```yaml
+   environment:
+     VIDEOLA_ELEVENLABS_KEY: sk_…
+   ```
+
+   On Unraid, Umbrel, CasaOS and Cosmos it is one more variable in the app's settings.
+4. Restart, open the lyric dialogue: **Find the lyrics** is now a menu with **At ElevenLabs** in it.
+   The server answers `GET /api/lyrics/ready` with `{"available":true,"engines":["cloud"]}`, which is
+   the quickest way to check from a shell.
+
+**What it costs and where the audio goes.** Every transcription is billed by ElevenLabs against the
+plan the key belongs to, by the length of the audio — see their pricing page for what that is today.
+Videola sends the sound alone, at 16 kHz mono, never the video, and **only when somebody chooses
+ElevenLabs in the menu**; the result is kept in that browser, so asking again for the same song
+sends nothing. The key stays on the server and never reaches a browser: the editor sends the audio
+to `/api/lyrics/transcribe?engine=cloud`, and the server passes it on. What ElevenLabs keeps of it
+is ElevenLabs' policy, not Videola's.
+
+The language chosen in the dialogue is passed on as `language_code`. A refusal — a wrong key, a key
+without the Speech to Text permission, a plan that has run out — comes back word for word under the
+button.
 
 ## The server bundle
 

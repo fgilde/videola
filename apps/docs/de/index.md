@@ -61,6 +61,14 @@ features:
       darauf. Alles, was sich einstellen lässt, lässt sich auch animieren.
     link: /de/guide/effects-and-transitions
     linkText: Effekte
+  - title: Lyric-Videos aus jedem Song
+    details: >
+      Die Wörter aus der Datei, eingefügt oder von Whisper direkt im Browser herausgehört — aus einem
+      Song oder einem Video, in seiner eigenen Sprache, mit ElevenLabs als zweitem Weg. Zeile für
+      Zeile korrigieren, einen von dreizehn Stilen wählen, und die Zeilen liegen zum Ziehen auf der
+      Zeitleiste.
+    link: /de/guide/editing#lyric-videos
+    linkText: Lyric-Videos
   - title: Veröffentlichen ohne Umweg
     details: >
       Das fertige Video geht direkt zu YouTube, Vimeo, PeerTube, Mastodon, Bluesky, Telegram, auf

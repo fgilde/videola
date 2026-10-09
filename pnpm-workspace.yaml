@@ -6,5 +6,9 @@ allowBuilds:
   # its install script only re-resolves that same binary, so skipping it costs nothing and keeps
   # the workspace free of post-install scripts.
   esbuild: false
+  # transformers.js names the Node runtime of onnxruntime as a dependency; the editor runs the
+  # model in the browser and never loads it, so its binary download is skipped.
+  onnxruntime-node: false
+  protobufjs: false
 minimumReleaseAgeExclude:
   - mediabunny@1.58.0

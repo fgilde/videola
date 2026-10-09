@@ -249,4 +249,33 @@ describe("MediaLibrary and proxies", () => {
 
     expect(screen.getByText(/Export/)).not.toBeNull();
   });
+
+  it("offers to remove every medium, and says which one", () => {
+    const a = video("a");
+    const onRemove = vi.fn<(media: MediaId) => void>();
+    render(
+      <I18nProvider>
+        <MediaLibrary
+          library={[a, video("b")]}
+          missing={new Set()}
+          fps={PROJECT_FPS}
+          onImport={vi.fn()}
+          onAdd={vi.fn()}
+          onRelink={vi.fn()}
+          onRemove={onRemove}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(within(entry(a)).getByRole("button", { name: "a.mp4 entfernen" }));
+
+    expect(onRemove.mock.calls).toEqual([[a.id]]);
+  });
+
+  it("draws no remove button where the host offers none", () => {
+    const a = video("a");
+    show([a]);
+
+    expect(within(entry(a)).queryByRole("button", { name: "a.mp4 entfernen" })).toBeNull();
+  });
 });

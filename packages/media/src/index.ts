@@ -43,3 +43,7 @@ export { clearSession, readSession, worthSaving, writeSession } from "./session"
 export type { Session } from "./session";
 export { peaks } from "./waveform";
 export type { Peaks } from "./waveform";
+export { putTranscript, transcriptText } from "./opfs";
+export type { TranscriptStore } from "./opfs";
+export { heldTranscript, keepTranscript, sungText, wavFile, windowsOf } from "./transcript";
+export type { HeardLine, HeldTranscript } from "./transcript";

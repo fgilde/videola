@@ -65,11 +65,32 @@ describe("which line is being sung", () => {
     expect(lineAt(project, 4 * SECOND)?.text).toBe("And the world's gonna know your name");
   });
 
-  // Nothing between the lines: a lyric video that holds the last line through an instrumental is a
-  // lyric video with a stuck picture.
-  it("is nothing at all before the first line and after the last", () => {
+  it("is nothing at all before the first line", () => {
     expect(lineAt(project, 0)).toBeUndefined();
-    expect(lineAt(project, 6 * SECOND)).toBeUndefined();
+  });
+
+  // Held, and said to be held: the word tree keeps standing through a breath, every other style
+  // draws nothing then -- a lyric video that holds a line through an instrumental is a stuck picture.
+  it("is the last line sung, resting, between lines and after the last", () => {
+    const gapped = song([
+      [1, 2, "Hallo was geht ab"],
+      [3, 4, "Alle tanzen mit"],
+    ]);
+
+    expect(lineAt(gapped, 2.5 * SECOND)).toMatchObject({ text: "Hallo was geht ab", index: 0, resting: true });
+    expect(lineAt(gapped, 6 * SECOND)).toMatchObject({ text: "Alle tanzen mit", index: 1, resting: true });
+    expect(lineAt(gapped, 3.5 * SECOND)?.resting).toBeUndefined();
+  });
+
+  it("carries every line before the one being sung", () => {
+    const three = song([
+      [1, 2, "one"],
+      [2, 3, "two"],
+      [3, 4, "three"],
+    ]);
+
+    expect(lineAt(three, 3.5 * SECOND)?.before).toEqual(["one", "two"]);
+    expect(lineAt(three, 1.5 * SECOND)?.before).toEqual([]);
   });
 
   it("says how far through the line the singing is", () => {

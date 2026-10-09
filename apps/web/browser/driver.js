@@ -804,13 +804,11 @@ async function announce() {
     check("opening it raised nothing", banner(), "");
     check("the song it offers is the one that was imported",
       dialog.querySelector('[data-testid="lyrics-song"]').options.length > 0, true);
-    // No server behind this run, so the way that needs one is a sentence rather than a button.
-    check("a server that cannot transcribe says so instead of offering it",
-      dialog.querySelector('[data-testid="lyrics-transcribe"]'), null);
-    check("and names what would change that",
-      dialog.querySelector('[data-testid="lyrics-no-transcriber"]').textContent
-        .includes("VIDEOLA_ELEVENLABS_KEY"),
-      true);
+    // No server behind this run, which leaves Whisper in the browser: one button, not a menu.
+    check("with no server the browser's own transcriber is the one button offered",
+      [dialog.querySelector('[data-testid="lyrics-transcribe"]')?.tagName,
+        dialog.querySelector('[data-testid="lyrics-transcribe"]')?.dataset.engine],
+      ["BUTTON", "local"]);
 
     labelled("In der Datei suchen").click();
     await until("the answer about the file",
@@ -830,7 +828,7 @@ async function announce() {
     // or "growing" look like, and the only other way to find out is to make a video. Read off the
     // canvas, because a tile that draws nothing is the failure worth catching.
     const tiles = [...dialog.querySelectorAll(".v-lyrics__style")];
-    check("every style shows itself", tiles.length, 12);
+    check("every style shows itself", tiles.length, 13);
     const picture = tiles[0].querySelector("canvas");
     const ctx = picture.getContext("2d");
     const pixels = ctx.getImageData(0, 0, picture.width, picture.height).data;

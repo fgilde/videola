@@ -118,7 +118,7 @@ export function generatorKey(
   // first frame of a word and hold it.
   const sung =
     generator.type === "lyrics" && line !== undefined
-      ? `${line.index}:${Math.round(line.progress * 100)}`
+      ? `${line.index}:${Math.round(line.progress * 100)}:${line.resting === true ? "r" : ""}`
       : "";
   return `${size.width}x${size.height}|${shown}|${heard}|${sung}|${JSON.stringify(generator)}`;
 }
@@ -336,7 +336,10 @@ export function lineAt(project: Project, at: Time): LyricLineOnScreen | undefine
   // the foot of the frame is turned off, and the lyric video reads the same clips to know which
   // line is being sung.
   const cues = captionCues(project, undefined, { includeHidden: true });
-  const index = cues.findIndex((cue) => at >= cue.start && at < cue.end);
+  const singing = cues.findIndex((cue) => at >= cue.start && at < cue.end);
+  // In a gap, the line that was last sung -- held, so a picture built line by line does not vanish
+  // for the breath between two of them. Before the first line there is nothing to hold.
+  const index = singing >= 0 ? singing : lastSungBefore(cues, at);
   const cue = cues[index];
   if (cue === undefined) return undefined;
   const span = Math.max(1, cue.end - cue.start);
@@ -346,7 +349,17 @@ export function lineAt(project: Project, at: Time): LyricLineOnScreen | undefine
     index,
     ...(cues[index + 1] === undefined ? {} : { next: cues[index + 1]!.text }),
     ...(cues[index - 1] === undefined ? {} : { previous: cues[index - 1]!.text }),
+    before: cues.slice(0, index).map((earlier) => earlier.text),
+    ...(singing >= 0 ? {} : { resting: true }),
   };
+}
+
+function lastSungBefore(cues: readonly { end: Time }[], at: Time): number {
+  let last = -1;
+  cues.forEach((cue, index) => {
+    if (cue.end <= at) last = index;
+  });
+  return last;
 }
 
 // The visible set comes from the draw list, which names a nested clip by its own id, so this has to

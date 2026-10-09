@@ -12,12 +12,14 @@
     "test": "echo \"no app-level tests yet\""
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@videola/core": "workspace:*",
     "@videola/engine": "workspace:*",
     "@videola/media": "workspace:*",
     "@videola/ui": "workspace:*",
+    "onnxruntime-web": "1.31.0-dev.20260914-8d85527a0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

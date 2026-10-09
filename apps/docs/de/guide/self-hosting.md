@@ -26,8 +26,8 @@ geöffnet.
 | `VIDEOLA_MAX_PROJECTS` | `8` | Wie viele Projekte im Speicher offen bleiben, jedes mit eigener Kerninstanz |
 | `VIDEOLA_YOUTUBE_CLIENT_ID` | keiner | Der OAuth-Client, über den die Anmeldung an einem Kanal läuft. Zusammen mit dem Geheimnis darunter, sonst gar nicht |
 | `VIDEOLA_YOUTUBE_CLIENT_SECRET` | keiner | Die zweite Hälfte davon. Ohne beide gibt es keine Anmeldung, nur die Felder im Dialog |
-| `VIDEOLA_ELEVENLABS_KEY` | keiner | Der Schlüssel, über den das Transkribieren für Lyric-Videos läuft. Der Ton geht dabei an ElevenLabs, und der Knopf im Editor sagt das |
-| `VIDEOLA_WHISPER` | keiner | Stattdessen ein Transkribierer auf diesem Rechner — Whisper über whisper.cpp oder faster-whisper. Aufgerufen als `<cmd> --input <Audio> --output <JSON> [--model …]`; der Ton verlässt die Maschine nicht. Wird dem Schlüssel vorgezogen |
+| `VIDEOLA_ELEVENLABS_KEY` | keiner | Bietet im Lyrics-Dialog ElevenLabs an, neben Whisper im Browser. Der Ton geht dabei an ElevenLabs, und das Menü sagt das. Siehe [Lyrics über ElevenLabs](#lyrics-uber-elevenlabs) |
+| `VIDEOLA_WHISPER` | keiner | Ein Transkribierer auf diesem Rechner — Whisper über whisper.cpp oder faster-whisper. Aufgerufen als `<cmd> --input <Audio> --output <JSON> [--model …]`; der Ton bleibt auf dieser Maschine. Wird neben den anderen beiden angeboten |
 | `VIDEOLA_WHISPER_MODEL` | keiner | Wird als `--model` übergeben, für einen Runner, dem man sagen muss, welches Modell er laden soll |
 
 **Über den Token entscheidet, wer hostet.** Gesetzt, braucht jeder /api-Aufruf ihn — Server-Projekte,
@@ -309,6 +309,49 @@ die Bytes hierher, und diese Seite spricht mit der Plattform.
 Sitzungsadresse die Anfrage überleben, und das ist eine Warteschlange und ein anderes Feature. Es gibt
 keinen Zeitplan, kein Vorschaubild und keine Playlist. Eine Art hinzuzufügen ist eine Funktion in
 `publish.ts` und eine Zeile in der Tabelle dessen, was sie braucht.
+
+## Lyrics über ElevenLabs
+
+Der Lyrics-Dialog kann einen Song immer selbst abhören — Whisper läuft im Browser und braucht nichts
+vom Server. ElevenLabs ist der zweite Weg: die Transkription (`scribe_v1`) ist schnell, liest einen
+Song in einem Rutsch und setzt Zeiten pro Wort. Sie erscheint im Menü des Dialogs, sobald der
+Server einen Schlüssel hat.
+
+1. Bei [elevenlabs.io](https://elevenlabs.io) anmelden und **Developers → API Keys** öffnen.
+2. **Create API key.** Einschränken: von allen Berechtigungen nutzt Videola nur **Speech to Text**.
+   Ein Schlüssel, der nichts anderes kann, kostet wenig, wenn er einmal verloren geht.
+3. Dem Server als `VIDEOLA_ELEVENLABS_KEY` geben:
+
+   ```sh
+   docker run -d --name videola -p 7331:7331 \
+     -e VIDEOLA_TOKEN="$(openssl rand -hex 24)" \
+     -e VIDEOLA_ELEVENLABS_KEY=sk_… \
+     -v videola-data:/data ghcr.io/fgilde/videola:latest
+   ```
+
+   oder in einer Compose-Datei unter `environment:` des Dienstes `videola`:
+
+   ```yaml
+   environment:
+     VIDEOLA_ELEVENLABS_KEY: sk_…
+   ```
+
+   Unter Unraid, Umbrel, CasaOS und Cosmos ist es eine Variable mehr in den Einstellungen der App.
+4. Neu starten, den Lyrics-Dialog öffnen: **Lyrics ermitteln** ist jetzt ein Menü mit **Bei
+   ElevenLabs** darin. `GET /api/lyrics/ready` antwortet `{"available":true,"engines":["cloud"]}` —
+   der schnellste Test aus einer Shell.
+
+**Was es kostet und wohin der Ton geht.** Jede Transkription rechnet ElevenLabs über den Tarif ab,
+zu dem der Schlüssel gehört, nach der Länge des Tons — was das heute ist, steht auf deren
+Preisseite. Videola schickt nur den Ton, in 16 kHz mono, nie das Video, und **nur, wenn jemand im
+Menü ElevenLabs wählt**; das Ergebnis bleibt in diesem Browser gespeichert, ein zweiter Anlauf für
+denselben Song schickt nichts mehr. Der Schlüssel bleibt auf dem Server und erreicht nie einen
+Browser: der Editor schickt den Ton an `/api/lyrics/transcribe?engine=cloud`, der Server reicht ihn
+weiter. Was ElevenLabs davon aufbewahrt, regelt ElevenLabs, nicht Videola.
+
+Die im Dialog gewählte Sprache geht als `language_code` mit. Eine Absage — falscher Schlüssel,
+Schlüssel ohne Speech-to-Text-Berechtigung, aufgebrauchter Tarif — kommt wörtlich unter dem Knopf
+an.
 
 ## Das Serverpaket
 

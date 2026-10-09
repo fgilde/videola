@@ -89,6 +89,18 @@ that travel inside the .videola.
 705,600 flicks, so the round trip is lossless by arithmetic — and checked byte for byte through the
 real core.
 
+**Lyric videos.** The words of a song from its own tag (`SYLT`, `USLT`, `©lyr`, `LYRICS`), from a
+pasted `.lrc`, or heard: Whisper runs in the browser in a worker — no key, no server, the audio stays
+on the device — in three sizes and the language of the song, and ElevenLabs is offered beside it
+where the server holds `VIDEOLA_ELEVENLABS_KEY`. A video works as well as a song, because only its
+sound is listened to. What was heard is kept per medium, so asking twice costs nothing and a stopped
+run carries on. The lines can be corrected in the dialogue and land as caption clips to drag; over
+them, thirteen styles, from kinetic type to a word tree that grows every line out of a letter of the
+lines before it.
+
+**The library.** A medium can be taken out of the project again; where clips are made from it, a
+question says how many and on which tracks before they go with it. One undo brings both back.
+
 **Classical editing.** Freeze frames — two cuts and a rate of zero, with the tail slipped back so it
 carries on from the frame the hold began on. In and out points, insert and overwrite, J/K/L shuttle, adjustment tracks
 whose effects run over everything below them, markers with colours and notes, speed ramps where the

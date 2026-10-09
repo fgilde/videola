@@ -61,6 +61,11 @@ das Material nicht nimmt, hinter das auf der ersten Spur seiner Art. Ein Medium 
 beliebig oft platzieren, ohne es erneut zu importieren; welche Spur es trifft, entscheidet ein Klick
 auf deren Kopf.
 
+Der Mülleimer an einem Eintrag nimmt das Medium aus dem Projekt. Wo Clips daraus gemacht sind,
+kommt vorher eine Frage, die sagt, wie viele und auf welchen Spuren — diese Clips gehen mit, auch
+die in Compound-Clips. Rückgängig holt beides zurück. Die Bytes bleiben im Speicher des Browsers,
+weil ein anderes Projekt dieselbe Datei nutzen kann.
+
 Jeder Eintrag trägt ein Vorschaubild, das aus der Datei selbst dekodiert wurde, und Tonclips zeichnen
 ihre Waveform aus den Puffern, die der Graph ohnehin dekodiert hat — kein zweites Dekodieren, und ein
 rückwärts laufender Clip zeigt sich so, wie er klingt.
@@ -1052,7 +1057,7 @@ der Editor sagt es so lange. Einen Titel zu verschieben löst nichts aus.
 
 ### Lyric-Videos
 
-**Einfügen → Lyric-Video …** macht aus einem Song ein Video mit mitlaufendem Text. Der Dialog sucht
+**Einfügen → Lyric-Video …** macht aus einem Song — oder einem Video, in dem gesungen wird — ein Video mit mitlaufendem Text. Der Dialog sucht
 die Wörter dort, wo sie meistens schon liegen, in dieser Reihenfolge:
 
 1. **In der Datei.** MP3s tragen sie in einem ID3-Frame — `SYLT` mit Zeitstempel pro Zeile, `USLT`
@@ -1062,16 +1067,42 @@ die Wörter dort, wo sie meistens schon liegen, in dieser Reihenfolge:
 2. **Eingefügt.** Text oder eine ganze `.lrc` ins Feld, fertig. `[00:12.50]` versteht der Leser
    samt Hundertsteln, Millisekunden, mehreren Zeitstempeln für denselben Refrain und den
    Wort-Zeitstempeln erweiterter Dateien.
-3. **Transkribieren lassen.** Nur, wenn ein Server mit hinterlegtem Schlüssel dahinter steht — und
-   nur dann steht der Knopf da, und er sagt, welcher der beiden Wege genommen würde.
-   **`VIDEOLA_WHISPER`** zeigt auf einen Transkribierer auf diesem Rechner — Whisper, über
-   whisper.cpp oder faster-whisper —, dann verlässt nichts die Maschine. **`VIDEOLA_ELEVENLABS_KEY`**
-   schickt den Ton stattdessen an ElevenLabs; das ist das Einzige in diesem
-   Editor, was den Rechner verlässt, und der Knopf sagt es, bevor man ihn drückt. Ein Server mit
-   beidem nimmt den lokalen Weg.
+3. **Herausgehört.** **Lyrics ermitteln** hört den Song ab — oder den Ton eines Videos — und
+   schreibt die Wörter mit ihren Zeiten auf. Mindestens ein Weg dafür ist immer da:
 
-   Lokal ist eine Kommandozeile und keine Abhängigkeit: ein Modell ist gigabyteweise groß und eine
-   Python-Umgebung gehört jemand anderem. Videola ruft
+   - **Hier im Browser (Whisper).** Immer verfügbar, ohne Server, ohne Schlüssel, ohne Installation,
+     und der Ton verlässt das Gerät nicht. Das Modell kommt beim ersten Mal von Hugging Face und
+     danach aus dem Cache des Browsers. Drei Größen, unter dem Knopf gewählt:
+
+     | Größe | Erster Download | Gut für |
+     |---|---|---|
+     | base | ca. 200 MB | Sprache, schnelle Versuche |
+     | small | ca. 300 MB | die meisten Songs (Vorgabe) |
+     | large-v3-turbo | ca. 760 MB | Gesang über einer Band, und die genauesten Zeiten |
+
+     Mit einer Grafikkarte, die WebGPU erreicht, läuft es dort, sonst auf dem Prozessor — langsamer,
+     aber es kommt an.
+   - **Bei ElevenLabs**, wenn der Server `VIDEOLA_ELEVENLABS_KEY` hat. Der Ton geht an ElevenLabs,
+     und das Menü sagt es, bevor man es wählt. Einrichtung unter
+     [Selbst hosten](./self-hosting#lyrics-uber-elevenlabs).
+   - **Auf dem Server (Whisper)**, wenn er `VIDEOLA_WHISPER` hat — ein Transkribierer auf dieser
+     Maschine; der Ton bleibt dort.
+
+   Bei einem Weg ist es ein Knopf, bei mehreren ein Knopf mit Menü, und jeder Eintrag sagt, wohin der
+   Song ginge. **Sprache des Songs** wird gesagt und nicht geraten: Whisper hält sonst die meisten
+   Songs für Englisch und übersetzt sie.
+
+   Geschickt wird nur der Ton, in 16 kHz mono — ein Zehntel einer Videodatei, und genau deshalb
+   klappt es mit einem Video so gut wie mit einem Song. Ein Balken zeigt, wie weit es ist: Ton lesen,
+   Modell laden (einmal), abhören. **Abbrechen** hält es an.
+
+   Was gehört wurde, **bleibt gespeichert** — je Medium, Transkribierer, Modell und Sprache. Ein
+   zweiter Anlauf für dasselbe kostet nichts, kein zweites Hochladen zu ElevenLabs, kein zweiter
+   Whisper-Lauf. Ein abgebrochener Lauf im Browser macht dort weiter, wo er aufgehört hat: der Song
+   wird in Stücken von zwanzig bis dreißig Sekunden abgehört, jedes an seiner leisesten Stelle
+   geschnitten, und jedes fertige Stück wird gespeichert.
+
+   Der Transkribierer des Servers ist eine Kommandozeile und keine Abhängigkeit. Videola ruft
 
    ```sh
    $VIDEOLA_WHISPER --input <Audiodatei> --output <JSON-Datei> [--model $VIDEOLA_WHISPER_MODEL]
@@ -1080,6 +1111,11 @@ die Wörter dort, wo sie meistens schon liegen, in dieser Reihenfolge:
    und liest `{"segments":[{"start":1.2,"end":3.4,"text":"…"}]}` in Sekunden — genau das, was
    faster-whisper liefert, ein Wrapper darum ist also drei Zeilen lang. Die `-oj`-Datei von
    whisper.cpp, in Millisekunden unter `transcription`, wird ebenfalls gelesen.
+
+Was gefunden wurde, lässt sich **im Dialog korrigieren**, bevor das Video entsteht: jede Zeile hat
+Beginn, Ende und Text in eigenen Feldern, eine Zeile lässt sich entfernen und hinter der letzten eine
+hinzufügen. Zeiten tippt man, wie man sie liest — `1:23.45`, `83.45` oder `83,45` —, und was keine
+Zeit ist, springt auf den alten Wert zurück.
 
 Was dabei herauskommt, sind **Untertitel-Clips auf einer eigenen Spur**: eine Zeile, ein Clip. Genau
 deshalb liegen die Lyrics dort und nicht im Generator — eine Zeile, die einen Schlag zu spät kommt,
@@ -1093,7 +1129,7 @@ genommen. Das Lyric-Video liest diese Clips, um zu wissen, welche Zeile gerade g
 lässt sich also nicht löschen, aber eine Spur außerhalb des Bildes zeichnet nichts. Das Auge auf der
 Spur holt sie jederzeit zurück; es ist derselbe Schalter unter anderem Namen.
 
-Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in zwölf Stilen:
+Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in dreizehn Stilen:
 
 | Stil | Was er tut |
 |---|---|
@@ -1109,6 +1145,7 @@ Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in z
 | Welle | die Zeile reitet auf einer Welle, jeder Buchstabe ein Stück weiter darauf |
 | Glitch | die Zeile zerreißt in Rot und Blau und setzt sich wieder zusammen |
 | Wachsend (3D) | jedes Wort wächst aus einem Buchstaben eines schon stehenden Wortes heraus, die ganze Zeile in Perspektive |
+| Wörterbaum | jede Zeile wächst aus einem Buchstaben einer schon stehenden Zeile — nach unten, quer oder schräg, rechtwinklig wie im Kreuzworträtsel — und kommt an, indem sie aus diesem Buchstaben herauswächst, sich in 3D aufklappt oder hereinschwenkt; das Bild folgt dem jüngsten Zweig, und der Baum bleibt auch in der Atempause zwischen zwei Zeilen stehen |
 
 Unter den Kacheln stehen die Einstellungen, auf die der gewählte Stil reagiert, und nur die:
 **Schriftgröße** immer, **Bewegung** dafür, wie weit etwas wandert, **Leuchten** bei den Stilen mit

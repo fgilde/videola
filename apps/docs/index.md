@@ -60,6 +60,13 @@ features:
       that effect on it. Anything you set can be animated.
     link: /guide/effects-and-transitions
     linkText: Effects
+  - title: Lyric videos from any song
+    details: >
+      The words from the file, pasted, or heard by Whisper right in your browser — from a song or a
+      video, in its own language, with ElevenLabs as a second way. Correct them line by line, pick
+      one of thirteen styles, and the lines land on the timeline to drag.
+    link: /guide/editing#lyric-videos
+    linkText: Lyric videos
   - title: Publish without leaving the editor
     details: >
       Send the finished file to YouTube, Vimeo, PeerTube, Mastodon, Bluesky, Telegram, a Facebook

@@ -48,6 +48,8 @@ export interface MediaLibraryProps {
   onCapture?: (files: File[]) => void;
   onAdd: (media: MediaId) => void;
   onRelink: (media: MediaId) => void;
+  /** Take this medium out of the project. Whether to ask first is the host's call. */
+  onRemove?: (media: MediaId) => void;
   onGrab?: (grab: MediaGrab) => void;
   /** The medium a range is being marked in, so the entry can say which one that is. */
   armed?: MediaId;
@@ -68,6 +70,7 @@ export function MediaLibrary({
   onCapture,
   onAdd,
   onRelink,
+  onRemove,
   onGrab,
   armed,
   onArm,
@@ -139,6 +142,7 @@ export function MediaLibrary({
               armed={armed === asset.id}
               onAdd={onAdd}
               onRelink={onRelink}
+              onRemove={onRemove}
               onGrab={onGrab}
               onArm={onArm}
             />
@@ -200,6 +204,7 @@ function Entry({
   armed,
   onAdd,
   onRelink,
+  onRemove,
   onGrab,
   onArm,
 }: {
@@ -212,6 +217,7 @@ function Entry({
   armed: boolean;
   onAdd: (media: MediaId) => void;
   onRelink: (media: MediaId) => void;
+  onRemove: ((media: MediaId) => void) | undefined;
   onGrab: ((grab: MediaGrab) => void) | undefined;
   onArm: ((media: MediaId) => void) | undefined;
 }): ReactElement {
@@ -310,6 +316,13 @@ function Entry({
             icon="link"
             label={t("library.relink")}
             onClick={() => onRelink(asset.id)}
+          />
+        )}
+        {onRemove !== undefined && (
+          <IconButton
+            icon="trash"
+            label={t("library.remove", { name: asset.originalName })}
+            onClick={() => onRemove(asset.id)}
           />
         )}
       </span>
