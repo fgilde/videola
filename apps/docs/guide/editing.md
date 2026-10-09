@@ -1078,7 +1078,7 @@ Over them sits a **lyrics clip** that draws whatever is being sung, in thirteen 
 | Wave | the line rides a wave, each letter a little further along it |
 | Glitch | the line tears into red and blue and puts itself back together |
 | Growing (3D) | every word grows out of a letter of a word already standing, the whole line in perspective |
-| Word tree | every line grows out of a letter of a line already standing — down, across or at a slant, crossing it at right angles like a crossword — and arrives by growing out of that letter, by folding open, or by swinging in; the picture follows the newest branch, and the tree stands through the breath between two lines |
+| Word tree | every line grows out of a letter of a line already standing — down, across or at a slant, crossing it at right angles like a crossword; a long line always runs across, and where it can cross nothing it hangs under the line before, so its letters stay large enough to read — and arrives by growing out of that letter, by folding open, or by swinging in; the picture follows the newest branch, and the tree stands through the breath between two lines |
 
 Under the tiles are the settings the chosen style answers to, and only those: **type size** always,
 **movement** for how hard it travels, **glow** where a style has a halo, and **perspective** for the

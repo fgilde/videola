@@ -45,30 +45,31 @@ const DIRECTIONS: readonly Direction[] = [
 
 const ENTRANCES: readonly Entrance[] = ["grow", "unfold", "swing"];
 
-/** Longer than this, a line goes down only where nothing else fits. */
-const LONG = 12;
+/** The smallest a letter may be, as a share of the frame's height, before a direction is ruled out. */
+const LEGIBLE = 0.05;
 
 /** How far back a new line looks for a letter to grow out of. Further, and branches cross the frame. */
 const REACH = 6;
 
-let memo: { texts: string[]; placed: TreeLine[] } = { texts: [], placed: [] };
+let memo: { texts: string[]; aspect: number; placed: TreeLine[] } = { texts: [], aspect: 0, placed: [] };
 
 /**
  * Where every line stands, in grid squares. A line's place depends only on the lines before it, so
  * the song is laid out once and every frame after that reads the same answer.
  */
-export function treeLines(texts: readonly string[]): TreeLine[] {
+export function treeLines(texts: readonly string[], aspect = 16 / 9): TreeLine[] {
   let same = 0;
+  if (memo.aspect !== aspect) memo = { texts: [], aspect, placed: [] };
   while (same < texts.length && same < memo.texts.length && texts[same] === memo.texts[same]) same += 1;
   const placed = memo.placed.slice(0, same);
   const taken = new Map<string, string>();
   for (const line of placed) occupy(taken, line);
   for (let index = same; index < texts.length; index += 1) {
-    const line = place(placed, taken, texts[index]!, index);
+    const line = place(placed, taken, texts[index]!, index, aspect);
     occupy(taken, line);
     placed.push(line);
   }
-  memo = { texts: [...texts], placed };
+  memo = { texts: [...texts], aspect, placed };
   return placed;
 }
 
@@ -76,13 +77,19 @@ export function cellOf(line: TreeLine, index: number): Cell {
   return step(line.start, line.direction, index);
 }
 
-function place(placed: readonly TreeLine[], taken: Map<string, string>, text: string, index: number): TreeLine {
+function place(
+  placed: readonly TreeLine[],
+  taken: Map<string, string>,
+  text: string,
+  index: number,
+  aspect: number,
+): TreeLine {
   const entrance = ENTRANCES[hash(`${text}:${index}`) % ENTRANCES.length]!;
   const letters = [...text];
   if (placed.length === 0) {
     return { text, start: { x: 0, y: 0 }, direction: DIRECTIONS[2]!, shared: -1, seed: { x: 0, y: 0 }, entrance };
   }
-  const tries = attempts(placed, letters.length, index);
+  const tries = attempts(placed, letters.length, index, aspect);
 
   for (const { parent, direction } of tries) {
     for (const [shared, letter] of letters.entries()) {
@@ -93,6 +100,20 @@ function place(placed: readonly TreeLine[], taken: Map<string, string>, text: st
         const start = { x: seed.x - direction.dx * shared, y: seed.y - direction.dy * shared };
         if (fits(taken, letters, start, direction, seed)) return { text, start, direction, shared, seed, entrance };
       }
+    }
+  }
+  // Every crossing taken or too small to read: the line hangs two rows under a line before it, its
+  // letter under the same letter, or under the start where none is shared.
+  for (const parent of placed.slice(-REACH).reverse()) {
+    if (parent.direction.dy !== 0) continue;
+    const under = [...parent.text].flatMap((theirs, at) => {
+      const ours = letters.findIndex((letter) => isLetter(letter) && letter.toLowerCase() === theirs.toLowerCase());
+      return ours < 0 ? [] : [{ at, ours }];
+    });
+    for (const { at, ours } of [...under, { at: 0, ours: 0 }]) {
+      const seed = cellOf(parent, at);
+      const start = { x: seed.x - ours, y: seed.y + 2 };
+      if (fits(taken, letters, start, DIRECTIONS[2]!, seed)) return { text, start, direction: DIRECTIONS[2]!, shared: -1, seed, entrance };
     }
   }
   // No letter in common: the line starts beside the last letter of a line before, or its first.
@@ -111,27 +132,37 @@ function place(placed: readonly TreeLine[], taken: Map<string, string>, text: st
 
 /**
  * Which line to grow from and in which direction, in the order worth trying. Newest parent first, so
- * the tree grows from where the eye is -- except for a long line, which tries every parent across or
- * at a slant before any of them downwards: written downwards it fills the frame top to bottom and the
- * letters shrink to fit it.
+ * the tree grows from where the eye is. Only directions the line can be read in: a long line written
+ * downwards or at a slant fills the frame top to bottom and its letters shrink to fit. Every third line
+ * tries a slant first and the others last, or most of the tree leans.
  */
 function attempts(
   placed: readonly TreeLine[],
   length: number,
   index: number,
+  aspect: number,
 ): { parent: TreeLine; direction: Direction }[] {
-  const turned = DIRECTIONS.map((_, at) => DIRECTIONS[(at + index) % DIRECTIONS.length]!);
+  const best = Math.max(...DIRECTIONS.map((direction) => letterSize(direction, length, aspect)));
+  const readable = DIRECTIONS.filter((direction) => {
+    const size = letterSize(direction, length, aspect);
+    return size >= LEGIBLE || size >= best * 0.9;
+  });
+  const leans = index % 3 === 0;
+  const slanted = (direction: Direction): number => (direction.dx !== 0 && direction.dy !== 0) === leans ? 0 : 1;
+  const turned = readable
+    .map((_, at) => readable[(at + index) % readable.length]!)
+    .sort((a, b) => slanted(a) - slanted(b));
   const parents = placed.slice(-REACH).reverse();
-  const pairs = parents.flatMap((parent, recency) =>
-    turned
-      .filter((direction) => crosses(direction, parent.direction))
-      .map((direction, rank) => ({ parent, direction, recency, rank })),
+  return parents.flatMap((parent) =>
+    turned.filter((direction) => crosses(direction, parent.direction)).map((direction) => ({ parent, direction })),
   );
-  if (length > LONG) {
-    const down = (pair: { direction: Direction }): number => (pair.direction.dx === 0 ? 1 : 0);
-    pairs.sort((a, b) => down(a) - down(b) || a.recency - b.recency || a.rank - b.rank);
-  }
-  return pairs;
+}
+
+/** How tall a letter can be, as a share of the frame's height, with the whole line in the picture. */
+function letterSize(direction: Direction, length: number, aspect: number): number {
+  const wide = Math.abs(direction.dx) * (length - 1) + 1;
+  const tall = Math.abs(direction.dy) * (length - 1) + 1;
+  return Math.min((aspect * 0.86) / (wide * ASPECT), 0.8 / tall);
 }
 
 // A new line has to go somewhere its parent does not: along the same axis it would lie on top of it.
@@ -226,7 +257,7 @@ export function paintTree(
   texts: readonly string[],
   progress: number,
 ): void {
-  const placed = treeLines(texts);
+  const placed = treeLines(texts, size.width / size.height);
   const newest = placed.length - 1;
   const line = placed[newest];
   if (line === undefined) return;

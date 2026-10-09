@@ -103,6 +103,28 @@ describe("a tree of lines", () => {
     });
   });
 
+  // Written downwards, a long line fills the frame top to bottom and its letters shrink to a few pixels.
+  it("writes a long line across, and lets only a short one go down or at a slant", () => {
+    const lines = treeLines([
+      "Hallo was geht ab",
+      "Alle tanzen mit",
+      "Ich hab dich gesehen in der Menge",
+      "Ja",
+      "Bis die Sonne aufgeht über uns",
+      "Und wenn der Morgen kommt dann bleiben wir",
+    ]);
+
+    for (const line of lines.filter((line) => line.text.length > 16)) expect(line.direction).toEqual({ dx: 1, dy: 0 });
+    expect(lines.filter((line) => line.direction.dy !== 0).length).toBeGreaterThan(0);
+  });
+
+  it("hangs a long line under the one before when it cannot cross it", () => {
+    const [first, second] = treeLines(["Hallo was geht ab", "Ich hab dich gesehen in der Menge"]);
+
+    expect(second!.direction).toEqual({ dx: 1, dy: 0 });
+    expect(second!.start.y).toBe(first!.start.y + 2);
+  });
+
   it("starts beside a letter where no letter is shared", () => {
     const [first, second] = treeLines(["abc", "xyz"]);
 

@@ -1145,7 +1145,7 @@ Darüber liegt ein **Lyrics-Clip**, der zeichnet, was gerade gesungen wird, in d
 | Welle | die Zeile reitet auf einer Welle, jeder Buchstabe ein Stück weiter darauf |
 | Glitch | die Zeile zerreißt in Rot und Blau und setzt sich wieder zusammen |
 | Wachsend (3D) | jedes Wort wächst aus einem Buchstaben eines schon stehenden Wortes heraus, die ganze Zeile in Perspektive |
-| Wörterbaum | jede Zeile wächst aus einem Buchstaben einer schon stehenden Zeile — nach unten, quer oder schräg, rechtwinklig wie im Kreuzworträtsel — und kommt an, indem sie aus diesem Buchstaben herauswächst, sich in 3D aufklappt oder hereinschwenkt; das Bild folgt dem jüngsten Zweig, und der Baum bleibt auch in der Atempause zwischen zwei Zeilen stehen |
+| Wörterbaum | jede Zeile wächst aus einem Buchstaben einer schon stehenden Zeile — nach unten, quer oder schräg, rechtwinklig wie im Kreuzworträtsel; eine lange Zeile läuft immer quer und hängt sich, wo sie nichts kreuzen kann, unter die Zeile davor, damit ihre Buchstaben lesbar groß bleiben — und kommt an, indem sie aus diesem Buchstaben herauswächst, sich in 3D aufklappt oder hereinschwenkt; das Bild folgt dem jüngsten Zweig, und der Baum bleibt auch in der Atempause zwischen zwei Zeilen stehen |
 
 Unter den Kacheln stehen die Einstellungen, auf die der gewählte Stil reagiert, und nur die:
 **Schriftgröße** immer, **Bewegung** dafür, wie weit etwas wandert, **Leuchten** bei den Stilen mit
