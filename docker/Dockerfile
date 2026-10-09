@@ -2,7 +2,7 @@
 # process serves all three: nginx in front of Node would need a process
 # supervisor for a job Node's own http server already does.
 
-FROM rust:1-bookworm AS wasm
+FROM mirror.gcr.io/library/rust:1-bookworm AS wasm
 WORKDIR /src
 RUN cargo install wasm-pack --locked
 COPY Cargo.toml Cargo.lock ./
@@ -10,7 +10,7 @@ COPY crates ./crates
 RUN wasm-pack build crates/videola-core-wasm --target web \
       --out-dir ../../packages/core/src/wasm --out-name videola_core
 
-FROM node:22-bookworm-slim AS build
+FROM mirror.gcr.io/library/node:22-bookworm-slim AS build
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -32,7 +32,7 @@ COPY --from=wasm /src/packages/core/src/wasm ./packages/core/src/wasm
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter videola-web build && pnpm --filter videola-server build
 
-FROM node:22-alpine
+FROM mirror.gcr.io/library/node:22-alpine
 # esbuild bundles both entry points down to plain ESM with nothing left to
 # resolve, so the runtime layer needs no node_modules -- only the .wasm, which
 # is data and stays a file.

@@ -231,7 +231,9 @@ outside `/assets`, and a test holds it there.
 
 Three stages. A `rust:1-bookworm` stage builds the WASM core, a `node:22-bookworm-slim` stage
 installs the workspace and builds both the web app and the server bundles, and a `node:22-alpine`
-stage keeps the result. That last stage carries no `node_modules`: esbuild bundles `serve.mjs`,
+stage keeps the result. All three come from `mirror.gcr.io`, Google's copy of Docker Hub: GitHub's
+runners share their addresses, and Docker Hub turns away anonymous pulls from them with `429 Too Many
+Requests` often enough to stop a release. That last stage carries no `node_modules`: esbuild bundles `serve.mjs`,
 `mcp.mjs` and `cli.mjs` down to plain ESM with nothing left to resolve, so what ships is three
 JavaScript files, one `.wasm`, and the built web app.
 

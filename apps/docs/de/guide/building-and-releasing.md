@@ -199,7 +199,9 @@ Der Server sendet `no-cache` für alles außerhalb von `/assets`, und ein Test h
 ## Das Docker-Image
 
 Drei Stufen: `rust:1-bookworm` baut den WASM-Kern, `node:22-bookworm-slim` installiert den Workspace
-und baut Web-App und Server-Bündel, `node:22-alpine` behält das Ergebnis. Die letzte Stufe trägt kein
+und baut Web-App und Server-Bündel, `node:22-alpine` behält das Ergebnis. Alle drei kommen von `mirror.gcr.io`, Googles Kopie von Docker
+Hub: GitHubs Runner teilen sich ihre Adressen, und Docker Hub weist anonyme Abrufe von dort oft genug
+mit `429 Too Many Requests` ab, um ein Release anzuhalten. Die letzte Stufe trägt kein
 `node_modules` — esbuild bündelt `serve.mjs`, `mcp.mjs` und `cli.mjs` zu reinem ESM ohne offene
 Auflösung, ausgeliefert werden also drei JavaScript-Dateien, eine `.wasm` und die gebaute Web-App.
 
