@@ -114,7 +114,7 @@ x-casaos:
   index: /
   port_map: "7331"
   scheme: http
-  version: "1.0.7"
+  version: "1.0.8"
   website: https://videola.app/
   repo: https://github.com/fgilde/videola
   support: https://github.com/fgilde/videola/issues
