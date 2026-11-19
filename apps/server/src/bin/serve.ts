@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 
 import { Api } from "../api";
 import { configFromEnv } from "../config";
+import { sweepFetches } from "../fetch";
 import { createRequestListener } from "../http";
 
 const config = configFromEnv();
@@ -12,7 +13,13 @@ const api = new Api({
   ...(config.youtubeClient === undefined ? {} : { youtubeClient: config.youtubeClient }),
   ...(config.elevenLabsKey === undefined ? {} : { elevenLabsKey: config.elevenLabsKey }),
   ...(config.whisper === undefined ? {} : { whisper: config.whisper }),
+  maxFetchBytes: config.maxFetchBytes,
 });
+
+// What a killed download left behind, once now and then daily for a server that runs for months.
+const sweep = (): void => void sweepFetches().catch(() => undefined);
+sweep();
+setInterval(sweep, 24 * 60 * 60 * 1000).unref();
 
 const server = createServer(
   createRequestListener({

@@ -21,6 +21,7 @@ import {
 import {
   describeVideo,
   fetchMedium,
+  FetchTooLarge,
   searchVideos,
   ytDlp,
   ytDlpVersion,
@@ -94,6 +95,8 @@ export interface ApiOptions {
   readonly fetch?: Fetch;
   /** What runs `yt-dlp`. Injected for the same reason `fetch` is: a check needs neither. */
   readonly ytdlp?: RunYtDlp;
+  /** What one download from a link may take on disk. Unset is no limit. */
+  readonly maxFetchBytes?: number | undefined;
   /** The OAuth client a sign-in uses, where the operator has registered one. */
   readonly youtubeClient?: OAuthClient | undefined;
   /** The key transcription runs through, where the operator set one. */
@@ -115,6 +118,7 @@ export class Api {
   #destinations: Destinations;
   #http: Fetch;
   #ytdlp: RunYtDlp;
+  #maxFetchBytes: number | undefined;
   #youtubeClient: OAuthClient | undefined;
   #elevenLabsKey: string | undefined;
   #whisper: LocalTranscriber | undefined;
@@ -131,6 +135,7 @@ export class Api {
     // given credentials to still has a testable publish path.
     this.#http = options.fetch ?? fetch;
     this.#ytdlp = options.ytdlp ?? ytDlp();
+    this.#maxFetchBytes = options.maxFetchBytes;
     this.#youtubeClient = options.youtubeClient;
     this.#elevenLabsKey = options.elevenLabsKey;
     this.#whisper = options.whisper;
@@ -262,9 +267,14 @@ export class Api {
     }
     try {
       return await this.#fetching(() =>
-        fetchMedium(request, this.#ytdlp, job === undefined ? undefined : (percent) => {
-          this.#fetchProgress.set(job, percent);
-        }),
+        fetchMedium(
+          request,
+          this.#ytdlp,
+          job === undefined ? undefined : (percent) => {
+            this.#fetchProgress.set(job, percent);
+          },
+          this.#maxFetchBytes,
+        ),
       );
     } finally {
       if (job !== undefined) this.#fetchProgress.delete(job);
@@ -289,6 +299,7 @@ export class Api {
       return await work();
     } catch (error) {
       const said = String((error as Error).message ?? error);
+      if (error instanceof FetchTooLarge) throw new ApiError(413, "fetchTooLarge", said);
       if (said.includes("not installed")) {
         throw new ApiError(501, "noFetcher", said);
       }

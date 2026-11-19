@@ -97,6 +97,7 @@ Configuration is environment only:
 | `VIDEOLA_STORAGE_ROOT` | the working directory | The whole of the server's authority over the file system. |
 | `VIDEOLA_MAX_PROJECTS` | `8` | Projects held open at once. Each can hold up to 2 GiB of media. |
 | `VIDEOLA_MAX_BODY_BYTES` | `536870912` | Counted as chunks arrive, not taken from `Content-Length`. |
+| `VIDEOLA_MAX_FETCH_BYTES` | unset | Disk one download from a link may take, merge included. Watched while it runs, so a stream that announces no size is stopped too; answered with `413 fetchTooLarge`. |
 | `VIDEOLA_LOCALE` | `en` | Written into the manifest of saved archives. |
 | `VIDEOLA_ELEVENLABS_KEY` | unset | Offers ElevenLabs in the lyric dialogue, beside Whisper in the browser. The audio leaves the machine. |
 | `VIDEOLA_WHISPER` | unset | A transcriber on this machine instead, called as `<cmd> --input <wav> --output <json> [--model …]` and expected to write `{"segments":[{start,end,text}]}` in seconds. Whisper.cpp's `-oj` file is read too. Offered beside the other two. |

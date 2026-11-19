@@ -24,6 +24,7 @@ geöffnet.
 | `VIDEOLA_WASM` | keiner | Der Kern. Ohne ihn kann der Server überhaupt kein Projekt öffnen |
 | `VIDEOLA_LOCALE` | `en` | `en` oder `de`: was der *Server* in erzeugte Namen schreibt. Der Editor folgt dem Browser |
 | `VIDEOLA_MAX_PROJECTS` | `8` | Wie viele Projekte im Speicher offen bleiben, jedes mit eigener Kerninstanz |
+| `VIDEOLA_MAX_FETCH_BYTES` | keiner | Wie viel Platz ein Download von einem Link belegen darf, in Bytes, Zusammenfügen eingeschlossen. Ohne Wert gibt es keine Grenze; auf einem Server, den Fremde erreichen, setzen |
 | `VIDEOLA_YOUTUBE_CLIENT_ID` | keiner | Der OAuth-Client, über den die Anmeldung an einem Kanal läuft. Zusammen mit dem Geheimnis darunter, sonst gar nicht |
 | `VIDEOLA_YOUTUBE_CLIENT_SECRET` | keiner | Die zweite Hälfte davon. Ohne beide gibt es keine Anmeldung, nur die Felder im Dialog |
 | `VIDEOLA_ELEVENLABS_KEY` | keiner | Bietet im Lyrics-Dialog ElevenLabs an, neben Whisper im Browser. Der Ton geht dabei an ElevenLabs, und das Menü sagt das. Siehe [Lyrics über ElevenLabs](#lyrics-uber-elevenlabs) |

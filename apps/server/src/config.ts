@@ -27,6 +27,14 @@ export interface ApiConfig {
    * so the contract is a command line, not a dependency.
    */
   readonly whisper: { command: string; model: string | undefined } | undefined;
+  /**
+   * What one download from a link may take on disk, where the operator set a limit.
+   *
+   * None by default: on your own machine the size of what you fetch is your business. A server that
+   * strangers can reach is another matter -- one four-hour stream in 4K is more disk than most
+   * hosts have spare.
+   */
+  readonly maxFetchBytes: number | undefined;
 }
 
 export interface Config extends ApiConfig {
@@ -52,6 +60,10 @@ export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfi
     ),
     elevenLabsKey: env.VIDEOLA_ELEVENLABS_KEY === "" ? undefined : env.VIDEOLA_ELEVENLABS_KEY,
     whisper: localTranscriber(env.VIDEOLA_WHISPER, env.VIDEOLA_WHISPER_MODEL),
+    maxFetchBytes:
+      env.VIDEOLA_MAX_FETCH_BYTES === undefined || env.VIDEOLA_MAX_FETCH_BYTES === ""
+        ? undefined
+        : integer(env.VIDEOLA_MAX_FETCH_BYTES, 0, "VIDEOLA_MAX_FETCH_BYTES"),
   };
 }
 

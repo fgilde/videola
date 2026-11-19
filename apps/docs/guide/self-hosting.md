@@ -23,6 +23,7 @@ opened over the API and a project opened in the editor are opened by the same co
 | `VIDEOLA_WASM` | none | The core. Without it the server cannot open a project at all |
 | `VIDEOLA_LOCALE` | `en` | `en` or `de`: what the *server* writes into generated names. The editor follows the browser |
 | `VIDEOLA_MAX_PROJECTS` | `8` | How many projects stay open in memory, each with its own core instance |
+| `VIDEOLA_MAX_FETCH_BYTES` | none | What one download from a link may take on disk, in bytes, merge included. Unset is no limit; set it on a server strangers can reach |
 | `VIDEOLA_YOUTUBE_CLIENT_ID` | none | The OAuth client a channel sign-in runs through. With the secret below, or not at all |
 | `VIDEOLA_YOUTUBE_CLIENT_SECRET` | none | The other half of it. Without both there is no sign-in, only the fields in the dialogue |
 | `VIDEOLA_ELEVENLABS_KEY` | none | Offers ElevenLabs in the lyric dialogue, beside Whisper in the browser. The audio goes to ElevenLabs, and the menu says so. See [Lyrics through ElevenLabs](#lyrics-through-elevenlabs) |

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { tmpdir } from "node:os";
 import { isIP } from "node:net";
@@ -25,6 +25,8 @@ export type RunYtDlp = (
   args: readonly string[],
   /** Each line the tool writes while it works, which is where the progress is. */
   onLine?: (line: string) => void,
+  /** Stops the tool and whatever it started, for a download that outgrew what it may take. */
+  signal?: AbortSignal,
 ) => Promise<{
   stdout: string;
   stderr: string;
@@ -170,6 +172,8 @@ export async function fetchMedium(
   run: RunYtDlp,
   /** How far along, in whole percent. A ten minute video is a wait somebody wants a number for. */
   onProgress?: (percent: number) => void,
+  /** What one download may take on disk, all its pieces together. Unset is no limit. */
+  maxBytes?: number,
 ): Promise<FetchedMedium> {
   await allowed(request.url);
   const into = await mkdtemp(join(tmpdir(), "videola-fetch-"));
@@ -180,6 +184,25 @@ export async function fetchMedium(
           const percent = percentOf(line);
           if (percent !== undefined) onProgress(percent);
         };
+  // `--max-filesize` turns away a file whose size the site announces. A live recording or a stream
+  // in fragments announces none, and the merge writes a second copy beside both halves -- so the
+  // directory itself is watched, and the download stopped the moment it holds more than allowed.
+  const stop = new AbortController();
+  const guard =
+    maxBytes === undefined
+      ? undefined
+      : setInterval(() => {
+          void sizeOf(into).then((size) => {
+            if (size > maxBytes) stop.abort();
+          });
+        }, GUARD_INTERVAL_MS);
+  const attempt = async (extra: readonly string[]) => {
+    const answer = await run(downloadArgs(request, into, extra, maxBytes), watch, stop.signal);
+    if (stop.signal.aborted || /max-filesize/.test(answer.stdout)) {
+      throw new FetchTooLarge(maxBytes ?? 0);
+    }
+    return answer;
+  };
   try {
     // Twice, where the first attempt hit a 403.
     //
@@ -189,12 +212,9 @@ export async function fetchMedium(
     // succeeds on the next try, which is exactly what makes it infuriating rather than informative.
     // The retries below cover a stale fragment, and asking as a different player client covers the
     // rest. Nothing is guessed about which happened: the second attempt simply changes both.
-    let answer = await run(downloadArgs(request, into, []), watch);
+    let answer = await attempt([]);
     if (answer.code !== 0 && forbidden(answer.stderr)) {
-      answer = await run(
-        downloadArgs(request, into, ["--extractor-args", "youtube:player_client=web_safari,web"]),
-        watch,
-      );
+      answer = await attempt(["--extractor-args", "youtube:player_client=web_safari,web"]);
     }
     if (answer.code !== 0) throw new Error(said(answer.stderr, "the download failed"));
     const written = await readdir(into);
@@ -203,10 +223,58 @@ export async function fetchMedium(
     const bytes = new Uint8Array(await readFile(join(into, filename)));
     return { bytes, filename, contentType: contentTypeOf(filename) };
   } finally {
+    clearInterval(guard);
     // Whatever happened. A failed merge leaves both streams behind, and a directory per attempt in
     // the system's temporary space is a disk that fills up over a month of use.
     await rm(into, { recursive: true, force: true });
   }
+}
+
+const GUARD_INTERVAL_MS = 1000;
+
+/** A download stopped because it outgrew what this server lets one take. */
+export class FetchTooLarge extends Error {
+  constructor(readonly maxBytes: number) {
+    super(`this download is larger than the ${readable(maxBytes)} this server allows`);
+  }
+}
+
+function readable(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${+(bytes / 1024 ** 3).toFixed(1)} GiB`;
+  return bytes >= 1024 ** 2 ? `${Math.round(bytes / 1024 ** 2)} MiB` : `${bytes} bytes`;
+}
+
+// Files vanish while this counts -- a merge removes its halves -- and one that is gone takes no room.
+async function sizeOf(directory: string): Promise<number> {
+  const names = await readdir(directory).catch(() => []);
+  const sizes = await Promise.all(
+    names.map(async (name) => (await stat(join(directory, name)).catch(() => undefined))?.size ?? 0),
+  );
+  return sizes.reduce((sum, size) => sum + size, 0);
+}
+
+/**
+ * Fetch directories nobody is coming back for.
+ *
+ * Every download clears its own up, so what is left is what a process that was killed mid-download
+ * left behind -- a restarted container, a pulled plug. Only old ones: another process on this
+ * machine, the CLI beside a running server, may be in the middle of its own.
+ */
+export async function sweepFetches(
+  olderThanMs = 24 * 60 * 60 * 1000,
+  root = tmpdir(),
+  now = Date.now(),
+): Promise<string[]> {
+  const stale: string[] = [];
+  for (const name of await readdir(root).catch(() => [])) {
+    if (!name.startsWith("videola-fetch-")) continue;
+    const path = join(root, name);
+    const since = (await stat(path).catch(() => undefined))?.mtimeMs;
+    if (since === undefined || now - since < olderThanMs) continue;
+    await rm(path, { recursive: true, force: true });
+    stale.push(path);
+  }
+  return stale;
 }
 
 export function forbidden(stderr: string): boolean {
@@ -218,8 +286,10 @@ export function downloadArgs(
   request: FetchRequest,
   into: string,
   extra: readonly string[],
+  maxBytes?: number,
 ): string[] {
   return [
+      ...(maxBytes === undefined ? [] : ["--max-filesize", String(maxBytes)]),
       // One line per update rather than a carriage return over the same one: a progress bar written
       // for a terminal arrives here as one enormous line nobody can parse.
       "--newline",
@@ -258,9 +328,23 @@ export function downloadArgs(
 
 /** The runner the server really uses. Absent binary and non-zero exit are both ordinary answers. */
 export function ytDlp(command = process.env.VIDEOLA_YTDLP ?? "yt-dlp"): RunYtDlp {
-  return async (args, onLine) =>
+  return async (args, onLine, signal) =>
     await new Promise((resolve, reject) => {
-      const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+      // A group of its own where there are groups, so that stopping it stops the ffmpeg it merges
+      // with too: killing yt-dlp alone leaves ffmpeg writing into a directory nobody reads.
+      const group = process.platform !== "win32";
+      const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"], detached: group });
+      const stop = (): void => {
+        try {
+          if (group && child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+          else child.kill("SIGKILL");
+        } catch {
+          // Gone already, which is what was wanted.
+        }
+      };
+      if (signal?.aborted) stop();
+      signal?.addEventListener("abort", stop, { once: true });
+      child.on("close", () => signal?.removeEventListener("abort", stop));
       let stdout = "";
       let stderr = "";
       let pending = "";

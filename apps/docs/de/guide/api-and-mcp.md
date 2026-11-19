@@ -88,7 +88,7 @@ node apps/server/dist/mcp.mjs     # MCP über stdio
 
 Eingestellt wird ausschließlich über die Umgebung: `VIDEOLA_HOST` (Vorgabe `127.0.0.1`),
 `VIDEOLA_PORT` (`7331`), `VIDEOLA_TOKEN`, `VIDEOLA_STORAGE_ROOT`, `VIDEOLA_MAX_PROJECTS` (`8`),
-`VIDEOLA_MAX_BODY_BYTES` (512 MiB), `VIDEOLA_LOCALE`, `VIDEOLA_WASM`, `VIDEOLA_WEB_ROOT`,
+`VIDEOLA_MAX_BODY_BYTES` (512 MiB), `VIDEOLA_MAX_FETCH_BYTES` (ohne Grenze), `VIDEOLA_LOCALE`, `VIDEOLA_WASM`, `VIDEOLA_WEB_ROOT`,
 `CHROME_PATH`, `VIDEOLA_RENDERER`. Ein gesetztes `CHROME_PATH` ist eine Anweisung, kein Kandidat:
 zeigt es ins Leere, ist das ein Fehler und kein Rückfall auf irgendein anderes Chrome.
 `VIDEOLA_WEB_ROOT` liefert die gebaute Web-App neben der Schnittstelle aus — so macht es das

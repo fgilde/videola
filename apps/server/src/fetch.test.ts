@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -5,6 +9,9 @@ import {
   describeArgs,
   describeVideo,
   fetchMedium,
+  FetchTooLarge,
+  sweepFetches,
+  type FetchRequest,
   formatSelector,
   downloadArgs,
   forbidden,
@@ -12,6 +19,7 @@ import {
   percentOf,
   searchArgs,
   searchVideos,
+  ytDlp,
   ytDlpVersion,
   type RunYtDlp,
 } from "./fetch";
@@ -315,6 +323,74 @@ describe("a download that was refused", () => {
   it("knows a refusal from anything else", () => {
     expect(forbidden("ERROR: HTTP Error 403: Forbidden")).toBe(true);
     expect(forbidden("ERROR: Video unavailable")).toBe(false);
+  });
+});
+
+describe("a download with a limit", () => {
+  const VIDEO: FetchRequest = { url: "https://example.com/v", kind: "video", format: "mp4", quality: "best" };
+
+  it("asks the tool to turn away a file announced as too large, and only then", () => {
+    expect(downloadArgs(VIDEO, "/tmp/x", [], 1000)).toEqual(
+      expect.arrayContaining(["--max-filesize", "1000"]),
+    );
+    expect(downloadArgs(VIDEO, "/tmp/x", [])).not.toContain("--max-filesize");
+  });
+
+  // A stream in fragments announces no size, so the directory is what is watched.
+  it("stops a download that outgrows it, and leaves nothing behind", async () => {
+    let into = "";
+    const run: RunYtDlp = async (args, _onLine, signal) => {
+      const target = args[args.indexOf("-o") + 1] ?? "";
+      into = dirname(target);
+      await writeFile(join(into, "big.mp4"), new Uint8Array(2000));
+      await new Promise((resolve) => signal?.addEventListener("abort", resolve, { once: true }));
+      return { stdout: "", stderr: "", code: 0 };
+    };
+
+    await expect(fetchMedium(VIDEO, run, undefined, 1000)).rejects.toThrow(FetchTooLarge);
+    expect(existsSync(into)).toBe(false);
+  });
+
+  it("says so where the tool itself refused the file", async () => {
+    const { run } = runner(() => ({
+      stdout: "[download] File is larger than max-filesize (5000 bytes > 1000 bytes). Aborting.\n",
+    }));
+
+    await expect(fetchMedium(VIDEO, run, undefined, 1000)).rejects.toThrow(
+      "larger than the 1000 bytes this server allows",
+    );
+  });
+});
+
+describe("ytDlp", () => {
+  // The real runner, with node standing in for the binary: a stop has to end a process that would
+  // otherwise keep writing for a minute.
+  it("stops the process it started when asked to", async () => {
+    const stop = new AbortController();
+    const running = ytDlp(process.execPath)(["-e", "setTimeout(() => {}, 60000)"], undefined, stop.signal);
+    setTimeout(() => stop.abort(), 200);
+    const started = Date.now();
+
+    await running;
+    expect(Date.now() - started).toBeLessThan(10_000);
+  });
+});
+
+describe("sweepFetches", () => {
+  it("clears what a killed download left, and nothing that may still be in use", async () => {
+    const root = await mkdtemp(join(tmpdir(), "videola-sweep-"));
+    const old = join(root, "videola-fetch-old");
+    const fresh = join(root, "videola-fetch-fresh");
+    const other = join(root, "someone-elses");
+    for (const dir of [old, fresh, other]) await mkdir(dir);
+    const day = 24 * 60 * 60 * 1000;
+    const then = new Date(Date.now() - 2 * day);
+    await utimes(old, then, then);
+    await utimes(other, then, then);
+
+    expect(await sweepFetches(day, root)).toEqual([old]);
+    expect([existsSync(old), existsSync(fresh), existsSync(other)]).toEqual([false, true, true]);
+    await rm(root, { recursive: true, force: true });
   });
 });
 

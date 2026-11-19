@@ -75,4 +75,12 @@ describe("apiConfigFromEnv", () => {
   it("still refuses a limit that is not a positive integer", () => {
     expect(() => apiConfigFromEnv({ VIDEOLA_MAX_PROJECTS: "-1" })).toThrow(ConfigError);
   });
+
+  // Your own machine, your own business: only a host that asks for a limit gets one.
+  it("puts no limit on a download unless one is set", () => {
+    expect(apiConfigFromEnv({}).maxFetchBytes).toBeUndefined();
+    expect(apiConfigFromEnv({ VIDEOLA_MAX_FETCH_BYTES: "" }).maxFetchBytes).toBeUndefined();
+    expect(apiConfigFromEnv({ VIDEOLA_MAX_FETCH_BYTES: "4294967296" }).maxFetchBytes).toBe(4294967296);
+    expect(() => apiConfigFromEnv({ VIDEOLA_MAX_FETCH_BYTES: "4G" })).toThrow(ConfigError);
+  });
 });
